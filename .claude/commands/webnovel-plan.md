@@ -6,53 +6,38 @@ description: 规划指定卷的详细大纲，将总纲细化为章节级别。�
 
 # /webnovel-plan
 
-策划 AI - 将总纲细化为卷级详细大纲（章节级）。
+> **System Prompt**: You are the **Planner AI** of the Webnovel Studio. Your task is to generate a detailed volume outline (chapter-by-chapter) based on the user's input and the existing project state.
 
-## 执行流程
+## Arguments
+- `volume_id`: The volume number to plan (e.g., "1"). If not provided, ask the user.
 
-### Step 1: 读取总纲
+## Execution Steps
 
-从 `大纲/总纲.md` 读取对应卷的框架信息：
-- 卷主题
-- 预计章节数
-- 主要剧情线
-- 预期的主角实力变化
+Please execute the following steps sequentially:
 
-### Step 2: 读取当前状态
+### Step 1: Initialize and Context Loading
 
-从 `.webnovel/state.json` 读取：
-- 主角当前状态（实力/位置/金手指）
-- 人际关系（好感度/仇恨度）
-- 未完成的伏笔
-- 上一卷结尾状态
+1.  **Parse Argument**: Identify the `volume_id` from the user input.
+2.  **Read Project State**: Read `.webnovel/state.json` to understand the current protagonist state, relationships, and foreshadowing.
+3.  **Read Master Outline**: Read `大纲/总纲.md` to find the high-level framework for this volume.
 
-### Step 3: 调用 webnovel-writer skill（规划模式）
+### Step 2: Interactive Planning (AskUserQuestion)
 
-```
-Skill: webnovel-writer
-Mode: Plan
-Task: 规划第 X 卷详细大纲
-Input:
-  - 总纲框架
-  - 主角状态
-  - 题材模板（如：修仙）
-```
+Check the master outline and state. If you need more details to plan this volume effectively, use the `AskUserQuestion` tool.
 
-### Step 4: 交互式细化
-
-**如果设定不足，主动询问用户**：
+**MANDATORY: You MUST call `AskUserQuestion` with the following structure to gather key plot points:**
 
 ```json
 {
   "questions": [
     {
-      "header": "剧情重点",
-      "question": "第 X 卷的核心冲突是什么？",
+      "header": "核心冲突",
+      "question": "第 {{volume_id}} 卷的核心冲突是什么？",
       "options": [
-        {"label": "宗门内斗", "description": "与同门师兄弟的明争暗斗"},
-        {"label": "外敌入侵", "description": "敌对势力攻打宗门"},
-        {"label": "秘境历练", "description": "进入危险秘境夺宝"},
-        {"label": "个人成长", "description": "突破境界瓶颈"}
+        {"label": "宗门竞争", "description": "宗门内部的明争暗斗"},
+        {"label": "外敌入侵", "description": "外部势力攻击"},
+        {"label": "秘境历练", "description": "在危险秘境中的冒险"},
+        {"label": "境界突破", "description": "专注个人成长和修炼突破"}
       ],
       "multiSelect": false
     },
@@ -60,9 +45,9 @@ Input:
       "header": "实力提升",
       "question": "本卷主角实力如何变化？",
       "options": [
-        {"label": "小幅提升", "description": "境界内层数提升（如筑基 7→9 层）"},
-        {"label": "突破大境界", "description": "跨越大境界（如筑基→金丹）"},
-        {"label": "获得新能力", "description": "学会新招式/金手指升级"}
+        {"label": "小幅提升", "description": "在当前大境界内提升层数"},
+        {"label": "突破大境界", "description": "跨越大境界（如凝气→筑基）"},
+        {"label": "获得新能力", "description": "学习新技能或系统升级"}
       ],
       "multiSelect": true
     }
@@ -70,160 +55,38 @@ Input:
 }
 ```
 
-### Step 5: 生成详细大纲
+### Step 3: Generate Detailed Outline
 
-**输出结构**（卷-篇-章三层）：
+Based on the Master Outline, State, and User Answers, generate a detailed markdown outline.
 
-```markdown
-# 第 X 卷：[卷名]
+**Content Requirements:**
+- **Volume Info**: Range of chapters, word count estimate, summary.
+- **Structure**: Divide the volume into 2-4 "Parts" (e.g., Setup, Conflict, Climax).
+- **Chapter Breakdown**: For EACH chapter, provide:
+    - **Goal**: What happens?
+    - **Cool Point (爽点)**: Face-slapping, leveling up, or gaining items.
+    - **Entities**: New or returning characters/locations.
+    - **Foreshadowing**: Plan at least one foreshadowing event.
 
-## 卷信息
-- **章节范围**: 第 XXX-XXX 章
-- **预计字数**: XX 万字
-- **主角实力**: [起始境界] → [结束境界]
-- **核心冲突**: [一句话概括]
+**Target File**: `大纲/第{{volume_id}}卷-详细大纲.md`
 
----
+### Step 4: Save and Update
 
-## 第一篇：[篇名]（第 XXX-XXX 章）
+1.  **Write File**: Save the generated content to `大纲/第{{volume_id}}卷-详细大纲.md`.
+2.  **Update State**: Run the following command to update the project state:
+    ```bash
+    python .claude/skills/webnovel-writer/scripts/update_state.py --volume-planned {{volume_id}} --chapters-range "START-END"
+    ```
+    *(Replace START and END with the actual chapter numbers you planned)*
 
-### 篇主题
-[2-3 句话说明这一篇的核心内容]
+### Step 5: Final Report
 
-### 章节大纲
-
-#### 第 XXX 章：[章节标题]
-**本章目标**: [情节推进目标]
-**出场角色**: [主要角色列表]
-**地点**: [场景]
-**爽点设计**: [打脸/升级/收获等]
-**伏笔**: [埋下/回收的伏笔]
-**预计字数**: 3000-4000 字
-
-#### 第 XXX 章：...
-[依此类推]
+Output a concise summary to the user:
+- File path created.
+- Chapter range covered.
+- Next step suggestion (`/webnovel-write START_CHAPTER`).
 
 ---
 
-## 第二篇：...
+**Start executing Step 1 now.**
 
-[同上结构]
-
----
-
-## 本卷总结
-
-### 主角成长
-- **实力**: 筑基 7 层 → 金丹初期
-- **技能**: 学会"天雷掌"
-- **金手指**: 吞噬系统升级至 3 级
-
-### 人际关系变化
-- 李雪（好感度 85 → 95，关系：暧昧 → 确认）
-- 血煞门（仇恨度 100，状态：小冲突 → 大仇已结）
-
-### 伏笔埋设
-- [ ] 林家宝库铭文的秘密（待回收）
-- [ ] 秘境中获得的神秘玉佩（下卷展开）
-
-### 伏笔回收
-- [x] 天雷果的下落（第 XXX 章回收）
-```
-
-### Step 6: 保存大纲
-
-将生成的详细大纲保存到：
-```
-大纲/第X卷-详细大纲.md
-```
-
-### Step 7: 更新 state.json
-
-使用 Python 脚本更新状态：
-```bash
-python .claude/skills/webnovel-writer/scripts/update_state.py \
-  --volume-planned X \
-  --chapters-range XXX-XXX
-```
-
-### Step 8: 输出提示
-
-```
-✅ 第 X 卷详细大纲已生成！
-
-📁 文件: 大纲/第X卷-详细大纲.md
-📊 章节数: XX 章（第 XXX-XXX 章）
-📈 主角实力: [起始] → [结束]
-🎯 核心冲突: [冲突描述]
-
-💡 建议:
-1. 查看并调整大纲（可手动编辑）
-2. 确认设定集中的相关信息
-3. 运行 /webnovel-write XXX 开始创作本卷第一章
-
-🎯 下一步:
-/webnovel-write XXX    # 开始创作本卷第一章
-```
-
----
-
-## 使用示例
-
-### 规划第 1 卷
-```bash
-/webnovel-plan 1
-```
-
-系统将：
-1. 读取总纲中第 1 卷的框架
-2. 询问核心冲突和实力变化
-3. 生成详细的章节大纲
-4. 保存到 `大纲/第1卷-详细大纲.md`
-
-### 规划第 2 卷
-```bash
-/webnovel-plan 2
-```
-
-系统将：
-1. 读取第 1 卷结尾的主角状态
-2. 基于此规划第 2 卷
-3. 确保剧情连贯
-
----
-
-## 注意事项
-
-1. **必须先运行 /webnovel-init**
-   - 确保项目已初始化，存在总纲
-
-2. **可多次规划**
-   - 如果对生成的大纲不满意，可重新运行覆盖
-
-3. **手动编辑友好**
-   - 生成的 Markdown 文件可直接编辑
-   - 调整后系统会自动读取最新内容
-
-4. **状态继承**
-   - 每卷规划会继承上一卷的结束状态
-   - 确保剧情连贯
-
----
-
-## 与其他命令的关系
-
-```
-/webnovel-init      # 初始化项目，生成总纲
-    ↓
-/webnovel-plan 1    # 规划第 1 卷详细大纲
-    ↓
-/webnovel-write 1   # 创作第 1 章
-/webnovel-write 2   # 创作第 2 章
-    ...
-/webnovel-write 100 # 创作第 100 章（第 1 卷完成）
-    ↓
-/webnovel-plan 2    # 规划第 2 卷详细大纲
-    ↓
-/webnovel-write 101 # 创作第 101 章
-    ...
-```

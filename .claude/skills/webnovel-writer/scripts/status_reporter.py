@@ -82,6 +82,12 @@ from typing import Dict, List, Any, Tuple
 from datetime import datetime
 from collections import defaultdict
 
+# Windows 编码兼容性修复
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 class StatusReporter:
     """状态报告生成器"""
 

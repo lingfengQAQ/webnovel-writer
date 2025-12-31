@@ -55,6 +55,12 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, List, Tuple
 
+# Windows 编码兼容性修复
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 class GitBackupManager:
     """基于 Git 的备份管理器"""
 

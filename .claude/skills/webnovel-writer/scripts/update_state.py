@@ -52,6 +52,12 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional
 
+# Windows 编码兼容性修复
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 class StateUpdater:
     """state.json 安全更新器"""
 
