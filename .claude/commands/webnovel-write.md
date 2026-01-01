@@ -379,12 +379,14 @@ Output consolidated findings to user (see Final Output section below).
    ```
 
    **Choice B - 延迟修复流程**:
-   ```bash
-   python .claude/skills/webnovel-writer/scripts/update_state.py \
-     --add-todo-fix "{N-1}-{N}" "审查报告/Review_Ch{N-1}-{N}_YYYYMMDD.md"
+   ```
+   输出：
+   📋 审查报告已保存：审查报告/Review_Ch{N-1}-{N}_YYYYMMDD.md
+   💡 建议在后续章节创作时注意规避这些问题
+   💡 或者稍后手动修复这些章节
    ```
 
-   **Purpose**: 记录到 state.json.todo_fixes 数组，后续可用 `/webnovel-fix` 批量处理
+   **Purpose**: 保存报告供后续参考，用户可选择稍后手动修复
 
 **IF** no Critical Issues:
 - 跳过此步骤，流程结束

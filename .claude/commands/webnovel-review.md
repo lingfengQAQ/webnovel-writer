@@ -379,7 +379,8 @@ Before you tell the user "Quality review complete", **YOU MUST verify**:
    ```
    输出：
    📋 审查报告已保存：审查报告/Review_Ch{N}-{M}_YYYYMMDD.md
-   💡 后续可用 `/webnovel-fix` 命令批量修复
+   💡 建议在后续章节创作时注意规避这些问题
+   💡 或者稍后重新调用本命令选择"立即修复"
    ```
 
 **IF** no Critical Issues (仅🟠/🟡问题):
