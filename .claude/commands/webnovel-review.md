@@ -333,6 +333,69 @@ Before you tell the user "Quality review complete", **YOU MUST verify**:
 
 ---
 
+## Step 8: Interactive Fix Option (CONDITIONAL - CRITICAL)
+
+**After generating the complete review report**, check if it contains **Critical Issues** (🔴 severity):
+
+**IF** Critical Issues exist:
+
+**YOU MUST execute**:
+
+1. **Extract Critical Issues from report**:
+   - Count issues with 🔴 severity in "优先级分类" section
+   - List specific problems
+
+2. **Ask user for immediate fix**:
+   ```
+   🔴 审查发现 {count} 个Critical问题：
+
+   {列出Critical Issues清单}
+
+   是否立即修复这些章节？
+   A) 是，立即修复并重新审查
+   B) 否，仅保存报告供后续参考
+   ```
+
+3. **Handle user choice**:
+
+   **Choice A - 立即修复流程**:
+   ```
+   For each Critical Issue:
+     1. 读取对应章节文件
+     2. 定位问题段落（基于审查员指出的章节/段落位置）
+     3. 应用修复（根据"改进建议"）
+     4. 保存修改后的章节文件
+     5. Git备份修复版本（commit message: "fix: 根据审查报告修复Ch{N}-{M}"）
+
+   可选：重新调用5个审查员验证修复效果
+
+   输出：
+   ✅ 修复完成：{count}个Critical Issues已解决
+   📝 修改章节：{章节列表}
+   📋 新审查报告（如重新审查）：审查报告/Review_Ch{N}-{M}_FIXED_YYYYMMDD.md
+   ```
+
+   **Choice B - 仅保存报告**:
+   ```
+   输出：
+   📋 审查报告已保存：审查报告/Review_Ch{N}-{M}_YYYYMMDD.md
+   💡 后续可用 `/webnovel-fix` 命令批量修复
+   ```
+
+**IF** no Critical Issues (仅🟠/🟡问题):
+- 输出报告保存确认
+- 提示用户可选择性改进
+- 流程结束
+
+**Purpose**: 提供立即修复入口，避免问题累积到无法挽回
+
+**FORBIDDEN**:
+- 发现Critical Issues却不询问用户
+- 自动修复而不征求用户意见
+- 跳过修复直接结束
+
+---
+
 ## Error Handling
 
 **IF** any checker fails to execute:

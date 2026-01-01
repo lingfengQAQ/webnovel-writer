@@ -340,6 +340,61 @@ Output consolidated findings to user (see Final Output section below).
 
 ---
 
+**Step 7.4: Interactive Fix Option (CONDITIONAL - CRITICAL)**
+
+**IF** the consolidated review report contains **Critical Issues** (🔴 severity: critical/high):
+
+**YOU MUST execute**:
+
+1. **Extract Critical Issues from report**:
+   - Parse the "关键问题汇总 (Critical Issues)" section
+   - Count issues with 🔴 critical or 🟠 high severity
+
+2. **Ask user for immediate fix**:
+   ```
+   🔴 审查发现 {count} 个Critical问题：
+
+   {列出Critical Issues清单}
+
+   是否立即修复当前章节？
+   A) 是，立即修复并重新审查
+   B) 否，记录到待修复清单，继续下一章
+   ```
+
+3. **Handle user choice**:
+
+   **Choice A - 立即修复流程**:
+   ```
+   For each Critical Issue:
+     1. 定位问题章节段落
+     2. 应用修复（基于Recommendations）
+     3. 保存修改后的章节文件
+     4. 运行 backup_manager.py（新Git commit标记"修复版"）
+
+   可选：重新调用5个审查员验证修复效果
+
+   输出：
+   ✅ 修复完成：{count}个Critical Issues已解决
+   📋 新审查报告（如有）：审查报告/Review_Ch{N-1}-{N}_FIXED_YYYYMMDD.md
+   ```
+
+   **Choice B - 延迟修复流程**:
+   ```bash
+   python .claude/skills/webnovel-writer/scripts/update_state.py \
+     --add-todo-fix "{N-1}-{N}" "审查报告/Review_Ch{N-1}-{N}_YYYYMMDD.md"
+   ```
+
+   **Purpose**: 记录到 state.json.todo_fixes 数组，后续可用 `/webnovel-fix` 批量处理
+
+**IF** no Critical Issues:
+- 跳过此步骤，流程结束
+
+**FORBIDDEN**:
+- 发现Critical Issues却不询问用户
+- 自动修复而不征求用户意见
+
+---
+
 ## Final Output (MANDATORY Format)
 
 ```
