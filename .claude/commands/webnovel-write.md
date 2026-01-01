@@ -32,7 +32,44 @@ description: 按大纲创作指定章节的正文内容（3000-5000字），自�
 
 ## Execution Steps (SEQUENTIAL - DO NOT SKIP)
 
+### Step 0: Initialize Workflow Tracking (MANDATORY)
+
+**BEFORE Step 1**, **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-task \
+  --command webnovel-write \
+  --chapter {chapter_num}
+```
+
+**Expected Output**:
+```
+✅ 任务已启动: webnovel-write {"chapter_num": {N}}
+```
+
+**Purpose**:
+- 记录任务开始时间和参数
+- 启用中断恢复功能
+- 创建 `.webnovel/workflow_state.json` 状态追踪文件
+
+**Why This Matters**:
+- Enables `/webnovel-resume` to detect interruptions
+- Allows safe recovery if Claude Code crashes or times out
+- Provides audit trail for task execution
+
+**FORBIDDEN**: Skipping this step or proceeding without successful initialization.
+
+---
+
 ### Step 1: Load Context (MANDATORY)
+
+**Before executing Step 1**, **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
+  --step-id "Step 1" \
+  --step-name "Load Context"
+```
 
 **YOU MUST execute these reads in parallel**:
 
@@ -78,9 +115,24 @@ description: 按大纲创作指定章节的正文内容（3000-5000字），自�
 - Proceeding to Step 2 without extracting feedback
 - Starting to write without loading state.json first
 
+**After completing Step 1**, **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-step \
+  --step-id "Step 1"
+```
+
 ---
 
 ### Step 2: Generate Chapter Content (MANDATORY - CRITICAL)
+
+**Before executing Step 2**, **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
+  --step-id "Step 2" \
+  --step-name "Generate Chapter Content"
+```
 
 **THIS STEP IS NOT OPTIONAL. YOU MUST EXECUTE IT.**
 
@@ -187,9 +239,25 @@ description: 按大纲创作指定章节的正文内容（3000-5000字），自�
 - ❌ Ignoring review feedback Critical Issues
 - ❌ Skipping self-review
 
+**After completing Step 2**, **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-step \
+  --step-id "Step 2" \
+  --artifacts '{"chapter_file": {"path": "正文/第{N:04d}章.md", "exists": true, "word_count": {实际字数}, "status": "complete"}}'
+```
+
 ---
 
 ### Step 3: Extract Entities (CONDITIONAL)
+
+**Before executing Step 3** (if NEW_ENTITY tags exist), **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
+  --step-id "Step 3" \
+  --step-name "Extract Entities"
+```
 
 **IF** you used `[NEW_ENTITY]` tags in the chapter:
 
@@ -197,9 +265,25 @@ description: 按大纲创作指定章节的正文内容（3000-5000字），自�
 python .claude/skills/webnovel-writer/scripts/extract_entities.py "正文/第{N:04d}章.md" --auto
 ```
 
+**After completing Step 3**, **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-step \
+  --step-id "Step 3" \
+  --artifacts '{"entities_extracted": true}'
+```
+
 ---
 
 ### Step 4: Update State (MANDATORY)
+
+**Before executing Step 4**, **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
+  --step-id "Step 4" \
+  --step-name "Update State"
+```
 
 ```bash
 python .claude/skills/webnovel-writer/scripts/update_state.py \
@@ -213,9 +297,25 @@ python .claude/skills/webnovel-writer/scripts/update_state.py \
 python .claude/skills/webnovel-writer/scripts/update_state.py --progress {chapter_num} {total_words}
 ```
 
+**After completing Step 4**, **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-step \
+  --step-id "Step 4" \
+  --artifacts '{"state_json_modified": true}'
+```
+
 ---
 
 ### Step 5: Git Backup (MANDATORY)
+
+**Before executing Step 5**, **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
+  --step-id "Step 5" \
+  --step-name "Git Backup"
+```
 
 ```bash
 python .claude/skills/webnovel-writer/scripts/backup_manager.py \
@@ -225,9 +325,25 @@ python .claude/skills/webnovel-writer/scripts/backup_manager.py \
 
 **What this does**: `git add .` + `git commit` + `git tag ch{N:04d}`
 
+**After completing Step 5**, **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-step \
+  --step-id "Step 5" \
+  --artifacts '{"git_committed": true, "git_tag": "ch{N:04d}"}'
+```
+
 ---
 
 ### Step 6: Update Strand Tracker (MANDATORY)
+
+**Before executing Step 6**, **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
+  --step-id "Step 6" \
+  --step-name "Update Strand Tracker"
+```
 
 **YOU MUST analyze** which story strand dominated this chapter:
 
@@ -251,9 +367,25 @@ python .claude/skills/webnovel-writer/scripts/update_state.py --strand-dominant 
 
 **FORBIDDEN**: Skipping strand_tracker update.
 
+**After completing Step 6**, **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-step \
+  --step-id "Step 6" \
+  --artifacts '{"strand_tracker_updated": true, "dominant_strand": "{quest|fire|constellation}"}'
+```
+
 ---
 
 ### Step 7: Bi-Chapter Review (CONDITIONAL - CRITICAL)
+
+**Before executing Step 7** (if chapter_num % 2 == 0), **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
+  --step-id "Step 7" \
+  --step-name "Bi-Chapter Review"
+```
 
 **IF** `chapter_num % 2 == 0` (every 2 chapters):
 
@@ -395,6 +527,41 @@ Output consolidated findings to user (see Final Output section below).
 - 发现Critical Issues却不询问用户
 - 自动修复而不征求用户意见
 
+**After completing Step 7**, **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-step \
+  --step-id "Step 7" \
+  --artifacts '{"review_completed": true, "review_report_path": "审查报告/Review_Ch{N-1}-{N}_YYYYMMDD.md"}'
+```
+
+---
+
+### Final Step: Complete Workflow Tracking (MANDATORY)
+
+**AFTER all steps complete successfully**, **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-task
+```
+
+**Expected Output**:
+```
+🎉 任务完成
+```
+
+**Purpose**:
+- 标记任务完成，清除 `current_task` 状态
+- 更新 `last_stable_state` 快照（for rollback reference）
+- 记录任务到 history
+
+**Why This Matters**:
+- Prevents `/webnovel-resume` from detecting false interruptions
+- Provides audit trail for completed tasks
+- Enables clean start for next chapter
+
+**FORBIDDEN**: Claiming chapter is complete without running this step.
+
 ---
 
 ## Final Output (MANDATORY Format)
@@ -435,11 +602,21 @@ Output consolidated findings to user (see Final Output section below).
 
 ## Execution Checklist (VERIFY BEFORE CLAIMING "DONE")
 
+**Workflow Tracking**:
+- [ ] `workflow_manager.py start-task` executed successfully
+- [ ] All step tracking calls (`start-step`/`complete-step`) executed
+- [ ] `workflow_manager.py complete-task` executed successfully
+
+**Chapter Content**:
 - [ ] Chapter file saved to `正文/第{N:04d}章.md` (3,000-5,000 chars)
 - [ ] [NEW_ENTITY] tags extracted (if any)
+
+**State Management**:
 - [ ] `update_state.py` executed successfully
 - [ ] `backup_manager.py` executed successfully
 - [ ] `strand_tracker` updated in state.json
+
+**Quality Control**:
 - [ ] Bi-chapter review run (if chapter_num % 2 == 0)
 - [ ] Final output summary displayed to user
 
