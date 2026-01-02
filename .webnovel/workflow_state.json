@@ -1,0 +1,16 @@
+{
+  "current_task": {
+    "command": "webnovel-write",
+    "args": {"chapter_num": 8888},
+    "started_at": "2025-01-01T12:00:00",
+    "last_heartbeat": "2025-01-01T12:00:00",
+    "status": "running",
+    "current_step": {
+      "id": "Step 2",
+      "name": "Test Step",
+      "status": "in_progress"
+    },
+    "completed_steps": [],
+    "artifacts": {}
+  }
+}
