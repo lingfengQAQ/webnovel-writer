@@ -55,11 +55,6 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, List, Tuple
 
-# ============================================================================
-# 安全修复：导入安全工具函数（P1 MEDIUM）
-# ============================================================================
-from security_utils import sanitize_commit_message
-
 # Windows 编码兼容性修复
 if sys.platform == 'win32':
     import io
@@ -172,13 +167,7 @@ __pycache__/
         # Step 2: git commit
         commit_message = f"Chapter {chapter_num}"
         if chapter_title:
-            # ============================================================================
-            # 安全修复：清理提交消息，防止命令注入 (CWE-77) - P1 MEDIUM
-            # 原代码: commit_message += f": {chapter_title}"
-            # 漏洞: chapter_title可能包含 Git 标志（如 --author, --amend）导致命令注入
-            # ============================================================================
-            safe_chapter_title = sanitize_commit_message(chapter_title)
-            commit_message += f": {safe_chapter_title}"
+            commit_message += f": {chapter_title}"
 
         success, output = self._run_git_command(
             ["commit", "-m", commit_message],

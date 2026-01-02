@@ -39,11 +39,6 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
-# ============================================================================
-# 安全修复：导入安全工具函数（P1 MEDIUM）
-# ============================================================================
-from security_utils import create_secure_directory
-
 # Windows UTF-8 编码修复
 if sys.platform == 'win32':
     import io
@@ -64,12 +59,8 @@ class ArchiveManager:
         self.state_file = project_root / ".webnovel" / "state.json"
         self.archive_dir = project_root / ".webnovel" / "archive"
 
-        # ============================================================================
-        # 安全修复：使用安全目录创建函数（P1 MEDIUM）
-        # 原代码: self.archive_dir.mkdir(parents=True, exist_ok=True)
-        # 漏洞: 未设置权限，使用OS默认（可能为755，允许同组用户读取）
-        # ============================================================================
-        create_secure_directory(str(self.archive_dir))
+        # 确保归档目录存在
+        self.archive_dir.mkdir(parents=True, exist_ok=True)
 
         # 归档文件路径
         self.characters_archive = self.archive_dir / "characters.json"

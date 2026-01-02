@@ -13,11 +13,6 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-# ============================================================================
-# 安全修复：导入安全工具函数（P1 MEDIUM）
-# ============================================================================
-from security_utils import create_secure_directory
-
 # UTF-8 编码修复（Windows兼容）
 if sys.platform == 'win32':
     import io
@@ -367,13 +362,7 @@ def load_state():
 
 def save_state(state):
     """保存workflow状态"""
-    # ============================================================================
-    # 安全修复：使用安全目录创建函数（P1 MEDIUM）
-    # 原代码: os.makedirs(os.path.dirname(WORKFLOW_STATE_FILE), exist_ok=True)
-    # 漏洞: 未设置权限，使用OS默认（可能为755，允许同组用户读取）
-    # ============================================================================
-    create_secure_directory(os.path.dirname(WORKFLOW_STATE_FILE))
-
+    os.makedirs(os.path.dirname(WORKFLOW_STATE_FILE), exist_ok=True)
     with open(WORKFLOW_STATE_FILE, 'w', encoding='utf-8') as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
 

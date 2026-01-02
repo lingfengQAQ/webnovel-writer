@@ -45,11 +45,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
 
-# ============================================================================
-# 安全修复：导入安全工具函数（P1 MEDIUM）
-# ============================================================================
-from security_utils import create_secure_directory
-
 
 class StructuredIndex:
     """结构化索引管理器（取代向量化检索）"""
@@ -65,12 +60,8 @@ class StructuredIndex:
         self.chapters_dir = project_root / "正文"
         self.index_db = project_root / ".webnovel" / "index.db"
 
-        # ============================================================================
-        # 安全修复：使用安全目录创建函数（P1 MEDIUM）
-        # 原代码: self.index_db.parent.mkdir(parents=True, exist_ok=True)
-        # 漏洞: 未设置权限，使用OS默认（可能为755，允许同组用户读取）
-        # ============================================================================
-        create_secure_directory(str(self.index_db.parent))
+        # 确保数据库目录存在
+        self.index_db.parent.mkdir(parents=True, exist_ok=True)
 
         # 连接数据库
         self.conn = sqlite3.connect(str(self.index_db))

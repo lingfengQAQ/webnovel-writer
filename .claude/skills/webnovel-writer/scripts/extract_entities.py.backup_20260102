@@ -26,11 +26,6 @@ from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Tuple
 
-# ============================================================================
-# 安全修复：导入安全工具函数（P0 CRITICAL）
-# ============================================================================
-from security_utils import sanitize_filename, create_secure_directory
-
 # Windows 编码兼容性修复
 if sys.platform == 'win32':
     import io
@@ -322,18 +317,9 @@ def sync_entity_to_settings(entity: Dict, project_root: str, auto_mode: bool = F
         category_dir = ROLE_CATEGORY_MAP.get(category.split('/')[0], "次要角色")
 
         target_dir = Path(project_root) / f"设定集/角色库/{category_dir}"
-        # ============================================================================
-        # 安全修复：使用安全目录创建函数（文件权限修复）
-        # ============================================================================
-        create_secure_directory(str(target_dir))
+        target_dir.mkdir(parents=True, exist_ok=True)
 
-        # ============================================================================
-        # 安全修复：清理文件名，防止路径遍历 (CWE-22) - P0 CRITICAL
-        # 原代码: target_file = target_dir / f"{entity_name}.md"
-        # 漏洞: entity_name可能包含 "../" 导致目录遍历攻击
-        # ============================================================================
-        safe_entity_name = sanitize_filename(entity_name)
-        target_file = target_dir / f"{safe_entity_name}.md"
+        target_file = target_dir / f"{entity_name}.md"
 
         if target_file.exists():
             print(f"⚠️  角色卡已存在: {target_file}")
@@ -368,18 +354,9 @@ def sync_entity_to_settings(entity: Dict, project_root: str, auto_mode: bool = F
 
     elif entity_type == "物品":
         target_dir = Path(project_root) / "设定集/物品库"
-        # ============================================================================
-        # 安全修复：使用安全目录创建函数（文件权限修复）
-        # ============================================================================
-        create_secure_directory(str(target_dir))
+        target_dir.mkdir(parents=True, exist_ok=True)
 
-        # ============================================================================
-        # 安全修复：清理文件名，防止路径遍历 (CWE-22) - P0 CRITICAL
-        # 原代码: target_file = target_dir / f"{entity_name}.md"
-        # 漏洞: entity_name可能包含 "../" 导致目录遍历攻击
-        # ============================================================================
-        safe_entity_name = sanitize_filename(entity_name)
-        target_file = target_dir / f"{safe_entity_name}.md"
+        target_file = target_dir / f"{entity_name}.md"
 
         if target_file.exists():
             print(f"⚠️  物品卡已存在: {target_file}")

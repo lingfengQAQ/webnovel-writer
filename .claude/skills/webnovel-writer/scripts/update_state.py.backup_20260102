@@ -52,11 +52,6 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional
 
-# ============================================================================
-# 安全修复：导入安全工具函数（P1 MEDIUM）
-# ============================================================================
-from security_utils import create_secure_directory
-
 # Windows 编码兼容性修复
 if sys.platform == 'win32':
     import io
@@ -124,12 +119,7 @@ class StateUpdater:
         """备份当前 state.json"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_dir = Path(self.state_file).parent / "backups"
-        # ============================================================================
-        # 安全修复：使用安全目录创建函数（P1 MEDIUM）
-        # 原代码: backup_dir.mkdir(exist_ok=True)
-        # 漏洞: 未设置权限，使用OS默认（可能为755，允许同组用户读取）
-        # ============================================================================
-        create_secure_directory(str(backup_dir))
+        backup_dir.mkdir(exist_ok=True)
 
         self.backup_file = backup_dir / f"state.backup_{timestamp}.json"
 
