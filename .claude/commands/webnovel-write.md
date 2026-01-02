@@ -335,56 +335,13 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-step 
 
 ---
 
-### Step 4.5: Data Archiving (AUTO-TRIGGERED)
+### Step 4.5: Update Structured Index (AUTO-TRIGGERED, 2 sub-steps)
 
-**CRITICAL**: After Step 4, **automatically run** archive check:
-
-```bash
-python .claude/skills/webnovel-writer/scripts/archive_manager.py --auto-check
-```
-
-**Purpose**: 防止 state.json 无限增长（200万字长跑保障）
-
-**Archiving Strategy**:
-- **角色归档**: 超过 50 章未出场的次要角色 → `archive/characters.json`
-- **伏笔归档**: status="已回收" 且超过 20 章的伏笔 → `archive/plot_threads.json`
-- **报告归档**: 超过 50 章的旧审查报告 → `archive/reviews.json`
-
-**Trigger Conditions** (满足任一即执行):
-- state.json 大小 ≥ 1 MB
-- 当前章节数是 10 的倍数（每 10 章检查一次）
-
-**Expected Output**:
-```
-✅ 无需归档（触发条件未满足）
-   文件大小: 0.35 MB (阈值: 1.0 MB)
-   当前章节: 7 (每 10 章触发)
-```
-
-**OR** (if archiving triggered):
-```
-✅ 归档完成:
-   角色归档: 12 → characters.json
-   伏笔归档: 8 → plot_threads.json
-   报告归档: 5 → reviews.json
-
-💾 文件大小: 1.2 MB → 0.8 MB (节省 0.4 MB)
-```
-
-**IMPORTANT**:
-- **不需要 workflow_manager 追踪**（归档是内部维护操作）
-- 如报错（如文件不存在），视为警告，不阻塞流程
-- 归档数据可随时使用 `--restore-character "角色名"` 恢复
+**CRITICAL**: After Step 4, **immediately update** structured index in TWO steps:
 
 ---
 
-### Step 4.6: Update Structured Index (AUTO-TRIGGERED, 2 sub-steps)
-
-**CRITICAL**: After archiving, **automatically update** structured index in TWO steps:
-
----
-
-#### Step 4.6.1: Extract Metadata with AI Agent
+#### Step 4.5.1: Extract Metadata with AI Agent
 
 **Use Task tool to call metadata-extractor agent**:
 
@@ -439,7 +396,7 @@ else:
 
 ---
 
-#### Step 4.6.2: Write to Index Database
+#### Step 4.5.2: Write to Index Database
 
 **Pass agent's JSON file to structured_index.py** (Windows-compatible):
 
@@ -477,7 +434,7 @@ os.unlink(metadata_file)  # Delete temporary file
 
 ---
 
-**Total Time**: Step 4.6.1 (~1-2s) + Step 4.6.2 (~10ms) = **~1-2s per chapter**
+**Total Time**: Step 4.5.1 (~1-2s) + Step 4.5.2 (~10ms) = **~1-2s per chapter**
 
 **Accuracy Improvement**:
 - **Before** (regex): Location = "未知" (60% accuracy)
@@ -518,6 +475,50 @@ python structured_index.py --stats
 - 如报错，视为警告，不阻塞流程
 - 索引失败降级为文件遍历（兼容性保障）
 - context_manager.py 已集成索引，查询时自动使用
+
+---
+
+### Step 4.6: Data Archiving (AUTO-TRIGGERED)
+
+**CRITICAL**: After indexing, **automatically run** archive check:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/archive_manager.py --auto-check
+```
+
+**Purpose**: 防止 state.json 无限增长（200万字长跑保障）
+
+**Archiving Strategy**:
+- **角色归档**: 超过 50 章未出场的次要角色 → `archive/characters.json`
+- **伏笔归档**: status="已回收" 且超过 20 章的伏笔 → `archive/plot_threads.json`
+- **报告归档**: 超过 50 章的旧审查报告 → `archive/reviews.json`
+
+**Trigger Conditions** (满足任一即执行):
+- state.json 大小 ≥ 1 MB
+- 当前章节数是 10 的倍数（每 10 章检查一次）
+
+**Expected Output**:
+```
+✅ 无需归档（触发条件未满足）
+   文件大小: 0.35 MB (阈值: 1.0 MB)
+   当前章节: 7 (每 10 章触发)
+```
+
+**OR** (if archiving triggered):
+```
+✅ 归档完成:
+   角色归档: 12 → characters.json
+   伏笔归档: 8 → plot_threads.json
+   报告归档: 5 → reviews.json
+
+💾 文件大小: 1.2 MB → 0.8 MB (节省 0.4 MB)
+```
+
+**IMPORTANT**:
+- **不需要 workflow_manager 追踪**（归档是内部维护操作）
+- 如报错（如文件不存在），视为警告，不阻塞流程
+- 归档数据可随时使用 `--restore-character "角色名"` 恢复
+- **归档发生在索引之后**，确保所有数据都被索引后再清理
 
 ---
 

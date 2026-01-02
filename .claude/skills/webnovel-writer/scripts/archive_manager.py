@@ -71,8 +71,8 @@ class ArchiveManager:
         self.config = {
             "character_inactive_threshold": 50,  # 角色超过 50 章未出场视为不活跃
             "plot_resolved_threshold": 20,       # 已回收伏笔超过 20 章后归档
-            "review_old_threshold": 50,          # 审查报告超过 50 章后归档
-            "file_size_trigger_mb": 1.0,         # state.json 超过 1MB 触发归档
+            "review_old_threshold": 20,          # 审查报告超过 20 章后归档（从 50 降至 20）
+            "file_size_trigger_mb": 0.5,         # state.json 超过 0.5MB 触发归档（从 1.0 降至 0.5）
             "chapter_trigger": 10                # 每 10 章检查一次
         }
 
@@ -372,13 +372,14 @@ class ArchiveManager:
         # 移除 archived_at 字段
         char_to_restore.pop("archived_at", None)
 
+        # ✅ 原子性修复：先从归档中移除，再添加到 state.json
+        # 理由：即使崩溃，数据仍在归档中，可重新恢复，不会丢失或重复
+        archived = [char for char in archived if char["name"] != name]
+        self.save_archive(self.characters_archive, archived)
+
         # 恢复到 state.json
         state["entities"]["characters"].append(char_to_restore)
         self.save_state(state)
-
-        # 从归档中移除
-        archived = [char for char in archived if char["name"] != name]
-        self.save_archive(self.characters_archive, archived)
 
         print(f"✅ 角色已恢复: {name}")
 
