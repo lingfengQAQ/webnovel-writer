@@ -25,6 +25,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# Claude Code settings (contains command history)
+.claude/settings.local.json
+
 # Testing artifacts
 test-security-project/
 .pytest_cache/
@@ -34,9 +37,17 @@ htmlcov/
 # webnovel-writer runtime data (tracked separately)
 .webnovel/context_cache.json
 .webnovel/workflow_state.json
+.webnovel/index.db
+
+# Test and example projects (don't commit user data)
+backup_webnovel_*/
+webnovel-project/
+crucible-temp/
+test_*.py
+test_*.md
+*沙盘推演*.md
 
 # Don't ignore important .webnovel files
 !.webnovel/state.json
 !.webnovel/archive/
 !.webnovel/backups/
-!.webnovel/index.db
