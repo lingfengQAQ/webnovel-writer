@@ -7,7 +7,7 @@ __pycache__/
 dist/
 build/
 
-# Backup files (Git is the backup)
+# Backup files
 *.backup
 *.backup_*
 *.bak
@@ -25,29 +25,29 @@ Thumbs.db
 *.swp
 *.swo
 
-# Claude Code settings (contains command history)
+# Claude Code settings (Contains history)
 .claude/settings.local.json
 
-# Testing artifacts
-test-security-project/
-.pytest_cache/
-.coverage
-htmlcov/
+# --- Webnovel Writer User Data (Private) ---
+# 警告：不要将你的小说内容传到 GitHub！
 
-# webnovel-writer runtime data (tracked separately)
-.webnovel/context_cache.json
-.webnovel/workflow_state.json
-.webnovel/index.db
+# 运行时数据
+.webnovel/
+!.webnovel/.keep
 
-# Test and example projects (don't commit user data)
-backup_webnovel_*/
-webnovel-project/
-crucible-temp/
+# 创作产物
+正文/
+大纲/
+设定集/
+审查报告/
+
+# 临时测试文件
 test_*.py
 test_*.md
 *沙盘推演*.md
+temp_metadata.json
 
-# Don't ignore important .webnovel files
-!.webnovel/state.json
-!.webnovel/archive/
-!.webnovel/backups/
+# 测试项目文件夹
+backup_webnovel_*/
+webnovel-project/
+crucible-temp/
