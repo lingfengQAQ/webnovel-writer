@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Backup files (Git is the backup)
+*.backup
+*.backup_*
+*.bak
+*~
+
+# Temporary files
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing artifacts
+test-security-project/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# webnovel-writer runtime data (tracked separately)
+.webnovel/context_cache.json
+.webnovel/workflow_state.json
+
+# Don't ignore important .webnovel files
+!.webnovel/state.json
+!.webnovel/archive/
+!.webnovel/backups/
+!.webnovel/index.db
