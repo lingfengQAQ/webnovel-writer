@@ -200,7 +200,7 @@ class ArchiveManager:
         return old_reviews
 
     def archive_characters(self, inactive_list, dry_run=False):
-        """归档不活跃角色"""
+        """归档不活跃角色（Priority 2 修复：与索引集成）"""
         if not inactive_list:
             return 0
 
@@ -212,6 +212,24 @@ class ArchiveManager:
         for item in inactive_list:
             item["character"]["archived_at"] = timestamp
             archived.append(item["character"])
+
+            # ✅ Priority 2 修复：同步更新索引状态（而非删除）
+            if not dry_run:
+                try:
+                    # 导入索引模块
+                    import sys
+                    from pathlib import Path
+                    script_dir = Path(__file__).parent
+                    sys.path.insert(0, str(script_dir))
+                    from structured_index import StructuredIndex
+
+                    # 更新索引状态为 'archived'
+                    project_root = self.state_file.parent.parent
+                    index = StructuredIndex(str(project_root))
+                    index.mark_character_archived(item["character"]["name"], timestamp)
+                except Exception as e:
+                    # 索引更新失败不影响归档流程
+                    print(f"⚠️ 索引状态更新失败（不影响归档）: {e}")
 
         if not dry_run:
             self.save_archive(self.characters_archive, archived)
@@ -354,7 +372,7 @@ class ArchiveManager:
         print(f"\n💾 文件大小: {trigger['file_size_mb']:.2f} MB → {new_size_mb:.2f} MB (节省 {saved_mb:.2f} MB)")
 
     def restore_character(self, name):
-        """恢复归档的角色"""
+        """恢复归档的角色（Priority 2 修复：同步恢复索引状态）"""
         archived = self.load_archive(self.characters_archive)
         state = self.load_state()
 
@@ -380,6 +398,20 @@ class ArchiveManager:
         # 恢复到 state.json
         state["entities"]["characters"].append(char_to_restore)
         self.save_state(state)
+
+        # ✅ Priority 2 修复：同步恢复索引状态为 'active'
+        try:
+            import sys
+            from pathlib import Path
+            script_dir = Path(__file__).parent
+            sys.path.insert(0, str(script_dir))
+            from structured_index import StructuredIndex
+
+            project_root = self.state_file.parent.parent
+            index = StructuredIndex(str(project_root))
+            index.mark_character_active(name)
+        except Exception as e:
+            print(f"⚠️ 索引状态恢复失败（不影响数据恢复）: {e}")
 
         print(f"✅ 角色已恢复: {name}")
 
