@@ -524,6 +524,7 @@ def main():
     # 更新操作
     parser.add_argument("--update-chapter", type=int, metavar="NUM", help="更新单章索引")
     parser.add_argument("--metadata", metavar="PATH", help="章节文件路径（配合 --update-chapter）")
+    parser.add_argument("--metadata-json", metavar="JSON", help="元数据 JSON（配合 --update-chapter，由 metadata-extractor agent 提供）")
 
     # 批量操作
     parser.add_argument("--rebuild-index", action="store_true", help="批量重建所有索引")
@@ -546,27 +547,52 @@ def main():
 
     # 执行操作
     if args.update_chapter:
-        if not args.metadata:
-            print("❌ 缺少 --metadata 参数")
+        # 模式1：直接接收 JSON（从 metadata-extractor agent）
+        if args.metadata_json:
+            try:
+                metadata = json.loads(args.metadata_json)
+
+                # 验证必需字段
+                required_fields = ['title', 'location', 'characters', 'word_count', 'hash']
+                missing_fields = [f for f in required_fields if f not in metadata]
+
+                if missing_fields:
+                    print(f"❌ JSON 缺少必需字段: {', '.join(missing_fields)}")
+                    return
+
+                # 更新索引
+                index.index_chapter(args.update_chapter, metadata)
+
+                # 同步伏笔索引
+                index.sync_foreshadowing_from_state()
+
+            except json.JSONDecodeError as e:
+                print(f"❌ JSON 解析失败: {e}")
+                return
+
+        # 模式2：从文件提取元数据（旧模式，保持向后兼容）
+        elif args.metadata:
+            # 读取章节文件
+            chapter_file = Path(args.metadata)
+            if not chapter_file.exists():
+                print(f"❌ 章节文件不存在: {chapter_file}")
+                return
+
+            # 提取元数据
+            with open(chapter_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            metadata = index._extract_metadata_from_content(content, args.update_chapter)
+
+            # 更新索引
+            index.index_chapter(args.update_chapter, metadata)
+
+            # 同步伏笔索引
+            index.sync_foreshadowing_from_state()
+
+        else:
+            print("❌ 缺少 --metadata 或 --metadata-json 参数")
             return
-
-        # 读取章节文件
-        chapter_file = Path(args.metadata)
-        if not chapter_file.exists():
-            print(f"❌ 章节文件不存在: {chapter_file}")
-            return
-
-        # 提取元数据
-        with open(chapter_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        metadata = index._extract_metadata_from_content(content, args.update_chapter)
-
-        # 更新索引
-        index.index_chapter(args.update_chapter, metadata)
-
-        # 同步伏笔索引
-        index.sync_foreshadowing_from_state()
 
     elif args.rebuild_index:
         index.rebuild_all_indexes()
