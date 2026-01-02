@@ -1,6 +1,14 @@
 ---
 name: webnovel-writer
 description: Knowledge base for writing Chinese webnovels with anti-hallucination protocols (大纲即法律/设定即物理/发明需申报), cool-points strategy, and pacing control (Strand Weave). Automatically loaded when writing webnovel chapters, creating chapter content, or discussing webnovel writing techniques.
+allowed-tools:
+  - Read
+  - Write
+  - Edit
+  - Grep
+  - Bash
+  - AskUserQuestion
+  - Task
 ---
 
 # 网文创作知识库
