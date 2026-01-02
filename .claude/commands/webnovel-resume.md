@@ -10,13 +10,13 @@ description: 恢复中断的网文创作任务，基于精确的workflow状态�
 ## CRITICAL WARNING ⚠️
 
 **ABSOLUTE REQUIREMENTS - VIOLATION = FAILURE**:
-1. 🚨 **MUST load RESUME_SKILL.md first** (NOT optional)
+1. 🚨 **MUST load workflow-resume.md first** (NOT optional)
 2. 🚨 **MUST run workflow_manager.py detect** (NOT optional)
 3. 🚨 **MUST ask user before executing recovery** (NOT optional, NO auto-recovery)
 4. 🚨 **FORBIDDEN to skip any step** or merge steps
 
 **Why This Matters**:
-- Skipping RESUME_SKILL.md → Wrong recovery strategy → Data loss
+- Skipping workflow-resume.md → Wrong recovery strategy → Data loss
 - Skipping detection → Guessing interruption point → Incorrect cleanup
 - Auto-recovery without asking → User loses control → Unwanted changes
 - Different steps have different recovery difficulty (Step 2 ⭐⭐ vs Step 7 ⭐⭐⭐⭐⭐)
@@ -25,12 +25,12 @@ description: 恢复中断的网文创作任务，基于精确的workflow状态�
 
 ## 执行流程（SEQUENTIAL - DO NOT SKIP）
 
-### Step 1: Load RESUME_SKILL.md (MANDATORY)
+### Step 1: Load workflow-resume.md (MANDATORY)
 
 **YOU MUST read** the recovery strategy knowledge base:
 
 ```bash
-Read .claude/skills/webnovel-writer/RESUME_SKILL.md
+Read .claude/skills/webnovel-writer/references/workflow-resume.md
 ```
 
 **Purpose**: 加载不同Step的中断难度分级和恢复策略
@@ -42,7 +42,7 @@ Read .claude/skills/webnovel-writer/RESUME_SKILL.md
 - FORBIDDEN清单（禁止智能续写等）
 
 **Verification**:
-- [ ] RESUME_SKILL.md 已读取
+- [ ] workflow-resume.md 已读取
 - [ ] Step难度分级表已理解
 - [ ] FORBIDDEN清单已理解
 
@@ -452,7 +452,7 @@ B) 回滚到上一章（安全）
 
 Before you tell the user "Recovery complete", **YOU MUST verify**:
 
-- [ ] RESUME_SKILL.md 已读取
+- [ ] workflow-resume.md 已读取
 - [ ] workflow_manager.py detect 已执行
 - [ ] 中断信息已完整展示给用户
 - [ ] 恢复选项已清晰列出（含风险等级）

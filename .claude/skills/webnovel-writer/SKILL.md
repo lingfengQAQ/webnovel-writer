@@ -1,6 +1,14 @@
 ---
 name: webnovel-writer
 description: Knowledge base for writing Chinese webnovels with anti-hallucination protocols (大纲即法律/设定即物理/发明需申报), cool-points strategy, and pacing control (Strand Weave). Automatically loaded when writing webnovel chapters, creating chapter content, or discussing webnovel writing techniques.
+allowed-tools:
+  - Read
+  - Write
+  - Edit
+  - Grep
+  - Bash
+  - AskUserQuestion
+  - Task
 ---
 
 # 网文创作知识库
@@ -304,6 +312,7 @@ Ch 10: Quest + Fire（融合）
 - **[pacing-control.md](references/pacing-control.md)** - 节奏控制技巧和案例分析
 - **[genre-tropes.md](references/genre-tropes.md)** - 修仙/都市/玄幻等题材套路库
 - **[strand-weave-pattern.md](references/strand-weave-pattern.md)** - Strand Weave 详细规范
+- **[workflow-resume.md](references/workflow-resume.md)** - 工作流中断恢复机制（用于 /webnovel-resume 命令）
 
 ---
 

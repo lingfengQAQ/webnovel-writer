@@ -77,6 +77,7 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 2. Read `大纲/第X卷-详细大纲.md` - Find this chapter's outline
 3. Read previous 2 chapters from `正文/` (if exist) - Get context
 4. **[NEW] Load latest review report (if exists)** ⬅️ 新增步骤
+5. **[REFERENCE] Load relevant reference files (if needed)** ⬅️ 新增步骤
 
 ---
 
@@ -109,6 +110,33 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 ```
 
 **Purpose**: Ensure the chapter-writer agent applies quality feedback, preventing defect accumulation.
+
+---
+
+**Step 1.5: Load Reference Materials (CONDITIONAL - OPTIONAL)**
+
+**When to Load**:
+- **First time using this command** → Load `references/cool-points-guide.md` for爽点type overview
+- **Unsure about pacing** → Load `references/pacing-control.md` for Strand Weave rules
+- **Need genre-specific templates** → Load `templates/genres/修仙.md` (or相应题材)
+- **Designing golden finger** → Load `templates/golden-finger-templates.md`
+
+**How to Load** (Example):
+```markdown
+📚 Reference Materials Loaded:
+- cool-points-guide.md (Refreshed 5 types of cool points: 打脸/升级/收获/扮猪吃虎/装逼打脸)
+- golden-finger-templates.md (Reviewed system panel design for Lv.X → Lv.Y breakthrough)
+```
+
+**Purpose**:
+- Refresh memory on established patterns (爽点类型, 题材套路)
+- Ensure adherence to genre conventions
+- Avoid redundant cool-point types (e.g., 3 consecutive face-slapping chapters)
+
+**IMPORTANT**:
+- This step is **OPTIONAL** - only load when **actively needed**
+- Do NOT load all references every time (wastes tokens)
+- The webnovel-writer skill knowledge is already in context - references provide **deeper details**
 
 **FORBIDDEN**:
 - Skipping review report when it exists
