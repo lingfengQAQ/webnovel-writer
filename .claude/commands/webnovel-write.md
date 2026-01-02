@@ -394,11 +394,26 @@ with open(f"正文/第{chapter_num:04d}章.md", 'r', encoding='utf-8') as f:
     chapter_content = f.read()
 
 # Call metadata-extractor agent
-metadata_json = Task(
+agent_output = Task(
     subagent_type="metadata-extractor",
     description="Extract chapter metadata",
     prompt=f"Extract metadata from chapter {chapter_num}:\n\n{chapter_content}"
 )
+
+# Parse agent output (agent returns JSON in text block)
+import re
+import json
+json_match = re.search(r'\{[\s\S]*\}', agent_output)
+if json_match:
+    metadata_json = json_match.group(0)
+
+    # Save to temporary file (Windows-compatible)
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as tmp:
+        tmp.write(metadata_json)
+        metadata_file = tmp.name
+else:
+    raise ValueError("Agent output missing JSON block")
 ```
 
 **What the agent does**:
@@ -426,16 +441,22 @@ metadata_json = Task(
 
 #### Step 4.6.2: Write to Index Database
 
-**Pass agent's JSON output to structured_index.py**:
+**Pass agent's JSON file to structured_index.py** (Windows-compatible):
 
 ```bash
 python .claude/skills/webnovel-writer/scripts/structured_index.py \
   --update-chapter {chapter_num} \
-  --metadata-json '{metadata_json}'
+  --metadata-file {metadata_file}
 ```
 
+**Why use --metadata-file instead of --metadata-json?**
+- ✅ **Windows CLI 兼容性**：避免 JSON 字符串在 CMD/PowerShell 中的引号转义问题
+- ✅ **跨平台一致性**：Linux/macOS/Windows 全部支持
+- ✅ **大型 JSON 支持**：不受命令行长度限制
+
 **What this does**:
-- Parses JSON and validates required fields
+- Reads JSON from temporary file
+- Validates required fields
 - Inserts/updates chapter metadata in SQLite database
 - Syncs foreshadowing urgency from state.json
 - Stores content hash for Self-Healing detection
@@ -448,6 +469,12 @@ python .claude/skills/webnovel-writer/scripts/structured_index.py \
 
 **Performance**: ~10ms (SQLite write)
 
+**Cleanup** (after successful write):
+```python
+import os
+os.unlink(metadata_file)  # Delete temporary file
+```
+
 ---
 
 **Total Time**: Step 4.6.1 (~1-2s) + Step 4.6.2 (~10ms) = **~1-2s per chapter**
@@ -456,9 +483,16 @@ python .claude/skills/webnovel-writer/scripts/structured_index.py \
 - **Before** (regex): Location = "未知" (60% accuracy)
 - **After** (AI agent): Location = "慕容家族" (95% accuracy)
 
-**Fallback Mode** (if agent unavailable):
+**Alternative Modes**:
+
+1. **Direct JSON string** (Linux/macOS only):
 ```bash
-# Direct file-based extraction (legacy mode)
+python structured_index.py --update-chapter {N} --metadata-json '{json_string}'
+```
+
+2. **Fallback mode** (if agent unavailable):
+```bash
+# Direct file-based extraction (legacy mode, 60% accuracy)
 python structured_index.py --update-chapter {N} --metadata "正文/第{N:04d}章.md"
 ```
 
