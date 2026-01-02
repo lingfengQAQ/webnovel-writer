@@ -258,10 +258,54 @@ class ContextManager:
         return f"[地点：{location}]（世界观.md 中未找到详情）"
 
     def _get_character_cards(self, characters: List[str]) -> List[Dict[str, str]]:
-        """获取角色卡（完整版，最多 5 个，每个 200 Token）"""
+        """获取角色卡（完整版，最多 5 个，每个 200 Token）
+
+        Priority 3 修复：自动检测并恢复归档角色
+        """
         cards = []
 
         for char_name in characters[:5]:  # 最多 5 个
+            # ✅ Priority 3 修复：先检查角色是否已归档
+            is_archived = False
+            if self.use_index and self.index:
+                try:
+                    # 从索引查询角色状态
+                    cursor = self.index.conn.execute(
+                        "SELECT status FROM characters WHERE name = ?",
+                        (char_name,)
+                    )
+                    row = cursor.fetchone()
+
+                    if row and row[0] == 'archived':
+                        is_archived = True
+                        print(f"🔄 检测到归档角色: {char_name}，自动恢复中...")
+
+                        # 自动恢复归档角色
+                        try:
+                            import subprocess
+                            script_dir = Path(__file__).parent
+                            archive_script = script_dir / "archive_manager.py"
+
+                            result = subprocess.run(
+                                ["python", str(archive_script), "--restore-character", char_name],
+                                capture_output=True,
+                                text=True,
+                                encoding='utf-8',
+                                timeout=10
+                            )
+
+                            if result.returncode == 0:
+                                print(f"✅ 角色 {char_name} 已自动恢复")
+                                # 重新加载 state.json
+                                self.load_state()
+                            else:
+                                print(f"⚠️ 角色恢复失败: {result.stderr}")
+                        except Exception as e:
+                            print(f"⚠️ 自动恢复失败: {e}")
+
+                except Exception as e:
+                    print(f"⚠️ 归档检测失败（继续正常查询）: {e}")
+
             # 在角色库中查找
             for category in ["主要角色", "次要角色", "反派角色"]:
                 char_file = self.settings_dir / f"角色库/{category}/{char_name}.md"
