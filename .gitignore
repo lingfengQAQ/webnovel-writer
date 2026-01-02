@@ -25,29 +25,29 @@ Thumbs.db
 *.swp
 *.swo
 
-# Claude Code settings (Contains history)
+# Claude Code settings (contains command history)
 .claude/settings.local.json
 
-# --- Webnovel Writer User Data (Private) ---
-# 警告：不要将你的小说内容传到 GitHub！
+# Testing artifacts
+test-security-project/
+.pytest_cache/
+.coverage
+htmlcov/
 
-# 运行时数据
+# webnovel-writer runtime data (don't commit user projects)
 .webnovel/
-!.webnovel/.keep
-
-# 创作产物
-正文/
-大纲/
-设定集/
-审查报告/
-
-# 临时测试文件
-test_*.py
-test_*.md
-*沙盘推演*.md
-temp_metadata.json
-
-# 测试项目文件夹
 backup_webnovel_*/
 webnovel-project/
 crucible-temp/
+test_*.py
+test_*.md
+
+# Design documents and reports (not part of the skill)
+*.md
+!README.md
+!LICENSE.md
+!.claude/**/*.md
+
+# Security audit reports (internal use only)
+SECURITY_*.md
+TEST_*.md
