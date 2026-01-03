@@ -91,9 +91,10 @@ allowed-tools: Read, Grep
 ### Step 3: [NEW_ENTITY] Validation
 
 **For all new entities in reviewed chapters**:
-1. Verify they are tagged with `[NEW_ENTITY: 类型, 名称, 描述]`
+1. Verify they are tagged with `[NEW_ENTITY: 类型, 名称, 描述, 层级]`（层级: 核心/支线/装饰）
 2. Check if they contradict existing settings
 3. Assess if their introduction is necessary or bloat
+4. **NEW**: Verify `[GOLDEN_FINGER_SKILL]` tags for new abilities
 
 **Report untagged inventions**:
 ```
@@ -136,10 +137,13 @@ Chapters {N} - {M}
 - ✓ All new entities properly tagged: {count}
 - ⚠️ Untagged entities found: {count} (详见下方列表)
 - ❌ Contradictory entities: {count}
+- ⚠️ Missing tier classification: {count} (缺少层级标注)
+- 🔧 Untagged golden finger skills: {count}
 
 **Untagged List**:
-1. 第{M}章："紫霄宗" (势力) - 需补充标签
-2. 第{M}章："天雷果" (物品) - 需补充标签
+1. 第{M}章："紫霄宗" (势力) - 需补充标签+层级
+2. 第{M}章："天雷果" (物品) - 需补充标签+层级
+3. 第{M}章："吞噬升级" (金手指技能) - 需补充 [GOLDEN_FINGER_SKILL] 标签
 
 ## 建议 (Recommendations)
 - [For power conflicts] 修改第{M}章，将"破空斩"替换为筑基期可用技能
@@ -162,6 +166,7 @@ Chapters {N} - {M}
 ## Success Criteria
 
 - 0 critical violations (power conflicts, unexplained character changes)
-- All new entities tagged with [NEW_ENTITY]
+- All new entities tagged with [NEW_ENTITY: ..., 层级]
+- All new golden finger skills tagged with [GOLDEN_FINGER_SKILL]
 - Location and timeline transitions are logical
 - Report provides specific fix recommendations with chapter numbers

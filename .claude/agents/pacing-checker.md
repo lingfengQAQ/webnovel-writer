@@ -23,6 +23,17 @@ allowed-tools: Read, Grep
 2. `.webnovel/state.json` (strand_tracker history)
 3. `大纲/` (to understand intended arc structure)
 
+**Optional: Use status_reporter for automated analysis**:
+```bash
+# 获取 Strand Weave 详细分析（推荐）
+python .claude/skills/webnovel-writer/scripts/status_reporter.py --focus strand
+
+# 输出包含:
+# - Quest/Fire/Constellation 占比统计
+# - 违规检测（连续Quest>5章等）
+# - 章节列表与主导Strand
+```
+
 ### Step 2: Classify Chapter Strands
 
 **For each chapter, identify the dominant strand**:

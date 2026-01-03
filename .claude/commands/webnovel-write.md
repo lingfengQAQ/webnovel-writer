@@ -215,7 +215,8 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 2. **Content Generation** (3000-5000 Chinese characters):
    - ✅ Follow outline Goal 100%
    - ✅ Deliver Cool Point as promised
-   - ✅ Introduce required Entities with `[NEW_ENTITY: 类型, 名称, 描述]` tags
+   - ✅ Introduce required Entities with `[NEW_ENTITY: 类型, 名称, 描述, 层级]` tags（层级: 核心/支线/装饰）
+   - ✅ Track new golden finger skills with `[GOLDEN_FINGER_SKILL: 技能名, 等级, 描述, 冷却时间]`
    - ✅ Plant Foreshadowing as planned
    - ✅ Protagonist power ≤ state.json (no power inflation)
    - ✅ Apply review feedback (avoid Critical Issues)
@@ -230,7 +231,8 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
    - [ ] Outline Goal achieved?
    - [ ] Cool-point delivered?
    - [ ] No power inflation (≤ state.json)?
-   - [ ] New entities tagged with [NEW_ENTITY]?
+   - [ ] New entities tagged with [NEW_ENTITY: ..., 层级]?
+   - [ ] Golden finger skills tagged with [GOLDEN_FINGER_SKILL] (if learned new)?
    - [ ] Review feedback applied (if exists)?
 
 5. **Save Output**:
@@ -263,7 +265,7 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 **FORBIDDEN**:
 - ❌ Deviating from outline
 - ❌ Power inflation (exceeding state.json)
-- ❌ Missing [NEW_ENTITY] tags
+- ❌ Missing [NEW_ENTITY] or [GOLDEN_FINGER_SKILL] tags
 - ❌ Ignoring review feedback Critical Issues
 - ❌ Skipping self-review
 
@@ -287,7 +289,7 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
   --step-name "Extract Entities"
 ```
 
-**IF** you used `[NEW_ENTITY]` tags in the chapter:
+**IF** you used `[NEW_ENTITY]` or `[GOLDEN_FINGER_SKILL]` tags in the chapter:
 
 ```bash
 python .claude/skills/webnovel-writer/scripts/extract_entities.py "正文/第{N:04d}章.md" --auto
@@ -828,7 +830,7 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-task
 
 **Chapter Content**:
 - [ ] Chapter file saved to `正文/第{N:04d}章.md` (3,000-5,000 chars)
-- [ ] [NEW_ENTITY] tags extracted (if any)
+- [ ] [NEW_ENTITY] and [GOLDEN_FINGER_SKILL] tags extracted (if any)
 
 **State Management**:
 - [ ] `update_state.py` executed successfully

@@ -39,8 +39,9 @@ Extract **structured metadata** from webnovel chapter content to populate the st
 
 刺耳的嘲笑声从四面八方传来，林天紧咬着牙关...
 
-[NEW_ENTITY: 角色, 慕容战天, 家族第一天才，练气期九层巅峰]
-[NEW_ENTITY: 角色, 慕容虎, 慕容战天的跟班，练气期五层]
+[NEW_ENTITY: 角色, 慕容战天, 家族第一天才，练气期九层巅峰, 核心]
+[NEW_ENTITY: 角色, 慕容虎, 慕容战天的跟班，练气期五层, 装饰]
+[GOLDEN_FINGER_SKILL: 吞噬, Lv1, 可吞噬敌人获得经验, 10秒]
 ```
 
 ---
@@ -149,7 +150,8 @@ Extract **structured metadata** from webnovel chapter content to populate the st
 **A) Identify Named Characters**:
 - Extract names from:
   - Dialogue attributions: `林天说道：`
-  - NEW_ENTITY tags: `[NEW_ENTITY: 角色, 慕容战天, ...]`
+  - NEW_ENTITY tags: `[NEW_ENTITY: 角色, 慕容战天, ..., 层级]`
+  - GOLDEN_FINGER_SKILL tags: Protagonist learning new skills
   - Narrative mentions: `慕容战天冷笑一声`
 
 **B) Filter Out**:

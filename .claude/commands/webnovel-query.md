@@ -244,6 +244,18 @@ grep -r -i -n -A 5 "{keyword}" 大纲/
 
 > **Reference**: `references/cool-points-guide.md` → 伏笔管理三层级（核心/支线/装饰）
 
+**快速分析命令**（推荐）:
+```bash
+# 使用 status_reporter 获取自动化伏笔紧急度分析
+python .claude/skills/webnovel-writer/scripts/status_reporter.py --focus urgency
+
+# 输出包含:
+# - 三层级分类（核心/支线/装饰）+ 权重（3.0/2.0/1.0）
+# - 紧急度计算公式：(已过章节 / 目标回收章节) × 层级权重
+# - 危急/警告/正常 状态标识
+# - 回收建议排序
+```
+
 **YOU MUST**:
 1. Read `state.json` → `plot_threads.foreshadowing` array
 2. Filter where `status == "未回收"`
@@ -507,6 +519,18 @@ grep -r -i -n -A 5 "{keyword}" 大纲/
 > **Reference**: `references/strand-weave-pattern.md`
 
 **Purpose**: 分析最近章节的三线分布，检查是否存在节奏问题。
+
+**快速分析命令**（推荐）:
+```bash
+# 使用 status_reporter 获取自动化 Strand Weave 分析
+python .claude/skills/webnovel-writer/scripts/status_reporter.py --focus strand
+
+# 输出包含:
+# - Quest/Fire/Constellation 占比统计
+# - 违规检测（连续Quest>5章、Fire缺失>10章等）
+# - 章节列表与主导Strand
+# - 节奏平衡建议
+```
 
 **YOU MUST**:
 1. Read `state.json` → `strand_tracker`
