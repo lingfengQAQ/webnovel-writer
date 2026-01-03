@@ -315,6 +315,41 @@ Ch 10: Quest + Fire（融合）
 - **[strand-weave-pattern.md](references/strand-weave-pattern.md)** - Strand Weave 详细规范
 - **[workflow-resume.md](references/workflow-resume.md)** - 工作流中断恢复机制（用于 /webnovel-resume 命令）
 - **[archiving-strategy.md](references/archiving-strategy.md)** - 数据归档策略（200万字长跑保障）
+- **[git-workflow.md](references/git-workflow.md)** - Git 版本控制工作流规范
+
+### 创作基础指南
+
+#### 创意构思 (creativity/)
+- **[inspiration-collection.md](references/creativity/inspiration-collection.md)** - 灵感收集与管理
+- **[market-positioning.md](references/creativity/market-positioning.md)** - 市场定位分析
+- **[creative-combination.md](references/creativity/creative-combination.md)** - 创意组合技巧
+- **[selling-points.md](references/creativity/selling-points.md)** - 卖点提炼方法
+
+#### 世界构建 (worldbuilding/)
+- **[character-design.md](references/worldbuilding/character-design.md)** - 角色设计方法论
+- **[power-systems.md](references/worldbuilding/power-systems.md)** - 力量体系设计指南
+- **[world-rules.md](references/worldbuilding/world-rules.md)** - 世界规则构建
+- **[faction-systems.md](references/worldbuilding/faction-systems.md)** - 势力体系设计
+- **[setting-consistency.md](references/worldbuilding/setting-consistency.md)** - 设定一致性维护
+
+#### 大纲规划 (outlining/)
+- **[outline-structure.md](references/outlining/outline-structure.md)** - 大纲结构设计
+- **[plot-frameworks.md](references/outlining/plot-frameworks.md)** - 剧情框架模板
+- **[chapter-planning.md](references/outlining/chapter-planning.md)** - 章节规划技巧
+- **[conflict-design.md](references/outlining/conflict-design.md)** - 冲突设计方法
+
+#### 写作技巧 (writing/)
+- **[dialogue-writing.md](references/writing/dialogue-writing.md)** - 对话写作技巧
+- **[scene-description.md](references/writing/scene-description.md)** - 场景描写方法
+- **[combat-scenes.md](references/writing/combat-scenes.md)** - 战斗场景写作
+- **[emotion-psychology.md](references/writing/emotion-psychology.md)** - 情感与心理描写
+
+#### 高级技巧 (advanced/)
+- **[multi-threading.md](references/advanced/multi-threading.md)** - 多线叙事技巧
+- **[foreshadowing.md](references/advanced/foreshadowing.md)** - 伏笔设计与回收
+- **[pacing-mastery.md](references/advanced/pacing-mastery.md)** - 节奏掌控进阶
+- **[character-arc.md](references/advanced/character-arc.md)** - 人物弧光设计
+- **[suspense-building.md](references/advanced/suspense-building.md)** - 悬念构建技巧
 
 ### 题材专项指南
 
@@ -349,6 +384,21 @@ Ch 10: Quest + Fire（融合）
 - **[palace-intrigue.md](references/genres/period-drama/palace-intrigue.md)** - 宫斗权谋设计
 - **[character-design.md](references/genres/period-drama/character-design.md)** - 古言人物设计
 - **[plot-patterns.md](references/genres/period-drama/plot-patterns.md)** - 古言剧情模式
+
+#### 玄幻题材 (genres/xuanhuan/)
+- **[power-systems.md](references/genres/xuanhuan/power-systems.md)** - 玄幻力量体系
+- **[cultivation-levels.md](references/genres/xuanhuan/cultivation-levels.md)** - 修炼等级设计
+- **[xuanhuan-plot-patterns.md](references/genres/xuanhuan/xuanhuan-plot-patterns.md)** - 玄幻剧情模式
+- **[xuanhuan-cool-points.md](references/genres/xuanhuan/xuanhuan-cool-points.md)** - 玄幻爽点设计
+
+#### 规则怪谈 (genres/rules-mystery/)
+- **[core-elements.md](references/genres/rules-mystery/core-elements.md)** - 规则怪谈核心要素
+- **[clue-design.md](references/genres/rules-mystery/clue-design.md)** - 线索设计技巧
+- **[trick-design.md](references/genres/rules-mystery/trick-design.md)** - 诡计设计方法
+- **[suspect-management.md](references/genres/rules-mystery/suspect-management.md)** - 嫌疑人管理
+- **[detective-design.md](references/genres/rules-mystery/detective-design.md)** - 侦探角色设计
+- **[revelation-design.md](references/genres/rules-mystery/revelation-design.md)** - 真相揭露设计
+- **[structure-pacing.md](references/genres/rules-mystery/structure-pacing.md)** - 结构与节奏控制
 
 ---
 
