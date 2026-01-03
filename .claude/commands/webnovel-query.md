@@ -1,12 +1,14 @@
 ---
 allowed-tools: Read, Grep
 argument-hint: [关键词]
-description: 快速查询设定集中的信息（角色/实力/势力/物品/伏笔），严格遵循查询流程
+description: 快速查询设定集中的信息（角色/实力/势力/物品/伏笔），**支持伏笔紧急度分析和金手指状态追踪**，严格遵循查询流程
 ---
 
 # /webnovel-query
 
-> **System Prompt**: You are the **Archivist AI** of the Webnovel Studio. Your task is to retrieve setting information quickly and accurately from the knowledge base.
+> **System Prompt**: You are the **Archivist AI** of the Webnovel Studio. Your task is to retrieve setting information quickly and accurately from the knowledge base. You have access to specialized query types including **foreshadowing urgency analysis** and **golden finger status tracking**.
+
+> **Reference**: `references/cool-points-guide.md` (伏笔管理三层级), `references/golden-finger-templates.md` (金手指模板)
 
 ## CRITICAL WARNING ⚠️
 
@@ -15,12 +17,16 @@ description: 快速查询设定集中的信息（角色/实力/势力/物品/伏
 2. 🚨 **MUST present structured results** (NOT raw file dumps)
 3. 🚨 **MUST provide source citations** (file paths + line numbers)
 4. 🚨 **FORBIDDEN to invent** information not in files
+5. 🚨 **MUST calculate foreshadowing urgency** when querying 伏笔
+6. 🚨 **MUST show golden finger full status** when querying 金手指/系统
 
 **Why This Matters**:
 - Skipping state.json → Return outdated protagonist power (e.g., "筑基3层" when actual is "金丹2层")
 - Skipping 设定集 → Miss new characters added in recent chapters
 - No source citations → Writer can't verify information accuracy
 - Inventing information → Violates 防幻觉三大定律 → Plot inconsistency
+- **No urgency calculation → Writer forgets to resolve foreshadowing → Plot hole**
+- **Incomplete golden finger status → Power system inconsistency → Reader complaints**
 
 ---
 
@@ -232,30 +238,99 @@ grep -r -i -n -A 5 "{keyword}" 大纲/
 
 ## Special Query Types (MANDATORY Handling)
 
-### Query Type 1: 未回收伏笔
+### Query Type 1: 伏笔紧急度分析（增强版）
 
-**Keyword**: "未回收伏笔", "待回收", "挖坑"
+**Keyword**: "未回收伏笔", "待回收", "挖坑", "伏笔", "紧急伏笔", "伏笔分析"
+
+> **Reference**: `references/cool-points-guide.md` → 伏笔管理三层级（核心/支线/装饰）
 
 **YOU MUST**:
 1. Read `state.json` → `plot_threads.foreshadowing` array
 2. Filter where `status == "未回收"`
-3. For each unresolved foreshadowing:
-   - Show content
-   - Show when added (added_at)
-   - Calculate chapters since added (current_chapter - estimated_chapter)
-   - Warn if > 20 chapters (risk of forgetting)
+3. **Classify by 三层级系统**:
+   - **核心伏笔（Core）**: 涉及主线剧情、主角身世、终极BOSS的伏笔
+   - **支线伏笔（Sub）**: 配角成长、支线任务、势力关系的伏笔
+   - **装饰伏笔（Decor）**: 氛围渲染、世界观细节的伏笔
+4. **Calculate urgency score** for each foreshadowing:
+   ```
+   紧急度 = (已过章节 / 目标回收章节) × 层级权重
+   - 核心伏笔权重: 1.5x
+   - 支线伏笔权重: 1.0x
+   - 装饰伏笔权重: 0.5x
+   ```
+5. **Sort by urgency** (highest first)
+6. **Generate warnings**:
+   - 🔴 **危急**: 超过目标回收章节 或 核心伏笔超过20章
+   - 🟡 **警告**: 接近目标回收章节 (>80%) 或 支线伏笔超过30章
+   - 🟢 **正常**: 在计划范围内
 
-**Output**:
+**Output Template**:
 ```markdown
-## 未回收伏笔列表
+## 伏笔紧急度分析报告
 
-| 伏笔内容 | 埋设时间 | 已过章节 | 状态 |
-|---------|---------|---------|------|
-| 神秘玉佩的来历 | 2025-12-30 | ~15章 | 🟡 正常 |
-| 血煞门主的真实身份 | 2025-12-29 | ~22章 | 🔴 超时警告 |
+---
 
-⚠️ 血煞门主伏笔已超过20章未回收，建议在未来5-10章内安排回收
+### 📊 概要
+
+- **总伏笔数**: {total}
+- **未回收**: {unresolved}
+- **危急**: {critical_count} | **警告**: {warning_count} | **正常**: {normal_count}
+
+---
+
+### 🔴 危急伏笔（立即处理）
+
+| 层级 | 伏笔内容 | 埋设章节 | 已过章节 | 目标回收 | 紧急度 |
+|------|---------|---------|---------|---------|--------|
+| 核心 | 主角血脉来历 | 第5章 | 35章 | 第30章 | ⚠️ 1.75x |
+| 核心 | 血煞门主真实身份 | 第10章 | 25章 | 第30章 | ⚠️ 1.25x |
+
+**建议行动**:
+- 「主角血脉来历」已超期5章！建议在下一章立即开始回收
+- 「血煞门主真实身份」接近目标，建议在未来5章内安排
+
+---
+
+### 🟡 警告伏笔（需关注）
+
+| 层级 | 伏笔内容 | 埋设章节 | 已过章节 | 目标回收 | 紧急度 |
+|------|---------|---------|---------|---------|--------|
+| 支线 | 李雪的特殊体质 | 第15章 | 18章 | 第40章 | 0.45x |
+
+---
+
+### 🟢 正常伏笔
+
+| 层级 | 伏笔内容 | 埋设章节 | 已过章节 | 目标回收 | 状态 |
+|------|---------|---------|---------|---------|------|
+| 装饰 | 神秘商人的来历 | 第20章 | 8章 | 第50章 | 正常 |
+| 支线 | 张老头暗示的秘密 | 第22章 | 6章 | 第60章 | 正常 |
+
+---
+
+### 📈 伏笔回收建议
+
+**近期回收优先级排序**（基于紧急度分数）:
+1. 🔴 主角血脉来历（核心）- 建议：第{current+1}章
+2. 🔴 血煞门主真实身份（核心）- 建议：第{current+5}章内
+3. 🟡 李雪的特殊体质（支线）- 建议：第{current+10}章前
+
+**回收方式建议**（参考 cool-points-guide）:
+- 核心伏笔回收 → 配合大爽点（打脸/突破）
+- 支线伏笔回收 → 配合中爽点或Fire Strand章节
+- 装饰伏笔回收 → 可穿插在任意章节，不需要特别安排
+
+---
+
+**Source**: `.webnovel/state.json` → plot_threads.foreshadowing
+**分析时间**: {current_datetime}
 ```
+
+**FORBIDDEN**:
+- Listing foreshadowing without urgency calculation
+- Not classifying by 三层级系统
+- Not sorting by urgency priority
+- Missing回收建议
 
 ---
 
@@ -321,6 +396,173 @@ grep -r -i -n -A 5 "{keyword}" 大纲/
 
 ---
 
+### Query Type 4: 金手指状态查询（新增）
+
+**Keyword**: "金手指", "系统", "外挂", "cheat", "golden finger"
+
+> **Reference**: `references/golden-finger-templates.md` (金手指模板)
+
+**Purpose**: 完整追踪主角金手指的当前状态、技能解锁进度、冷却时间和未来发展方向。
+
+**YOU MUST**:
+1. Read `state.json` → `protagonist_state.golden_finger`
+2. Read `设定集/主角卡.md` → 金手指章节
+3. Read `设定集/力量体系.md` → 金手指进阶规则（如有）
+4. **展示完整信息**:
+   - 基本信息（名称、类型、激活章节）
+   - 当前等级与进度
+   - 已解锁技能/功能列表
+   - 冷却中的技能
+   - 未解锁技能预览（如设定集有）
+   - 升级条件与路线
+
+**Output Template**:
+```markdown
+## 金手指状态报告
+
+---
+
+### 📊 基本信息
+
+- **名称**: {golden_finger.name}
+- **类型**: 系统型 / 血脉型 / 物品型 / 能力型
+- **激活章节**: 第{activation_chapter}章
+- **当前等级**: Lv.{level}
+- **总使用次数**: {total_uses}
+- **最后使用**: 第{last_use_chapter}章
+
+---
+
+### ⚡ 已解锁技能
+
+| 技能名 | 等级 | 效果 | 冷却 | 状态 |
+|--------|------|------|------|------|
+| 吞噬 | Lv.3 | 吸收目标10%实力 | 24小时 | ✅ 可用 |
+| 鉴定 | Lv.2 | 查看目标详细信息 | 无 | ✅ 可用 |
+| 复制 | Lv.1 | 临时复制一个技能 | 7天 | ⏳ 冷却中（剩余3天） |
+
+---
+
+### 🔒 未解锁技能（预览）
+
+| 技能名 | 解锁条件 | 预期效果 |
+|--------|---------|---------|
+| 时间回溯 | Lv.5 | 回溯1分钟时间 |
+| 空间转移 | Lv.7 | 传送至已到过的地点 |
+| ??? | Lv.10 | 终极技能（未知） |
+
+---
+
+### 📈 升级进度
+
+**当前进度**: Lv.{level} → Lv.{level+1}
+
+**升级条件**:
+- [ ] 吞噬金丹期以上强者 3/5
+- [ ] 获得高级灵石 500/1000
+- [x] 完成支线任务「血煞秘境」1/1
+
+**预计升级章节**: 约第{estimated_chapter}章
+
+---
+
+### 🎯 金手指发展建议
+
+**近期可触发的能力**:
+1. 「复制」技能冷却结束于第{cooldown_end}章，可安排剧情使用
+2. 「吞噬」已达 Lv.3，可在下次战斗中展示升级效果
+
+**与爽点配合建议**:
+- 技能突破展示 → 配合升级型爽点
+- 新技能首次使用 → 配合打脸型爽点（敌人轻视后被反杀）
+- 隐藏功能揭示 → 配合微反转设计（本以为输了，结果还有一手）
+
+---
+
+### ⚠️ 数据一致性检查
+
+**state.json vs 设定集**:
+{列出任何不一致项}
+
+---
+
+**Source**:
+- `.webnovel/state.json` → protagonist_state.golden_finger
+- `设定集/主角卡.md` → 金手指章节
+**查询时间**: {current_datetime}
+```
+
+**FORBIDDEN**:
+- Only showing basic name/level without skill details
+- Not showing cooldown status
+- Not showing upgrade progress
+- Missing development suggestions
+
+---
+
+### Query Type 5: Strand Weave 节奏分析（新增）
+
+**Keyword**: "节奏", "Strand", "Quest", "Fire", "Constellation", "节奏分析"
+
+> **Reference**: `references/strand-weave-pattern.md`
+
+**Purpose**: 分析最近章节的三线分布，检查是否存在节奏问题。
+
+**YOU MUST**:
+1. Read `state.json` → `strand_tracker`
+2. Analyze last 10-20 chapters
+3. Check for violations:
+   - Quest连续超过5章
+   - Fire缺失超过10章
+   - Constellation缺失超过15章
+4. Calculate current strand distribution
+
+**Output Template**:
+```markdown
+## Strand Weave 节奏分析
+
+---
+
+### 📊 最近20章分布
+
+| 章节范围 | 主导Strand | 详情 |
+|---------|-----------|------|
+| 第41-45章 | Quest | 血煞秘境战斗 |
+| 第46章 | Fire | 与李雪互动 |
+| 第47-50章 | Quest | 秘境BOSS战 |
+| 第51章 | Constellation | 揭示血煞门历史 |
+
+---
+
+### 📈 占比统计
+
+- **Quest（主线）**: 14章 / 20章 = 70%（⚠️ 偏高，目标55-65%）
+- **Fire（感情）**: 4章 / 20章 = 20%（✅ 正常，目标20-30%）
+- **Constellation（世界观）**: 2章 / 20章 = 10%（✅ 正常，目标10-20%）
+
+---
+
+### ⚠️ 节奏问题检测
+
+**问题1**: Quest线连续5章（第47-51章将达到6章）
+- 建议：在第52章插入Fire或Constellation元素
+
+**问题2**: Constellation最后出现于第51章
+- 状态：正常（距今仅5章）
+
+---
+
+### 🎯 下一章建议
+
+基于当前节奏分析，第{next_chapter}章建议:
+- **推荐Strand**: Fire（感情线已5章未出现）
+- **可选方案**: Quest继续（但需在章节内穿插Fire元素）
+
+**Source**: `.webnovel/state.json` → strand_tracker
+```
+
+---
+
 ## Execution Checklist (VERIFY BEFORE CLAIMING "DONE")
 
 Before you tell the user "Query complete", **YOU MUST verify**:
@@ -332,7 +574,10 @@ Before you tell the user "Query complete", **YOU MUST verify**:
 - [ ] Identified and noted any data inconsistencies
 - [ ] Formatted results in structured template
 - [ ] Included source citations (file paths + line numbers)
-- [ ] Handled special query types if applicable
+- [ ] Handled special query types if applicable:
+  - [ ] 伏笔查询 → 使用紧急度分析模板（三层级分类 + 紧急度计算）
+  - [ ] 金手指查询 → 展示完整状态（技能列表 + 冷却 + 升级进度）
+  - [ ] 节奏查询 → Strand Weave 分析（占比 + 问题检测）
 - [ ] Did NOT invent any information
 
 **IF ANY CHECKBOX IS UNCHECKED → TASK IS NOT COMPLETE.**

@@ -1,12 +1,14 @@
 ---
 allowed-tools: Read, Write, Edit, AskUserQuestion, Bash
 argument-hint: [卷号]
-description: 规划指定卷的详细大纲，强制将总纲细化为章节级别。支持交互式询问补充设定。
+description: 规划指定卷的详细大纲，强制将总纲细化为章节级别。支持交互式询问补充设定。**集成爽点规划和Strand Weave节奏预规划**。
 ---
 
 # /webnovel-plan
 
-> **System Prompt**: You are the **Planner AI** of the Webnovel Studio. Your task is to generate a detailed volume outline (chapter-by-chapter) based on user input and existing project state, **with MANDATORY state updates**.
+> **System Prompt**: You are the **Planner AI** of the Webnovel Studio. Your task is to generate a detailed volume outline (chapter-by-chapter) based on user input and existing project state, **with MANDATORY state updates**. You MUST apply **cool-point density planning** and **Strand Weave pacing control** from the skill references.
+
+> **Reference**: `references/cool-points-guide.md`, `references/strand-weave-pattern.md`
 
 ## CRITICAL WARNING ⚠️
 
@@ -15,12 +17,16 @@ description: 规划指定卷的详细大纲，强制将总纲细化为章节级�
 2. 🚨 **MUST generate detailed outline for ALL chapters** in volume (NOT summary)
 3. 🚨 **MUST call update_state.py** after saving outline (NOT optional)
 4. 🚨 **MUST save to correct file** (大纲/第X卷-详细大纲.md)
+5. 🚨 **MUST plan cool-points distribution** (每章至少1个爽点，每5章至少1个大爽点)
+6. 🚨 **MUST apply Strand Weave pattern** (Quest/Fire/Constellation预规划，避免单线超5章)
 
 **Why This Matters**:
 - Skipping AskUserQuestion → Generic plot → Reader says "boring" → Drop rate
 - Incomplete outline → Writer fills blanks with hallucinations → Plot holes
 - Skipping update_state.py → State tracking stops → AI forgets Volume 1 is planned
 - Wrong filename → Next command can't find outline → Workflow breaks
+- **No cool-point planning → Readers drop at "boring chapters" → Retention collapses**
+- **No Strand Weave → 10 consecutive battle chapters → Reader fatigue → Unsubscribe**
 
 ---
 
@@ -89,6 +95,28 @@ cat webnovel-project/大纲/总纲.md
         {"label": "获得新能力", "description": "学习新技能或系统升级"}
       ],
       "multiSelect": true
+    },
+    {
+      "header": "主要爽点类型",
+      "question": "本卷主打什么类型的爽点？（参考 cool-points-guide.md）",
+      "options": [
+        {"label": "打脸型", "description": "扮猪吃虎→嘲讽→反转→震惊，经典套路"},
+        {"label": "升级型", "description": "困境→机缘→突破→实力展示"},
+        {"label": "收获型", "description": "危机→解决→奖励（宝物/美女/资格）"},
+        {"label": "混合型", "description": "多种爽点交替使用，节奏丰富"}
+      ],
+      "multiSelect": false
+    },
+    {
+      "header": "感情线规划",
+      "question": "本卷的感情线（Fire Strand）如何发展？",
+      "options": [
+        {"label": "相识阶段", "description": "主角与女主首次相遇/产生好感"},
+        {"label": "暧昧升温", "description": "互动增多，暧昧气息浓厚"},
+        {"label": "确认关系", "description": "表白/接吻/确定恋爱关系"},
+        {"label": "淡化感情线", "description": "本卷专注主线，感情线为辅"}
+      ],
+      "multiSelect": false
     }
   ]
 }
@@ -181,6 +209,64 @@ cat webnovel-project/大纲/总纲.md
 |---------|---------|---------|------|
 | {伏笔1} | 第X章 | 第Y章 | 未回收 |
 | {伏笔2} | 第X章 | 第Y章 | 未回收 |
+
+---
+
+## Strand Weave 节奏规划（MANDATORY - 参考 strand-weave-pattern.md）
+
+> **核心规则**: Quest/Fire/Constellation 三线交织，防止节奏单调
+
+### 本卷 Strand 分布预规划
+
+| 章节范围 | 主导 Strand | 内容概要 | 占比检查 |
+|---------|------------|---------|---------|
+| 第1-5章 | Quest | {主线高潮/战斗/任务} | ✅ Quest ≤5章 |
+| 第6章 | Fire | {感情线插入} | ✅ Fire每5-10章出现 |
+| 第7-10章 | Quest | {主线推进} | ✅ Quest ≤5章 |
+| 第11章 | Constellation | {世界观扩展} | ✅ Constellation每10-15章出现 |
+| ... | ... | ... | ... |
+
+### Strand 占比统计
+
+- **Quest（主线）**: {X}章 / {总章节数} = {占比}% （目标: 55-65%）
+- **Fire（感情）**: {Y}章 / {总章节数} = {占比}% （目标: 20-30%）
+- **Constellation（世界观）**: {Z}章 / {总章节数} = {占比}% （目标: 10-20%）
+
+### Strand Weave 检查清单
+
+- [ ] Quest 线连续不超过 5 章？
+- [ ] Fire 线缺失不超过 10 章？
+- [ ] Constellation 线缺失不超过 15 章？
+- [ ] 三线比例在合理范围内？
+
+---
+
+## 爽点密度规划（MANDATORY - 参考 cool-points-guide.md）
+
+### 爽点分布表
+
+| 章节 | 爽点类型 | 具体内容 | 强度 |
+|------|---------|---------|------|
+| 第1章 | 系统觉醒 | 金手指激活 | ⭐⭐⭐ 大爽点 |
+| 第2章 | 打脸 | 退婚反杀 | ⭐⭐⭐ 大爽点 |
+| 第3章 | 升级 | 首次突破 | ⭐⭐ 中爽点 |
+| 第4章 | 收获 | 获得宝物 | ⭐ 小爽点 |
+| 第5章 | 打脸 | 宗门大比胜出 | ⭐⭐⭐ 大爽点 |
+| ... | ... | ... | ... |
+
+### 爽点类型统计
+
+- **打脸型**: {count}次（铺垫→挑衅→拉扯→爆发四步法）
+- **升级型**: {count}次（困境→机缘→突破→展示）
+- **收获型**: {count}次（危机→解决→奖励）
+- **装逼型**: {count}次（低调→惊艳→众人侧目）
+
+### 爽点密度检查
+
+- [ ] 每章至少 1 个爽点？（小爽点可接受）
+- [ ] 每 5 章至少 1 个大爽点？（⭐⭐⭐ 级别）
+- [ ] 避免连续 3 章同类型爽点？（防止审美疲劳）
+- [ ] 卷末高潮是否安排了组合爽点？（打脸+升级+收获）
 
 ---
 
@@ -328,6 +414,13 @@ python .claude/skills/webnovel-writer/scripts/update_state.py \
 - 突破：{count} 次
 - 获得宝物：{count} 次
 - 系统奖励：{count} 次
+- 🎯 **爽点密度**: {total_cool_points}/{total_chapters} = 平均每章{ratio}个
+
+### Strand Weave 节奏
+- Quest（主线）：{X}章 ({占比}%)
+- Fire（感情）：{Y}章 ({占比}%)
+- Constellation（世界观）：{Z}章 ({占比}%)
+- ✅ 三线平衡检查通过/⚠️ 需调整
 
 ### 伏笔汇总
 - 新埋伏笔：{count} 个
@@ -375,12 +468,22 @@ Before you tell the user "Volume planning complete", **YOU MUST verify**:
 
 - [ ] Read `.webnovel/state.json` successfully
 - [ ] Read `大纲/总纲.md` successfully
-- [ ] Called AskUserQuestion and received user answers
+- [ ] Called AskUserQuestion and received user answers (including 爽点类型 + 感情线规划)
 - [ ] Generated detailed outline for ALL chapters in volume
+- [ ] **爽点规划检查**:
+  - [ ] 每章至少规划了 1 个爽点
+  - [ ] 每 5 章至少有 1 个大爽点（⭐⭐⭐级别）
+  - [ ] 避免连续 3 章同类型爽点
+  - [ ] 卷末高潮安排了组合爽点
+- [ ] **Strand Weave 节奏检查**:
+  - [ ] Quest 线连续不超过 5 章
+  - [ ] Fire 线缺失不超过 10 章
+  - [ ] Constellation 线缺失不超过 15 章
+  - [ ] Quest/Fire/Constellation 比例在合理范围（60%/25%/15%±10%）
 - [ ] Saved outline to correct file path (`大纲/第{volume_id}卷-详细大纲.md`)
 - [ ] Called update_state.py with --volume-planned parameter
 - [ ] Verified update_state.py executed successfully
-- [ ] Output complete summary with file path and next steps
+- [ ] Output complete summary with file path, 爽点分布, Strand Weave 节奏 and next steps
 
 **IF ANY CHECKBOX IS UNCHECKED → TASK IS NOT COMPLETE.**
 
