@@ -15,12 +15,14 @@ description: 按大纲创作指定章节的正文内容（3000-5000字），自�
 2. 🚨 **MUST call backup_manager.py** for Git commit (NOT optional)
 3. 🚨 **MUST update strand_tracker** (NOT optional)
 4. 🚨 **MUST run bi-chapter review** every 2 chapters (NOT optional)
+5. 🚨 **MUST polish content** (Step 2.5) before entity extraction (NOT optional)
 
 **Why This Matters**:
 - Without state update → AI forgets protagonist's power → Plot collapse
 - Without Git backup → File corruption = ALL chapters lost
 - Without strand tracking → Pacing becomes monotonous → Reader churn
 - Without quality review → Accumulating defects → Unrecoverable errors
+- Without polishing → AI traces remain → Content feels robotic → Reader disengagement
 
 ---
 
@@ -274,7 +276,159 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 ```bash
 python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-step \
   --step-id "Step 2" \
-  --artifacts '{"chapter_file": {"path": "正文/第{N:04d}章.md", "exists": true, "word_count": {实际字数}, "status": "complete"}}'
+  --artifacts '{"chapter_file": {"path": "正文/第{N:04d}章.md", "exists": true, "word_count": {实际字数}, "status": "draft"}}'
+```
+
+---
+
+### Step 2.5: Polish Content (MANDATORY - IN-PLACE)
+
+**Before executing Step 2.5**, **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
+  --step-id "Step 2.5" \
+  --step-name "Polish Content"
+```
+
+> ⚠️ **CRITICAL**: 此步骤在主流程中直接执行，**不使用独立代理**，确保润色不偏离大纲约束。
+
+---
+
+**润色必须遵循的核心原则**:
+
+```
+🔒 大纲即法律：润色只调整表达方式，不改变情节内容
+🔒 设定即物理：润色不得改变任何实力/能力描述
+🔒 标签保护：[NEW_ENTITY] 和 [GOLDEN_FINGER_SKILL] 标签必须原样保留
+```
+
+---
+
+**润色四步骤（顺序执行）**:
+
+#### 2.5.1 AI痕迹检测与修正
+
+**识别以下AI写作特征并修正**:
+
+| AI痕迹类型 | 识别特征 | 修正方法 |
+|-----------|---------|---------|
+| **过度总结** | "综合以上…"、"总而言之…" | 删除或改为自然过渡 |
+| **完美结构** | "首先…其次…最后…"、"第一…第二…" | 打散结构，变为自然叙述 |
+| **学术表达** | "而言"、"在某种程度上"、"从本质上看" | 替换为口语化表达 |
+| **排比过多** | 连续3个以上相同句式 | 保留1-2个，其余改写 |
+| **对偶堆砌** | 刻意对仗的形容词组 | 减少或打破对称 |
+| **因果过密** | 每句都有"因为…所以…" | 改用暗示或动作展现 |
+
+**修正示例**:
+```
+❌ AI风格：综合以上分析，林天首先需要提升修为，其次需要获取资源，最后需要寻找盟友。
+✅ 自然风格：林天心里盘算着，修为是根本，资源也不能少，至于盟友……先走一步看一步吧。
+```
+
+#### 2.5.2 语言五层优化
+
+按以下顺序逐层优化（每层只处理对应问题）:
+
+| 层级 | 优化目标 | 检查要点 |
+|-----|---------|---------|
+| **L1 准确性** | 词汇准确、语法正确 | 错别字、语病、逻辑矛盾 |
+| **L2 生动性** | 多感官描写 | 视觉+听觉+触觉，动作细节 |
+| **L3 流畅性** | 句式变化、段落过渡 | 长短句交替，自然衔接 |
+| **L4 表现力** | 情感张力、氛围营造 | 内心独白、环境烘托 |
+| **L5 一致性** | 风格统一 | 人称视角、叙事距离保持 |
+
+**优化示例（L2 生动性）**:
+```
+❌ 单调：林天感到很紧张。
+✅ 生动：林天攥紧拳头，掌心渗出细密的汗珠，心跳如擂鼓般直冲耳膜。
+```
+
+#### 2.5.3 风格四维检查
+
+确保以下四个维度与前文保持统一:
+
+| 维度 | 检查内容 | 一致性要求 |
+|-----|---------|----------|
+| **语言风格** | 词汇选择、修辞手法 | 与前2章用词习惯一致 |
+| **叙事风格** | 视角、节奏、距离 | 第几人称、紧凑/舒缓 |
+| **角色风格** | 对话语气、行为模式 | 符合人设（state.json） |
+| **场景风格** | 环境描写、氛围基调 | 与题材模板风格匹配 |
+
+**检查示例（角色风格）**:
+```
+林天人设：沉稳、少言
+❌ OOC：林天兴奋地大喊："太棒了！我成功了！"
+✅ 符合：林天嘴角微微上扬，眼中闪过一丝不易察觉的笑意。
+```
+
+#### 2.5.4 自然化处理
+
+**添加人类写作特有的自然元素**:
+
+| 元素类型 | 应用场景 | 示例 |
+|---------|---------|-----|
+| **停顿词** | 对话、内心独白 | "嗯"、"这个"、"怎么说呢" |
+| **不确定语气** | 推测、判断 | "大概"、"应该"、"似乎" |
+| **口语化** | 日常对话 | "咋回事"、"得了"、"行吧" |
+| **自我纠正** | 思考过程 | "不对，应该是…"、"等等…" |
+| **情绪词** | 感叹、反应 | "嘁"、"切"、"哼" |
+
+**自然化示例**:
+```
+❌ 机械：林天分析了三种可能的策略，最终选择了第二种。
+✅ 自然：林天琢磨了半天——第一种太冒险，第三种太慢，嗯……就第二种吧。
+```
+
+---
+
+**润色后自检清单**:
+
+- [ ] 大纲目标未改变（情节、爽点、伏笔完整）
+- [ ] 主角实力未膨胀（≤ state.json）
+- [ ] [NEW_ENTITY] 和 [GOLDEN_FINGER_SKILL] 标签保留完整
+- [ ] AI痕迹已清除（无过度总结、完美结构）
+- [ ] 风格与前文一致（语言/叙事/角色/场景）
+- [ ] 字数仍在 3000-5000 范围内
+
+---
+
+**润色前后对比输出（可选）**:
+
+```markdown
+📝 润色报告
+
+## AI痕迹修正
+- 修正过度总结: 2处
+- 打散完美结构: 1处
+- 替换学术表达: 3处
+
+## 语言优化
+- L2 生动性提升: 5处（新增感官描写）
+- L3 流畅性优化: 2处（句式调整）
+
+## 风格统一
+- 角色对话调整: 1处（符合林天沉稳人设）
+
+## 自然化处理
+- 添加停顿词: 3处
+- 添加不确定语气: 2处
+
+✅ 润色完成，章节已更新
+```
+
+---
+
+**Save Polished Output**:
+
+更新章节文件 `正文/第{N:04d}章.md`，覆盖原草稿。
+
+**After completing Step 2.5**, **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-step \
+  --step-id "Step 2.5" \
+  --artifacts '{"polished": true, "ai_traces_fixed": {N}, "style_unified": true}'
 ```
 
 ---
@@ -792,6 +946,12 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-task
 - 字数: {实际字数} 字
 - 爽点: {爽点类型}
 
+✨ 润色处理
+- AI痕迹修正: {N}处
+- 语言优化: L1-L5 已完成
+- 风格统一: ✅ 四维检查通过
+- 自然化: 已添加停顿词/口语化表达
+
 📊 状态更新
 - 总进度: {current_chapter}/{target_chapters} 章
 - 总字数: {total_words}/{target_words} 字
@@ -831,6 +991,13 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-task
 **Chapter Content**:
 - [ ] Chapter file saved to `正文/第{N:04d}章.md` (3,000-5,000 chars)
 - [ ] [NEW_ENTITY] and [GOLDEN_FINGER_SKILL] tags extracted (if any)
+
+**Content Polishing** (Step 2.5):
+- [ ] AI traces detected and fixed (过度总结/完美结构/学术表达)
+- [ ] Language 5-layer optimization applied (准确性→生动性→流畅性→表现力→一致性)
+- [ ] Style 4-dimension check passed (语言/叙事/角色/场景风格统一)
+- [ ] Naturalization applied (停顿词/不确定语气/口语化)
+- [ ] Outline constraints preserved (情节、爽点、伏笔未改变)
 
 **State Management**:
 - [ ] `update_state.py` executed successfully

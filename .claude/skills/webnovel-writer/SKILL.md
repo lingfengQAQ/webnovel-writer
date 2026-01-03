@@ -351,6 +351,7 @@ Ch 10: Quest + Fire（融合）
 - **[pacing-control.md](references/pacing-control.md)** - 节奏控制技巧和案例分析
 - **[genre-tropes.md](references/genre-tropes.md)** - 修仙/都市/玄幻等题材套路库
 - **[strand-weave-pattern.md](references/strand-weave-pattern.md)** - Strand Weave 详细规范
+- **[polish-guide.md](references/polish-guide.md)** - 内容润色指南（AI痕迹清除/语言优化/风格统一/自然化）
 - **[workflow-resume.md](references/workflow-resume.md)** - 工作流中断恢复机制（用于 /webnovel-resume 命令）
 - **[archiving-strategy.md](references/archiving-strategy.md)** - 数据归档策略（200万字长跑保障）
 - **[git-workflow.md](references/git-workflow.md)** - Git 版本控制工作流规范
