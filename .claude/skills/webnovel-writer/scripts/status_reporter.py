@@ -492,15 +492,38 @@ class StatusReporter:
 
         lines = ["```mermaid", "graph LR"]
 
-        for char_name, rel_data in relationships.items():
-            affection = rel_data.get("affection", 0)
-            hatred = rel_data.get("hatred", 0)
+        # 支持两种格式：
+        # 格式1（新）: {"allies": [...], "enemies": [...]}
+        # 格式2（旧）: {"角色名": {"affection": X, "hatred": Y}}
 
-            if affection > 0:
-                lines.append(f"    {protagonist_name} -->|好感度{affection}| {char_name}")
+        allies = relationships.get("allies", [])
+        enemies = relationships.get("enemies", [])
 
-            if hatred > 0:
-                lines.append(f"    {protagonist_name} -->|仇恨度{hatred}| {char_name}")
+        if allies or enemies:
+            # 新格式
+            for ally in allies:
+                if isinstance(ally, dict):
+                    name = ally.get("name", "未知")
+                    relation = ally.get("relation", "友好")
+                    lines.append(f"    {protagonist_name} -->|{relation}| {name}")
+
+            for enemy in enemies:
+                if isinstance(enemy, dict):
+                    name = enemy.get("name", "未知")
+                    relation = enemy.get("relation", "敌对")
+                    lines.append(f"    {protagonist_name} -.->|{relation}| {name}")
+        else:
+            # 旧格式兼容
+            for char_name, rel_data in relationships.items():
+                if isinstance(rel_data, dict):
+                    affection = rel_data.get("affection", 0)
+                    hatred = rel_data.get("hatred", 0)
+
+                    if affection > 0:
+                        lines.append(f"    {protagonist_name} -->|好感度{affection}| {char_name}")
+
+                    if hatred > 0:
+                        lines.append(f"    {protagonist_name} -.->|仇恨度{hatred}| {char_name}")
 
         lines.append("```")
 

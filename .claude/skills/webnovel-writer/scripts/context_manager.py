@@ -152,11 +152,36 @@ class ContextManager:
 
         protag_state = self.state.get("protagonist_state", {})
 
+        # 支持两种格式：嵌套格式和平铺格式
+        # power 字段
+        power_data = protag_state.get("power", {})
+        if isinstance(power_data, dict):
+            power = power_data
+        else:
+            # 平铺格式
+            power = {
+                "realm": protag_state.get("realm", "未知"),
+                "layer": protag_state.get("layer", 0),
+                "bottleneck": protag_state.get("bottleneck")
+            }
+
+        # location 字段
+        location_data = protag_state.get("location", {})
+        if isinstance(location_data, dict):
+            location = location_data.get("current", "未知")
+        else:
+            # 平铺格式 - location 是字符串
+            location = location_data if location_data else "未知"
+
+        # golden_finger 字段
+        gf_data = protag_state.get("golden_finger", {})
+        gf_name = gf_data.get("name", "无") if isinstance(gf_data, dict) else "无"
+
         brief = {
             "name": protag_state.get("name", "主角"),
-            "power": protag_state.get("power", {}),
-            "location": protag_state.get("location", {}).get("current", "未知"),
-            "golden_finger": protag_state.get("golden_finger", {}).get("name", "无")
+            "power": power,
+            "location": location,
+            "golden_finger": gf_name
         }
 
         # 读取主角卡的"核心性格"章节（如果存在）
@@ -205,9 +230,13 @@ class ContextManager:
                            characters: Optional[List[str]] = None) -> Dict[str, Any]:
         """构建场景上下文（1500 Token）"""
 
-        # 确定当前地点
+        # 确定当前地点（支持嵌套和平铺两种格式）
         if not location and self.state:
-            location = self.state.get("protagonist_state", {}).get("location", {}).get("current")
+            location_data = self.state.get("protagonist_state", {}).get("location", {})
+            if isinstance(location_data, dict):
+                location = location_data.get("current")
+            else:
+                location = location_data if location_data else None
 
         scene = {
             "location_details": self._get_location_details(location) if location else None,
