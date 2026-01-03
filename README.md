@@ -38,8 +38,16 @@
 
 ### 安装与初始化
 
-1. **下载 Skill**:
-   将本项目克隆至您的 `.claude/skills/` 目录下，或通过 Claude Code 插件机制安装。
+1. **安装 Skill**:
+   ```bash
+   cd ~/.claude/skills/
+   git clone https://github.com/lingfengQAQ/webnovel-writer.git
+   ```
+
+   安装后 Claude Code 会自动加载：
+   - 📁 6 个 Agents (高潮点检查、连贯性检查等)
+   - ⚡ 6 个 Commands (`/webnovel-init`, `/webnovel-write` 等)
+   - 🔧 15+ 个 Python 脚本
 
 2. **初始化项目**:
    ```bash
@@ -75,14 +83,28 @@
 ## 项目结构
 
 ```text
-.
-├── .claude/
-│   ├── agents/              # 审查员 Agents (High-Point, Consistency, etc.)
-│   ├── commands/            # Slash Commands 定义
-│   └── skills/webnovel-writer/
-│       ├── scripts/         # 核心逻辑脚本 (Python)
-│       ├── references/      # 写作指南与规范
-│       └── templates/       # 题材与金手指模板
+~/.claude/skills/webnovel-writer/
+├── agents/               # 5 个审查员 Agents
+│   ├── high-point-checker.md
+│   ├── consistency-checker.md
+│   ├── ooc-checker.md
+│   ├── pacing-checker.md
+│   └── continuity-checker.md
+├── commands/             # 6 个 Slash Commands
+│   ├── webnovel-init.md
+│   ├── webnovel-plan.md
+│   ├── webnovel-write.md
+│   ├── webnovel-review.md
+│   ├── webnovel-query.md
+│   └── webnovel-resume.md
+├── scripts/              # 核心 Python 脚本
+│   ├── security_utils.py
+│   ├── context_manager.py
+│   ├── extract_entities.py
+│   ├── structured_index.py
+│   └── ...
+├── references/           # 写作指南与规范
+└── templates/            # 题材与金手指模板
 ```
 
 ## 技术实现细节
