@@ -89,12 +89,19 @@ class StateUpdater:
                 print(f"❌ 缺少必需字段: {key}")
                 return False
 
-        # 验证嵌套结构
-        if "power" not in state["protagonist_state"]:
-            print(f"❌ 缺少 protagonist_state.power 字段")
+        # 验证嵌套结构（支持两种格式：嵌套和平铺）
+        ps = state["protagonist_state"]
+        # power 字段：支持 power.realm 或直接 realm
+        has_nested_power = "power" in ps and isinstance(ps.get("power"), dict)
+        has_flat_power = "realm" in ps
+        if not (has_nested_power or has_flat_power):
+            print(f"❌ 缺少 protagonist_state.power 或 protagonist_state.realm 字段")
             return False
 
-        if "location" not in state["protagonist_state"]:
+        # location 字段：支持 location.current 或直接 location
+        has_nested_location = isinstance(ps.get("location"), dict) and "current" in ps.get("location", {})
+        has_flat_location = isinstance(ps.get("location"), str)
+        if not (has_nested_location or has_flat_location):
             print(f"❌ 缺少 protagonist_state.location 字段")
             return False
 
@@ -165,20 +172,37 @@ class StateUpdater:
             return False
 
     def update_protagonist_power(self, realm: str, layer: int, bottleneck: str):
-        """更新主角实力"""
-        self.state["protagonist_state"]["power"] = {
-            "realm": realm,
-            "layer": layer,
-            "bottleneck": bottleneck
-        }
+        """更新主角实力（支持嵌套和平铺两种格式）"""
+        ps = self.state["protagonist_state"]
+        # 检测当前格式
+        if "power" in ps and isinstance(ps.get("power"), dict):
+            # 嵌套格式
+            ps["power"] = {
+                "realm": realm,
+                "layer": layer,
+                "bottleneck": bottleneck if bottleneck != "null" else None
+            }
+        else:
+            # 平铺格式
+            ps["realm"] = realm
+            ps["layer"] = layer
+            ps["bottleneck"] = bottleneck if bottleneck != "null" else None
         print(f"📝 更新主角实力: {realm} {layer}层, 瓶颈: {bottleneck}")
 
     def update_protagonist_location(self, location: str, chapter: int):
-        """更新主角位置"""
-        self.state["protagonist_state"]["location"] = {
-            "current": location,
-            "last_chapter": chapter
-        }
+        """更新主角位置（支持嵌套和平铺两种格式）"""
+        ps = self.state["protagonist_state"]
+        # 检测当前格式
+        if isinstance(ps.get("location"), dict):
+            # 嵌套格式
+            ps["location"] = {
+                "current": location,
+                "last_chapter": chapter
+            }
+        else:
+            # 平铺格式
+            ps["location"] = location
+            ps["location_since_chapter"] = chapter
         print(f"📝 更新主角位置: {location}（第{chapter}章）")
 
     def update_golden_finger(self, name: str, level: int, cooldown: int):
