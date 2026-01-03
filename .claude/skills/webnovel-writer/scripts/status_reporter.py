@@ -6,10 +6,12 @@
 
 功能：
 1. 角色活跃度分析：哪些角色太久没出场（掉线统计）
-2. 伏笔深度分析：哪些坑挖得太久了（超过 20 万字未收）
+2. 伏笔深度分析：哪些坑挖得太久了（超过 20 万字未收）+ 紧急度排序
 3. 爽点节奏分布：全书高潮点的分布频率（热力图）
 4. 字数分布统计：各卷、各篇的字数分布
 5. 人际关系图谱：好感度/仇恨度趋势
+6. Strand Weave 节奏分析：Quest/Fire/Constellation 三线占比统计
+7. 伏笔紧急度排序：基于三层级系统（核心/支线/装饰）的优先级计算
 
 输出格式：
   - Markdown 报告（.webnovel/health_report.md）
@@ -27,6 +29,9 @@
 
   # 仅分析爽点节奏
   python status_reporter.py --focus pacing
+
+  # 分析 Strand Weave 节奏
+  python status_reporter.py --focus strand
 
 报告示例：
   # 全书健康报告
@@ -236,6 +241,204 @@ class StatusReporter:
         else:
             return "🔴 严重超时"
 
+    def analyze_foreshadowing_urgency(self) -> List[Dict]:
+        """
+        分析伏笔紧急度（基于三层级系统）
+
+        三层级权重：
+        - 核心(Core): 权重 3.0 - 必须回收，否则剧情崩塌
+        - 支线(Sub): 权重 2.0 - 应该回收，否则显得作者健忘
+        - 装饰(Decor): 权重 1.0 - 可回收可不回收，仅增加真实感
+
+        紧急度计算公式：
+        urgency = (已过章节 / 目标回收章节) × 层级权重
+        """
+        if not self.state:
+            return []
+
+        current_chapter = self.state.get("progress", {}).get("current_chapter", 0)
+        plot_threads = self.state.get("plot_threads", {})
+        foreshadowing = plot_threads.get("foreshadowing", [])
+
+        # 层级权重映射
+        tier_weights = {
+            "核心": 3.0,
+            "core": 3.0,
+            "支线": 2.0,
+            "sub": 2.0,
+            "装饰": 1.0,
+            "decor": 1.0
+        }
+
+        urgency_list = []
+
+        for item in foreshadowing:
+            if item.get("status") == "已回收":
+                continue
+
+            content = item.get("content", "")
+            tier = item.get("tier", "支线")  # 默认支线
+            planted_chapter = item.get("planted_chapter", 1)
+            target_chapter = item.get("target_chapter", planted_chapter + 100)
+
+            weight = tier_weights.get(tier.lower(), 2.0)
+            elapsed = current_chapter - planted_chapter
+            remaining = target_chapter - current_chapter
+
+            # 紧急度计算
+            if target_chapter > planted_chapter:
+                urgency = (elapsed / (target_chapter - planted_chapter)) * weight
+            else:
+                urgency = weight * 2  # 已超期
+
+            urgency_list.append({
+                "content": content,
+                "tier": tier,
+                "weight": weight,
+                "planted_chapter": planted_chapter,
+                "target_chapter": target_chapter,
+                "elapsed": elapsed,
+                "remaining": remaining,
+                "urgency": round(urgency, 2),
+                "status": self._get_urgency_status(urgency, remaining)
+            })
+
+        # 按紧急度排序（降序）
+        return sorted(urgency_list, key=lambda x: x["urgency"], reverse=True)
+
+    def _get_urgency_status(self, urgency: float, remaining: int) -> str:
+        """判断紧急度状态"""
+        if remaining < 0:
+            return "🔴 已超期"
+        elif urgency >= 2.0:
+            return "🔴 紧急"
+        elif urgency >= 1.0:
+            return "🟡 警告"
+        else:
+            return "🟢 正常"
+
+    def analyze_strand_weave(self) -> Dict:
+        """
+        分析 Strand Weave 节奏分布
+
+        三线定义：
+        - Quest（主线）: 战斗、任务、升级 - 目标 55-65%
+        - Fire（感情）: 感情线、人际互动 - 目标 20-30%
+        - Constellation（世界观）: 世界观展开、势力背景 - 目标 10-20%
+
+        检查规则：
+        - Quest 线连续不超过 5 章
+        - Fire 线缺失不超过 10 章
+        - Constellation 线缺失不超过 15 章
+        """
+        if not self.state:
+            return {}
+
+        strand_tracker = self.state.get("strand_tracker", {})
+        history = strand_tracker.get("history", [])
+
+        if not history:
+            return {
+                "has_data": False,
+                "message": "暂无 Strand Weave 数据"
+            }
+
+        # 统计各线占比
+        quest_count = 0
+        fire_count = 0
+        constellation_count = 0
+        total = len(history)
+
+        for entry in history:
+            strand = entry.get("strand", "").lower()
+            if strand in ["quest", "主线", "战斗", "任务"]:
+                quest_count += 1
+            elif strand in ["fire", "感情", "感情线", "互动"]:
+                fire_count += 1
+            elif strand in ["constellation", "世界观", "背景", "势力"]:
+                constellation_count += 1
+
+        # 计算占比
+        quest_ratio = (quest_count / total * 100) if total > 0 else 0
+        fire_ratio = (fire_count / total * 100) if total > 0 else 0
+        constellation_ratio = (constellation_count / total * 100) if total > 0 else 0
+
+        # 检查违规
+        violations = []
+
+        # 检查 Quest 连续超过 5 章
+        quest_streak = 0
+        max_quest_streak = 0
+        for entry in history:
+            strand = entry.get("strand", "").lower()
+            if strand in ["quest", "主线", "战斗", "任务"]:
+                quest_streak += 1
+                max_quest_streak = max(max_quest_streak, quest_streak)
+            else:
+                quest_streak = 0
+
+        if max_quest_streak > 5:
+            violations.append(f"Quest 线连续 {max_quest_streak} 章（超过 5 章限制）")
+
+        # 检查 Fire 缺失超过 10 章
+        fire_gap = 0
+        max_fire_gap = 0
+        for entry in history:
+            strand = entry.get("strand", "").lower()
+            if strand in ["fire", "感情", "感情线", "互动"]:
+                max_fire_gap = max(max_fire_gap, fire_gap)
+                fire_gap = 0
+            else:
+                fire_gap += 1
+        max_fire_gap = max(max_fire_gap, fire_gap)
+
+        if max_fire_gap > 10:
+            violations.append(f"Fire 线缺失 {max_fire_gap} 章（超过 10 章限制）")
+
+        # 检查 Constellation 缺失超过 15 章
+        const_gap = 0
+        max_const_gap = 0
+        for entry in history:
+            strand = entry.get("strand", "").lower()
+            if strand in ["constellation", "世界观", "背景", "势力"]:
+                max_const_gap = max(max_const_gap, const_gap)
+                const_gap = 0
+            else:
+                const_gap += 1
+        max_const_gap = max(max_const_gap, const_gap)
+
+        if max_const_gap > 15:
+            violations.append(f"Constellation 线缺失 {max_const_gap} 章（超过 15 章限制）")
+
+        # 检查占比是否在合理范围
+        if quest_ratio < 55:
+            violations.append(f"Quest 占比 {quest_ratio:.1f}% 偏低（目标 55-65%）")
+        elif quest_ratio > 65:
+            violations.append(f"Quest 占比 {quest_ratio:.1f}% 偏高（目标 55-65%）")
+
+        if fire_ratio < 20:
+            violations.append(f"Fire 占比 {fire_ratio:.1f}% 偏低（目标 20-30%）")
+        elif fire_ratio > 30:
+            violations.append(f"Fire 占比 {fire_ratio:.1f}% 偏高（目标 20-30%）")
+
+        if constellation_ratio < 10:
+            violations.append(f"Constellation 占比 {constellation_ratio:.1f}% 偏低（目标 10-20%）")
+        elif constellation_ratio > 20:
+            violations.append(f"Constellation 占比 {constellation_ratio:.1f}% 偏高（目标 10-20%）")
+
+        return {
+            "has_data": True,
+            "total_chapters": total,
+            "quest": {"count": quest_count, "ratio": quest_ratio},
+            "fire": {"count": fire_count, "ratio": fire_ratio},
+            "constellation": {"count": constellation_count, "ratio": constellation_ratio},
+            "violations": violations,
+            "max_quest_streak": max_quest_streak,
+            "max_fire_gap": max_fire_gap,
+            "max_const_gap": max_const_gap,
+            "health": "✅ 健康" if not violations else f"⚠️ {len(violations)} 个问题"
+        }
+
     def analyze_pacing(self) -> List[Dict]:
         """分析爽点节奏分布（每 100 章为一段）"""
         segment_size = 100
@@ -327,9 +530,17 @@ class StatusReporter:
         if focus in ["all", "foreshadowing"]:
             report_lines.extend(self._generate_foreshadowing_section())
 
+        # 伏笔紧急度（新增）
+        if focus in ["all", "foreshadowing", "urgency"]:
+            report_lines.extend(self._generate_urgency_section())
+
         # 爽点节奏
         if focus in ["all", "pacing"]:
             report_lines.extend(self._generate_pacing_section())
+
+        # Strand Weave 节奏（新增）
+        if focus in ["all", "strand", "pacing"]:
+            report_lines.extend(self._generate_strand_section())
 
         # 人际关系
         if focus in ["all", "relationships"]:
@@ -428,6 +639,101 @@ class StatusReporter:
 
         return lines
 
+    def _generate_urgency_section(self) -> List[str]:
+        """生成伏笔紧急度章节（基于三层级系统）"""
+        urgency_list = self.analyze_foreshadowing_urgency()
+
+        # 筛选紧急伏笔
+        urgent_items = [item for item in urgency_list if item["urgency"] >= 1.0]
+
+        lines = [
+            f"## 🚨 伏笔紧急度排序（{len(urgent_items)}条需关注）",
+            "",
+            "> 基于三层级系统：核心(×3) / 支线(×2) / 装饰(×1)",
+            "> 紧急度 = (已过章节 / 目标回收章节) × 层级权重",
+            ""
+        ]
+
+        if urgency_list:
+            lines.extend([
+                "| 伏笔内容 | 层级 | 埋设 | 目标 | 紧急度 | 状态 |",
+                "|---------|------|------|------|--------|------|"
+            ])
+
+            for item in urgency_list[:10]:  # 只显示前10条
+                lines.append(
+                    f"| {item['content'][:20]}... | {item['tier']} | "
+                    f"第{item['planted_chapter']}章 | 第{item['target_chapter']}章 | "
+                    f"{item['urgency']:.2f} | {item['status']} |"
+                )
+        else:
+            lines.append("✅ 暂无伏笔数据")
+
+        lines.extend(["", "---", ""])
+
+        return lines
+
+    def _generate_strand_section(self) -> List[str]:
+        """生成 Strand Weave 节奏章节"""
+        strand_data = self.analyze_strand_weave()
+
+        lines = [
+            "## 🎭 Strand Weave 节奏分析",
+            ""
+        ]
+
+        if not strand_data.get("has_data"):
+            lines.append(f"⚠️ {strand_data.get('message', '暂无数据')}")
+            lines.extend(["", "---", ""])
+            return lines
+
+        # 占比统计
+        lines.extend([
+            "### 三线占比",
+            "",
+            "| Strand | 章节数 | 占比 | 目标范围 | 状态 |",
+            "|--------|--------|------|----------|------|"
+        ])
+
+        q = strand_data["quest"]
+        q_status = "✅" if 55 <= q["ratio"] <= 65 else "⚠️"
+        lines.append(f"| Quest（主线） | {q['count']} | {q['ratio']:.1f}% | 55-65% | {q_status} |")
+
+        f = strand_data["fire"]
+        f_status = "✅" if 20 <= f["ratio"] <= 30 else "⚠️"
+        lines.append(f"| Fire（感情） | {f['count']} | {f['ratio']:.1f}% | 20-30% | {f_status} |")
+
+        c = strand_data["constellation"]
+        c_status = "✅" if 10 <= c["ratio"] <= 20 else "⚠️"
+        lines.append(f"| Constellation（世界观） | {c['count']} | {c['ratio']:.1f}% | 10-20% | {c_status} |")
+
+        lines.append("")
+
+        # 连续性检查
+        lines.extend([
+            "### 连续性检查",
+            "",
+            f"- Quest 最大连续: {strand_data['max_quest_streak']} 章（限制 ≤5）",
+            f"- Fire 最大缺失: {strand_data['max_fire_gap']} 章（限制 ≤10）",
+            f"- Constellation 最大缺失: {strand_data['max_const_gap']} 章（限制 ≤15）",
+            ""
+        ])
+
+        # 违规清单
+        if strand_data["violations"]:
+            lines.extend([
+                "### ⚠️ 违规清单",
+                ""
+            ])
+            for v in strand_data["violations"]:
+                lines.append(f"- {v}")
+        else:
+            lines.append("### ✅ 无违规")
+
+        lines.extend(["", f"**综合健康度**: {strand_data['health']}", "", "---", ""])
+
+        return lines
+
     def _generate_pacing_section(self) -> List[str]:
         """生成节奏分析章节"""
         segments = self.analyze_pacing()
@@ -493,8 +799,9 @@ def main():
     parser.add_argument('--output', default='.webnovel/health_report.md',
                        help='输出文件路径')
     parser.add_argument('--focus', choices=['all', 'basic', 'characters',
-                                            'foreshadowing', 'pacing', 'relationships'],
-                       default='all', help='分析焦点')
+                                            'foreshadowing', 'urgency', 'pacing',
+                                            'strand', 'relationships'],
+                       default='all', help='分析焦点（新增 urgency, strand）')
     parser.add_argument('--project-root', default='.', help='项目根目录')
 
     args = parser.parse_args()

@@ -5,9 +5,11 @@
 功能：
 1. 扫描指定章节正文，提取所有 [NEW_ENTITY] 标签
 2. 解析实体类型（角色/地点/物品/势力/招式）
-3. 同步到设定集对应文件
-4. 更新 state.json 中的相关记录
-5. 支持自动化模式和交互式模式
+3. 支持实体层级分类（核心/支线/装饰）- 匹配伏笔三层级系统
+4. 提取金手指技能标签 [GOLDEN_FINGER_SKILL]
+5. 同步到设定集对应文件
+6. 更新 state.json 中的相关记录
+7. 支持自动化模式和交互式模式
 
 使用方式：
   python extract_entities.py <章节文件> [--auto] [--dry-run]
@@ -55,43 +57,128 @@ ROLE_CATEGORY_MAP = {
     "路人": "次要角色"
 }
 
+# 实体层级权重（匹配伏笔三层级系统）
+ENTITY_TIER_MAP = {
+    "核心": {"weight": 3.0, "desc": "必须追踪，影响主线"},
+    "core": {"weight": 3.0, "desc": "必须追踪，影响主线"},
+    "支线": {"weight": 2.0, "desc": "应该追踪，丰富剧情"},
+    "sub": {"weight": 2.0, "desc": "应该追踪，丰富剧情"},
+    "装饰": {"weight": 1.0, "desc": "可选追踪，增加真实感"},
+    "decor": {"weight": 1.0, "desc": "可选追踪，增加真实感"}
+}
+
 def extract_new_entities(file_path: str) -> List[Dict]:
     """
     从章节文件中提取所有 [NEW_ENTITY] 标签
 
-    标签格式：
-      [NEW_ENTITY: 角色, 李雪, 天云宗外门弟子，主角的青梅竹马]
-      [NEW_ENTITY: 地点, 血煞秘境, 危险的试炼之地，内有金丹期凶兽]
-      [NEW_ENTITY: 物品, 天雷果, 可提升雷属性修炼速度的灵果]
+    标签格式（支持两种）：
+      基础格式：[NEW_ENTITY: 类型, 名称, 描述]
+      增强格式：[NEW_ENTITY: 类型, 名称, 描述, 层级]  （层级可选：核心/支线/装饰）
+
+      示例：
+      [NEW_ENTITY: 角色, 李雪, 天云宗外门弟子]
+      [NEW_ENTITY: 角色, 血煞门主, 本卷最终BOSS, 核心]
+      [NEW_ENTITY: 地点, 血煞秘境, 危险的试炼之地, 支线]
+      [NEW_ENTITY: 物品, 天雷果, 可提升雷属性修炼速度的灵果, 装饰]
 
     Returns:
-        List[Dict]: [{"type": "角色", "name": "李雪", "desc": "...", "line": 123}, ...]
+        List[Dict]: [{"type": "角色", "name": "李雪", "desc": "...", "tier": "支线", "line": 123}, ...]
     """
     entities = []
 
     with open(file_path, 'r', encoding='utf-8') as f:
         for line_num, line in enumerate(f, 1):
-            # 匹配 [NEW_ENTITY: 类型, 名称, 描述]
-            # 支持全角逗号（，）和半角逗号（,）混用
-            matches = re.findall(
-                r'\[NEW_ENTITY:\s*([^,，]+)[,，]\s*([^,，]+)[,，]\s*([^\]]+)\]',
+            # 增强格式：4个字段（包含层级）
+            matches_enhanced = re.findall(
+                r'\[NEW_ENTITY:\s*([^,，]+)[,，]\s*([^,，]+)[,，]\s*([^,，]+)[,，]\s*([^,，\]]+)\]',
                 line
             )
 
-            for match in matches:
+            # 基础格式：3个字段
+            matches_basic = re.findall(
+                r'\[NEW_ENTITY:\s*([^,，]+)[,，]\s*([^,，]+)[,，]\s*([^,，\]]+)\]',
+                line
+            )
+
+            # 优先处理增强格式
+            for match in matches_enhanced:
                 entity_type = match[0].strip()
                 entity_name = match[1].strip()
                 entity_desc = match[2].strip()
+                entity_tier = match[3].strip()
+
+                # 验证层级有效性
+                if entity_tier.lower() not in ENTITY_TIER_MAP:
+                    entity_tier = "支线"  # 默认支线
 
                 entities.append({
                     "type": entity_type,
                     "name": entity_name,
                     "desc": entity_desc,
+                    "tier": entity_tier,
                     "line": line_num,
                     "source_file": file_path
                 })
 
+            # 处理基础格式（排除已被增强格式匹配的）
+            for match in matches_basic:
+                entity_type = match[0].strip()
+                entity_name = match[1].strip()
+                entity_desc = match[2].strip()
+
+                # 检查是否已被增强格式匹配
+                already_matched = any(
+                    e["name"] == entity_name and e["line"] == line_num
+                    for e in entities
+                )
+
+                if not already_matched:
+                    entities.append({
+                        "type": entity_type,
+                        "name": entity_name,
+                        "desc": entity_desc,
+                        "tier": "支线",  # 默认层级
+                        "line": line_num,
+                        "source_file": file_path
+                    })
+
     return entities
+
+
+def extract_golden_finger_skills(file_path: str) -> List[Dict]:
+    """
+    从章节文件中提取金手指技能标签 [GOLDEN_FINGER_SKILL]
+
+    标签格式：
+      [GOLDEN_FINGER_SKILL: 技能名, 等级, 描述, 冷却时间]
+
+      示例：
+      [GOLDEN_FINGER_SKILL: 吞噬, Lv1, 可吞噬敌人获得经验, 10秒]
+      [GOLDEN_FINGER_SKILL: 鉴定术, Lv2, 查看物品/角色属性, 无冷却]
+
+    Returns:
+        List[Dict]: [{"name": "吞噬", "level": "Lv1", "desc": "...", "cooldown": "10秒"}, ...]
+    """
+    skills = []
+
+    with open(file_path, 'r', encoding='utf-8') as f:
+        for line_num, line in enumerate(f, 1):
+            matches = re.findall(
+                r'\[GOLDEN_FINGER_SKILL:\s*([^,，]+)[,，]\s*([^,，]+)[,，]\s*([^,，]+)[,，]\s*([^\]]+)\]',
+                line
+            )
+
+            for match in matches:
+                skills.append({
+                    "name": match[0].strip(),
+                    "level": match[1].strip(),
+                    "desc": match[2].strip(),
+                    "cooldown": match[3].strip(),
+                    "line": line_num,
+                    "source_file": file_path
+                })
+
+    return skills
 
 def categorize_character(desc: str) -> str:
     """
@@ -233,8 +320,8 @@ def update_power_system(entity: Dict, target_file: str):
     with open(target_file, 'w', encoding='utf-8') as f:
         f.write(content)
 
-def update_state_json(entities: List[Dict], state_file: str):
-    """更新 state.json 中的实体记录"""
+def update_state_json(entities: List[Dict], state_file: str, golden_finger_skills: List[Dict] = None):
+    """更新 state.json 中的实体记录（支持层级分类和金手指技能）"""
     with open(state_file, 'r', encoding='utf-8') as f:
         state = json.load(f)
 
@@ -248,8 +335,19 @@ def update_state_json(entities: List[Dict], state_file: str):
             "techniques": []
         }
 
+    # 确保存在金手指技能列表
+    if 'protagonist_state' not in state:
+        state['protagonist_state'] = {}
+    if 'golden_finger' not in state['protagonist_state']:
+        state['protagonist_state']['golden_finger'] = {
+            "name": "",
+            "skills": [],
+            "level": 1
+        }
+
     for entity in entities:
         entity_type = entity['type']
+        entity_tier = entity.get('tier', '支线')
 
         if entity_type == "角色":
             if entity['name'] not in [c.get('name') for c in state['entities']['characters']]:
@@ -257,6 +355,7 @@ def update_state_json(entities: List[Dict], state_file: str):
                     "name": entity['name'],
                     "desc": entity['desc'],
                     "category": categorize_character(entity['desc']),
+                    "tier": entity_tier,
                     "first_appearance": entity.get('source_file', ''),
                     "added_at": datetime.now().strftime('%Y-%m-%d')
                 })
@@ -266,6 +365,7 @@ def update_state_json(entities: List[Dict], state_file: str):
                 state['entities']['locations'].append({
                     "name": entity['name'],
                     "desc": entity['desc'],
+                    "tier": entity_tier,
                     "first_appearance": entity.get('source_file', ''),
                     "added_at": datetime.now().strftime('%Y-%m-%d')
                 })
@@ -275,6 +375,7 @@ def update_state_json(entities: List[Dict], state_file: str):
                 state['entities']['items'].append({
                     "name": entity['name'],
                     "desc": entity['desc'],
+                    "tier": entity_tier,
                     "first_appearance": entity.get('source_file', ''),
                     "added_at": datetime.now().strftime('%Y-%m-%d')
                 })
@@ -284,6 +385,7 @@ def update_state_json(entities: List[Dict], state_file: str):
                 state['entities']['factions'].append({
                     "name": entity['name'],
                     "desc": entity['desc'],
+                    "tier": entity_tier,
                     "first_appearance": entity.get('source_file', ''),
                     "added_at": datetime.now().strftime('%Y-%m-%d')
                 })
@@ -293,9 +395,25 @@ def update_state_json(entities: List[Dict], state_file: str):
                 state['entities']['techniques'].append({
                     "name": entity['name'],
                     "desc": entity['desc'],
+                    "tier": entity_tier,
                     "first_appearance": entity.get('source_file', ''),
                     "added_at": datetime.now().strftime('%Y-%m-%d')
                 })
+
+    # 更新金手指技能
+    if golden_finger_skills:
+        existing_skills = [s.get('name') for s in state['protagonist_state']['golden_finger'].get('skills', [])]
+        for skill in golden_finger_skills:
+            if skill['name'] not in existing_skills:
+                state['protagonist_state']['golden_finger']['skills'].append({
+                    "name": skill['name'],
+                    "level": skill['level'],
+                    "desc": skill['desc'],
+                    "cooldown": skill['cooldown'],
+                    "unlocked_at": skill.get('source_file', ''),
+                    "added_at": datetime.now().strftime('%Y-%m-%d')
+                })
+                print(f"  ✨ 新增金手指技能: {skill['name']} ({skill['level']})")
 
     # 备份旧文件
     backup_file = state_file.replace('.json', f'.backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json')
@@ -438,13 +556,23 @@ def main():
     print(f"📖 正在扫描: {chapter_file}")
     entities = extract_new_entities(chapter_file)
 
-    if not entities:
-        print("✅ 未发现 [NEW_ENTITY] 标签")
+    # 提取金手指技能
+    golden_finger_skills = extract_golden_finger_skills(chapter_file)
+
+    if not entities and not golden_finger_skills:
+        print("✅ 未发现 [NEW_ENTITY] 或 [GOLDEN_FINGER_SKILL] 标签")
         return
 
-    print(f"\n🔍 发现 {len(entities)} 个新实体：")
-    for i, entity in enumerate(entities, 1):
-        print(f"  {i}. [{entity['type']}] {entity['name']} - {entity['desc'][:30]}...")
+    if entities:
+        print(f"\n🔍 发现 {len(entities)} 个新实体：")
+        for i, entity in enumerate(entities, 1):
+            tier_emoji = {"核心": "🔴", "支线": "🟡", "装饰": "🟢"}.get(entity.get('tier', '支线'), "⚪")
+            print(f"  {i}. [{entity['type']}] {entity['name']} {tier_emoji}{entity.get('tier', '支线')} - {entity['desc'][:25]}...")
+
+    if golden_finger_skills:
+        print(f"\n✨ 发现 {len(golden_finger_skills)} 个金手指技能：")
+        for i, skill in enumerate(golden_finger_skills, 1):
+            print(f"  {i}. {skill['name']} ({skill['level']}) - {skill['desc'][:25]}...")
 
     if dry_run:
         print("\n⚠️  Dry-run 模式，不执行实际写入")
@@ -467,17 +595,22 @@ def main():
         if sync_entity_to_settings(entity, str(project_root), auto_mode):
             success_count += 1
 
-    # 更新 state.json
+    # 更新 state.json（包含金手指技能）
     print(f"\n💾 更新 state.json...")
-    update_state_json(entities, str(state_file))
+    update_state_json(entities, str(state_file), golden_finger_skills)
 
-    print(f"\n✅ 完成！成功同步 {success_count}/{len(entities)} 个实体")
+    print(f"\n✅ 完成！")
+    print(f"  - 实体同步: {success_count}/{len(entities)} 个")
+    if golden_finger_skills:
+        print(f"  - 金手指技能: {len(golden_finger_skills)} 个")
 
     if not auto_mode:
         print("\n💡 建议:")
         print("  1. 检查生成的角色卡/物品卡，补充详细设定")
         print("  2. 查看 世界观.md 和 力量体系.md 的更新")
         print("  3. 确认 .webnovel/state.json 中的实体记录")
+        if golden_finger_skills:
+            print("  4. 检查金手指技能是否正确记录在 protagonist_state.golden_finger.skills")
 
 if __name__ == "__main__":
     main()
