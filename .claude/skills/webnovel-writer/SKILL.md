@@ -307,6 +307,7 @@ Ch 10: Quest + Fire（融合）
 
 当需要更详细的指导时，可以参考以下文档：
 
+### 核心文档
 - **[anti-hallucination.md](references/anti-hallucination.md)** - 三大定律详细解释和案例
 - **[cool-points-guide.md](references/cool-points-guide.md)** - 爽点设计完整指南，包含各题材爽点库
 - **[pacing-control.md](references/pacing-control.md)** - 节奏控制技巧和案例分析
@@ -314,6 +315,40 @@ Ch 10: Quest + Fire（融合）
 - **[strand-weave-pattern.md](references/strand-weave-pattern.md)** - Strand Weave 详细规范
 - **[workflow-resume.md](references/workflow-resume.md)** - 工作流中断恢复机制（用于 /webnovel-resume 命令）
 - **[archiving-strategy.md](references/archiving-strategy.md)** - 数据归档策略（200万字长跑保障）
+
+### 题材专项指南
+
+#### 狗血言情 (genres/dog-blood-romance/)
+- **[romance-tropes.md](references/genres/dog-blood-romance/romance-tropes.md)** - 经典言情套路公式
+- **[character-archetypes.md](references/genres/dog-blood-romance/character-archetypes.md)** - 角色原型设计
+- **[emotional-tension.md](references/genres/dog-blood-romance/emotional-tension.md)** - 情感张力构建
+- **[romance-pacing.md](references/genres/dog-blood-romance/romance-pacing.md)** - 言情节奏控制
+- **[sweet-moments.md](references/genres/dog-blood-romance/sweet-moments.md)** - 甜蜜场景设计
+- **[torture-points.md](references/genres/dog-blood-romance/torture-points.md)** - 虐点设计技巧
+- **[plot-templates.md](references/genres/dog-blood-romance/plot-templates.md)** - 剧情模板库（长/中/短篇）
+
+#### 知乎短篇 (genres/zhihu-short/)
+- **[hook-techniques.md](references/genres/zhihu-short/hook-techniques.md)** - 开篇钩子技巧（十大模板）
+- **[pacing-rhythm.md](references/genres/zhihu-short/pacing-rhythm.md)** - 短篇节奏控制
+- **[character-quick-build.md](references/genres/zhihu-short/character-quick-build.md)** - 快速人设构建
+- **[plot-compression.md](references/genres/zhihu-short/plot-compression.md)** - 剧情压缩技巧
+- **[ending-patterns.md](references/genres/zhihu-short/ending-patterns.md)** - 结局模式（HE/BE/开放式）
+- **[emotional-peaks.md](references/genres/zhihu-short/emotional-peaks.md)** - 情绪高潮设计
+- **[genre-templates.md](references/genres/zhihu-short/genre-templates.md)** - 体裁模板（追妻/重生/豪门等）
+
+#### 现实题材 (genres/realistic/)
+- **[reality-anchoring.md](references/genres/realistic/reality-anchoring.md)** - 真实感锚定技巧
+- **[social-issues.md](references/genres/realistic/social-issues.md)** - 社会议题处理
+- **[dialogue-authenticity.md](references/genres/realistic/dialogue-authenticity.md)** - 对话真实感
+- **[character-depth.md](references/genres/realistic/character-depth.md)** - 人物深度塑造
+- **[plot-logic.md](references/genres/realistic/plot-logic.md)** - 剧情逻辑构建
+
+#### 古言题材 (genres/period-drama/)
+- **[historical-setting.md](references/genres/period-drama/historical-setting.md)** - 历史背景设定
+- **[ancient-dialogue.md](references/genres/period-drama/ancient-dialogue.md)** - 古风对话与文风
+- **[palace-intrigue.md](references/genres/period-drama/palace-intrigue.md)** - 宫斗权谋设计
+- **[character-design.md](references/genres/period-drama/character-design.md)** - 古言人物设计
+- **[plot-patterns.md](references/genres/period-drama/plot-patterns.md)** - 古言剧情模式
 
 ---
 
