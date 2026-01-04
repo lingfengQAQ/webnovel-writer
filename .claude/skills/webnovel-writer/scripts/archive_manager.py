@@ -43,6 +43,7 @@ from pathlib import Path
 # 安全修复：导入安全工具函数（P1 MEDIUM）
 # ============================================================================
 from security_utils import create_secure_directory
+from project_locator import resolve_project_root
 
 # Windows UTF-8 编码修复
 if sys.platform == 'win32':
@@ -460,8 +461,15 @@ def main():
 
     args = parser.parse_args()
 
-    # 创建管理器
-    manager = ArchiveManager(project_root=args.project_root)
+    # 创建管理器（支持从仓库根目录运行）
+    project_root = args.project_root
+    if project_root is None and not (Path.cwd() / ".webnovel" / "state.json").exists():
+        try:
+            project_root = str(resolve_project_root())
+        except FileNotFoundError:
+            project_root = None
+
+    manager = ArchiveManager(project_root=project_root)
 
     # 执行操作
     if args.auto_check or args.force:

@@ -79,10 +79,10 @@ cat webnovel-project/大纲/总纲.md
       "header": "核心冲突",
       "question": "第 {volume_id} 卷的核心冲突是什么？",
       "options": [
-        {"label": "宗门竞争", "description": "宗门内部的明争暗斗"},
-        {"label": "外敌入侵", "description": "外部势力攻击"},
-        {"label": "秘境历练", "description": "在危险秘境中的冒险"},
-        {"label": "境界突破", "description": "专注个人成长和修炼突破"}
+        {"label": "生存危机", "description": "活下去/被追杀/高压困境下求生"},
+        {"label": "势力博弈", "description": "组织/宗门/公司/财团之间的明暗斗"},
+        {"label": "揭秘阴谋", "description": "围绕金手指/世界真相/黑幕的调查与反制"},
+        {"label": "成长突破", "description": "围绕升级与能力成长推进剧情"}
       ],
       "multiSelect": false
     },
@@ -115,6 +115,30 @@ cat webnovel-project/大纲/总纲.md
         {"label": "暧昧升温", "description": "互动增多，暧昧气息浓厚"},
         {"label": "确认关系", "description": "表白/接吻/确定恋爱关系"},
         {"label": "淡化感情线", "description": "本卷专注主线，感情线为辅"}
+      ],
+      "multiSelect": false
+    },
+    {
+      "header": "金手指差异化（反模板化）",
+      "question": "本卷金手指/系统的“差异化钉子”是什么？（至少选 1 项）",
+      "options": [
+        {"label": "有代价/限制", "description": "扣寿命/精神负担/契约条款/失败惩罚"},
+        {"label": "继承/前任线", "description": "前任宿主/传承/继承者资格带来麻烦与线索"},
+        {"label": "系统有目的", "description": "养蛊/筛选/夺舍/培养救世主等（本卷先埋线）"},
+        {"label": "成长路径独特", "description": "职业/技能树/专精路线明确，避免纯数值堆叠"},
+        {"label": "暂不确定", "description": "本卷先用“代号+线索”，后续再定（但不要用“???”当正文占位符）"}
+      ],
+      "multiSelect": true
+    },
+    {
+      "header": "隐秘期遮蔽机制（都市异能推荐）",
+      "question": "若出现“普通人可感知的大动静”，世界如何压住消息/给出解释？",
+      "options": [
+        {"label": "官方特管", "description": "封锁现场+统一通报（施工事故/煤气爆炸/高压电起火）"},
+        {"label": "财团公关", "description": "删帖/买热搜/媒体合作，舆情被引导"},
+        {"label": "超凡规则", "description": "记忆处理/认知屏蔽/规则覆盖（偏设定向）"},
+        {"label": "不遮蔽（爆发期）", "description": "本卷世界进入公开阶段，社会秩序开始变化"},
+        {"label": "不适用", "description": "非都市题材/本卷不涉及大动静"}
       ],
       "multiSelect": false
     }

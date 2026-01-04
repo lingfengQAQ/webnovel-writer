@@ -56,6 +56,7 @@ from typing import Dict, Any, Optional
 # 安全修复：导入安全工具函数（P1 MEDIUM）
 # ============================================================================
 from security_utils import create_secure_directory
+from project_locator import resolve_state_file
 
 # Windows 编码兼容性修复
 if sys.platform == 'win32':
@@ -377,9 +378,15 @@ def main():
     )
 
     parser.add_argument(
+        '--project-root',
+        default=None,
+        help='项目根目录（包含 .webnovel/state.json）。不提供时自动搜索（支持 webnovel-project/ 与父目录）。'
+    )
+
+    parser.add_argument(
         '--state-file',
-        default='.webnovel/state.json',
-        help='state.json 文件路径（默认: .webnovel/state.json）'
+        default=None,
+        help='state.json 文件路径（可选）。不提供时从项目根目录自动定位为 .webnovel/state.json。'
     )
 
     parser.add_argument(
@@ -491,8 +498,11 @@ def main():
         parser.print_help()
         sys.exit(1)
 
+    # 解析 state.json 路径（支持从仓库根目录运行）
+    state_file_path = resolve_state_file(args.state_file, explicit_project_root=args.project_root)
+
     # 创建更新器
-    updater = StateUpdater(args.state_file, args.dry_run)
+    updater = StateUpdater(str(state_file_path), args.dry_run)
 
     # 加载状态文件
     if not updater.load():
@@ -564,7 +574,7 @@ def main():
         if not args.dry_run:
             print(f"\n💡 提示:")
             print(f"  - 原文件已备份: {updater.backup_file}")
-            print(f"  - 如需回滚，可复制备份文件到 {args.state_file}")
+            print(f"  - 如需回滚，可复制备份文件到 {updater.state_file}")
 
     except Exception as e:
         print(f"\n❌ 更新失败: {e}")

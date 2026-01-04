@@ -50,6 +50,8 @@ import sys
 import re
 from pathlib import Path
 from typing import Dict, List, Any, Optional
+from project_locator import resolve_project_root
+from chapter_paths import find_chapter_file
 
 # Windows 编码兼容性修复
 if sys.platform == 'win32':
@@ -206,22 +208,37 @@ class ContextManager:
             if i <= 0:
                 continue
 
-            chapter_file = self.chapters_dir / f"第{i:04d}章.md"
-            if not chapter_file.exists():
+            chapter_file = find_chapter_file(self.project_root, i)
+            if not chapter_file:
                 continue
 
             with open(chapter_file, 'r', encoding='utf-8') as f:
                 content = f.read()
 
-            # 提取正文（去除标题、元数据等）
-            text_match = re.search(r'---\n\n(.+)', content, re.DOTALL)
-            if text_match:
-                text = text_match.group(1).strip()
-            else:
-                text = content
+            # 提取正文摘要（避开标签/统计区块）
+            lines = content.splitlines()
+            # 去掉标题行
+            if lines and lines[0].lstrip().startswith("#"):
+                lines = lines[1:]
 
-            # 生成摘要（取前 200 字）
-            summary = text[:200] + "..."
+            buf: List[str] = []
+            for line in lines:
+                s = line.strip()
+                if not s:
+                    continue
+                if s.startswith("## 本章统计"):
+                    break
+                if s == "---":
+                    continue
+                # 过滤工作流标签行（[NEW_ENTITY] 等）
+                if s.startswith("[") and s.endswith("]"):
+                    continue
+                buf.append(s)
+                if sum(len(x) for x in buf) >= 220:
+                    break
+
+            text = "".join(buf).strip()
+            summary = (text[:200] + "...") if len(text) > 200 else text
             summaries.append(f"第 {i} 章摘要：{summary}")
 
         return summaries
@@ -396,7 +413,7 @@ class ContextManager:
         relevant = []
 
         for item in all_foreshadowing:
-            if item.get("status") != "未回收":
+            if item.get("status") not in ["未回收", "active", "pending", None, ""]:
                 continue
 
             content = item.get("content", "")
@@ -486,7 +503,7 @@ class ContextManager:
         urgent = []
 
         for item in all_foreshadowing:
-            if item.get("status") != "未回收":
+            if item.get("status") not in ["未回收", "active", "pending", None, ""]:
                 continue
 
             # 计算已埋章节数（粗略：假设每章对应 1 个章节号增量）
@@ -571,13 +588,21 @@ def main():
 
     args = parser.parse_args()
 
+    # 解析项目根目录（支持从仓库根目录运行）
+    project_root = args.project_root
+    if project_root == '.' and not (Path('.') / '.webnovel' / 'state.json').exists():
+        try:
+            project_root = str(resolve_project_root())
+        except FileNotFoundError:
+            project_root = args.project_root
+
     # 解析角色列表
     characters = None
     if args.characters:
         characters = [c.strip() for c in args.characters.split(',')]
 
     # 创建管理器
-    manager = ContextManager(args.project_root)
+    manager = ContextManager(project_root)
 
     # 加载状态
     if not manager.load_state():
@@ -594,7 +619,10 @@ def main():
         print("\n📄 上下文预览：")
         print(json.dumps(context, ensure_ascii=False, indent=2))
     else:
-        manager.save_context(context, args.output)
+        output_path = args.output
+        if args.output == '.webnovel/context_cache.json' and project_root != '.':
+            output_path = str(Path(project_root) / '.webnovel' / 'context_cache.json')
+        manager.save_context(context, output_path)
 
 if __name__ == "__main__":
     main()

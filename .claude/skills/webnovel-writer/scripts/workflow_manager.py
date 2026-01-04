@@ -17,6 +17,8 @@ from pathlib import Path
 # 安全修复：导入安全工具函数（P1 MEDIUM）
 # ============================================================================
 from security_utils import create_secure_directory
+from project_locator import resolve_project_root
+from chapter_paths import default_chapter_draft_path, find_chapter_file
 
 # UTF-8 编码修复（Windows兼容）
 if sys.platform == 'win32':
@@ -24,22 +26,9 @@ if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
-WORKFLOW_STATE_FILE = '.webnovel/workflow_state.json'
-
 def find_project_root():
-    """动态查找包含 .webnovel/ 的项目根目录"""
-    # 优先检查环境变量
-    if os.environ.get('WEBNOVEL_PROJECT_ROOT'):
-        return Path(os.environ['WEBNOVEL_PROJECT_ROOT'])
-
-    # 从当前目录往上查找
-    current = Path.cwd()
-    for parent in [current] + list(current.parents):
-        if (parent / '.webnovel').exists():
-            return parent
-
-    # 默认返回当前目录（向后兼容）
-    return current
+    """解析项目根目录（包含 .webnovel/state.json）"""
+    return resolve_project_root()
 
 def get_workflow_state_path():
     """获取 workflow_state.json 的完整路径"""
@@ -354,17 +343,29 @@ def cleanup_artifacts(chapter_num):
     """清理半成品artifacts"""
     artifacts_cleaned = []
 
-    # 删除章节文件
-    chapter_file = f"正文/第{chapter_num:04d}章.md"
-    if os.path.exists(chapter_file):
-        os.remove(chapter_file)
-        artifacts_cleaned.append(chapter_file)
+    project_root = find_project_root()
+
+    # 删除章节文件（兼容多种命名/目录结构）
+    chapter_path = find_chapter_file(project_root, chapter_num)
+    if chapter_path is None:
+        # 可能是“草稿路径”但尚未重命名
+        draft_path = default_chapter_draft_path(project_root, chapter_num)
+        if draft_path.exists():
+            chapter_path = draft_path
+
+    if chapter_path and chapter_path.exists():
+        chapter_path.unlink()
+        artifacts_cleaned.append(str(chapter_path.relative_to(project_root)))
 
     # 清理Git暂存区
-    result = subprocess.run(['git', 'reset', 'HEAD', '.'],
-                          capture_output=True, text=True)
+    result = subprocess.run(
+        ['git', 'reset', 'HEAD', '.'],
+        cwd=project_root,
+        capture_output=True,
+        text=True
+    )
     if result.returncode == 0:
-        artifacts_cleaned.append("Git暂存区已清理")
+        artifacts_cleaned.append("Git暂存区已清理（project）")
 
     return artifacts_cleaned
 

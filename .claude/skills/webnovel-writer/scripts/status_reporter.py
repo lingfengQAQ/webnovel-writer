@@ -86,6 +86,8 @@ from pathlib import Path
 from typing import Dict, List, Any, Tuple
 from datetime import datetime
 from collections import defaultdict
+from project_locator import resolve_project_root
+from chapter_paths import extract_chapter_num_from_filename
 
 # Windows 编码兼容性修复
 if sys.platform == 'win32':
@@ -104,6 +106,26 @@ class StatusReporter:
         self.state = None
         self.chapters_data = []
 
+        # 可选：集成结构化索引（如果可用，角色统计更准）
+        self.index = None
+        try:
+            from structured_index import StructuredIndex
+            self.index = StructuredIndex(self.project_root)
+        except Exception:
+            self.index = None
+
+    def _extract_stats_field(self, content: str, field_name: str) -> str:
+        """
+        从“本章统计”区块提取字段值，例如：
+        - **主导Strand**: quest
+        """
+        pattern = rf"^\s*-\s*\*\*{re.escape(field_name)}\*\*\s*:\s*(.+?)\s*$"
+        for line in content.splitlines():
+            m = re.match(pattern, line)
+            if m:
+                return m.group(1).strip()
+        return ""
+
     def load_state(self) -> bool:
         """加载 state.json"""
         if not self.state_file.exists():
@@ -121,13 +143,25 @@ class StatusReporter:
             print(f"⚠️  正文目录不存在: {self.chapters_dir}")
             return
 
-        for chapter_file in sorted(self.chapters_dir.glob("第*.md")):
-            # 提取章节号
-            match = re.search(r'第(\d+)章', chapter_file.name)
-            if not match:
-                continue
+        # 支持两种目录结构：
+        # 1) 正文/第0001章.md
+        # 2) 正文/第1卷/第001章-标题.md
+        chapter_files = sorted(self.chapters_dir.rglob("第*.md"))
 
-            chapter_num = int(match.group(1))
+        # 角色候选（fallback 用）：从 state.json 获取已知角色名
+        known_character_names: List[str] = []
+        protagonist_name = ""
+        if self.state:
+            protagonist_name = self.state.get("protagonist_state", {}).get("name", "") or ""
+            known_character_names = [
+                c.get("name", "") for c in self.state.get("entities", {}).get("characters", [])
+                if c.get("name")
+            ]
+
+        for chapter_file in chapter_files:
+            chapter_num = extract_chapter_num_from_filename(chapter_file.name)
+            if not chapter_num:
+                continue
 
             # 读取章节内容
             with open(chapter_file, 'r', encoding='utf-8') as f:
@@ -139,14 +173,51 @@ class StatusReporter:
             text = re.sub(r'---', '', text)  # 去除分隔线
             word_count = len(text.strip())
 
-            # 提取出场角色（粗略：查找 [角色: XXX]）
-            characters = re.findall(r'\[角色:\s*([^\]]+)\]', content)
+            # 主导 Strand / 爽点类型（优先从“本章统计”解析）
+            dominant_strand = (self._extract_stats_field(content, "主导Strand") or "").lower()
+            cool_point_type = self._extract_stats_field(content, "爽点")
+
+            # 角色提取：优先从结构化索引读取（若有），否则 fallback 用“出现即算出场”
+            characters: List[str] = []
+            if self.index is not None:
+                try:
+                    cursor = self.index.conn.execute(
+                        "SELECT characters FROM chapters WHERE chapter_num = ?",
+                        (chapter_num,),
+                    )
+                    row = cursor.fetchone()
+                    if row and row[0]:
+                        try:
+                            stored = json.loads(row[0])
+                            if isinstance(stored, list):
+                                characters = [str(x) for x in stored if x]
+                        except json.JSONDecodeError:
+                            characters = []
+                except Exception:
+                    characters = []
+
+            if not characters and (protagonist_name or known_character_names):
+                # 限制候选规模，避免在超大角色库下过慢
+                candidates = []
+                if protagonist_name:
+                    candidates.append(protagonist_name)
+                candidates.extend(known_character_names[:800])
+
+                seen = set()
+                for name in candidates:
+                    if not name or name in seen:
+                        continue
+                    if name in content:
+                        characters.append(name)
+                        seen.add(name)
 
             self.chapters_data.append({
                 "chapter": chapter_num,
                 "file": chapter_file,
                 "word_count": word_count,
-                "characters": characters
+                "characters": characters,
+                "dominant": dominant_strand,
+                "cool_point": cool_point_type,
             })
 
     def analyze_characters(self) -> Dict:
@@ -206,7 +277,8 @@ class StatusReporter:
         overdue = []
 
         for item in foreshadowing:
-            if item.get("status") != "未回收":
+            status = item.get("status")
+            if status not in ["未回收", "active", "pending", None, ""]:
                 continue
 
             # 假设每个伏笔记录了"added_chapter"（埋设章节）
@@ -273,7 +345,7 @@ class StatusReporter:
         urgency_list = []
 
         for item in foreshadowing:
-            if item.get("status") == "已回收":
+            if item.get("status") in ["已回收", "resolved"]:
                 continue
 
             content = item.get("content", "")
@@ -350,7 +422,7 @@ class StatusReporter:
         total = len(history)
 
         for entry in history:
-            strand = entry.get("strand", "").lower()
+            strand = (entry.get("strand") or entry.get("dominant") or "").lower()
             if strand in ["quest", "主线", "战斗", "任务"]:
                 quest_count += 1
             elif strand in ["fire", "感情", "感情线", "互动"]:
@@ -370,7 +442,7 @@ class StatusReporter:
         quest_streak = 0
         max_quest_streak = 0
         for entry in history:
-            strand = entry.get("strand", "").lower()
+            strand = (entry.get("strand") or entry.get("dominant") or "").lower()
             if strand in ["quest", "主线", "战斗", "任务"]:
                 quest_streak += 1
                 max_quest_streak = max(max_quest_streak, quest_streak)
@@ -384,7 +456,7 @@ class StatusReporter:
         fire_gap = 0
         max_fire_gap = 0
         for entry in history:
-            strand = entry.get("strand", "").lower()
+            strand = (entry.get("strand") or entry.get("dominant") or "").lower()
             if strand in ["fire", "感情", "感情线", "互动"]:
                 max_fire_gap = max(max_fire_gap, fire_gap)
                 fire_gap = 0
@@ -399,7 +471,7 @@ class StatusReporter:
         const_gap = 0
         max_const_gap = 0
         for entry in history:
-            strand = entry.get("strand", "").lower()
+            strand = (entry.get("strand") or entry.get("dominant") or "").lower()
             if strand in ["constellation", "世界观", "背景", "势力"]:
                 max_const_gap = max(max_const_gap, const_gap)
                 const_gap = 0
@@ -829,8 +901,16 @@ def main():
 
     args = parser.parse_args()
 
+    # 解析项目根目录（支持从仓库根目录运行）
+    project_root = args.project_root
+    if project_root == '.' and not (Path('.') / '.webnovel' / 'state.json').exists():
+        try:
+            project_root = str(resolve_project_root())
+        except FileNotFoundError:
+            project_root = args.project_root
+
     # 创建报告生成器
-    reporter = StatusReporter(args.project_root)
+    reporter = StatusReporter(project_root)
 
     # 加载状态
     if not reporter.load_state():
@@ -848,6 +928,8 @@ def main():
 
     # 保存报告
     output_file = Path(args.output)
+    if args.output == '.webnovel/health_report.md' and project_root != '.':
+        output_file = Path(project_root) / '.webnovel' / 'health_report.md'
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_file, 'w', encoding='utf-8') as f:

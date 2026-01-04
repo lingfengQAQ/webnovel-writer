@@ -184,6 +184,29 @@ fi
 {
   "questions": [
     {
+      "header": "系统称呼/代号",
+      "question": "系统/金手指在正文里的称呼是什么？（不要用“???”占位）",
+      "options": [
+        {"label": "继承者系统", "description": "偏传承/继承者路线，利于埋大阴谋"},
+        {"label": "面板", "description": "弱化人格化，突出数据可视化"},
+        {"label": "协议", "description": "偏冷硬科技感/契约感"},
+        {"label": "自定义", "description": "由作者自定义一个读者可见的称呼"}
+      ],
+      "multiSelect": false
+    },
+    {
+      "header": "代价/限制（反模板化）",
+      "question": "这个系统/金手指的代价或限制是什么？（至少选 1 项）",
+      "options": [
+        {"label": "精神负担", "description": "频繁使用会头痛/失眠/情绪污染"},
+        {"label": "资源消耗", "description": "积分/寿命/代价材料，不给白嫖"},
+        {"label": "条款约束", "description": "必须完成任务/不能泄密/违约惩罚"},
+        {"label": "继承者麻烦", "description": "前任宿主/追猎者/继承资格引来风险"},
+        {"label": "暂不确定", "description": "先埋线索，本卷末或后续揭示（但正文不用“???”占位）"}
+      ],
+      "multiSelect": true
+    },
+    {
       "header": "系统性格",
       "question": "系统与宿主的关系是？",
       "options": [
@@ -393,6 +416,7 @@ python .claude/skills/webnovel-writer/scripts/init_project.py \
   --protagonist-name "{主角姓名}" \
   --target-words {目标字数} \
   --target-chapters {目标章节数} \
+  --golden-finger-name "{金手指称呼}" \
   --golden-finger-type "{金手指类型}" \
   --golden-finger-style "{金手指风格}" \
   --core-selling-points "{核心卖点1},{核心卖点2}"

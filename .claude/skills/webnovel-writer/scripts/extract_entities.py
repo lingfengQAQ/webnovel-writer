@@ -24,14 +24,17 @@ import re
 import json
 import os
 import sys
+import argparse
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional, Any
 
 # ============================================================================
 # 安全修复：导入安全工具函数（P0 CRITICAL）
 # ============================================================================
 from security_utils import sanitize_filename, create_secure_directory
+from project_locator import resolve_project_root, resolve_state_file
+from chapter_paths import find_chapter_file, extract_chapter_num_from_filename
 
 # Windows 编码兼容性修复
 if sys.platform == 'win32':
@@ -180,6 +183,69 @@ def extract_golden_finger_skills(file_path: str) -> List[Dict]:
 
     return skills
 
+
+def extract_foreshadowing_json(file_path: str) -> List[Dict[str, Any]]:
+    """
+    从章节文件提取伏笔标签（推荐放在 HTML 注释内，避免影响读者阅读）：
+
+      <!-- [FORESHADOWING_JSON: {"content":"继承者验证通过","tier":"支线","target_chapter":101,"location":"云程贸易公司","characters":["陆辰"]}] -->
+
+    字段：
+      - content (必填)
+      - tier (可选: 核心/支线/装饰，默认 支线)
+      - planted_chapter (可选: 默认由调用方补齐)
+      - target_chapter (可选: 默认 planted_chapter + 100)
+      - location (可选)
+      - characters (可选: list[str] 或 逗号分隔字符串)
+    """
+    p = Path(file_path)
+    text = p.read_text(encoding="utf-8")
+
+    pattern = re.compile(r"\[FORESHADOWING_JSON:\s*(\{.*?\})\s*\]", re.DOTALL)
+    results: List[Dict[str, Any]] = []
+
+    for m in pattern.finditer(text):
+        raw = m.group(1).strip()
+        line_num = text[: m.start()].count("\n") + 1
+        try:
+            obj = json.loads(raw)
+        except json.JSONDecodeError:
+            print(f"?? 伏笔 JSON 解析失败（第{line_num}行附近），已跳过")
+            continue
+
+        content = str(obj.get("content", "")).strip()
+        if not content:
+            print(f"?? 伏笔缺少 content（第{line_num}行附近），已跳过")
+            continue
+
+        tier = str(obj.get("tier", "支线")).strip() or "支线"
+        if tier.lower() not in ENTITY_TIER_MAP:
+            tier = "支线"
+
+        characters = obj.get("characters", [])
+        if isinstance(characters, str):
+            characters_list = [c.strip() for c in re.split(r"[,，]", characters) if c.strip()]
+        elif isinstance(characters, list):
+            characters_list = [str(c).strip() for c in characters if str(c).strip()]
+        else:
+            characters_list = []
+
+        results.append(
+            {
+                "content": content,
+                "tier": tier,
+                "planted_chapter": obj.get("planted_chapter"),
+                "target_chapter": obj.get("target_chapter"),
+                "location": str(obj.get("location", "")).strip(),
+                "characters": characters_list,
+                "line": line_num,
+                "source_file": str(p),
+            }
+        )
+
+    return results
+
+
 def categorize_character(desc: str) -> str:
     """
     根据描述判断角色分类
@@ -320,8 +386,15 @@ def update_power_system(entity: Dict, target_file: str):
     with open(target_file, 'w', encoding='utf-8') as f:
         f.write(content)
 
-def update_state_json(entities: List[Dict], state_file: str, golden_finger_skills: List[Dict] = None):
-    """更新 state.json 中的实体记录（支持层级分类和金手指技能）"""
+def update_state_json(
+    entities: List[Dict],
+    state_file: str,
+    golden_finger_skills: Optional[List[Dict]] = None,
+    foreshadowing_items: Optional[List[Dict[str, Any]]] = None,
+    *,
+    default_planted_chapter: Optional[int] = None,
+):
+    """更新 state.json 中的实体记录（支持层级分类/金手指技能/伏笔结构化）"""
     with open(state_file, 'r', encoding='utf-8') as f:
         state = json.load(f)
 
@@ -414,6 +487,79 @@ def update_state_json(entities: List[Dict], state_file: str, golden_finger_skill
                     "added_at": datetime.now().strftime('%Y-%m-%d')
                 })
                 print(f"  ✨ 新增金手指技能: {skill['name']} ({skill['level']})")
+
+    # 更新伏笔（结构化）
+    if foreshadowing_items:
+        state.setdefault("plot_threads", {"active_threads": [], "foreshadowing": []})
+        state["plot_threads"].setdefault("foreshadowing", [])
+
+        existing = state["plot_threads"]["foreshadowing"]
+
+        for item in foreshadowing_items:
+            content = str(item.get("content", "")).strip()
+            if not content:
+                continue
+
+            planted = item.get("planted_chapter") or default_planted_chapter or 1
+            try:
+                planted = int(planted)
+            except (TypeError, ValueError):
+                planted = default_planted_chapter or 1
+
+            target = item.get("target_chapter")
+            if target is None:
+                target = planted + 100
+            try:
+                target = int(target)
+            except (TypeError, ValueError):
+                target = planted + 100
+
+            tier = str(item.get("tier", "支线")).strip() or "支线"
+            if tier.lower() not in ENTITY_TIER_MAP:
+                tier = "支线"
+
+            location = str(item.get("location", "")).strip()
+            characters = item.get("characters", [])
+            if not isinstance(characters, list):
+                characters = []
+
+            found = None
+            for old in existing:
+                if old.get("content") == content:
+                    found = old
+                    break
+
+            if found is None:
+                existing.append({
+                    "content": content,
+                    "status": "active",
+                    "tier": tier,
+                    "planted_chapter": planted,
+                    "target_chapter": target,
+                    "location": location,
+                    "characters": characters,
+                    "added_at": datetime.now().strftime("%Y-%m-%d"),
+                })
+                print(f"  ?? 新增伏笔: {content[:30]}...")
+            else:
+                found["tier"] = tier
+                found["planted_chapter"] = planted
+                found["target_chapter"] = target
+                if location:
+                    found["location"] = location
+
+                old_chars = found.get("characters", [])
+                if not isinstance(old_chars, list):
+                    old_chars = []
+                merged = []
+                seen = set()
+                for n in [*old_chars, *characters]:
+                    s = str(n).strip()
+                    if not s or s in seen:
+                        continue
+                    merged.append(s)
+                    seen.add(s)
+                found["characters"] = merged
 
     # 备份旧文件
     backup_file = state_file.replace('.json', f'.backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json')
@@ -539,82 +685,131 @@ def sync_entity_to_settings(entity: Dict, project_root: str, auto_mode: bool = F
         return False
 
 def main():
-    if len(sys.argv) < 2:
-        print("用法: python extract_entities.py <章节文件> [--auto] [--dry-run]")
-        print("示例: python extract_entities.py ../../../正文/第0001章.md")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="[NEW_ENTITY]/[GOLDEN_FINGER_SKILL]/FORESHADOWING_JSON 提取与同步",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例：
+  # 指定文件（兼容卷目录）
+  python extract_entities.py "webnovel-project/正文/第1卷/第001章-死亡降临.md" --auto
 
-    chapter_file = sys.argv[1]
-    auto_mode = '--auto' in sys.argv
-    dry_run = '--dry-run' in sys.argv
+  # 指定章节号（推荐）
+  python extract_entities.py --project-root "webnovel-project" --chapter 1 --auto
+""".strip(),
+    )
 
-    if not os.path.exists(chapter_file):
-        print(f"❌ 文件不存在: {chapter_file}")
-        sys.exit(1)
+    parser.add_argument("chapter_file", nargs="?", help="章节文件路径（或使用 --chapter）")
+    parser.add_argument("--chapter", type=int, help="章节号（与 --project-root 配合，自动定位章节文件）")
+    parser.add_argument("--project-root", default=None, help="项目根目录（包含 .webnovel/state.json）")
+    parser.add_argument("--auto", action="store_true", help="自动模式（非交互）")
+    parser.add_argument("--dry-run", action="store_true", help="仅预览，不写入文件/状态")
 
-    # 提取实体
+    args = parser.parse_args()
+
+    auto_mode = args.auto
+    dry_run = args.dry_run
+
+    project_root: Optional[Path] = None
+    if args.project_root:
+        project_root = resolve_project_root(args.project_root)
+    else:
+        try:
+            project_root = resolve_project_root()
+        except FileNotFoundError:
+            project_root = None
+
+    chapter_file: Optional[str] = None
+    chapter_num: Optional[int] = None
+
+    if args.chapter is not None:
+        if not project_root:
+            print("❌ 未提供有效的 --project-root，无法用 --chapter 定位章节文件")
+            sys.exit(1)
+
+        chapter_num = int(args.chapter)
+        chapter_path = find_chapter_file(project_root, chapter_num)
+        if not chapter_path:
+            print(f"❌ 未找到第{chapter_num}章文件（请先生成/保存章节）")
+            sys.exit(1)
+        chapter_file = str(chapter_path)
+    else:
+        if not args.chapter_file:
+            parser.error("必须提供 chapter_file 或 --chapter")
+        chapter_file = args.chapter_file
+        if not os.path.exists(chapter_file):
+            print(f"❌ 文件不存在: {chapter_file}")
+            sys.exit(1)
+
+        chapter_num = extract_chapter_num_from_filename(Path(chapter_file).name)
+
     print(f"📖 正在扫描: {chapter_file}")
     entities = extract_new_entities(chapter_file)
-
-    # 提取金手指技能
     golden_finger_skills = extract_golden_finger_skills(chapter_file)
+    foreshadowing_items = extract_foreshadowing_json(chapter_file)
 
-    if not entities and not golden_finger_skills:
-        print("✅ 未发现 [NEW_ENTITY] 或 [GOLDEN_FINGER_SKILL] 标签")
+    if not entities and not golden_finger_skills and not foreshadowing_items:
+        print("✅ 未发现 [NEW_ENTITY] / [GOLDEN_FINGER_SKILL] / [FORESHADOWING_JSON] 标签")
         return
 
     if entities:
         print(f"\n🔍 发现 {len(entities)} 个新实体：")
         for i, entity in enumerate(entities, 1):
-            tier_emoji = {"核心": "🔴", "支线": "🟡", "装饰": "🟢"}.get(entity.get('tier', '支线'), "⚪")
-            print(f"  {i}. [{entity['type']}] {entity['name']} {tier_emoji}{entity.get('tier', '支线')} - {entity['desc'][:25]}...")
+            tier_emoji = {"核心": "🔴", "支线": "🟡", "装饰": "🟢"}.get(entity.get("tier", "支线"), "⚪")
+            print(
+                f"  {i}. [{entity['type']}] {entity['name']} {tier_emoji}{entity.get('tier', '支线')} - {entity['desc'][:25]}..."
+            )
 
     if golden_finger_skills:
         print(f"\n✨ 发现 {len(golden_finger_skills)} 个金手指技能：")
         for i, skill in enumerate(golden_finger_skills, 1):
             print(f"  {i}. {skill['name']} ({skill['level']}) - {skill['desc'][:25]}...")
 
+    if foreshadowing_items:
+        print(f"\n🧩 发现 {len(foreshadowing_items)} 条伏笔：")
+        for i, item in enumerate(foreshadowing_items, 1):
+            tier = item.get("tier", "支线")
+            target = item.get("target_chapter", "未设定")
+            print(f"  {i}. {tier} → 目标Ch{target}: {str(item.get('content', ''))[:40]}...")
+
     if dry_run:
         print("\n⚠️  Dry-run 模式，不执行实际写入")
         return
 
-    # 确定项目根目录（动态查找 .webnovel/ 目录）
-    chapter_path = Path(chapter_file).resolve()
-    project_root = None
-    for parent in [chapter_path.parent] + list(chapter_path.parents):
-        if (parent / ".webnovel").exists():
-            project_root = parent
-            break
+    if not project_root:
+        chapter_path = Path(chapter_file).resolve()
+        for parent in [chapter_path.parent] + list(chapter_path.parents):
+            if (parent / ".webnovel" / "state.json").exists():
+                project_root = parent
+                break
 
-    if project_root is None:
-        print(f"❌ 找不到 .webnovel 目录")
-        print(f"   搜索路径: {chapter_path.parent} 及其父目录")
-        print("请先运行 /webnovel-init 初始化项目")
+    if not project_root:
+        print("❌ 找不到项目根目录（缺少 .webnovel/state.json）")
+        print("请先运行 /webnovel-init 初始化项目，或使用 --project-root 指定路径")
         sys.exit(1)
 
-    state_file = project_root / ".webnovel/state.json"
+    state_file = resolve_state_file(explicit_project_root=str(project_root))
 
-    if not state_file.exists():
-        print(f"❌ 状态文件不存在: {state_file}")
-        print("请先运行 /webnovel-init 初始化项目")
-        sys.exit(1)
-
-    # 同步实体到设定集
-    print(f"\n📝 开始同步到设定集...")
+    print("\n📝 开始同步到设定集...")
     success_count = 0
-
     for entity in entities:
         if sync_entity_to_settings(entity, str(project_root), auto_mode):
             success_count += 1
 
-    # 更新 state.json（包含金手指技能）
-    print(f"\n💾 更新 state.json...")
-    update_state_json(entities, str(state_file), golden_finger_skills)
+    print("\n💾 更新 state.json...")
+    update_state_json(
+        entities,
+        str(state_file),
+        golden_finger_skills,
+        foreshadowing_items,
+        default_planted_chapter=chapter_num,
+    )
 
-    print(f"\n✅ 完成！")
+    print("\n✅ 完成！")
     print(f"  - 实体同步: {success_count}/{len(entities)} 个")
     if golden_finger_skills:
         print(f"  - 金手指技能: {len(golden_finger_skills)} 个")
+    if foreshadowing_items:
+        print(f"  - 伏笔同步: {len(foreshadowing_items)} 条")
 
     if not auto_mode:
         print("\n💡 建议:")
@@ -623,6 +818,8 @@ def main():
         print("  3. 确认 .webnovel/state.json 中的实体记录")
         if golden_finger_skills:
             print("  4. 检查金手指技能是否正确记录在 protagonist_state.golden_finger.skills")
+        if foreshadowing_items:
+            print("  5. 检查 plot_threads.foreshadowing 的 planted/target/tier/location/characters 是否合理")
 
 if __name__ == "__main__":
     main()

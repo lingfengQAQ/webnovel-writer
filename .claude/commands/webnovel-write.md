@@ -57,7 +57,7 @@ Search order:
 
 ```bash
 # Read state.json to get current progress
-python -c "import json; s=json.load(open('PROJECT_ROOT/.webnovel/state.json')); print(s['progress']['current_chapter'] + 1)"
+python -c "import json, os; p=os.path.join('$PROJECT_ROOT','.webnovel','state.json'); s=json.load(open(p, encoding='utf-8')); print(s['progress']['current_chapter'] + 1)"
 ```
 
 **Set chapter_num** = current_chapter + 1
@@ -266,6 +266,9 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
    - ✅ Introduce required Entities with `[NEW_ENTITY: 类型, 名称, 描述, 层级]` tags（层级: 核心/支线/装饰）
    - ✅ Track new golden finger skills with `[GOLDEN_FINGER_SKILL: 技能名, 等级, 描述, 冷却时间]`
    - ✅ Plant Foreshadowing as planned
+   - ✅ **禁止自创“工作流标签”**：除 `[NEW_ENTITY]` / `[GOLDEN_FINGER_SKILL]` / `[OUTLINE_DEVIATION]` 外，不要在正文里新增任何方括号标签（例如 `[FORESHADOWING: ...]`、`[COOL_POINT: ...]` 等）；如需伏笔结构化，仅允许使用 **`[FORESHADOWING_JSON: {...}]` 且必须包在 HTML 注释里**（不影响读者阅读）
+   - ✅ **禁用占位符正文**：正文里不要出现“???系统/???功能/???”；未知信息用“代号/称呼”或“权限屏蔽/无法读取”等叙述句替代
+   - ✅ **都市异能（隐秘期）余波要求**：若出现“会被普通人注意到的大动静”（爆炸/坍塌/火光/多人伤亡），本章或下一章必须交代一个现实层面的“余波/遮蔽机制”细节（警戒线、监控调取、热搜/群聊传闻、官方说法等）
    - ✅ Protagonist power ≤ state.json (no power inflation)
    - ✅ Apply review feedback (avoid Critical Issues)
 
@@ -281,15 +284,22 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 > [GOLDEN_FINGER_SKILL: 时间回溯, 1, 回到10秒前, 24小时]
 > ```
 >
+> **可选：读者版隐藏写法（推荐）**：用 HTML 注释包裹“正确格式”，脚本仍可识别，多数 Markdown 渲染不显示：
+> ```
+> <!-- [NEW_ENTITY: 角色, 陆辰, 主角觉醒时空能力, 核心] -->
+> <!-- [GOLDEN_FINGER_SKILL: 时间回溯, 1, 回到10秒前, 24小时] -->
+> <!-- [FORESHADOWING_JSON: {"content":"继承者验证通过","tier":"支线","target_chapter":101,"location":"云程贸易公司","characters":["陆辰"]}] -->
+> ```
+>
 > **错误格式（脚本无法识别 ❌）**:
 > ```
-> <!-- NEW_ENTITY: 陆辰 | 主角 | ... -->  ❌ HTML注释格式
+> <!-- NEW_ENTITY: 陆辰 | 主角 | ... -->  ❌ 缺少 [NEW_ENTITY: ...] 标准标签
 > {NEW_ENTITY: 陆辰, 主角, ...}            ❌ 花括号
 > NEW_ENTITY: 陆辰, 主角, ...              ❌ 缺少方括号
 > [NEW_ENTITY: 陆辰 | 主角 | ...]          ❌ 竖线分隔符
 > ```
 >
-> **标签放置位置**: 在角色/地点/物品首次出现的段落末尾，或章节末尾统一放置
+> **标签放置位置**: 在角色/地点/物品首次出现的段落末尾，或章节末尾统一放置。为便于后处理，建议**标签单独成行**（不要把标签夹在一句正文里）
 
 ---
 
@@ -309,7 +319,8 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 
 5. **Save Output**:
    ```
-   File: 正文/第{N:04d}章.md
+   File: 正文/第{volume_num}卷/第{N:03d}章-{标题}.md
+   （也可先保存为：正文/第{volume_num}卷/第{N:03d}章.md，后续再补标题重命名）
 
    Format:
    # 第 {N} 章：{标题}
@@ -346,7 +357,7 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 ```bash
 python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-step \
   --step-id "Step 2" \
-  --artifacts '{"chapter_file": {"path": "正文/第{N:04d}章.md", "exists": true, "word_count": {实际字数}, "status": "draft"}}'
+  --artifacts '{"chapter_file": {"path": "正文/第{volume_num}卷/第{N:03d}章-{标题}.md", "exists": true, "word_count": {实际字数}, "status": "draft"}}'
 ```
 
 ---
@@ -371,11 +382,20 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 🔒 大纲即法律：润色只调整表达方式，不改变情节内容
 🔒 设定即物理：润色不得改变任何实力/能力描述
 🔒 标签保护：[NEW_ENTITY] 和 [GOLDEN_FINGER_SKILL] 标签必须原样保留
+🔒 通用润色：所有改进技法均为通用技法，不依赖特定题材
 ```
+
+**详细参考**: `.claude/skills/webnovel-writer/references/polish-guide.md`（含量化标准和改写示例库）
 
 ---
 
-**润色四步骤（顺序执行）**:
+**润色六步骤（顺序执行）**:
+
+#### 2.5.0 量化基线抽检（润色前）
+
+按 `.claude/skills/webnovel-writer/references/polish-guide.md` 的“AI痕迹/自然化”做一次快速计数（建议：首章/每10章/出现模板感时抽检即可）。
+
+---
 
 #### 2.5.1 AI痕迹检测与修正
 
@@ -450,6 +470,22 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 ✅ 自然：林天琢磨了半天——第一种太冒险，第三种太慢，嗯……就第二种吧。
 ```
 
+**改写技巧速查**:
+
+| 问题类型 | 改写方法 |
+|---------|---------|
+| 情绪直白 | 动作外化（拳头攥紧、额头冒汗） |
+| 逻辑完美 | 打断重组（加……和破折号） |
+| 比喻堆砌 | 只留一个最有力的 |
+| 形容过密 | 删除70%的形容词 |
+| 对话书面 | 口语化+省略主语 |
+
+---
+
+#### 2.5.5 量化复检（润色后）
+
+复检目标（详见 polish-guide）：总结词=0、列举结构=0、学术词 <1次/1000字、短句占比 30-50%、停顿词 ≥2次/1000字；未达标则返回 2.5.1-2.5.4 针对性修正。
+
 ---
 
 **润色后自检清单**:
@@ -457,7 +493,8 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 - [ ] 大纲目标未改变（情节、爽点、伏笔完整）
 - [ ] 主角实力未膨胀（≤ state.json）
 - [ ] [NEW_ENTITY] 和 [GOLDEN_FINGER_SKILL] 标签保留完整
-- [ ] AI痕迹已清除（无过度总结、完美结构）
+- [ ] AI痕迹量化达标（总结词=0，学术词<1次/1000字）
+- [ ] 自然化量化达标（停顿词≥2次/1000字，短句30-50%）
 - [ ] 风格与前文一致（语言/叙事/角色/场景）
 - [ ] 字数仍在 3000-5000 范围内
 
@@ -491,7 +528,7 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 
 **Save Polished Output**:
 
-更新章节文件 `正文/第{N:04d}章.md`，覆盖原草稿。
+更新章节文件 `正文/第{volume_num}卷/第{N:03d}章-{标题}.md`，覆盖原草稿。
 
 **After completing Step 2.5**, **YOU MUST run**:
 
@@ -513,10 +550,10 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
   --step-name "Extract Entities"
 ```
 
-**IF** you used `[NEW_ENTITY]` or `[GOLDEN_FINGER_SKILL]` tags in the chapter:
+**IF** you used `[NEW_ENTITY]` / `[GOLDEN_FINGER_SKILL]` / `[FORESHADOWING_JSON]` tags in the chapter:
 
 ```bash
-python .claude/skills/webnovel-writer/scripts/extract_entities.py "正文/第{N:04d}章.md" --auto
+python .claude/skills/webnovel-writer/scripts/extract_entities.py --project-root "$PROJECT_ROOT" --chapter {chapter_num} --auto
 ```
 
 **After completing Step 3**, **YOU MUST run**:
@@ -590,8 +627,17 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-step 
 **Use Task tool to call metadata-extractor agent**:
 
 ```python
-# Read chapter content
-with open(f"正文/第{chapter_num:04d}章.md", 'r', encoding='utf-8') as f:
+# Read chapter content (兼容卷目录命名：正文/第{volume_num}卷/第{N:03d}章-标题.md)
+from pathlib import Path
+
+volume_num = (chapter_num - 1) // 50 + 1
+vol_dir = Path("正文") / f"第{volume_num}卷"
+matches = sorted(vol_dir.glob(f"第{chapter_num:03d}章*.md")) + sorted(vol_dir.glob(f"第{chapter_num:04d}章*.md"))
+if not matches:
+    raise FileNotFoundError(f"Chapter file not found for ch{chapter_num} under {vol_dir}")
+
+chapter_file = matches[0]
+with open(chapter_file, 'r', encoding='utf-8') as f:
     chapter_content = f.read()
 
 # Call metadata-extractor agent
@@ -688,13 +734,13 @@ os.unlink(metadata_file)  # Delete temporary file
 
 1. **Direct JSON string** (Linux/macOS only):
 ```bash
-python structured_index.py --update-chapter {N} --metadata-json '{json_string}'
+python .claude/skills/webnovel-writer/scripts/structured_index.py --project-root "$PROJECT_ROOT" --update-chapter {N} --metadata-json '{json_string}'
 ```
 
 2. **Fallback mode** (if agent unavailable):
 ```bash
 # Direct file-based extraction (legacy mode, 60% accuracy)
-python structured_index.py --update-chapter {N} --metadata "正文/第{N:04d}章.md"
+python .claude/skills/webnovel-writer/scripts/structured_index.py --project-root "$PROJECT_ROOT" --update-chapter {N} --metadata "正文/第{volume_num}卷/第{N:03d}章.md"
 ```
 
 ---
@@ -702,16 +748,16 @@ python structured_index.py --update-chapter {N} --metadata "正文/第{N:04d}章
 **Query Examples** (for future use):
 ```bash
 # 查询地点相关章节（O(log n) vs O(n) 文件遍历）
-python structured_index.py --query-location "血煞秘境"
+python .claude/skills/webnovel-writer/scripts/structured_index.py --project-root "$PROJECT_ROOT" --query-location "血煞秘境"
 
 # 查询紧急伏笔（超过 50 章未回收）
-python structured_index.py --query-urgent-foreshadowing
+python .claude/skills/webnovel-writer/scripts/structured_index.py --project-root "$PROJECT_ROOT" --query-urgent-foreshadowing
 
 # 模糊查询角色
-python structured_index.py --fuzzy-search "姓李" "女弟子"
+python .claude/skills/webnovel-writer/scripts/structured_index.py --project-root "$PROJECT_ROOT" --fuzzy-search "姓李" "女弟子"
 
 # 查看索引统计
-python structured_index.py --stats
+python .claude/skills/webnovel-writer/scripts/structured_index.py --project-root "$PROJECT_ROOT" --stats
 ```
 
 **IMPORTANT**:
@@ -1095,7 +1141,7 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-task
 - [ ] Archive check result confirmed (无需归档 OR 归档完成)
 
 **Chapter Content**:
-- [ ] Chapter file saved to `正文/第{N:04d}章.md` (3,000-5,000 chars)
+- [ ] Chapter file saved to `正文/第{volume_num}卷/第{N:03d}章-{标题}.md` (3,000-5,000 chars)
 - [ ] [NEW_ENTITY] and [GOLDEN_FINGER_SKILL] tags extracted (if any)
 
 **Content Polishing** (Step 2.5):
