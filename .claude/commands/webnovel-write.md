@@ -223,6 +223,30 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
    - ✅ Protagonist power ≤ state.json (no power inflation)
    - ✅ Apply review feedback (avoid Critical Issues)
 
+---
+
+> ⚠️ **标签格式警告 - 必须严格遵守（脚本依赖此格式）**
+>
+> **正确格式（方括号 + 逗号分隔）**:
+> ```
+> [NEW_ENTITY: 角色, 陆辰, 主角觉醒时空能力, 核心]
+> [NEW_ENTITY: 地点, 末日避难所, 幸存者聚集地, 支线]
+> [NEW_ENTITY: 物品, 时空碎片, 强化金手指的材料, 装饰]
+> [GOLDEN_FINGER_SKILL: 时间回溯, 1, 回到10秒前, 24小时]
+> ```
+>
+> **错误格式（脚本无法识别 ❌）**:
+> ```
+> <!-- NEW_ENTITY: 陆辰 | 主角 | ... -->  ❌ HTML注释格式
+> {NEW_ENTITY: 陆辰, 主角, ...}            ❌ 花括号
+> NEW_ENTITY: 陆辰, 主角, ...              ❌ 缺少方括号
+> [NEW_ENTITY: 陆辰 | 主角 | ...]          ❌ 竖线分隔符
+> ```
+>
+> **标签放置位置**: 在角色/地点/物品首次出现的段落末尾，或章节末尾统一放置
+
+---
+
 3. **Interactive Adjustment** (if user interrupts):
    - If user says "这段改一下" → Adjust immediately
    - If user says "Accept" → Continue
@@ -469,6 +493,9 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
   --step-name "Update State"
 ```
 
+> ⚠️ **命令格式警告 - 复制下方模板使用**
+
+**完整命令模板（有实力/位置变化时）**:
 ```bash
 python .claude/skills/webnovel-writer/scripts/update_state.py \
   --progress {chapter_num} {total_words} \
@@ -476,10 +503,25 @@ python .claude/skills/webnovel-writer/scripts/update_state.py \
   --protagonist-location "{新地点}" {chapter_num}
 ```
 
-**Minimum required** (if no power/location change):
+**示例（第5章，突破到炼气二层，位置变更）**:
+```bash
+python .claude/skills/webnovel-writer/scripts/update_state.py \
+  --progress 5 18500 \
+  --protagonist-power "炼气期" 2 "无" \
+  --protagonist-location "天云宗内门" 5
+```
+
+**最小命令（无实力/位置变化时）**:
 ```bash
 python .claude/skills/webnovel-writer/scripts/update_state.py --progress {chapter_num} {total_words}
 ```
+
+**示例（第3章，4200字，无变化）**:
+```bash
+python .claude/skills/webnovel-writer/scripts/update_state.py --progress 3 12600
+```
+
+> ❌ **错误示例**: `--chapter-written 1 --words 2500` （参数名错误）
 
 **After completing Step 4**, **YOU MUST run**:
 
@@ -688,11 +730,23 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
   --step-name "Git Backup"
 ```
 
+> ⚠️ **命令格式警告 - 复制下方模板使用**
+
+**命令模板**:
 ```bash
 python .claude/skills/webnovel-writer/scripts/backup_manager.py \
   --chapter {chapter_num} \
   --chapter-title "{章节标题}"
 ```
+
+**示例（第1章）**:
+```bash
+python .claude/skills/webnovel-writer/scripts/backup_manager.py \
+  --chapter 1 \
+  --chapter-title "死亡降临"
+```
+
+> ❌ **错误示例**: `backup --message "完成第1章"` （不需要 backup 子命令和 --message 参数）
 
 **What this does**: `git add .` + `git commit` + `git tag ch{N:04d}`
 
@@ -722,16 +776,22 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 - **Fire Strand** (情感线): Romance, friendship, emotional conflicts
 - **Constellation Strand** (人际线): Social dynamics, alliances, betrayals
 
-**After determining the dominant strand, run**:
+> ⚠️ **命令格式警告 - 复制下方模板使用**
 
+**命令模板**:
 ```bash
 python .claude/skills/webnovel-writer/scripts/update_state.py \
   --strand-dominant {quest|fire|constellation} {chapter_num}
 ```
 
-**Example** (Chapter 3 dominated by Quest):
+**示例（第3章，Quest线主导）**:
 ```bash
 python .claude/skills/webnovel-writer/scripts/update_state.py --strand-dominant quest 3
+```
+
+**示例（第7章，Fire线主导）**:
+```bash
+python .claude/skills/webnovel-writer/scripts/update_state.py --strand-dominant fire 7
 ```
 
 **CRITICAL**: This updates `strand_tracker` in state.json, tracking pacing balance to prevent monotonous pacing.
