@@ -49,6 +49,8 @@ from typing import Optional, List, Dict, Tuple
 # 安全修复：导入安全工具函数（P1 MEDIUM）
 # ============================================================================
 from security_utils import create_secure_directory
+from project_locator import resolve_project_root
+from chapter_paths import find_chapter_file
 
 
 class StructuredIndex:
@@ -56,7 +58,10 @@ class StructuredIndex:
 
     def __init__(self, project_root=None):
         if project_root is None:
-            project_root = Path.cwd()
+            try:
+                project_root = resolve_project_root()
+            except FileNotFoundError:
+                project_root = Path.cwd()
         else:
             project_root = Path(project_root)
 
@@ -259,9 +264,8 @@ class StructuredIndex:
         - 增加耗时：~5ms（Hash 计算 + 对比）
         - 仅当检测到变更时才重建（增量成本）
         """
-        chapter_file = self.chapters_dir / f"第{chapter_num:04d}章.md"
-
-        if not chapter_file.exists():
+        chapter_file = find_chapter_file(self.project_root, chapter_num)
+        if chapter_file is None or not chapter_file.exists():
             return  # 文件不存在，跳过
 
         # 计算当前文件 Hash
@@ -363,18 +367,40 @@ class StructuredIndex:
 
         current_chapter = state.get('progress', {}).get('current_chapter', 0)
 
-        # 同步活跃伏笔（未回收）
-        active_plots = state.get('plot_threads', {}).get('active', [])
-        for plot in active_plots:
-            self._index_foreshadowing(plot, current_chapter, status="未回收")
+        plot_threads = state.get('plot_threads', {}) or {}
 
-        # 同步已回收伏笔
-        resolved_plots = state.get('plot_threads', {}).get('resolved', [])
-        for plot in resolved_plots:
-            self._index_foreshadowing(plot, current_chapter, status="已回收")
+        # 兼容新格式：plot_threads.foreshadowing = [{"content": "...", "status": "active", ...}, ...]
+        foreshadowing_items = plot_threads.get('foreshadowing', []) or []
+        active_count = 0
+        resolved_count = 0
+
+        for item in foreshadowing_items:
+            desc = item.get('description') or item.get('content') or ''
+            if not desc:
+                continue
+
+            raw_status = (item.get('status') or '').strip()
+            if raw_status in ['已回收', 'resolved']:
+                status = '已回收'
+                resolved_count += 1
+            else:
+                # 默认都视为未回收（兼容 active/未回收/pending/空）
+                status = '未回收'
+                active_count += 1
+
+            normalized = {
+                'description': desc,
+                'location': item.get('location', ''),
+                'characters': item.get('characters', []),
+                # 如果没有明确记录，至少给一个可用的默认值（避免紧急度恒为0）
+                'introduced_chapter': item.get('introduced_chapter') or item.get('planted_chapter') or 1,
+                'resolved_chapter': item.get('resolved_chapter', None),
+            }
+
+            self._index_foreshadowing(normalized, current_chapter, status=status)
 
         self.conn.commit()
-        print(f"✅ 伏笔索引已同步：{len(active_plots)} 条活跃 + {len(resolved_plots)} 条已回收")
+        print(f"✅ 伏笔索引已同步：{active_count} 条活跃 + {resolved_count} 条已回收")
 
     def _index_foreshadowing(self, plot: Dict, current_chapter: int, status: str):
         """为单个伏笔建立索引"""
@@ -391,8 +417,8 @@ class StructuredIndex:
             (id, content, location, characters, introduced_chapter, resolved_chapter, status, urgency, updated_at)
             VALUES ((SELECT id FROM foreshadowing_index WHERE content = ?), ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         """, (
-            plot['description'],  # 用于查重
-            plot['description'],
+            plot.get('description', ''),  # 用于查重
+            plot.get('description', ''),
             location,
             json.dumps(characters, ensure_ascii=False),
             plot.get('introduced_chapter', 0),
@@ -581,10 +607,11 @@ class StructuredIndex:
             return
 
         # 获取所有章节文件
-        chapter_files = sorted(self.chapters_dir.glob("第*.md"))
+        chapter_files = sorted(self.chapters_dir.rglob("第*.md"))
 
         print(f"🔍 发现 {len(chapter_files)} 个章节文件，开始重建索引...")
 
+        seen = set()
         for chapter_file in chapter_files:
             # 提取章节编号
             match = re.search(r'第(\d+)章', chapter_file.name)
@@ -592,6 +619,9 @@ class StructuredIndex:
                 continue
 
             chapter_num = int(match.group(1))
+            if chapter_num in seen:
+                continue
+            seen.add(chapter_num)
 
             # 重建索引
             self._rebuild_chapter_index(chapter_num, chapter_file)
@@ -599,7 +629,7 @@ class StructuredIndex:
         # 同步伏笔索引
         self.sync_foreshadowing_from_state()
 
-        print(f"✅ 批量重建完成：{len(chapter_files)} 章")
+        print(f"✅ 批量重建完成：{len(seen)} 章")
 
     # ================== 查询与统计 ==================
 
