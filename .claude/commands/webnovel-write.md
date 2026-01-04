@@ -28,7 +28,53 @@ description: 按大纲创作指定章节的正文内容（3000-5000字），自�
 
 ## Arguments
 
-- `chapter_num`: Chapter number to write (e.g., "45"). If not provided, ask the user.
+- `chapter_num`: Chapter number to write (e.g., "45").
+  - If user says "自动检测" or "下一章" → Auto-detect from state.json
+  - If not provided → Ask the user
+
+---
+
+## Step -1: Environment Setup (MANDATORY - BEFORE ALL STEPS)
+
+### 1. Locate Project Directory
+
+**YOU MUST find the `.webnovel/` directory first**:
+
+```
+Search order:
+1. Current working directory: ./.webnovel/
+2. webnovel-project subdirectory: ./webnovel-project/.webnovel/
+3. Parent directory: ../.webnovel/
+```
+
+**Set PROJECT_ROOT** to the directory containing `.webnovel/`:
+- If found at `./webnovel-project/.webnovel/` → `PROJECT_ROOT = ./webnovel-project`
+- All subsequent paths are relative to PROJECT_ROOT
+
+### 2. Auto-detect Chapter Number (if requested)
+
+**IF user requested auto-detection** ("自动检测" / "下一章" / no chapter specified):
+
+```bash
+# Read state.json to get current progress
+python -c "import json; s=json.load(open('PROJECT_ROOT/.webnovel/state.json')); print(s['progress']['current_chapter'] + 1)"
+```
+
+**Set chapter_num** = current_chapter + 1
+
+### 3. Validate Before Proceeding
+
+**Before Step 0, confirm**:
+- [ ] PROJECT_ROOT is set (contains `.webnovel/state.json`)
+- [ ] chapter_num is determined (from user or auto-detected)
+- [ ] Volume number is calculated: `volume_num = (chapter_num - 1) // 50 + 1`
+
+**Example Output**:
+```
+📍 项目目录: D:\wk\novel skill\webnovel-project
+📖 目标章节: 第2章 (第1卷)
+✅ 环境检查通过，开始执行 Step 0...
+```
 
 ---
 

@@ -578,8 +578,20 @@ def main():
         print("\n⚠️  Dry-run 模式，不执行实际写入")
         return
 
-    # 确定项目根目录
-    project_root = Path(chapter_file).parent.parent
+    # 确定项目根目录（动态查找 .webnovel/ 目录）
+    chapter_path = Path(chapter_file).resolve()
+    project_root = None
+    for parent in [chapter_path.parent] + list(chapter_path.parents):
+        if (parent / ".webnovel").exists():
+            project_root = parent
+            break
+
+    if project_root is None:
+        print(f"❌ 找不到 .webnovel 目录")
+        print(f"   搜索路径: {chapter_path.parent} 及其父目录")
+        print("请先运行 /webnovel-init 初始化项目")
+        sys.exit(1)
+
     state_file = project_root / ".webnovel/state.json"
 
     if not state_file.exists():
