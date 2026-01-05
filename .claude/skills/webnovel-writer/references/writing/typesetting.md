@@ -57,4 +57,4 @@
 7. 场景切换是否清晰（空行/分隔/过渡句）
 8. 章内是否至少 1 个明确推进点（信息/行动/转折）
 9. 章末是否有钩子
-10. 新实体是否标注 `[NEW_ENTITY]` / `[GOLDEN_FINGER_SKILL]` / `[FORESHADOWING_JSON]`
+10. 新实体是否标注 `<entity/>` / `<skill/>` / `<foreshadow/>` 标签

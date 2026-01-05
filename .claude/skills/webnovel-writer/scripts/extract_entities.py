@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """
-[NEW_ENTITY] 标签提取与同步脚本
+XML 标签提取与同步脚本 (v2.0)
 
 功能：
-1. 扫描指定章节正文，提取所有 [NEW_ENTITY] 标签
-2. 解析实体类型（角色/地点/物品/势力/招式）
+1. 扫描指定章节正文，提取所有 XML 格式标签
+2. 支持标签类型：
+   - <entity>: 新实体（角色/地点/物品/势力/招式）
+   - <skill>: 金手指技能
+   - <foreshadow>: 伏笔标签
+   - <deviation>: 大纲偏离标记
 3. 支持实体层级分类（核心/支线/装饰）- 匹配伏笔三层级系统
-4. 提取金手指技能标签 [GOLDEN_FINGER_SKILL]
-5. 同步到设定集对应文件
-6. 更新 state.json 中的相关记录
-7. 支持自动化模式和交互式模式
+4. 同步到设定集对应文件
+5. 更新 state.json 中的相关记录
+6. 支持自动化模式和交互式模式
+7. 兼容旧格式（[NEW_ENTITY]/[GOLDEN_FINGER_SKILL]/[FORESHADOWING_JSON]）
 
 使用方式：
   python extract_entities.py <章节文件> [--auto] [--dry-run]
@@ -72,17 +76,19 @@ ENTITY_TIER_MAP = {
 
 def extract_new_entities(file_path: str) -> List[Dict]:
     """
-    从章节文件中提取所有 [NEW_ENTITY] 标签
+    从章节文件中提取所有实体标签（支持 XML 格式和旧方括号格式）
 
-    标签格式（支持两种）：
-      基础格式：[NEW_ENTITY: 类型, 名称, 描述]
-      增强格式：[NEW_ENTITY: 类型, 名称, 描述, 层级]  （层级可选：核心/支线/装饰）
+    XML 格式（推荐）：
+      <entity type="类型" name="名称" desc="描述" tier="层级"/>
 
       示例：
-      [NEW_ENTITY: 角色, 李雪, 天云宗外门弟子]
-      [NEW_ENTITY: 角色, 血煞门主, 本卷最终BOSS, 核心]
-      [NEW_ENTITY: 地点, 血煞秘境, 危险的试炼之地, 支线]
-      [NEW_ENTITY: 物品, 天雷果, 可提升雷属性修炼速度的灵果, 装饰]
+      <entity type="角色" name="陆辰" desc="主角，觉醒时空能力的大学生" tier="核心"/>
+      <entity type="地点" name="末日避难所" desc="幸存者聚集地，位于地下三层" tier="支线"/>
+      <entity type="物品" name="时空碎片" desc="强化金手指的稀有材料" tier="装饰"/>
+
+    旧格式（兼容）：
+      [NEW_ENTITY: 类型, 名称, 描述, 层级]
+      [NEW_ENTITY: 类型, 名称, 描述]
 
     Returns:
         List[Dict]: [{"type": "角色", "name": "李雪", "desc": "...", "tier": "支线", "line": 123}, ...]
@@ -91,6 +97,35 @@ def extract_new_entities(file_path: str) -> List[Dict]:
 
     with open(file_path, 'r', encoding='utf-8') as f:
         for line_num, line in enumerate(f, 1):
+            # ============================================================
+            # XML 格式: <entity type="..." name="..." desc="..." tier="..."/>
+            # ============================================================
+            xml_matches = re.findall(
+                r'<entity\s+type=["\']([^"\']+)["\']\s+name=["\']([^"\']+)["\']\s+desc=["\']([^"\']+)["\']\s+tier=["\']([^"\']+)["\']\s*/?>',
+                line
+            )
+            for match in xml_matches:
+                entity_type = match[0].strip()
+                entity_name = match[1].strip()
+                entity_desc = match[2].strip()
+                entity_tier = match[3].strip()
+
+                # 验证层级有效性
+                if entity_tier.lower() not in ENTITY_TIER_MAP:
+                    entity_tier = "支线"
+
+                entities.append({
+                    "type": entity_type,
+                    "name": entity_name,
+                    "desc": entity_desc,
+                    "tier": entity_tier,
+                    "line": line_num,
+                    "source_file": file_path
+                })
+
+            # ============================================================
+            # 旧格式兼容: [NEW_ENTITY: 类型, 名称, 描述, 层级]
+            # ============================================================
             # 增强格式：4个字段（包含层级）
             matches_enhanced = re.findall(
                 r'\[NEW_ENTITY:\s*([^,，]+)[,，]\s*([^,，]+)[,，]\s*([^,，]+)[,，]\s*([^,，\]]+)\]',
@@ -110,6 +145,14 @@ def extract_new_entities(file_path: str) -> List[Dict]:
                 entity_desc = match[2].strip()
                 entity_tier = match[3].strip()
 
+                # 检查是否已被 XML 格式匹配
+                already_matched = any(
+                    e["name"] == entity_name and e["line"] == line_num
+                    for e in entities
+                )
+                if already_matched:
+                    continue
+
                 # 验证层级有效性
                 if entity_tier.lower() not in ENTITY_TIER_MAP:
                     entity_tier = "支线"  # 默认支线
@@ -123,13 +166,13 @@ def extract_new_entities(file_path: str) -> List[Dict]:
                     "source_file": file_path
                 })
 
-            # 处理基础格式（排除已被增强格式匹配的）
+            # 处理基础格式（排除已被增强格式或 XML 格式匹配的）
             for match in matches_basic:
                 entity_type = match[0].strip()
                 entity_name = match[1].strip()
                 entity_desc = match[2].strip()
 
-                # 检查是否已被增强格式匹配
+                # 检查是否已被增强格式或 XML 格式匹配
                 already_matched = any(
                     e["name"] == entity_name and e["line"] == line_num
                     for e in entities
@@ -150,14 +193,18 @@ def extract_new_entities(file_path: str) -> List[Dict]:
 
 def extract_golden_finger_skills(file_path: str) -> List[Dict]:
     """
-    从章节文件中提取金手指技能标签 [GOLDEN_FINGER_SKILL]
+    从章节文件中提取金手指技能标签（支持 XML 格式和旧方括号格式）
 
-    标签格式：
-      [GOLDEN_FINGER_SKILL: 技能名, 等级, 描述, 冷却时间]
+    XML 格式（推荐）：
+      <skill name="技能名" level="等级" desc="描述" cooldown="冷却时间"/>
 
       示例：
-      [GOLDEN_FINGER_SKILL: 吞噬, Lv1, 可吞噬敌人获得经验, 10秒]
-      [GOLDEN_FINGER_SKILL: 鉴定术, Lv2, 查看物品/角色属性, 无冷却]
+      <skill name="时间回溯" level="1" desc="回到10秒前的状态" cooldown="24小时"/>
+      <skill name="空间锚点" level="2" desc="设置传送锚点，可瞬移返回" cooldown="1小时"/>
+      <skill name="时间感知" level="1" desc="被动技能，预知3秒内的危险" cooldown="无"/>
+
+    旧格式（兼容）：
+      [GOLDEN_FINGER_SKILL: 技能名, 等级, 描述, 冷却时间]
 
     Returns:
         List[Dict]: [{"name": "吞噬", "level": "Lv1", "desc": "...", "cooldown": "10秒"}, ...]
@@ -166,12 +213,14 @@ def extract_golden_finger_skills(file_path: str) -> List[Dict]:
 
     with open(file_path, 'r', encoding='utf-8') as f:
         for line_num, line in enumerate(f, 1):
-            matches = re.findall(
-                r'\[GOLDEN_FINGER_SKILL:\s*([^,，]+)[,，]\s*([^,，]+)[,，]\s*([^,，]+)[,，]\s*([^\]]+)\]',
+            # ============================================================
+            # XML 格式: <skill name="..." level="..." desc="..." cooldown="..."/>
+            # ============================================================
+            xml_matches = re.findall(
+                r'<skill\s+name=["\']([^"\']+)["\']\s+level=["\']([^"\']+)["\']\s+desc=["\']([^"\']+)["\']\s+cooldown=["\']([^"\']+)["\']\s*/?>',
                 line
             )
-
-            for match in matches:
+            for match in xml_matches:
                 skills.append({
                     "name": match[0].strip(),
                     "level": match[1].strip(),
@@ -181,41 +230,137 @@ def extract_golden_finger_skills(file_path: str) -> List[Dict]:
                     "source_file": file_path
                 })
 
+            # ============================================================
+            # 旧格式兼容: [GOLDEN_FINGER_SKILL: 技能名, 等级, 描述, 冷却时间]
+            # ============================================================
+            matches = re.findall(
+                r'\[GOLDEN_FINGER_SKILL:\s*([^,，]+)[,，]\s*([^,，]+)[,，]\s*([^,，]+)[,，]\s*([^\]]+)\]',
+                line
+            )
+
+            for match in matches:
+                skill_name = match[0].strip()
+                # 检查是否已被 XML 格式匹配
+                already_matched = any(
+                    s["name"] == skill_name and s["line"] == line_num
+                    for s in skills
+                )
+                if not already_matched:
+                    skills.append({
+                        "name": skill_name,
+                        "level": match[1].strip(),
+                        "desc": match[2].strip(),
+                        "cooldown": match[3].strip(),
+                        "line": line_num,
+                        "source_file": file_path
+                    })
+
     return skills
 
 
 def extract_foreshadowing_json(file_path: str) -> List[Dict[str, Any]]:
     """
-    从章节文件提取伏笔标签（推荐放在 HTML 注释内，避免影响读者阅读）：
+    从章节文件提取伏笔标签（支持 XML 格式和旧 JSON 格式）
 
-      <!-- [FORESHADOWING_JSON: {"content":"继承者验证通过","tier":"支线","target_chapter":101,"location":"云程贸易公司","characters":["陆辰"]}] -->
+    XML 格式（推荐）：
+      <foreshadow content="伏笔内容" tier="层级" target="目标章节" location="地点" characters="角色1,角色2"/>
+
+      示例：
+      <foreshadow content="神秘老者留下的玉佩开始发光" tier="核心" target="50" location="废弃实验室" characters="陆辰"/>
+      <foreshadow content="李薇手腕上的奇怪纹身" tier="支线" target="30" characters="李薇,陆辰"/>
+      <foreshadow content="咖啡店老板意味深长的眼神" tier="装饰"/>
+
+    旧格式（兼容）：
+      <!-- [FORESHADOWING_JSON: {"content":"伏笔内容","tier":"支线",...}] -->
 
     字段：
       - content (必填)
       - tier (可选: 核心/支线/装饰，默认 支线)
       - planted_chapter (可选: 默认由调用方补齐)
-      - target_chapter (可选: 默认 planted_chapter + 100)
+      - target_chapter / target (可选: 默认 planted_chapter + 100)
       - location (可选)
       - characters (可选: list[str] 或 逗号分隔字符串)
     """
     p = Path(file_path)
     text = p.read_text(encoding="utf-8")
 
-    pattern = re.compile(r"\[FORESHADOWING_JSON:\s*(\{.*?\})\s*\]", re.DOTALL)
     results: List[Dict[str, Any]] = []
+
+    # ============================================================
+    # XML 格式: <foreshadow content="..." tier="..." .../>
+    # ============================================================
+    # 必填: content, tier
+    # 可选: target, location, characters
+    xml_pattern = re.compile(
+        r'<foreshadow\s+'
+        r'content=["\']([^"\']+)["\']\s+'
+        r'tier=["\']([^"\']+)["\']'
+        r'(?:\s+target=["\']([^"\']*)["\'])?'
+        r'(?:\s+location=["\']([^"\']*)["\'])?'
+        r'(?:\s+characters=["\']([^"\']*)["\'])?'
+        r'\s*/?>',
+        re.DOTALL
+    )
+
+    for m in xml_pattern.finditer(text):
+        line_num = text[: m.start()].count("\n") + 1
+        content = m.group(1).strip()
+        if not content:
+            continue
+
+        tier = m.group(2).strip() or "支线"
+        if tier.lower() not in ENTITY_TIER_MAP:
+            tier = "支线"
+
+        target_str = m.group(3)
+        target_chapter = None
+        if target_str:
+            try:
+                target_chapter = int(target_str.strip())
+            except (TypeError, ValueError):
+                pass
+
+        location = (m.group(4) or "").strip()
+
+        characters_str = m.group(5) or ""
+        characters_list = [c.strip() for c in re.split(r"[,，]", characters_str) if c.strip()]
+
+        results.append({
+            "content": content,
+            "tier": tier,
+            "planted_chapter": None,
+            "target_chapter": target_chapter,
+            "location": location,
+            "characters": characters_list,
+            "line": line_num,
+            "source_file": str(p),
+        })
+
+    # ============================================================
+    # 旧格式兼容: [FORESHADOWING_JSON: {...}]
+    # ============================================================
+    pattern = re.compile(r"\[FORESHADOWING_JSON:\s*(\{.*?\})\s*\]", re.DOTALL)
 
     for m in pattern.finditer(text):
         raw = m.group(1).strip()
         line_num = text[: m.start()].count("\n") + 1
+
+        # 检查是否已被 XML 格式匹配
+        already_matched = any(
+            r["line"] == line_num for r in results
+        )
+        if already_matched:
+            continue
+
         try:
             obj = json.loads(raw)
         except json.JSONDecodeError:
-            print(f"?? 伏笔 JSON 解析失败（第{line_num}行附近），已跳过")
+            print(f"⚠️ 伏笔 JSON 解析失败（第{line_num}行附近），已跳过")
             continue
 
         content = str(obj.get("content", "")).strip()
         if not content:
-            print(f"?? 伏笔缺少 content（第{line_num}行附近），已跳过")
+            print(f"⚠️ 伏笔缺少 content（第{line_num}行附近），已跳过")
             continue
 
         tier = str(obj.get("tier", "支线")).strip() or "支线"
@@ -242,6 +387,69 @@ def extract_foreshadowing_json(file_path: str) -> List[Dict[str, Any]]:
                 "source_file": str(p),
             }
         )
+
+    return results
+
+
+def extract_deviations(file_path: str) -> List[Dict[str, Any]]:
+    """
+    从章节文件提取大纲偏离标签
+
+    XML 格式：
+      <deviation reason="偏离原因"/>
+
+      示例：
+      <deviation reason="临时灵感，增加李薇与陆辰的情感互动，为后续感情线铺垫"/>
+      <deviation reason="原计划本章突破，但节奏过快，延迟到下章"/>
+
+    旧格式（兼容）：
+      [OUTLINE_DEVIATION: 偏离原因]
+
+    Returns:
+        List[Dict]: [{"reason": "...", "line": 123}, ...]
+    """
+    p = Path(file_path)
+    text = p.read_text(encoding="utf-8")
+
+    results: List[Dict[str, Any]] = []
+
+    # ============================================================
+    # XML 格式: <deviation reason="..."/>
+    # ============================================================
+    xml_pattern = re.compile(
+        r'<deviation\s+reason=["\']([^"\']+)["\']\s*/?>',
+        re.DOTALL
+    )
+
+    for m in xml_pattern.finditer(text):
+        line_num = text[: m.start()].count("\n") + 1
+        reason = m.group(1).strip()
+        if reason:
+            results.append({
+                "reason": reason,
+                "line": line_num,
+                "source_file": str(p),
+            })
+
+    # ============================================================
+    # 旧格式兼容: [OUTLINE_DEVIATION: 原因]
+    # ============================================================
+    old_pattern = re.compile(r'\[OUTLINE_DEVIATION:\s*([^\]]+)\]')
+
+    for m in old_pattern.finditer(text):
+        line_num = text[: m.start()].count("\n") + 1
+        reason = m.group(1).strip()
+
+        # 检查是否已被 XML 格式匹配
+        already_matched = any(
+            r["line"] == line_num for r in results
+        )
+        if not already_matched and reason:
+            results.append({
+                "reason": reason,
+                "line": line_num,
+                "source_file": str(p),
+            })
 
     return results
 
@@ -301,7 +509,7 @@ def generate_character_card(entity: Dict, category: str) -> str:
 
 ## 备注
 
-自动提取自 [NEW_ENTITY] 标签，请补充完善。
+自动提取自 `<entity/>` 标签，请补充完善。
 """
 
 def update_world_view(entity: Dict, target_file: str, section: str):
@@ -694,7 +902,7 @@ def sync_entity_to_settings(entity: Dict, project_root: str, auto_mode: bool = F
 
 ## 备注
 
-自动提取自 [NEW_ENTITY] 标签，请补充完善。
+自动提取自 `<entity/>` 标签，请补充完善。
 """
 
         with open(target_file, 'w', encoding='utf-8') as f:
@@ -709,7 +917,7 @@ def sync_entity_to_settings(entity: Dict, project_root: str, auto_mode: bool = F
 
 def main():
     parser = argparse.ArgumentParser(
-        description="[NEW_ENTITY]/[GOLDEN_FINGER_SKILL]/FORESHADOWING_JSON 提取与同步",
+        description="XML 标签提取与同步 (<entity/>, <skill/>, <foreshadow/>, <deviation/>)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例：
@@ -769,9 +977,10 @@ def main():
     entities = extract_new_entities(chapter_file)
     golden_finger_skills = extract_golden_finger_skills(chapter_file)
     foreshadowing_items = extract_foreshadowing_json(chapter_file)
+    deviations = extract_deviations(chapter_file)
 
-    if not entities and not golden_finger_skills and not foreshadowing_items:
-        print("✅ 未发现 [NEW_ENTITY] / [GOLDEN_FINGER_SKILL] / [FORESHADOWING_JSON] 标签")
+    if not entities and not golden_finger_skills and not foreshadowing_items and not deviations:
+        print("✅ 未发现任何 XML 标签（<entity>/<skill>/<foreshadow>/<deviation>）")
         return
 
     if entities:
@@ -793,6 +1002,11 @@ def main():
             tier = item.get("tier", "支线")
             target = item.get("target_chapter", "未设定")
             print(f"  {i}. {tier} → 目标Ch{target}: {str(item.get('content', ''))[:40]}...")
+
+    if deviations:
+        print(f"\n⚡ 发现 {len(deviations)} 条大纲偏离：")
+        for i, dev in enumerate(deviations, 1):
+            print(f"  {i}. {dev.get('reason', '')[:50]}...")
 
     if dry_run:
         print("\n⚠️  Dry-run 模式，不执行实际写入")
@@ -833,6 +1047,8 @@ def main():
         print(f"  - 金手指技能: {len(golden_finger_skills)} 个")
     if foreshadowing_items:
         print(f"  - 伏笔同步: {len(foreshadowing_items)} 条")
+    if deviations:
+        print(f"  - 大纲偏离: {len(deviations)} 条（仅记录，不同步到 state.json）")
 
     if not auto_mode:
         print("\n💡 建议:")
@@ -843,6 +1059,8 @@ def main():
             print("  4. 检查金手指技能是否正确记录在 protagonist_state.golden_finger.skills")
         if foreshadowing_items:
             print("  5. 检查 plot_threads.foreshadowing 的 planted/target/tier/location/characters 是否合理")
+        if deviations:
+            print("  6. 大纲偏离已记录，请在 plan.md 或大纲中同步调整")
 
 if __name__ == "__main__":
     main()

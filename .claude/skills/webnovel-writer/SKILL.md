@@ -26,7 +26,7 @@ allowed-tools:
 | [爽点系统](#-爽点系统cool-points) | 五大爽点类型 + 布局策略 |
 | [节奏控制](#-节奏控制strand-weave) | Quest/Fire/Constellation 三线编织 |
 | [写作规范](#-写作规范) | 对话、描写、章节结构 |
-| [实体标签](#-new_entity-标签规范) | NEW_ENTITY 声明系统 |
+| [XML 标签](#-xml-标签规范) | 实体/技能/伏笔/偏离标签系统 |
 | [参考文档](#-参考文档索引) | 65+ 专题指南 |
 | [题材模板](#-题材模板库) | 9 大类型模板 |
 | [质量检查](#-质量检查清单) | 短期/长期质量目标 |
@@ -84,22 +84,28 @@ allowed-tools:
 
 **原则**: 所有新创造的角色、地点、物品必须标记并等待批准。
 
-**标记格式**:
-```markdown
-# 基础格式（3字段）
-[NEW_ENTITY: 类型, 名称, 描述]
+**XML 标签格式**（详见 [tag-specification.md](references/tag-specification.md)）:
+```xml
+<!-- 实体标签 -->
+<entity type="类型" name="名称" desc="描述" tier="层级"/>
 
-# 增强格式（4字段，推荐）- 支持实体层级分类
-[NEW_ENTITY: 类型, 名称, 描述, 层级]
-# 层级选项: 核心(必须追踪) / 支线(应该追踪) / 装饰(可选追踪)
+<!-- 技能标签 -->
+<skill name="技能名" level="等级" desc="描述" cooldown="冷却时间"/>
 
-示例（增强格式）:
-[NEW_ENTITY: 角色, 血煞门主, 本卷最终BOSS，炼虚期巅峰, 核心]
-[NEW_ENTITY: 角色, 云长老, 天云宗外门长老，筑基期巅峰修为, 支线]
-[NEW_ENTITY: 地点, 黑风山脉, 天云宗附近的危险区域，栖息着大量妖兽, 装饰]
-[NEW_ENTITY: 物品, 天雷果, 稀有灵果，可帮助练气期修士突破筑基瓶颈, 支线]
-[NEW_ENTITY: 势力, 血煞门, 邪道宗门，与主角家族有世仇, 核心]
-[NEW_ENTITY: 功法, 吞噬神功, 主角的金手指功法，可吞噬他人修为, 核心]
+<!-- 伏笔标签 -->
+<foreshadow content="伏笔内容" tier="层级" target="目标章节" location="地点" characters="角色"/>
+
+<!-- 大纲偏离标签 -->
+<deviation reason="偏离原因"/>
+```
+
+**实体标签示例**:
+```xml
+<entity type="角色" name="陆辰" desc="主角，觉醒时空能力的大学生" tier="核心"/>
+<entity type="地点" name="末日避难所" desc="幸存者聚集地，位于地下三层" tier="支线"/>
+<entity type="物品" name="时空碎片" desc="强化金手指的稀有材料" tier="装饰"/>
+<entity type="势力" name="守夜人组织" desc="隐秘世界的秩序维护者" tier="核心"/>
+<entity type="功法" name="时空掌控" desc="陆辰的核心能力体系" tier="核心"/>
 ```
 
 **层级权重（用于伏笔紧急度计算）**:
@@ -109,18 +115,22 @@ allowed-tools:
 | 支线 | 2.0 | 应该追踪，丰富剧情 |
 | 装饰 | 1.0 | 可选追踪，增加真实感 |
 
-**金手指技能标签**（独立标签，用于追踪主角技能）:
-```markdown
-[GOLDEN_FINGER_SKILL: 技能名, 等级, 描述, 冷却时间]
+**金手指技能标签示例**:
+```xml
+<skill name="时间回溯" level="1" desc="回到10秒前的状态" cooldown="24小时"/>
+<skill name="空间锚点" level="2" desc="设置传送锚点，可瞬移返回" cooldown="1小时"/>
+<skill name="时间感知" level="1" desc="被动技能，预知3秒内的危险" cooldown="无"/>
+```
 
-示例:
-[GOLDEN_FINGER_SKILL: 吞噬, Lv1, 可吞噬敌人获得经验, 10秒]
-[GOLDEN_FINGER_SKILL: 鉴定术, Lv2, 查看物品/角色属性, 无冷却]
-[GOLDEN_FINGER_SKILL: 瞬移, Lv3, 短距离位移闪避攻击, 30秒]
+**伏笔标签示例**:
+```xml
+<foreshadow content="神秘老者留下的玉佩开始发光" tier="核心" target="50" location="废弃实验室" characters="陆辰"/>
+<foreshadow content="李薇手腕上的奇怪纹身" tier="支线" target="30" characters="李薇,陆辰"/>
+<foreshadow content="咖啡店老板意味深长的眼神" tier="装饰"/>
 ```
 
 **后处理流程**:
-1. Python 脚本自动提取所有 `[NEW_ENTITY]` 标签
+1. Python 脚本自动提取所有 XML 标签（`<entity>`/`<skill>`/`<foreshadow>`/`<deviation>`）
 2. 询问用户是否加入设定集
 3. 用户确认后更新 `state.json` 和设定文档
 
@@ -158,12 +168,14 @@ allowed-tools:
 
 ### 4) 标签纪律（减少 AI 痕迹）
 
-仅使用 workflow 明确规定的标签：
-- ✅ `[NEW_ENTITY: ...]`
-- ✅ `[GOLDEN_FINGER_SKILL: ...]`
-- ✅ `[OUTLINE_DEVIATION]`
-- ✅ `<!-- [FORESHADOWING_JSON: {...}] -->`（仅允许放在 HTML 注释内，避免影响读者阅读；由脚本同步到 `plot_threads.foreshadowing`）
-- ❌ 禁止自行发明新标签体系（例如 `[FORESHADOWING: ...]`、`[COOL_POINT: ...]`），除非同步更新脚本与规范
+仅使用 workflow 明确规定的 XML 标签（详见 [tag-specification.md](references/tag-specification.md)）：
+- ✅ `<entity type="..." name="..." desc="..." tier="..."/>` - 新实体标签
+- ✅ `<skill name="..." level="..." desc="..." cooldown="..."/>` - 金手指技能标签
+- ✅ `<foreshadow content="..." tier="..." .../>` - 伏笔标签
+- ✅ `<deviation reason="..."/>` - 大纲偏离标签
+- ✅ 推荐使用 HTML 注释包裹（`<!-- <entity.../> -->`），避免影响读者阅读
+- ❌ 禁止自行发明新标签体系，除非同步更新脚本与规范
+- ⚠️ 旧格式（`[NEW_ENTITY]`/`[GOLDEN_FINGER_SKILL]`/`[FORESHADOWING_JSON]`）仍兼容，但推荐迁移到 XML 格式
 
 ---
 
@@ -319,7 +331,7 @@ Ch 10: Quest + Fire（融合）
 - [ ] 是否符合大纲？（定律 1）
 - [ ] 爽点是否充足（≥1）？
 - [ ] 是否有设定冲突？（定律 2）
-- [ ] 是否标记了所有 [NEW_ENTITY]？（定律 3）
+- [ ] 是否标记了所有 `<entity/>`？（定律 3）
 
 **质量检查**:
 - [ ] 是否有战力崩坏？（境界 vs 实力匹配）
@@ -364,8 +376,8 @@ Ch 10: Quest + Fire（融合）
 ❌ **错误示例**: 突然出现"紫霄宗"，但设定集中无此势力
 
 ✅ **修正**:
-```markdown
-[NEW_ENTITY: 势力, 紫霄宗, 与天云宗齐名的大宗门，位于东域]
+```xml
+<entity type="势力" name="紫霄宗" desc="与天云宗齐名的大宗门，位于东域" tier="支线"/>
 ```
 并询问用户是否加入设定集
 

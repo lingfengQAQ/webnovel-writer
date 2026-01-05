@@ -263,12 +263,12 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 2. **Content Generation** (3000-5000 Chinese characters):
    - ✅ Follow outline Goal 100%
    - ✅ Deliver Cool Point as promised
-   - ✅ Introduce required Entities with `[NEW_ENTITY: 类型, 名称, 描述, 层级]` tags（层级: 核心/支线/装饰）
-   - ✅ Track new golden finger skills with `[GOLDEN_FINGER_SKILL: 技能名, 等级, 描述, 冷却时间]`
-   - ✅ Plant Foreshadowing as planned
-   - ✅ **禁止自创“工作流标签”**：除 `[NEW_ENTITY]` / `[GOLDEN_FINGER_SKILL]` / `[OUTLINE_DEVIATION]` 外，不要在正文里新增任何方括号标签（例如 `[FORESHADOWING: ...]`、`[COOL_POINT: ...]` 等）；如需伏笔结构化，仅允许使用 **`[FORESHADOWING_JSON: {...}]` 且必须包在 HTML 注释里**（不影响读者阅读）
-   - ✅ **禁用占位符正文**：正文里不要出现“???系统/???功能/???”；未知信息用“代号/称呼”或“权限屏蔽/无法读取”等叙述句替代
-   - ✅ **都市异能（隐秘期）余波要求**：若出现“会被普通人注意到的大动静”（爆炸/坍塌/火光/多人伤亡），本章或下一章必须交代一个现实层面的“余波/遮蔽机制”细节（警戒线、监控调取、热搜/群聊传闻、官方说法等）
+   - ✅ Introduce required Entities with `<entity type="类型" name="名称" desc="描述" tier="层级"/>` tags（层级: 核心/支线/装饰）
+   - ✅ Track new golden finger skills with `<skill name="技能名" level="等级" desc="描述" cooldown="冷却时间"/>`
+   - ✅ Plant Foreshadowing as planned with `<foreshadow content="伏笔内容" tier="层级" target="目标章节"/>`
+   - ✅ **禁止自创"工作流标签"**：除 `<entity>` / `<skill>` / `<foreshadow>` / `<deviation>` 外，不要在正文里新增任何自定义标签；详见 `references/tag-specification.md`
+   - ✅ **禁用占位符正文**：正文里不要出现"???系统/???功能/???"；未知信息用"代号/称呼"或"权限屏蔽/无法读取"等叙述句替代
+   - ✅ **都市异能（隐秘期）余波要求**：若出现"会被普通人注意到的大动静"（爆炸/坍塌/火光/多人伤亡），本章或下一章必须交代一个现实层面的"余波/遮蔽机制"细节（警戒线、监控调取、热搜/群聊传闻、官方说法等）
    - ✅ Protagonist power ≤ state.json (no power inflation)
    - ✅ Apply review feedback (avoid Critical Issues)
 
@@ -276,30 +276,36 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 
 > ⚠️ **标签格式警告 - 必须严格遵守（脚本依赖此格式）**
 >
-> **正确格式（方括号 + 逗号分隔）**:
-> ```
-> [NEW_ENTITY: 角色, 陆辰, 主角觉醒时空能力, 核心]
-> [NEW_ENTITY: 地点, 末日避难所, 幸存者聚集地, 支线]
-> [NEW_ENTITY: 物品, 时空碎片, 强化金手指的材料, 装饰]
-> [GOLDEN_FINGER_SKILL: 时间回溯, 1, 回到10秒前, 24小时]
+> **正确格式（XML 自闭合标签）**:
+> ```xml
+> <entity type="角色" name="陆辰" desc="主角觉醒时空能力" tier="核心"/>
+> <entity type="地点" name="末日避难所" desc="幸存者聚集地" tier="支线"/>
+> <entity type="物品" name="时空碎片" desc="强化金手指的材料" tier="装饰"/>
+> <skill name="时间回溯" level="1" desc="回到10秒前" cooldown="24小时"/>
+> <foreshadow content="继承者验证通过" tier="支线" target="101" location="云程贸易公司" characters="陆辰"/>
+> <deviation reason="临时灵感增加情感互动"/>
 > ```
 >
-> **可选：读者版隐藏写法（推荐）**：用 HTML 注释包裹“正确格式”，脚本仍可识别，多数 Markdown 渲染不显示：
-> ```
-> <!-- [NEW_ENTITY: 角色, 陆辰, 主角觉醒时空能力, 核心] -->
-> <!-- [GOLDEN_FINGER_SKILL: 时间回溯, 1, 回到10秒前, 24小时] -->
-> <!-- [FORESHADOWING_JSON: {"content":"继承者验证通过","tier":"支线","target_chapter":101,"location":"云程贸易公司","characters":["陆辰"]}] -->
+> **推荐：读者版隐藏写法**：用 HTML 注释包裹，脚本仍可识别，渲染时不显示：
+> ```xml
+> <!--
+> <entity type="角色" name="陆辰" desc="主角觉醒时空能力" tier="核心"/>
+> <skill name="时间回溯" level="1" desc="回到10秒前" cooldown="24小时"/>
+> <foreshadow content="继承者验证通过" tier="支线" target="101"/>
+> -->
 > ```
 >
 > **错误格式（脚本无法识别 ❌）**:
-> ```
-> <!-- NEW_ENTITY: 陆辰 | 主角 | ... -->  ❌ 缺少 [NEW_ENTITY: ...] 标准标签
-> {NEW_ENTITY: 陆辰, 主角, ...}            ❌ 花括号
-> NEW_ENTITY: 陆辰, 主角, ...              ❌ 缺少方括号
-> [NEW_ENTITY: 陆辰 | 主角 | ...]          ❌ 竖线分隔符
+> ```xml
+> <entity type='角色' .../>          ❌ 单引号（必须用双引号）
+> <entity type="角色" ...>           ❌ 未闭合（必须 />）
+> <Entity type="角色" .../>          ❌ 大写标签名（必须小写）
+> [NEW_ENTITY: 角色, 陆辰, ...]      ❌ 旧格式（已废弃，仅向后兼容）
 > ```
 >
 > **标签放置位置**: 在角色/地点/物品首次出现的段落末尾，或章节末尾统一放置。为便于后处理，建议**标签单独成行**（不要把标签夹在一句正文里）
+>
+> **详细规范**: 见 `references/tag-specification.md`
 
 ---
 
@@ -313,8 +319,8 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
    - [ ] Outline Goal achieved?
    - [ ] Cool-point delivered?
    - [ ] No power inflation (≤ state.json)?
-   - [ ] New entities tagged with [NEW_ENTITY: ..., 层级]?
-   - [ ] Golden finger skills tagged with [GOLDEN_FINGER_SKILL] (if learned new)?
+   - [ ] New entities tagged with `<entity type="..." name="..." desc="..." tier="..."/>`?
+   - [ ] Golden finger skills tagged with `<skill .../>` (if learned new)?
    - [ ] Review feedback applied (if exists)?
 
 5. **Save Output**:
@@ -348,7 +354,7 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 **FORBIDDEN**:
 - ❌ Deviating from outline
 - ❌ Power inflation (exceeding state.json)
-- ❌ Missing [NEW_ENTITY] or [GOLDEN_FINGER_SKILL] tags
+- ❌ Missing `<entity/>` or `<skill/>` tags
 - ❌ Ignoring review feedback Critical Issues
 - ❌ Skipping self-review
 
@@ -381,7 +387,7 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 ```
 🔒 大纲即法律：润色只调整表达方式，不改变情节内容
 🔒 设定即物理：润色不得改变任何实力/能力描述
-🔒 标签保护：[NEW_ENTITY] 和 [GOLDEN_FINGER_SKILL] 标签必须原样保留
+🔒 标签保护：`<entity/>` 和 `<skill/>` 标签必须原样保留
 🔒 通用润色：所有改进技法均为通用技法，不依赖特定题材
 ```
 
@@ -492,7 +498,7 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 
 - [ ] 大纲目标未改变（情节、爽点、伏笔完整）
 - [ ] 主角实力未膨胀（≤ state.json）
-- [ ] [NEW_ENTITY] 和 [GOLDEN_FINGER_SKILL] 标签保留完整
+- [ ] `<entity/>` 和 `<skill/>` 标签保留完整
 - [ ] AI痕迹量化达标（总结词=0，学术词<1次/1000字）
 - [ ] 自然化量化达标（停顿词≥2次/1000字，短句30-50%）
 - [ ] 风格与前文一致（语言/叙事/角色/场景）
@@ -550,7 +556,7 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
   --step-name "Extract Entities"
 ```
 
-**IF** you used `[NEW_ENTITY]` / `[GOLDEN_FINGER_SKILL]` / `[FORESHADOWING_JSON]` tags in the chapter:
+**IF** you used `<entity/>` / `<skill/>` / `<foreshadow/>` tags in the chapter:
 
 ```bash
 python .claude/skills/webnovel-writer/scripts/extract_entities.py --project-root "$PROJECT_ROOT" --chapter {chapter_num} --auto
@@ -1142,7 +1148,7 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-task
 
 **Chapter Content**:
 - [ ] Chapter file saved to `正文/第{volume_num}卷/第{N:03d}章-{标题}.md` (3,000-5,000 chars)
-- [ ] [NEW_ENTITY] and [GOLDEN_FINGER_SKILL] tags extracted (if any)
+- [ ] `<entity/>` and `<skill/>` tags extracted (if any)
 
 **Content Polishing** (Step 2.5):
 - [ ] AI traces detected and fixed (过度总结/完美结构/学术表达)

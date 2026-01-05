@@ -52,7 +52,7 @@ allowed-tools: Read, Grep
 
 **Verify**:
 - Current location matches state.json or has valid travel sequence
-- Characters appearing are established in 设定集/ or tagged with [NEW_ENTITY]
+- Characters appearing are established in 设定集/ or tagged with `<entity/>`
 - Character attributes (appearance, personality, affiliations) match records
 
 **Red Flags** (LOCATION_ERROR / CHARACTER_CONFLICT):
@@ -88,19 +88,19 @@ allowed-tools: Read, Grep
    → VIOLATION: Timeline arithmetic error
 ```
 
-### Step 3: [NEW_ENTITY] Validation
+### Step 3: `<entity/>` Validation
 
 **For all new entities in reviewed chapters**:
-1. Verify they are tagged with `[NEW_ENTITY: 类型, 名称, 描述, 层级]`（层级: 核心/支线/装饰）
+1. Verify they are tagged with `<entity type="类型" name="名称" desc="描述" tier="层级"/>`（层级: 核心/支线/装饰）
 2. Check if they contradict existing settings
 3. Assess if their introduction is necessary or bloat
-4. **NEW**: Verify `[GOLDEN_FINGER_SKILL]` tags for new abilities
+4. **NEW**: Verify `<skill .../>` tags for new abilities
 
 **Report untagged inventions**:
 ```
 ⚠️ 发现未标记新实体:
 - 第46章出现"紫霄宗"（设定集中无此势力）
-  → ACTION REQUIRED: 补充 [NEW_ENTITY] 标签或确认是否笔误
+  → ACTION REQUIRED: 补充 <entity/> 标签或确认是否笔误
 ```
 
 ### Step 4: Generate Report
@@ -143,13 +143,13 @@ Chapters {N} - {M}
 **Untagged List**:
 1. 第{M}章："紫霄宗" (势力) - 需补充标签+层级
 2. 第{M}章："天雷果" (物品) - 需补充标签+层级
-3. 第{M}章："吞噬升级" (金手指技能) - 需补充 [GOLDEN_FINGER_SKILL] 标签
+3. 第{M}章："吞噬升级" (金手指技能) - 需补充 `<skill .../>` 标签
 
 ## 建议 (Recommendations)
 - [For power conflicts] 修改第{M}章，将"破空斩"替换为筑基期可用技能
 - [For location errors] 补充移动过程描述或调整地点设定
 - [For timeline issues] 统一时间线推算，修正矛盾
-- [For untagged entities] 补充 [NEW_ENTITY] 标签并决定是否纳入设定集
+- [For untagged entities] 补充 `<entity/>` 标签并决定是否纳入设定集
 
 ## 综合评分
 **Overall**: {PASS/FAIL} - {Brief summary}
@@ -166,7 +166,7 @@ Chapters {N} - {M}
 ## Success Criteria
 
 - 0 critical violations (power conflicts, unexplained character changes)
-- All new entities tagged with [NEW_ENTITY: ..., 层级]
-- All new golden finger skills tagged with [GOLDEN_FINGER_SKILL]
+- All new entities tagged with `<entity type="..." name="..." desc="..." tier="..."/>`
+- All new golden finger skills tagged with `<skill .../>`
 - Location and timeline transitions are logical
 - Report provides specific fix recommendations with chapter numbers

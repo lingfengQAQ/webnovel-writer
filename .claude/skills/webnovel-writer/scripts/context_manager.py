@@ -230,8 +230,15 @@ class ContextManager:
                     break
                 if s == "---":
                     continue
-                # 过滤工作流标签行（[NEW_ENTITY] 等）
+                # 过滤工作流标签行（XML 格式 + 旧方括号格式）
+                # XML 格式: <entity.../>, <skill.../>, <foreshadow.../>, <deviation.../>
+                if re.match(r'^<(entity|skill|foreshadow|deviation)\s+', s):
+                    continue
+                # 旧格式: [NEW_ENTITY], [GOLDEN_FINGER_SKILL], [FORESHADOWING_JSON], [OUTLINE_DEVIATION]
                 if s.startswith("[") and s.endswith("]"):
+                    continue
+                # HTML 注释包裹的标签（<!-- <entity.../> -->）
+                if s.startswith("<!--") and ("<entity" in s or "<skill" in s or "<foreshadow" in s or "<deviation" in s):
                     continue
                 buf.append(s)
                 if sum(len(x) for x in buf) >= 220:
