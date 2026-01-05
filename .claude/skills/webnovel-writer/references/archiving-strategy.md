@@ -55,7 +55,7 @@
 - **超过 50 章未出场**（`current_chapter - last_appearance_chapter ≥ 50`）
 
 **归档目标**：
-- `archive/characters.json`
+- `.webnovel/.webnovel/archive/characters.json`
 
 **保留数据**：
 - 主要角色（`importance="major"`）**永不归档**
@@ -82,7 +82,7 @@ python archive_manager.py --restore-character "李雪"
 - **超过 20 章**（`current_chapter - resolved_chapter ≥ 20`）
 
 **归档目标**：
-- `archive/plot_threads.json`
+- `.webnovel/.webnovel/archive/plot_threads.json`
 
 **保留数据**：
 - 未回收的伏笔（`status="未回收"`）**永不归档**
@@ -107,7 +107,7 @@ python archive_manager.py --restore-character "李雪"
 - 审查报告超过 **50 章**（`current_chapter - review_chapter ≥ 50`）
 
 **归档目标**：
-- `archive/reviews.json`
+- `.webnovel/.webnovel/archive/reviews.json`
 
 **保留数据**：
 - 最近 50 章的审查报告保持活跃
@@ -225,7 +225,7 @@ python archive_manager.py --auto-check --dry-run
 
 **归档文件格式**（示例）：
 
-**archive/characters.json**:
+**.webnovel/archive/characters.json**:
 ```json
 [
   {
@@ -245,7 +245,7 @@ python archive_manager.py --auto-check --dry-run
 ]
 ```
 
-**archive/plot_threads.json**:
+**.webnovel/archive/plot_threads.json**:
 ```json
 [
   {
@@ -308,7 +308,7 @@ python archive_manager.py --restore-character "李雪"
 ```
 
 **执行逻辑**：
-1. 从 `archive/characters.json` 中查找角色"李雪"
+1. 从 `.webnovel/.webnovel/archive/characters.json` 中查找角色"李雪"
 2. 移除 `archived_at` 字段
 3. 将角色恢复到 `state.json` 的 `entities.characters`
 4. 从归档文件中移除该角色

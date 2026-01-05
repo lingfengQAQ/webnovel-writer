@@ -203,7 +203,12 @@ def init_project(
     # 读取内置模板（可选）
     script_dir = Path(__file__).resolve().parent
     templates_dir = script_dir.parent / "templates"
-    genre_template = _read_text_if_exists(templates_dir / "genres" / f"{genre}.md")
+    genre_key = (genre or "").strip()
+    genre_template_key = {
+        "修仙/玄幻": "修仙",
+        "玄幻": "修仙",
+    }.get(genre_key, genre_key)
+    genre_template = _read_text_if_exists(templates_dir / "genres" / f"{genre_template_key}.md")
     golden_finger_templates = _read_text_if_exists(templates_dir / "golden-finger-templates.md")
 
     # 基础文件（只在缺失时生成，避免覆盖已有内容）

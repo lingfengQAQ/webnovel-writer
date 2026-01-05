@@ -779,9 +779,9 @@ python .claude/skills/webnovel-writer/scripts/archive_manager.py --auto-check
 **Purpose**: 防止 state.json 无限增长（200万字长跑保障）
 
 **Archiving Strategy**:
-- **角色归档**: 超过 50 章未出场的次要角色 → `archive/characters.json`
-- **伏笔归档**: status="已回收" 且超过 20 章的伏笔 → `archive/plot_threads.json`
-- **报告归档**: 超过 50 章的旧审查报告 → `archive/reviews.json`
+- **角色归档**: 超过 50 章未出场的次要角色 → `.webnovel/archive/characters.json`
+- **伏笔归档**: status="已回收" 且超过 20 章的伏笔 → `.webnovel/archive/plot_threads.json`
+- **报告归档**: 超过 50 章的旧审查报告 → `.webnovel/archive/reviews.json`
 
 **Trigger Conditions** (满足任一即执行):
 - state.json 大小 ≥ 1 MB

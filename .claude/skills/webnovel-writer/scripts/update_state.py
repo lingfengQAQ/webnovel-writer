@@ -208,11 +208,16 @@ class StateUpdater:
 
     def update_golden_finger(self, name: str, level: int, cooldown: int):
         """更新金手指状态"""
-        self.state["protagonist_state"]["golden_finger"] = {
-            "name": name,
-            "level": level,
-            "cooldown": cooldown
-        }
+        ps = self.state.setdefault("protagonist_state", {})
+        golden_finger = ps.get("golden_finger")
+        if not isinstance(golden_finger, dict):
+            golden_finger = {}
+            ps["golden_finger"] = golden_finger
+
+        golden_finger.setdefault("skills", [])
+        golden_finger["name"] = name
+        golden_finger["level"] = level
+        golden_finger["cooldown"] = cooldown
         print(f"📝 更新金手指: {name} Lv.{level}, 冷却: {cooldown}天")
 
     def update_relationship(self, char_name: str, key: str, value: Any):

@@ -395,8 +395,17 @@ def update_state_json(
     default_planted_chapter: Optional[int] = None,
 ):
     """更新 state.json 中的实体记录（支持层级分类/金手指技能/伏笔结构化）"""
+
+    def _to_int(value: Any, default: int = 0) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
     with open(state_file, 'r', encoding='utf-8') as f:
         state = json.load(f)
+
+    first_seen_chapter = _to_int(default_planted_chapter, 0)
 
     # 确保存在实体列表
     if 'entities' not in state:
@@ -411,33 +420,44 @@ def update_state_json(
     # 确保存在金手指技能列表
     if 'protagonist_state' not in state:
         state['protagonist_state'] = {}
-    if 'golden_finger' not in state['protagonist_state']:
-        state['protagonist_state']['golden_finger'] = {
-            "name": "",
-            "skills": [],
-            "level": 1
-        }
+    golden_finger = state['protagonist_state'].get('golden_finger')
+    if not isinstance(golden_finger, dict):
+        golden_finger = {}
+        state['protagonist_state']['golden_finger'] = golden_finger
+    golden_finger.setdefault("name", "")
+    golden_finger.setdefault("level", 1)
+    golden_finger.setdefault("cooldown", 0)
+    golden_finger.setdefault("skills", [])
 
     for entity in entities:
         entity_type = entity['type']
         entity_tier = entity.get('tier', '支线')
 
         if entity_type == "角色":
-            if entity['name'] not in [c.get('name') for c in state['entities']['characters']]:
-                state['entities']['characters'].append({
-                    "name": entity['name'],
-                    "desc": entity['desc'],
-                    "category": categorize_character(entity['desc']),
-                    "tier": entity_tier,
-                    "first_appearance": entity.get('source_file', ''),
-                    "added_at": datetime.now().strftime('%Y-%m-%d')
-                })
+            chars = state['entities']['characters']
+            record = next((c for c in chars if c.get('name') == entity['name']), None)
+            if record is None:
+                record = {"name": entity['name']}
+                chars.append(record)
+
+            desc = entity['desc']
+            record.setdefault("desc", desc)
+            record.setdefault("description", desc)  # 兼容 structured_index
+            record.setdefault("category", categorize_character(desc))
+            record.setdefault("tier", entity_tier)
+            record.setdefault("importance", "major" if entity_tier == "核心" else "minor")
+            record.setdefault("first_appearance", entity.get('source_file', ''))
+            if first_seen_chapter:
+                record.setdefault("first_appearance_chapter", first_seen_chapter)
+                record["last_appearance_chapter"] = max(_to_int(record.get("last_appearance_chapter"), 0), first_seen_chapter)
+            record.setdefault("added_at", datetime.now().strftime('%Y-%m-%d'))
 
         elif entity_type == "地点":
             if entity['name'] not in [l.get('name') for l in state['entities']['locations']]:
                 state['entities']['locations'].append({
                     "name": entity['name'],
                     "desc": entity['desc'],
+                    "description": entity['desc'],
                     "tier": entity_tier,
                     "first_appearance": entity.get('source_file', ''),
                     "added_at": datetime.now().strftime('%Y-%m-%d')
@@ -448,6 +468,7 @@ def update_state_json(
                 state['entities']['items'].append({
                     "name": entity['name'],
                     "desc": entity['desc'],
+                    "description": entity['desc'],
                     "tier": entity_tier,
                     "first_appearance": entity.get('source_file', ''),
                     "added_at": datetime.now().strftime('%Y-%m-%d')
@@ -458,6 +479,7 @@ def update_state_json(
                 state['entities']['factions'].append({
                     "name": entity['name'],
                     "desc": entity['desc'],
+                    "description": entity['desc'],
                     "tier": entity_tier,
                     "first_appearance": entity.get('source_file', ''),
                     "added_at": datetime.now().strftime('%Y-%m-%d')
@@ -468,6 +490,7 @@ def update_state_json(
                 state['entities']['techniques'].append({
                     "name": entity['name'],
                     "desc": entity['desc'],
+                    "description": entity['desc'],
                     "tier": entity_tier,
                     "first_appearance": entity.get('source_file', ''),
                     "added_at": datetime.now().strftime('%Y-%m-%d')
@@ -532,7 +555,7 @@ def update_state_json(
             if found is None:
                 existing.append({
                     "content": content,
-                    "status": "active",
+                    "status": "未回收",
                     "tier": tier,
                     "planted_chapter": planted,
                     "target_chapter": target,
