@@ -72,3 +72,9 @@ cd your-project && git clone https://github.com/lingfengQAQ/webnovel-writer.git 
 ## License
 
 GPL v3 - 详见 [LICENSE](LICENSE)
+
+## 致谢
+
+本项目使用 **Claude Code + Gemini CLI + Codex** 配合 Vibe Coding 方式开发。
+
+灵感来源：[Linux.do 帖子](https://linux.do/t/topic/1397944/49)
