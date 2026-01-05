@@ -126,6 +126,47 @@ allowed-tools:
 
 ---
 
+## 读者体验补丁（反模板化）
+
+### 1) 禁用“占位符正文”
+
+**原则**：正文是给读者看的，禁止用“???”当作读者可见信息。
+
+推荐写法（任选其一，且全书保持一致）：
+- 用**代号/称呼**：系统名未知 → “暂称：继承者系统/面板/协议”
+- 用**叙述句**：系统名未知 → “系统名称被权限屏蔽/无法读取”
+
+**禁止**：
+- 在正文里出现“???系统/???功能/???”这种占位符（会显得粗糙、模板感强）
+
+### 2) “权限不足”使用规则
+
+**原则**：每次“拒绝回答”都必须给读者一个“可推进剧情的替代信息”。
+
+规则：
+- 每章最多出现 **1 次**“权限不足/无法查询”
+- 每次出现必须同时满足至少 1 条：
+  - 给出**可执行的解锁条件**（等级/积分/地点/道具/行为）
+  - 给出**部分答案**（范围/代号/危险等级区间/关键词）
+  - 自动刷新一个**可落地任务**（让主角立刻有下一步）
+
+### 3) 都市异能的“现实余波”硬要求（隐秘期）
+
+只要出现“普通人可能注意到的大动静”（爆炸/坍塌/大火/封路/多人受伤），本章或下一章必须交代：
+- **现实层面的余波**：警戒线、消防/救护车、监控调取、笔录、封控
+- **舆情/官方口径**：热搜/群聊碎片 + 合理解释（施工事故/煤气爆炸/高压电起火）
+
+### 4) 标签纪律（减少 AI 痕迹）
+
+仅使用 workflow 明确规定的标签：
+- ✅ `[NEW_ENTITY: ...]`
+- ✅ `[GOLDEN_FINGER_SKILL: ...]`
+- ✅ `[OUTLINE_DEVIATION]`
+- ✅ `<!-- [FORESHADOWING_JSON: {...}] -->`（仅允许放在 HTML 注释内，避免影响读者阅读；由脚本同步到 `plot_threads.foreshadowing`）
+- ❌ 禁止自行发明新标签体系（例如 `[FORESHADOWING: ...]`、`[COOL_POINT: ...]`），除非同步更新脚本与规范
+
+---
+
 ## 📖 爽点设计指南
 
 ### 爽点类型与标准流程
@@ -353,6 +394,7 @@ Ch 10: Quest + Fire（融合）
 - **[strand-weave-pattern.md](references/strand-weave-pattern.md)** - Strand Weave 详细规范
 - **[polish-guide.md](references/polish-guide.md)** - 内容润色指南（AI痕迹清除/语言优化/风格统一/自然化）
 - **[workflow-resume.md](references/workflow-resume.md)** - 工作流中断恢复机制（用于 /webnovel-resume 命令）
+- **[system-data-flow.md](references/system-data-flow.md)** - 数据链与组件地图（state/index/archive 口径与顺序）
 - **[archiving-strategy.md](references/archiving-strategy.md)** - 数据归档策略（200万字长跑保障）
 - **[git-workflow.md](references/git-workflow.md)** - Git 版本控制工作流规范
 
@@ -382,6 +424,7 @@ Ch 10: Quest + Fire（融合）
 - **[scene-description.md](references/writing/scene-description.md)** - 场景描写方法
 - **[combat-scenes.md](references/writing/combat-scenes.md)** - 战斗场景写作
 - **[emotion-psychology.md](references/writing/emotion-psychology.md)** - 情感与心理描写
+- **[typesetting.md](references/writing/typesetting.md)** - 排版与阅读体验（移动端优先）
 
 #### 高级技巧 (advanced/)
 - **[multi-threading.md](references/advanced/multi-threading.md)** - 多线叙事技巧

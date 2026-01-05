@@ -1,5 +1,5 @@
 ---
-allowed-tools: Read, Bash
+allowed-tools: Read, Grep, Write, Edit, Bash, Task, AskUserQuestion
 argument-hint: [起始章-结束章]
 description: 对指定范围的章节进行质量审查，强制调用 5 个专职审查员生成综合报告
 ---
@@ -31,7 +31,22 @@ description: 对指定范围的章节进行质量审查，强制调用 5 个专�
 
 ---
 
-## 5 Mandatory Checkers (SEQUENTIAL - DO NOT SKIP)
+## Invocation (MANDATORY)
+
+**YOU MUST use the Task tool** to call all 5 checker subagents (can be parallel).
+- `high-point-checker`
+- `consistency-checker`
+- `pacing-checker`
+- `ooc-checker`
+- `continuity-checker`
+
+Each subagent prompt should include:
+- The chapter range (e.g., "1-10")
+- Instruction to read chapter files from `正文/` and follow its own protocol
+
+---
+
+## 5 Mandatory Checkers (MANDATORY - DO NOT SKIP)
 
 ### Checker 1: high-point-checker（爽点密度检查）
 
@@ -311,6 +326,19 @@ description: 对指定范围的章节进行质量审查，强制调用 5 个专�
 - Outputting report to console only (MUST save to file)
 - Skipping any section of the report structure
 - Claiming "report generated" without actually writing the file
+
+---
+
+## Step 7: Update state.json (MANDATORY)
+
+After saving the report file, **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/update_state.py \\
+  --add-review "{起始章}-{结束章}" "审查报告/第{起始章}-{结束章}章审查报告.md"
+```
+
+**Purpose**: record `review_checkpoints` so `/webnovel-write` can load the latest review feedback.
 
 ---
 

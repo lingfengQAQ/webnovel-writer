@@ -50,6 +50,8 @@ import sys
 import re
 from pathlib import Path
 from typing import Dict, List, Any, Optional
+from project_locator import resolve_project_root
+from chapter_paths import find_chapter_file
 
 # Windows 编码兼容性修复
 if sys.platform == 'win32':
@@ -206,22 +208,37 @@ class ContextManager:
             if i <= 0:
                 continue
 
-            chapter_file = self.chapters_dir / f"第{i:04d}章.md"
-            if not chapter_file.exists():
+            chapter_file = find_chapter_file(self.project_root, i)
+            if not chapter_file:
                 continue
 
             with open(chapter_file, 'r', encoding='utf-8') as f:
                 content = f.read()
 
-            # 提取正文（去除标题、元数据等）
-            text_match = re.search(r'---\n\n(.+)', content, re.DOTALL)
-            if text_match:
-                text = text_match.group(1).strip()
-            else:
-                text = content
+            # 提取正文摘要（避开标签/统计区块）
+            lines = content.splitlines()
+            # 去掉标题行
+            if lines and lines[0].lstrip().startswith("#"):
+                lines = lines[1:]
 
-            # 生成摘要（取前 200 字）
-            summary = text[:200] + "..."
+            buf: List[str] = []
+            for line in lines:
+                s = line.strip()
+                if not s:
+                    continue
+                if s.startswith("## 本章统计"):
+                    break
+                if s == "---":
+                    continue
+                # 过滤工作流标签行（[NEW_ENTITY] 等）
+                if s.startswith("[") and s.endswith("]"):
+                    continue
+                buf.append(s)
+                if sum(len(x) for x in buf) >= 220:
+                    break
+
+            text = "".join(buf).strip()
+            summary = (text[:200] + "...") if len(text) > 200 else text
             summaries.append(f"第 {i} 章摘要：{summary}")
 
         return summaries
@@ -353,6 +370,25 @@ class ContextManager:
 
         return cards
 
+    @staticmethod
+    def _is_resolved_foreshadowing_status(raw_status: Any) -> bool:
+        """判断伏笔是否已回收（兼容历史字段与同义词）。"""
+        if raw_status is None:
+            return False
+
+        status = str(raw_status).strip()
+        if not status:
+            return False
+
+        status_lower = status.lower()
+        if status in {"已回收", "已完成", "已解决", "完成"}:
+            return True
+        if status_lower in {"resolved", "done", "complete"}:
+            return True
+        if "已回收" in status:
+            return True
+        return False
+
     def _get_relevant_foreshadowing(self, location: Optional[str],
                                    characters: Optional[List[str]]) -> List[Dict[str, str]]:
         """获取相关伏笔（优先使用索引，支持复杂条件查询）"""
@@ -396,7 +432,7 @@ class ContextManager:
         relevant = []
 
         for item in all_foreshadowing:
-            if item.get("status") != "未回收":
+            if self._is_resolved_foreshadowing_status(item.get("status")):
                 continue
 
             content = item.get("content", "")
@@ -476,27 +512,51 @@ class ContextManager:
         return "[境界划分待补充]"
 
     def _get_urgent_foreshadowing(self) -> List[str]:
-        """获取紧急伏笔（未回收 且 已埋超过 100 章）"""
+        """获取紧急伏笔（未回收 且 已埋超过 50 章）"""
         if not self.state:
             return []
 
-        current_chapter = self.state.get("progress", {}).get("current_chapter", 0)
-        all_foreshadowing = self.state.get("plot_threads", {}).get("foreshadowing", [])
+        # 优先：使用索引的紧急度（简单阈值：>50章）
+        if self.use_index and self.index:
+            try:
+                urgent_plots = self.index.query_urgent_foreshadowing(threshold=60)
+                formatted = []
+                for plot in urgent_plots:
+                    content = plot.get("content", "")
+                    if not content:
+                        continue
+                    introduced = plot.get("introduced_chapter", 0) or 0
+                    formatted.append(f"⚠️ {content}（埋设Ch{introduced}）")
+                return formatted[:3]
+            except Exception as e:
+                print(f"⚠️ 伏笔索引查询失败，降级到 state.json: {e}")
 
-        urgent = []
+        current_chapter = int(self.state.get("progress", {}).get("current_chapter", 0) or 0)
+        all_foreshadowing = self.state.get("plot_threads", {}).get("foreshadowing", []) or []
 
+        scored = []
         for item in all_foreshadowing:
-            if item.get("status") != "未回收":
+            if self._is_resolved_foreshadowing_status(item.get("status")):
                 continue
 
-            # 计算已埋章节数（粗略：假设每章对应 1 个章节号增量）
-            # 实际项目中应该记录"埋设章节号"
-            # 这里简化：如果 added_at 距离现在超过 100 天，视为紧急
+            introduced = item.get("introduced_chapter") or item.get("planted_chapter") or 1
+            try:
+                introduced_chapter = int(introduced)
+            except (TypeError, ValueError):
+                introduced_chapter = 1
+
+            pending = current_chapter - introduced_chapter
+            if pending < 50:
+                continue
 
             content = item.get("content", "")
-            urgent.append(f"⚠️ {content}")
+            if not content:
+                continue
 
-        return urgent[:3]  # 最多 3 条
+            scored.append((pending, content))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [f"⚠️ {content}（已埋 {pending} 章）" for pending, content in scored[:3]]
 
     def build_context(self, chapter_num: int, location: Optional[str] = None,
                      characters: Optional[List[str]] = None) -> Dict[str, Any]:
@@ -571,13 +631,21 @@ def main():
 
     args = parser.parse_args()
 
+    # 解析项目根目录（支持从仓库根目录运行）
+    project_root = args.project_root
+    if project_root == '.' and not (Path('.') / '.webnovel' / 'state.json').exists():
+        try:
+            project_root = str(resolve_project_root())
+        except FileNotFoundError:
+            project_root = args.project_root
+
     # 解析角色列表
     characters = None
     if args.characters:
         characters = [c.strip() for c in args.characters.split(',')]
 
     # 创建管理器
-    manager = ContextManager(args.project_root)
+    manager = ContextManager(project_root)
 
     # 加载状态
     if not manager.load_state():
@@ -594,7 +662,10 @@ def main():
         print("\n📄 上下文预览：")
         print(json.dumps(context, ensure_ascii=False, indent=2))
     else:
-        manager.save_context(context, args.output)
+        output_path = args.output
+        if args.output == '.webnovel/context_cache.json' and project_root != '.':
+            output_path = str(Path(project_root) / '.webnovel' / 'context_cache.json')
+        manager.save_context(context, output_path)
 
 if __name__ == "__main__":
     main()

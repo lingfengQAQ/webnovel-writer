@@ -59,6 +59,7 @@ from typing import Optional, List, Tuple
 # 安全修复：导入安全工具函数（P1 MEDIUM）
 # ============================================================================
 from security_utils import sanitize_commit_message
+from project_locator import resolve_project_root
 
 # Windows 编码兼容性修复
 if sys.platform == 'win32':
@@ -393,8 +394,17 @@ def main():
 
     args = parser.parse_args()
 
+    # 解析项目根目录（支持从仓库根目录运行）
+    project_root = args.project_root
+    if project_root == '.' and not (Path('.') / '.webnovel' / 'state.json').exists():
+        try:
+            project_root = str(resolve_project_root())
+        except FileNotFoundError:
+            # 维持向后兼容：仍然使用用户提供的 cwd
+            project_root = args.project_root
+
     # 创建管理器
-    manager = GitBackupManager(args.project_root)
+    manager = GitBackupManager(project_root)
 
     # 执行操作
     if args.chapter:

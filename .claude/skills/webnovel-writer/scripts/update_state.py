@@ -14,7 +14,7 @@
   python update_state.py --protagonist-power "金丹" 3 "雷劫"
 
   # 更新人际关系
-  python update_state.py --relationship "李雪" affection 95 --relationship-status "李雪" "确认关系"
+  python update_state.py --relationship "李雪" affection 95
 
   # 记录伏笔
   python update_state.py --add-foreshadowing "神秘玉佩的秘密" "未回收"
@@ -56,6 +56,7 @@ from typing import Dict, Any, Optional
 # 安全修复：导入安全工具函数（P1 MEDIUM）
 # ============================================================================
 from security_utils import create_secure_directory
+from project_locator import resolve_state_file
 
 # Windows 编码兼容性修复
 if sys.platform == 'win32':
@@ -207,11 +208,16 @@ class StateUpdater:
 
     def update_golden_finger(self, name: str, level: int, cooldown: int):
         """更新金手指状态"""
-        self.state["protagonist_state"]["golden_finger"] = {
-            "name": name,
-            "level": level,
-            "cooldown": cooldown
-        }
+        ps = self.state.setdefault("protagonist_state", {})
+        golden_finger = ps.get("golden_finger")
+        if not isinstance(golden_finger, dict):
+            golden_finger = {}
+            ps["golden_finger"] = golden_finger
+
+        golden_finger.setdefault("skills", [])
+        golden_finger["name"] = name
+        golden_finger["level"] = level
+        golden_finger["cooldown"] = cooldown
         print(f"📝 更新金手指: {name} Lv.{level}, 冷却: {cooldown}天")
 
     def update_relationship(self, char_name: str, key: str, value: Any):
@@ -233,10 +239,34 @@ class StateUpdater:
                 print(f"⚠️  伏笔已存在: {content}")
                 return
 
+        # 归一化状态，避免 "待回收/进行中/active/pending" 等混用导致下游过滤漏掉
+        raw_status = "" if status is None else str(status).strip()
+        raw_status_lower = raw_status.lower()
+        if raw_status in {"已回收", "已完成", "已解决", "完成"} or raw_status_lower in {"resolved", "done", "complete"}:
+            status = "已回收"
+        elif (
+            raw_status in {"未回收", "待回收", "进行中", "未解决"}
+            or raw_status_lower in {"active", "pending"}
+            or not raw_status
+        ):
+            status = "未回收"
+        else:
+            status = "未回收"
+
+        planted_chapter = int(self.state.get("progress", {}).get("current_chapter", 0) or 0)
+        if planted_chapter <= 0:
+            planted_chapter = 1
+            print("? 未找到有效 progress.current_chapter，默认 planted_chapter=1")
+
+        target_chapter = planted_chapter + 100
+
         self.state["plot_threads"]["foreshadowing"].append({
             "content": content,
             "status": status,
-            "added_at": datetime.now().strftime("%Y-%m-%d")
+            "added_at": datetime.now().strftime("%Y-%m-%d"),
+            "planted_chapter": planted_chapter,
+            "target_chapter": target_chapter,
+            "tier": "支线"
         })
         print(f"📝 添加伏笔: {content}（{status}）")
 
@@ -377,9 +407,15 @@ def main():
     )
 
     parser.add_argument(
+        '--project-root',
+        default=None,
+        help='项目根目录（包含 .webnovel/state.json）。不提供时自动搜索（支持 webnovel-project/ 与父目录）。'
+    )
+
+    parser.add_argument(
         '--state-file',
-        default='.webnovel/state.json',
-        help='state.json 文件路径（默认: .webnovel/state.json）'
+        default=None,
+        help='state.json 文件路径（可选）。不提供时从项目根目录自动定位为 .webnovel/state.json。'
     )
 
     parser.add_argument(
@@ -491,8 +527,11 @@ def main():
         parser.print_help()
         sys.exit(1)
 
+    # 解析 state.json 路径（支持从仓库根目录运行）
+    state_file_path = resolve_state_file(args.state_file, explicit_project_root=args.project_root)
+
     # 创建更新器
-    updater = StateUpdater(args.state_file, args.dry_run)
+    updater = StateUpdater(str(state_file_path), args.dry_run)
 
     # 加载状态文件
     if not updater.load():
@@ -564,7 +603,7 @@ def main():
         if not args.dry_run:
             print(f"\n💡 提示:")
             print(f"  - 原文件已备份: {updater.backup_file}")
-            print(f"  - 如需回滚，可复制备份文件到 {args.state_file}")
+            print(f"  - 如需回滚，可复制备份文件到 {updater.state_file}")
 
     except Exception as e:
         print(f"\n❌ 更新失败: {e}")
