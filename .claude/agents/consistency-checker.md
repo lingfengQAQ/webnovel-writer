@@ -45,7 +45,7 @@ allowed-tools: Read, Grep
 ```
 
 **Check Against**:
-- state.json: `protagonist.power.realm`, `protagonist.power.layer`
+- state.json: `protagonist_state.power.realm`, `protagonist_state.power.layer`
 - 设定集/修炼体系.md: Realm ability restrictions
 
 #### Tier 2: Location & Character Consistency (地点/角色检查)
@@ -67,7 +67,7 @@ allowed-tools: Read, Grep
 ```
 
 **Check Against**:
-- state.json: `protagonist.location`
+- state.json: `protagonist_state.location.current`
 - 设定集/角色卡/: Character profiles
 
 #### Tier 3: Timeline Consistency (时间线检查)

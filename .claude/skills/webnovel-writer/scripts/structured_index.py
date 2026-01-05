@@ -41,6 +41,7 @@ import argparse
 import sqlite3
 import hashlib
 import re
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
@@ -218,6 +219,87 @@ class StructuredIndex:
 
         self.conn.commit()
         print(f"✅ 章节索引已更新：Ch{chapter_num} - {metadata['title']}")
+
+    def bump_character_last_appearance_in_state(self, chapter_num: int, character_names: List[str]) -> int:
+        """将本章出场角色同步回 state.json 的 last_appearance_chapter（轻量级）"""
+        if not character_names:
+            return 0
+        if not self.state_file.exists():
+            return 0
+
+        try:
+            with open(self.state_file, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+        except json.JSONDecodeError:
+            return 0
+
+        entities = state.get("entities", {}) or {}
+        characters = entities.get("characters", [])
+        if not isinstance(characters, list):
+            return 0
+
+        name_set = {str(n).strip() for n in character_names if str(n).strip()}
+        if not name_set:
+            return 0
+
+        updated = 0
+        changed = False
+        for char in characters:
+            if not isinstance(char, dict):
+                continue
+            name = str(char.get("name", "")).strip()
+            if not name or name not in name_set:
+                continue
+
+            tier = str(char.get("tier", "")).strip()
+            if "importance" not in char:
+                char["importance"] = "major" if tier == "核心" else "minor"
+                changed = True
+
+            if "description" not in char and isinstance(char.get("desc"), str):
+                char["description"] = char.get("desc", "")
+                changed = True
+
+            prev = char.get("last_appearance_chapter")
+            try:
+                prev_int = int(prev)
+            except (TypeError, ValueError):
+                prev_int = 0
+
+            new_last = max(prev_int, int(chapter_num))
+            if new_last != prev_int:
+                char["last_appearance_chapter"] = new_last
+                updated += 1
+                changed = True
+
+            if not char.get("first_appearance_chapter"):
+                char["first_appearance_chapter"] = int(chapter_num)
+                changed = True
+
+        if not changed:
+            return 0
+
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                suffix=".tmp",
+                delete=False,
+                dir=str(self.state_file.parent),
+            ) as tf:
+                tmp_path = Path(tf.name)
+                json.dump(state, tf, ensure_ascii=False, indent=2)
+                tf.write("\n")
+            os.replace(str(tmp_path), str(self.state_file))
+        finally:
+            if tmp_path and tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
+
+        return updated
 
     def query_chapters_by_location(self, location: str, limit: int = 10) -> List[Tuple]:
         """O(log n) 查询：返回该地点的最近 N 章
@@ -470,6 +552,32 @@ class StructuredIndex:
 
     def _index_character(self, char: Dict, status: str = 'active'):
         """为单个角色建立索引"""
+        description = char.get('description') or char.get('desc') or ''
+        tier = str(char.get('tier', '') or '').strip()
+        importance = char.get('importance') or ('major' if tier == '核心' else 'minor')
+
+        first_appearance = char.get('first_appearance_chapter', 0) or 0
+        try:
+            first_appearance = int(first_appearance)
+        except (TypeError, ValueError):
+            first_appearance = 0
+
+        if first_appearance == 0:
+            src = char.get('first_appearance')
+            if isinstance(src, str):
+                m = re.search(r'第(\d+)章', src)
+                if m:
+                    try:
+                        first_appearance = int(m.group(1))
+                    except ValueError:
+                        first_appearance = 0
+
+        last_appearance = char.get('last_appearance_chapter', 0) or first_appearance
+        try:
+            last_appearance = int(last_appearance)
+        except (TypeError, ValueError):
+            last_appearance = first_appearance
+
         self.conn.execute("""
             INSERT OR REPLACE INTO characters
             (name, description, personality, importance, power_level,
@@ -477,12 +585,12 @@ class StructuredIndex:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         """, (
             char.get('name', ''),
-            char.get('description', ''),
+            description,
             char.get('personality', ''),
-            char.get('importance', 'minor'),
+            importance,
             char.get('power_level', ''),
-            char.get('first_appearance_chapter', 0),
-            char.get('last_appearance_chapter', 0),
+            first_appearance,
+            last_appearance,
             status
         ))
 
@@ -628,6 +736,7 @@ class StructuredIndex:
 
         # 同步伏笔索引
         self.sync_foreshadowing_from_state()
+        self.sync_characters_from_state()
 
         print(f"✅ 批量重建完成：{len(seen)} 章")
 
@@ -723,6 +832,8 @@ def main():
 
                 # 同步伏笔索引
                 index.sync_foreshadowing_from_state()
+                index.bump_character_last_appearance_in_state(args.update_chapter, metadata.get("characters", []))
+                index.sync_characters_from_state()
 
             except json.JSONDecodeError as e:
                 print(f"❌ JSON 解析失败: {e}")
@@ -746,6 +857,8 @@ def main():
 
                 # 同步伏笔索引
                 index.sync_foreshadowing_from_state()
+                index.bump_character_last_appearance_in_state(args.update_chapter, metadata.get("characters", []))
+                index.sync_characters_from_state()
 
             except json.JSONDecodeError as e:
                 print(f"❌ JSON 解析失败: {e}")
@@ -770,6 +883,8 @@ def main():
 
             # 同步伏笔索引
             index.sync_foreshadowing_from_state()
+            index.bump_character_last_appearance_in_state(args.update_chapter, metadata.get("characters", []))
+            index.sync_characters_from_state()
 
         else:
             print("❌ 缺少参数：--metadata-file (推荐) / --metadata-json / --metadata")

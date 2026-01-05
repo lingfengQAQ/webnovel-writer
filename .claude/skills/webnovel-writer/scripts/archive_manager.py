@@ -81,8 +81,8 @@ class ArchiveManager:
         self.config = {
             "character_inactive_threshold": 50,  # 角色超过 50 章未出场视为不活跃
             "plot_resolved_threshold": 20,       # 已回收伏笔超过 20 章后归档
-            "review_old_threshold": 20,          # 审查报告超过 20 章后归档（从 50 降至 20）
-            "file_size_trigger_mb": 0.5,         # state.json 超过 0.5MB 触发归档（从 1.0 降至 0.5）
+            "review_old_threshold": 50,          # 审查报告超过 50 章后归档
+            "file_size_trigger_mb": 1.0,         # state.json 超过 1.0MB 触发强制归档
             "chapter_trigger": 10                # 每 10 章检查一次
         }
 
@@ -152,11 +152,22 @@ class ArchiveManager:
         inactive = []
         for char in characters:
             # 只归档次要角色（importance="minor"）
-            if char.get("importance") != "minor":
+            importance = char.get("importance")
+            if not importance:
+                tier = str(char.get("tier", "")).strip()
+                importance = "major" if tier == "核心" else "minor"
+            if importance != "minor":
                 continue
 
             # 检查最后出场章节
             last_appearance = char.get("last_appearance_chapter", 0)
+            try:
+                last_appearance = int(last_appearance)
+            except (TypeError, ValueError):
+                last_appearance = 0
+            if last_appearance <= 0:
+                continue
+
             inactive_chapters = current_chapter - last_appearance
 
             if inactive_chapters >= threshold:
@@ -171,21 +182,48 @@ class ArchiveManager:
     def identify_resolved_plot_threads(self, state):
         """识别可归档的已回收伏笔"""
         current_chapter = state.get("progress", {}).get("current_chapter", 0)
-        plot_threads = state.get("plot_threads", {}).get("active", [])
-        resolved = state.get("plot_threads", {}).get("resolved", [])
+        plot_threads = state.get("plot_threads", {}) or {}
+        foreshadowing = plot_threads.get("foreshadowing", []) or []
+        resolved_legacy = plot_threads.get("resolved", []) or []
         threshold = self.config["plot_resolved_threshold"]
 
         archivable = []
-        for thread in resolved:
-            resolved_chapter = thread.get("resolved_chapter", 0)
-            chapters_since_resolved = current_chapter - resolved_chapter
+        # 新格式：plot_threads.foreshadowing（用 status 标识是否已回收）
+        if isinstance(foreshadowing, list):
+            for item in foreshadowing:
+                if not isinstance(item, dict):
+                    continue
+                status = str(item.get("status", "")).strip()
+                if status not in ["已回收", "resolved"]:
+                    continue
+                try:
+                    resolved_chapter = int(item.get("resolved_chapter", 0))
+                except (TypeError, ValueError):
+                    continue
+                chapters_since_resolved = current_chapter - resolved_chapter
+                if chapters_since_resolved >= threshold:
+                    archivable.append({
+                        "thread": item,
+                        "chapters_since_resolved": chapters_since_resolved,
+                        "resolved_chapter": resolved_chapter
+                    })
 
-            if chapters_since_resolved >= threshold:
-                archivable.append({
-                    "thread": thread,
-                    "chapters_since_resolved": chapters_since_resolved,
-                    "resolved_chapter": resolved_chapter
-                })
+        # 旧格式兼容：plot_threads.resolved（直接存已回收列表）
+        if isinstance(resolved_legacy, list):
+            for item in resolved_legacy:
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    resolved_chapter = int(item.get("resolved_chapter", 0))
+                except (TypeError, ValueError):
+                    continue
+                chapters_since_resolved = current_chapter - resolved_chapter
+                if chapters_since_resolved >= threshold:
+                    archivable.append({
+                        "thread": item,
+                        "chapters_since_resolved": chapters_since_resolved,
+                        "resolved_chapter": resolved_chapter
+                    })
 
         return archivable
 
@@ -195,9 +233,47 @@ class ArchiveManager:
         reviews = state.get("review_checkpoints", [])
         threshold = self.config["review_old_threshold"]
 
+        def _parse_end_chapter(review: dict) -> int:
+            # 新格式：{"chapters":"5-6","report":"...","reviewed_at":"..."}
+            chapters = review.get("chapters")
+            if isinstance(chapters, str):
+                parts = [p.strip() for p in chapters.replace("—", "-").split("-") if p.strip()]
+                if parts:
+                    try:
+                        return int(parts[-1])
+                    except ValueError:
+                        pass
+
+            # 旧格式：{"chapter_range":[5,6], "date":"..."}
+            cr = review.get("chapter_range")
+            if isinstance(cr, (list, tuple)) and len(cr) >= 2:
+                try:
+                    return int(cr[1])
+                except (TypeError, ValueError):
+                    pass
+
+            # 兜底：从 report 文件名里抓 "Ch5-6" 或 "第005-006"
+            report = review.get("report")
+            if isinstance(report, str):
+                import re
+                m = re.search(r"Ch(\d+)[-–—](\d+)", report)
+                if m:
+                    try:
+                        return int(m.group(2))
+                    except ValueError:
+                        pass
+                m = re.search(r"第(\d+)[-–—](\d+)章", report)
+                if m:
+                    try:
+                        return int(m.group(2))
+                    except ValueError:
+                        pass
+
+            return 0
+
         old_reviews = []
         for review in reviews:
-            review_chapter = review.get("chapter_range", [0, 0])[1]  # 取结束章节
+            review_chapter = _parse_end_chapter(review)
             chapters_since_review = current_chapter - review_chapter
 
             if chapters_since_review >= threshold:
@@ -296,18 +372,37 @@ class ArchiveManager:
 
         # 移除已归档的伏笔
         if resolved_threads:
-            thread_ids = {item["thread"]["description"] for item in resolved_threads}
-            state["plot_threads"]["resolved"] = [
-                thread for thread in state["plot_threads"]["resolved"]
-                if thread["description"] not in thread_ids
-            ]
+            thread_ids = {
+                (item.get("thread", {}) or {}).get("content") or (item.get("thread", {}) or {}).get("description")
+                for item in resolved_threads
+            }
+            thread_ids = {t for t in thread_ids if isinstance(t, str) and t.strip()}
+
+            plot_threads = state.get("plot_threads", {}) or {}
+            if isinstance(plot_threads.get("foreshadowing"), list):
+                plot_threads["foreshadowing"] = [
+                    t for t in plot_threads["foreshadowing"]
+                    if not isinstance(t, dict) or (t.get("content") or t.get("description")) not in thread_ids
+                ]
+            if isinstance(plot_threads.get("resolved"), list):
+                plot_threads["resolved"] = [
+                    t for t in plot_threads["resolved"]
+                    if not isinstance(t, dict) or (t.get("content") or t.get("description")) not in thread_ids
+                ]
+            state["plot_threads"] = plot_threads
 
         # 移除旧审查报告
         if old_reviews:
-            review_dates = {item["review"]["date"] for item in old_reviews}
+            review_keys = set()
+            for item in old_reviews:
+                review = item.get("review", {}) or {}
+                key = review.get("report") or review.get("reviewed_at") or review.get("date")
+                if isinstance(key, str) and key.strip():
+                    review_keys.add(key)
+
             state["review_checkpoints"] = [
-                review for review in state["review_checkpoints"]
-                if review["date"] not in review_dates
+                review for review in state.get("review_checkpoints", [])
+                if (review.get("report") or review.get("reviewed_at") or review.get("date")) not in review_keys
             ]
 
         return state
@@ -354,7 +449,8 @@ class ArchiveManager:
             if resolved_threads:
                 print("\n   已回收伏笔:")
                 for item in resolved_threads[:5]:
-                    print(f"   - {item['thread']['description'][:30]}... (已回收 {item['chapters_since_resolved']} 章)")
+                    desc = item["thread"].get("content") or item["thread"].get("description") or ""
+                    print(f"   - {str(desc)[:30]}... (已回收 {item['chapters_since_resolved']} 章)")
             if old_reviews:
                 print("\n   旧审查报告:")
                 for item in old_reviews[:5]:

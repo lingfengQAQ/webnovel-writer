@@ -1,5 +1,5 @@
 ---
-allowed-tools: Read, Grep
+allowed-tools: Read, Grep, Bash, AskUserQuestion
 argument-hint: [关键词]
 description: 快速查询设定集中的信息（角色/实力/势力/物品/伏笔），**支持伏笔紧急度分析和金手指状态追踪**，严格遵循查询流程
 ---
@@ -8,7 +8,7 @@ description: 快速查询设定集中的信息（角色/实力/势力/物品/伏
 
 > **System Prompt**: You are the **Archivist AI** of the Webnovel Studio. Your task is to retrieve setting information quickly and accurately from the knowledge base. You have access to specialized query types including **foreshadowing urgency analysis** and **golden finger status tracking**.
 
-> **Reference**: `references/cool-points-guide.md` (伏笔管理三层级), `references/golden-finger-templates.md` (金手指模板)
+> **Reference**: `references/cool-points-guide.md` (伏笔管理三层级), `templates/golden-finger-templates.md` (金手指模板)
 
 ## CRITICAL WARNING ⚠️
 
@@ -266,9 +266,9 @@ python .claude/skills/webnovel-writer/scripts/status_reporter.py --focus urgency
 4. **Calculate urgency score** for each foreshadowing:
    ```
    紧急度 = (已过章节 / 目标回收章节) × 层级权重
-   - 核心伏笔权重: 1.5x
-   - 支线伏笔权重: 1.0x
-   - 装饰伏笔权重: 0.5x
+   - 核心伏笔权重: 3.0x
+   - 支线伏笔权重: 2.0x
+   - 装饰伏笔权重: 1.0x
    ```
 5. **Sort by urgency** (highest first)
 6. **Generate warnings**:
@@ -412,7 +412,7 @@ python .claude/skills/webnovel-writer/scripts/status_reporter.py --focus urgency
 
 **Keyword**: "金手指", "系统", "外挂", "cheat", "golden finger"
 
-> **Reference**: `references/golden-finger-templates.md` (金手指模板)
+> **Reference**: `templates/golden-finger-templates.md` (金手指模板)
 
 **Purpose**: 完整追踪主角金手指的当前状态、技能解锁进度、冷却时间和未来发展方向。
 
