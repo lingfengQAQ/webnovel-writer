@@ -204,6 +204,7 @@ def analyze_recovery_options(interrupt_info):
         # 使用 chapter_paths 模块定位章节文件（兼容新旧目录结构）
         project_root = find_project_root()
         existing_chapter = find_chapter_file(project_root, chapter_num)
+        draft_path = None
         if existing_chapter:
             chapter_path = str(existing_chapter.relative_to(project_root))
         else:
@@ -225,7 +226,8 @@ def analyze_recovery_options(interrupt_info):
         }]
 
         # 检查文件是否存在
-        if existing_chapter and existing_chapter.exists():
+        candidate = existing_chapter or draft_path
+        if candidate and candidate.exists():
             options.append({
                 'option': 'B',
                 'label': '回滚到上一章',

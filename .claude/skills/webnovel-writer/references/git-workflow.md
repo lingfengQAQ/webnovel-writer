@@ -103,7 +103,7 @@ python scripts/backup_manager.py --rollback 140
 ```
 ✅ state.json: 筑基 7 层
 ✅ 正文/第3卷/第140章.md: 最后一章（筑基期内容）
-✅ 正文/第4卷/第150章.md: 不存在（已回滚）
+✅ 正文/第3卷/第150章.md: 不存在（已回滚）
 ```
 
 ---
