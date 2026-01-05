@@ -83,7 +83,7 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py detect
   "elapsed_seconds": 315,
   "artifacts": {
     "chapter_file": {
-      "path": "正文/第0007章.md",
+      "path": "正文/第1卷/第007章.md",
       "exists": true,
       "size_bytes": 1500,
       "status": "incomplete"
@@ -100,9 +100,9 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py detect
     "option": "A",
     "label": "删除半成品，从Step 1重新开始",
     "risk": "low",
-    "description": "清理 正文/第0007章.md，重新生成章节",
+    "description": "清理 正文/第1卷/第007章.md，重新生成章节",
     "actions": [
-      "删除 正文/第0007章.md（如存在）",
+      "删除 正文/第1卷/第007章.md（如存在）",
       "清理 Git 暂存区",
       "清理中断状态",
       "执行 /webnovel-write 7"
@@ -185,9 +185,9 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py detect
 恢复选项：
 A) 删除半成品，从Step 1重新开始（推荐）⭐
    风险：低
-   清理 正文/第0007章.md，重新生成章节
+   清理 正文/第1卷/第007章.md，重新生成章节
    操作步骤：
-   - 删除 正文/第0007章.md（如存在）
+   - 删除 正文/第1卷/第007章.md（如存在）
    - 清理 Git 暂存区
    - 清理中断状态
    - 执行 /webnovel-write 7
@@ -228,7 +228,7 @@ B) 回滚到Ch6，放弃Ch7所有进度
 python .claude/skills/webnovel-writer/scripts/workflow_manager.py cleanup --chapter {chapter_num}
 
 # 预期输出:
-# ✅ 已清理: 正文/第0007章.md, Git暂存区已清理
+# ✅ 已清理: 正文/第1卷/第007章.md, Git暂存区已清理
 
 # Step 4.2: 清除中断状态
 python .claude/skills/webnovel-writer/scripts/workflow_manager.py clear
@@ -243,7 +243,7 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py clear
 
 Step 1: 清理半成品文件
 [运行: python workflow_manager.py cleanup --chapter 7]
-✅ 已清理: 正文/第0007章.md, Git暂存区已清理
+✅ 已清理: 正文/第1卷/第007章.md, Git暂存区已清理
 
 Step 2: 清除中断状态
 [运行: python workflow_manager.py clear]
@@ -481,13 +481,17 @@ Before you tell the user "Recovery complete", **YOU MUST verify**:
 **Fallback Strategy**（仅当workflow_state.json不存在时）：
 
 ```bash
-# 启发式检测
+# 启发式检测（兼容卷目录结构）
 current_chapter=$(jq '.progress.current_chapter' .webnovel/state.json)
 next_chapter=$((current_chapter + 1))
-next_file="正文/第$(printf '%04d' $next_chapter)章.md"
+volume_num=$(( (next_chapter - 1) / 50 + 1 ))
+next_file="正文/第${volume_num}卷/第$(printf '%03d' $next_chapter)章.md"
 
-if [ -f "$next_file" ]; then
-  echo "⚠️ 检测到半成品: $next_file"
+# 也检查旧格式
+legacy_file="正文/第$(printf '%04d' $next_chapter)章.md"
+
+if [ -f "$next_file" ] || [ -f "$legacy_file" ]; then
+  echo "⚠️ 检测到半成品: $next_file 或 $legacy_file"
   echo "建议: 删除并重新创作"
 else
   echo "✅ 状态一致，可继续创作Ch$next_chapter"

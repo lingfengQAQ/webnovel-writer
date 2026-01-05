@@ -46,14 +46,14 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py detect
   "elapsed_seconds": 315,
   "artifacts": {
     "chapter_file": {
-      "path": "正文/第0007章.md",
+      "path": "正文/第1卷/第007章.md",
       "exists": true,
       "size_bytes": 1500,
       "status": "incomplete"
     },
     "git_status": {
       "uncommitted_changes": true,
-      "unstaged_files": ["正文/第0007章.md"]
+      "unstaged_files": ["正文/第1卷/第007章.md"]
     }
   }
 }
@@ -66,9 +66,9 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py detect
     "option": "A",
     "label": "删除半成品，从Step 1重新开始",
     "risk": "low",
-    "description": "清理 正文/第0007章.md，重新生成章节",
+    "description": "清理 正文/第1卷/第007章.md，重新生成章节",
     "actions": [
-      "删除 正文/第0007章.md（如存在）",
+      "删除 正文/第1卷/第007章.md（如存在）",
       "清理 Git 暂存区",
       "清理中断状态",
       "执行 /webnovel-write 7"
@@ -110,7 +110,7 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py detect
 
 恢复选项：
 A) 删除半成品，从Step 1重新开始（推荐）⭐
-   - 清理 正文/第0007章.md
+   - 清理 正文/第1卷/第007章.md
    - 清理 Git 暂存区
    - 重新执行完整流程
 
@@ -136,7 +136,7 @@ python workflow_manager.py cleanup --chapter 7
 
 **预期输出**：
 ```
-✅ 已清理: 正文/第0007章.md, Git暂存区已清理
+✅ 已清理: 正文/第1卷/第007章.md, Git暂存区已清理
 ```
 
 2. **清除中断状态**：
@@ -213,7 +213,7 @@ Ch7的所有进度已丢弃
 ```bash
 # Step 1: 清理半成品
 python workflow_manager.py cleanup --chapter 7
-# 输出: ✅ 已清理: 正文/第0007章.md, Git暂存区已清理
+# 输出: ✅ 已清理: 正文/第1卷/第007章.md, Git暂存区已清理
 
 # Step 2: 清除中断状态
 python workflow_manager.py clear
@@ -245,7 +245,7 @@ python workflow_manager.py clear
 **恢复策略**：
 ```bash
 # 重新运行实体提取（幂等操作）
-python extract_entities.py "正文/第{N:04d}章.md" --auto
+python extract_entities.py --project-root "$PROJECT_ROOT" --chapter {N} --auto
 
 # 继续后续步骤
 # 手动执行Step 4-7，或重新执行整个命令
@@ -270,9 +270,9 @@ python extract_entities.py "正文/第{N:04d}章.md" --auto
 cat .webnovel/state.json | jq '.progress.current_chapter'
 # 输出: 6 （应该是7，说明未更新）
 
-# 检查文件是否存在
-ls -lh 正文/第0007章.md
-# 输出: -rw-r--r-- 1 user 3542 Jan 1 14:35 正文/第0007章.md
+# 检查文件是否存在（兼容卷目录）
+ls -lh "正文/第1卷/第007章.md" 2>/dev/null || ls -lh "正文/第0007章.md"
+# 输出示例: -rw-r--r-- 1 user 3542 Jan 1 14:35 正文/第1卷/第007章.md
 ```
 
 **Step 2: 决定恢复方案**：
@@ -291,7 +291,8 @@ python update_state.py \
 **选项B（高风险）**：回滚到Ch6
 ```bash
 git checkout ch0006 -- .webnovel/state.json
-rm 正文/第0007章.md
+# 删除章节文件（兼容新旧目录结构）
+rm -f "正文/第1卷/第007章.md" "正文/第0007章.md"
 python workflow_manager.py clear
 ```
 
@@ -324,7 +325,8 @@ git tag -l | grep ch0007
 ```bash
 git reset HEAD .
 git checkout -- .
-rm 正文/第0007章.md
+# 删除章节文件（兼容新旧目录结构）
+rm -f "正文/第1卷/第007章.md" "正文/第0007章.md"
 python workflow_manager.py clear
 ```
 
@@ -422,8 +424,9 @@ python workflow_manager.py detect
 
 **检测**：
 ```bash
-ls -lh 正文/*.md | tail -5
-# 发现: 第0007章.md (1500字), 第0008章.md (800字)
+# 检测所有章节文件（兼容卷目录结构）
+find 正文 -name "第*.md" -type f 2>/dev/null | xargs ls -lh | tail -5
+# 发现: 第007章.md (1500字), 第008章.md (800字)
 ```
 
 **策略**：
@@ -432,8 +435,12 @@ ls -lh 正文/*.md | tail -5
 cat .webnovel/state.json | jq '.progress.current_chapter'
 # 输出: 6
 
-# 决策: 删除所有半成品
-rm 正文/第0007章.md 正文/第0008章.md
+# 决策: 删除所有半成品（兼容卷目录）
+find 正文 -name "第007章*.md" -delete
+find 正文 -name "第008章*.md" -delete
+# 或使用 workflow_manager.py cleanup
+python workflow_manager.py cleanup --chapter 7
+python workflow_manager.py cleanup --chapter 8
 
 # 从Ch6的稳定状态重新开始
 python workflow_manager.py clear
@@ -453,12 +460,14 @@ python workflow_manager.py clear
 # Step 1: 读取state.json
 current_chapter=$(jq '.progress.current_chapter' .webnovel/state.json)
 
-# Step 2: 检查章节文件
+# Step 2: 检查章节文件（兼容卷目录结构）
 next_chapter=$((current_chapter + 1))
-next_file="正文/第$(printf '%04d' $next_chapter)章.md"
+volume_num=$(( (next_chapter - 1) / 50 + 1 ))
+next_file="正文/第${volume_num}卷/第$(printf '%03d' $next_chapter)章.md"
+legacy_file="正文/第$(printf '%04d' $next_chapter)章.md"
 
-if [ -f "$next_file" ]; then
-  echo "⚠️ 检测到半成品: $next_file"
+if [ -f "$next_file" ] || [ -f "$legacy_file" ]; then
+  echo "⚠️ 检测到半成品: $next_file 或 $legacy_file"
   echo "建议: 删除并重新创作"
 else
   echo "✅ 状态一致，可继续创作Ch$next_chapter"
@@ -546,7 +555,7 @@ AI: ✅ 执行选项A：删除半成品，重新开始
 
     Step 1: 清理半成品文件
     [运行: python workflow_manager.py cleanup --chapter 7]
-    ✅ 已清理: 正文/第0007章.md, Git暂存区已清理
+    ✅ 已清理: 正文/第1卷/第007章.md, Git暂存区已清理
 
     Step 2: 清除中断状态
     [运行: python workflow_manager.py clear]

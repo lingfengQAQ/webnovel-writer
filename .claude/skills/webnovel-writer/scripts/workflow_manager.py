@@ -200,7 +200,16 @@ def analyze_recovery_options(interrupt_info):
     elif step_id == 'Step 2':
         # Step 2中断：可能有半成品文件
         chapter_file = interrupt_info['artifacts'].get('chapter_file', {})
-        chapter_path = f"正文/第{chapter_num:04d}章.md"
+
+        # 使用 chapter_paths 模块定位章节文件（兼容新旧目录结构）
+        project_root = find_project_root()
+        existing_chapter = find_chapter_file(project_root, chapter_num)
+        if existing_chapter:
+            chapter_path = str(existing_chapter.relative_to(project_root))
+        else:
+            # 如果不存在，使用新格式的默认路径
+            draft_path = default_chapter_draft_path(project_root, chapter_num)
+            chapter_path = str(draft_path.relative_to(project_root))
 
         options = [{
             'option': 'A',
@@ -216,7 +225,7 @@ def analyze_recovery_options(interrupt_info):
         }]
 
         # 检查文件是否存在
-        if os.path.exists(chapter_path):
+        if existing_chapter and existing_chapter.exists():
             options.append({
                 'option': 'B',
                 'label': '回滚到上一章',

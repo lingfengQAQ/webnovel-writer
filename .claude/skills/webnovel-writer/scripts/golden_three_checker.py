@@ -12,16 +12,23 @@ Golden Three Chapters Checker
 
 使用方法：
 python golden_three_checker.py <章节文件路径1> <章节文件路径2> <章节文件路径3>
+python golden_three_checker.py --auto  # 自动定位前三章（推荐）
 
 示例：
-python .claude/skills/webnovel-writer/scripts/golden_three_checker.py "正文/第0001章.md" "正文/第0002章.md" "正文/第0003章.md"
+python golden_three_checker.py "正文/第1卷/第001章.md" "正文/第1卷/第002章.md" "正文/第1卷/第003章.md"
+python golden_three_checker.py --project-root "webnovel-project" --auto
 """
 
 import sys
 import os
 import re
 import json
+import argparse
 from pathlib import Path
+
+# 导入项目定位和章节路径模块
+from project_locator import resolve_project_root
+from chapter_paths import find_chapter_file
 
 # Windows UTF-8 输出修复
 if sys.platform == 'win32':
@@ -333,13 +340,56 @@ class GoldenThreeChecker:
 
 
 def main():
-    if len(sys.argv) < 4:
-        print("用法: python golden_three_checker.py <第1章路径> <第2章路径> <第3章路径>")
-        print("\n示例:")
-        print('python .claude/skills/webnovel-writer/scripts/golden_three_checker.py "正文/第0001章.md" "正文/第0002章.md" "正文/第0003章.md"')
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="黄金三章检查工具",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例：
+  # 指定文件路径（兼容旧格式）
+  python golden_three_checker.py "正文/第0001章.md" "正文/第0002章.md" "正文/第0003章.md"
 
-    chapter_files = sys.argv[1:4]
+  # 自动定位前三章（推荐）
+  python golden_three_checker.py --auto
+
+  # 指定项目根目录 + 自动定位
+  python golden_three_checker.py --project-root "webnovel-project" --auto
+""".strip(),
+    )
+
+    parser.add_argument("chapter_files", nargs="*", help="前三章文件路径（可选，使用 --auto 时自动定位）")
+    parser.add_argument("--auto", action="store_true", help="自动定位前三章文件")
+    parser.add_argument("--project-root", default=None, help="项目根目录（包含 .webnovel/state.json）")
+
+    args = parser.parse_args()
+
+    chapter_files = []
+
+    if args.auto or not args.chapter_files:
+        # 自动定位前三章
+        try:
+            project_root = resolve_project_root(args.project_root)
+        except FileNotFoundError as e:
+            print(f"❌ {e}")
+            sys.exit(1)
+
+        for i in range(1, 4):
+            chapter_path = find_chapter_file(project_root, i)
+            if chapter_path:
+                chapter_files.append(str(chapter_path))
+            else:
+                print(f"❌ 找不到第 {i} 章文件")
+                sys.exit(1)
+
+        print(f"📂 项目根目录: {project_root}")
+        print(f"📄 检测到前三章: {', '.join(Path(f).name for f in chapter_files)}\n")
+    else:
+        if len(args.chapter_files) < 3:
+            print("用法: python golden_three_checker.py <第1章路径> <第2章路径> <第3章路径>")
+            print("  或: python golden_three_checker.py --auto")
+            print("\n示例:")
+            print('python golden_three_checker.py "正文/第1卷/第001章.md" "正文/第1卷/第002章.md" "正文/第1卷/第003章.md"')
+            sys.exit(1)
+        chapter_files = args.chapter_files[:3]
 
     try:
         checker = GoldenThreeChecker(chapter_files)
