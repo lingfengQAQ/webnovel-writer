@@ -143,7 +143,7 @@ vs.
 **Deviation Handling**:
 - **Minor** (细节优化): 可接受
 - **Moderate** (情节调整): 需标记并确认
-- **Major** (核心冲突变化): 必须标记 [OUTLINE_DEVIATION] 并说明
+- **Major** (核心冲突变化): 必须标记 `<deviation reason="..."/>` 并说明
 
 ### Step 4: Pacing & Drag Check (拖沓检查)
 
@@ -229,7 +229,7 @@ Chapters {N} - {M}
 
 ## Anti-Patterns (Forbidden)
 
-❌ Approving chapters with major outline deviations without [OUTLINE_DEVIATION] tag
+❌ Approving chapters with major outline deviations without `<deviation/>` tag
 ❌ Ignoring forgotten foreshadowing (10+ chapters dormant)
 ❌ Accepting abrupt scene transitions (Grade F)
 ❌ Overlooking plot holes and contradictions
