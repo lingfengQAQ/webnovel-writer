@@ -76,14 +76,14 @@
 ╚═══════════════════════════════════════╝
 ```
 
-**NEW_ENTITY 标记格式**:
-```markdown
-[NEW_SYSTEM_MODULE: 模块名称, 解锁条件, 功能描述]
+**实体标签格式**:
+```xml
+<entity type="系统模块" name="模块名称" desc="功能描述" tier="层级" unlock="解锁条件"/>
 
 示例:
-[NEW_SYSTEM_MODULE: 商城系统, 筑基期, 可使用灵石兑换丹药/功法/法宝]
-[NEW_SYSTEM_MODULE: 抽奖系统, 金丹期, 消耗任务点进行随机抽奖]
-[NEW_SYSTEM_MODULE: 时空穿梭, 元婴期, 可穿越至其他位面历练]
+<entity type="系统模块" name="商城系统" desc="可使用灵石兑换丹药/功法/法宝" tier="核心" unlock="筑基期"/>
+<entity type="系统模块" name="抽奖系统" desc="消耗任务点进行随机抽奖" tier="支线" unlock="金丹期"/>
+<entity type="系统模块" name="时空穿梭" desc="可穿越至其他位面历练" tier="核心" unlock="元婴期"/>
 ```
 
 **系统功能版本迭代示例**:
@@ -160,13 +160,13 @@
    - 天云城拍卖会: 每月 15 日有隐藏拍品
 ```
 
-**NEW_ENTITY 标记**:
-```markdown
-[NEW_FUTURE_EVENT: 事件名称, 发生时间, 事件描述, 主角应对策略]
+**实体标签格式**:
+```xml
+<entity type="未来事件" name="事件名称" desc="事件描述" tier="层级" time="发生时间" strategy="应对策略"/>
 
 示例:
-[NEW_FUTURE_EVENT: 秘境开启, 3个月后, 天云宗后山秘境开启，内有筑基丹, 提前准备通行令牌]
-[NEW_FUTURE_EVENT: 血煞门入侵, 6个月后, 邪道袭击，家族遭劫, 提前转移族人和财产]
+<entity type="未来事件" name="秘境开启" desc="天云宗后山秘境开启，内有筑基丹" tier="核心" time="3个月后" strategy="提前准备通行令牌"/>
+<entity type="未来事件" name="血煞门入侵" desc="邪道袭击，家族遭劫" tier="核心" time="6个月后" strategy="提前转移族人和财产"/>
 ```
 
 ---
@@ -300,15 +300,15 @@
 
 ---
 
-## 📝 NEW_ENTITY 扩展标签说明
+## 📝 实体标签扩展说明
 
-针对金手指系统，新增以下标记类型：
+针对金手指系统，可使用以下 XML 标签类型：
 
-```markdown
-[NEW_SYSTEM_MODULE: 模块名称, 解锁条件, 功能描述]
-[NEW_SYSTEM_CURRENCY: 货币名称, 初始数量, 获得方式]
-[NEW_SYSTEM_ITEM: 物品名称, 品级, 效果, 获取途径]
-[NEW_FUTURE_EVENT: 事件名称, 发生时间, 事件描述, 应对策略]
+```xml
+<entity type="系统模块" name="模块名称" desc="功能描述" tier="层级" unlock="解锁条件"/>
+<entity type="系统货币" name="货币名称" desc="获得方式" tier="层级" initial="初始数量"/>
+<entity type="系统物品" name="物品名称" desc="效果" tier="层级" grade="品级" source="获取途径"/>
+<entity type="未来事件" name="事件名称" desc="事件描述" tier="层级" time="发生时间" strategy="应对策略"/>
 ```
 
 这些标签将被 `extract_entities.py` 自动识别并提取。

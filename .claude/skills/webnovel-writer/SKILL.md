@@ -68,9 +68,9 @@ allowed-tools:
 3. **时间线检查**: 剧情时间点 → 角色状态的合理性
 
 **违规标记**:
-- `[POWER_CONFLICT]`: 战力/招式与设定冲突
-- `[LOCATION_ERROR]`: 地点信息错误
-- `[TIMELINE_ISSUE]`: 时间线矛盾
+- `POWER_CONFLICT`: 战力/招式与设定冲突
+- `LOCATION_ERROR`: 地点信息错误
+- `TIMELINE_ISSUE`: 时间线矛盾
 
 **示例**:
 ```
