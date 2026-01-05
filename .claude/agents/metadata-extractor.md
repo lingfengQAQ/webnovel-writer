@@ -37,11 +37,6 @@ Extract **structured metadata** from webnovel chapter content to populate the st
 
 "废物！连练气期一层都突破不了，还有脸站在这里？"
 
-刺耳的嘲笑声从四面八方传来，林天紧咬着牙关...
-
-[NEW_ENTITY: 角色, 慕容战天, 家族第一天才，练气期九层巅峰, 核心]
-[NEW_ENTITY: 角色, 慕容虎, 慕容战天的跟班，练气期五层, 装饰]
-[GOLDEN_FINGER_SKILL: 吞噬, Lv1, 可吞噬敌人获得经验, 10秒]
 ```
 
 ---
@@ -60,6 +55,18 @@ Extract **structured metadata** from webnovel chapter content to populate the st
   "hash": "string (MD5 hash of content)",
   "metadata_quality": "string (high/medium/low - 元数据提取置信度)"
 }
+```
+
+**Example Input with XML Tags**:
+```markdown
+清晨的阳光洒在演武场上...
+"废物！连练气期一层都突破不了..."
+
+<!--
+<entity type="角色" name="慕容战天" desc="家族第一天才，练气期九层巅峰" tier="核心"/>
+<entity type="角色" name="慕容虎" desc="慕容战天的跟班，练气期五层" tier="装饰"/>
+<skill name="吞噬" level="1" desc="可吞噬敌人获得经验" cooldown="10秒"/>
+-->
 ```
 
 **Example Output**:
@@ -150,8 +157,8 @@ Extract **structured metadata** from webnovel chapter content to populate the st
 **A) Identify Named Characters**:
 - Extract names from:
   - Dialogue attributions: `林天说道：`
-  - NEW_ENTITY tags: `[NEW_ENTITY: 角色, 慕容战天, ..., 层级]`
-  - GOLDEN_FINGER_SKILL tags: Protagonist learning new skills
+  - XML entity tags: `<entity type="角色" name="慕容战天" .../>`
+  - XML skill tags: `<skill .../>` (Protagonist learning new skills)
   - Narrative mentions: `慕容战天冷笑一声`
 
 **B) Filter Out**:
@@ -162,7 +169,7 @@ Extract **structured metadata** from webnovel chapter content to populate the st
 **C) Ranking (Select Top 5)**:
 - **Priority 1**: Protagonist (主角，usually most mentioned)
 - **Priority 2**: Characters in dialogue
-- **Priority 3**: NEW_ENTITY tagged characters
+- **Priority 3**: XML-tagged characters (`<entity type="角色" .../>`)
 - **Priority 4**: Most mentioned names (by frequency)
 
 **D) Name Format**:
@@ -174,7 +181,7 @@ Extract **structured metadata** from webnovel chapter content to populate the st
 Content:
 林天看着慕容战天，心中一片平静。
 "废物，今天就是你的死期！"慕容战天冷笑。
-[NEW_ENTITY: 角色, 慕容虎, ...]
+<entity type="角色" name="慕容虎" desc="跟班" tier="装饰"/>
 云长老在一旁观战。
 
 → characters: ["林天", "慕容战天", "慕容虎", "云长老"]

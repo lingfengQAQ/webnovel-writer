@@ -212,7 +212,7 @@ cat webnovel-project/大纲/总纲.md
 
 **新增实体（Entities）**:
 - {角色/地点/物品/势力/招式}：{简要描述}
-  - 提醒：创作时需添加 [NEW_ENTITY] 标签
+  - 提醒：创作时需添加 `<entity/>` 标签
 
 **伏笔（Foreshadowing）**:
 - {埋设的伏笔内容}

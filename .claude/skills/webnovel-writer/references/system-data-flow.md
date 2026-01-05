@@ -19,7 +19,7 @@
 ## 2. 关键脚本职责（输入/输出）
 
 - `init_project.py`：初始化项目结构与模板（生成 `.webnovel/state.json` 等）
-- `extract_entities.py`：扫描章节中的 `[NEW_ENTITY]` / `[GOLDEN_FINGER_SKILL]` / `[FORESHADOWING_JSON]` → 写入 `设定集/` + 更新 `state.json`
+- `extract_entities.py`：扫描章节中的 `<entity/>` / `<skill/>` / `<foreshadow/>` 标签 → 写入 `设定集/` + 更新 `state.json`（兼容旧方括号格式）
 - `update_state.py`：**原子性**更新 `state.json`（进度/位置/战力/关系/伏笔/审查记录/Strand）
 - `structured_index.py`：把章节元数据写入 `.webnovel/index.db`；并从 `state.json` 同步角色/伏笔到索引（用于快速查询/上下文筛选）
 - `status_reporter.py`：生成健康报告、伏笔紧急度分析、Strand 分布等
