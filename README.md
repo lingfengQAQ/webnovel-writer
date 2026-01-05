@@ -45,14 +45,18 @@ cd your-project && git clone https://github.com/lingfengQAQ/webnovel-writer.git 
 
 ## 标签格式
 
-```markdown
-# 实体标签（4字段增强格式）
-[NEW_ENTITY: 类型, 名称, 描述, 层级]
-# 层级: 核心/支线/装饰
+```xml
+<!-- 实体标签 -->
+<entity type="角色" name="陆辰" desc="主角" tier="核心"/>
 
-# 金手指技能标签
-[GOLDEN_FINGER_SKILL: 技能名, 等级, 描述, 冷却时间]
+<!-- 技能标签 -->
+<skill name="时间回溯" level="1" desc="回到10秒前" cooldown="24小时"/>
+
+<!-- 伏笔标签 -->
+<foreshadow content="玉佩发光" tier="支线" target="50"/>
 ```
+
+详见 `references/tag-specification.md`
 
 ## 项目结构
 
