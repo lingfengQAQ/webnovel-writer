@@ -370,6 +370,25 @@ class ContextManager:
 
         return cards
 
+    @staticmethod
+    def _is_resolved_foreshadowing_status(raw_status: Any) -> bool:
+        """判断伏笔是否已回收（兼容历史字段与同义词）。"""
+        if raw_status is None:
+            return False
+
+        status = str(raw_status).strip()
+        if not status:
+            return False
+
+        status_lower = status.lower()
+        if status in {"已回收", "已完成", "已解决", "完成"}:
+            return True
+        if status_lower in {"resolved", "done", "complete"}:
+            return True
+        if "已回收" in status:
+            return True
+        return False
+
     def _get_relevant_foreshadowing(self, location: Optional[str],
                                    characters: Optional[List[str]]) -> List[Dict[str, str]]:
         """获取相关伏笔（优先使用索引，支持复杂条件查询）"""
@@ -413,7 +432,7 @@ class ContextManager:
         relevant = []
 
         for item in all_foreshadowing:
-            if item.get("status") not in ["未回收", "active", "pending", None, ""]:
+            if self._is_resolved_foreshadowing_status(item.get("status")):
                 continue
 
             content = item.get("content", "")
@@ -493,27 +512,51 @@ class ContextManager:
         return "[境界划分待补充]"
 
     def _get_urgent_foreshadowing(self) -> List[str]:
-        """获取紧急伏笔（未回收 且 已埋超过 100 章）"""
+        """获取紧急伏笔（未回收 且 已埋超过 50 章）"""
         if not self.state:
             return []
 
-        current_chapter = self.state.get("progress", {}).get("current_chapter", 0)
-        all_foreshadowing = self.state.get("plot_threads", {}).get("foreshadowing", [])
+        # 优先：使用索引的紧急度（简单阈值：>50章）
+        if self.use_index and self.index:
+            try:
+                urgent_plots = self.index.query_urgent_foreshadowing(threshold=60)
+                formatted = []
+                for plot in urgent_plots:
+                    content = plot.get("content", "")
+                    if not content:
+                        continue
+                    introduced = plot.get("introduced_chapter", 0) or 0
+                    formatted.append(f"⚠️ {content}（埋设Ch{introduced}）")
+                return formatted[:3]
+            except Exception as e:
+                print(f"⚠️ 伏笔索引查询失败，降级到 state.json: {e}")
 
-        urgent = []
+        current_chapter = int(self.state.get("progress", {}).get("current_chapter", 0) or 0)
+        all_foreshadowing = self.state.get("plot_threads", {}).get("foreshadowing", []) or []
 
+        scored = []
         for item in all_foreshadowing:
-            if item.get("status") not in ["未回收", "active", "pending", None, ""]:
+            if self._is_resolved_foreshadowing_status(item.get("status")):
                 continue
 
-            # 计算已埋章节数（粗略：假设每章对应 1 个章节号增量）
-            # 实际项目中应该记录"埋设章节号"
-            # 这里简化：如果 added_at 距离现在超过 100 天，视为紧急
+            introduced = item.get("introduced_chapter") or item.get("planted_chapter") or 1
+            try:
+                introduced_chapter = int(introduced)
+            except (TypeError, ValueError):
+                introduced_chapter = 1
+
+            pending = current_chapter - introduced_chapter
+            if pending < 50:
+                continue
 
             content = item.get("content", "")
-            urgent.append(f"⚠️ {content}")
+            if not content:
+                continue
 
-        return urgent[:3]  # 最多 3 条
+            scored.append((pending, content))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [f"⚠️ {content}（已埋 {pending} 章）" for pending, content in scored[:3]]
 
     def build_context(self, chapter_num: int, location: Optional[str] = None,
                      characters: Optional[List[str]] = None) -> Dict[str, Any]:

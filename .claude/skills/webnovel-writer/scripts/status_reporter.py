@@ -89,6 +89,24 @@ from collections import defaultdict
 from project_locator import resolve_project_root
 from chapter_paths import extract_chapter_num_from_filename
 
+def _is_resolved_foreshadowing_status(raw_status: Any) -> bool:
+    """判断伏笔是否已回收（兼容历史字段与同义词）。"""
+    if raw_status is None:
+        return False
+
+    status = str(raw_status).strip()
+    if not status:
+        return False
+
+    status_lower = status.lower()
+    if status in {"已回收", "已完成", "已解决", "完成"}:
+        return True
+    if status_lower in {"resolved", "done", "complete"}:
+        return True
+    if "已回收" in status:
+        return True
+    return False
+
 # Windows 编码兼容性修复
 if sys.platform == 'win32':
     import io
@@ -278,7 +296,7 @@ class StatusReporter:
 
         for item in foreshadowing:
             status = item.get("status")
-            if status not in ["未回收", "active", "pending", None, ""]:
+            if _is_resolved_foreshadowing_status(status):
                 continue
 
             # 假设每个伏笔记录了"added_chapter"（埋设章节）
@@ -345,7 +363,7 @@ class StatusReporter:
         urgency_list = []
 
         for item in foreshadowing:
-            if item.get("status") in ["已回收", "resolved"]:
+            if _is_resolved_foreshadowing_status(item.get("status")):
                 continue
 
             content = item.get("content", "")

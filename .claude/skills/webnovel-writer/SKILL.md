@@ -394,6 +394,7 @@ Ch 10: Quest + Fire（融合）
 - **[strand-weave-pattern.md](references/strand-weave-pattern.md)** - Strand Weave 详细规范
 - **[polish-guide.md](references/polish-guide.md)** - 内容润色指南（AI痕迹清除/语言优化/风格统一/自然化）
 - **[workflow-resume.md](references/workflow-resume.md)** - 工作流中断恢复机制（用于 /webnovel-resume 命令）
+- **[system-data-flow.md](references/system-data-flow.md)** - 数据链与组件地图（state/index/archive 口径与顺序）
 - **[archiving-strategy.md](references/archiving-strategy.md)** - 数据归档策略（200万字长跑保障）
 - **[git-workflow.md](references/git-workflow.md)** - Git 版本控制工作流规范
 
@@ -423,6 +424,7 @@ Ch 10: Quest + Fire（融合）
 - **[scene-description.md](references/writing/scene-description.md)** - 场景描写方法
 - **[combat-scenes.md](references/writing/combat-scenes.md)** - 战斗场景写作
 - **[emotion-psychology.md](references/writing/emotion-psychology.md)** - 情感与心理描写
+- **[typesetting.md](references/writing/typesetting.md)** - 排版与阅读体验（移动端优先）
 
 #### 高级技巧 (advanced/)
 - **[multi-threading.md](references/advanced/multi-threading.md)** - 多线叙事技巧

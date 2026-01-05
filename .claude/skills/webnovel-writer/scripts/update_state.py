@@ -14,7 +14,7 @@
   python update_state.py --protagonist-power "金丹" 3 "雷劫"
 
   # 更新人际关系
-  python update_state.py --relationship "李雪" affection 95 --relationship-status "李雪" "确认关系"
+  python update_state.py --relationship "李雪" affection 95
 
   # 记录伏笔
   python update_state.py --add-foreshadowing "神秘玉佩的秘密" "未回收"
@@ -239,10 +239,34 @@ class StateUpdater:
                 print(f"⚠️  伏笔已存在: {content}")
                 return
 
+        # 归一化状态，避免 "待回收/进行中/active/pending" 等混用导致下游过滤漏掉
+        raw_status = "" if status is None else str(status).strip()
+        raw_status_lower = raw_status.lower()
+        if raw_status in {"已回收", "已完成", "已解决", "完成"} or raw_status_lower in {"resolved", "done", "complete"}:
+            status = "已回收"
+        elif (
+            raw_status in {"未回收", "待回收", "进行中", "未解决"}
+            or raw_status_lower in {"active", "pending"}
+            or not raw_status
+        ):
+            status = "未回收"
+        else:
+            status = "未回收"
+
+        planted_chapter = int(self.state.get("progress", {}).get("current_chapter", 0) or 0)
+        if planted_chapter <= 0:
+            planted_chapter = 1
+            print("? 未找到有效 progress.current_chapter，默认 planted_chapter=1")
+
+        target_chapter = planted_chapter + 100
+
         self.state["plot_threads"]["foreshadowing"].append({
             "content": content,
             "status": status,
-            "added_at": datetime.now().strftime("%Y-%m-%d")
+            "added_at": datetime.now().strftime("%Y-%m-%d"),
+            "planted_chapter": planted_chapter,
+            "target_chapter": target_chapter,
+            "tier": "支线"
         })
         print(f"📝 添加伏笔: {content}（{status}）")
 
