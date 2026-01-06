@@ -1,7 +1,7 @@
 ---
 name: high-point-checker
 description: Specialized subagent for checking cool-point (爽点) density and quality in Chinese webnovel chapters. Use when reviewing webnovel chapters to verify satisfaction point frequency, type diversity, and execution quality.
-allowed-tools: Read, Grep
+allowed-tools: Read Grep
 ---
 
 # high-point-checker (爽点检查器)

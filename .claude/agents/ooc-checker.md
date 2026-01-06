@@ -1,7 +1,7 @@
 ---
 name: ooc-checker
 description: Specialized subagent for detecting Out-Of-Character (OOC) behavior in Chinese webnovel chapters. Use when reviewing webnovel chapters to verify character consistency against established personality profiles and behavioral patterns.
-allowed-tools: Read, Grep
+allowed-tools: Read Grep
 ---
 
 # ooc-checker (人物OOC检查器)

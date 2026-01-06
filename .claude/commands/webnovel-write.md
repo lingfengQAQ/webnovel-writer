@@ -1,5 +1,5 @@
 ---
-allowed-tools: Read, Write, Edit, Grep, Bash, Task
+allowed-tools: Read Write Edit Grep Bash Task
 argument-hint: [章节号]
 description: 按大纲创作指定章节的正文内容（3000-5000字），自动进行三大定律检查和爽点规划
 ---

@@ -1,7 +1,7 @@
 ---
 name: continuity-checker
 description: Specialized subagent for verifying narrative continuity and plot logic in Chinese webnovel chapters. Use when reviewing webnovel chapters to check scene transitions, plot thread coherence, and foreshadowing management (伏笔).
-allowed-tools: Read, Grep
+allowed-tools: Read Grep
 ---
 
 # continuity-checker (连贯性检查器)

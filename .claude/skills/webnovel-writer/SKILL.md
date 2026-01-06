@@ -1,14 +1,7 @@
 ---
 name: webnovel-writer
 description: Knowledge base for writing Chinese webnovels with anti-hallucination protocols (大纲即法律/设定即物理/发明需申报), cool-points strategy, and pacing control (Strand Weave). Automatically loaded when writing webnovel chapters, creating chapter content, or discussing webnovel writing techniques.
-allowed-tools:
-  - Read
-  - Write
-  - Edit
-  - Grep
-  - Bash
-  - AskUserQuestion
-  - Task
+allowed-tools: Read Write Edit Grep Bash AskUserQuestion Task
 ---
 
 # 网文创作知识库
@@ -348,49 +341,10 @@ Ch 10: Quest + Fire（融合）
 
 ## 🔍 常见错误与修正
 
-### 错误 1: 战力崩坏
-
-❌ **错误示例**: 主角筑基 3 层，打败金丹期敌人
-
-✅ **修正**: 检查 state.json 中主角实力，合理设定对手境界
-- 如果必须越级战斗，需要：
-  - 金手指/秘法加持
-  - 对手受伤/被削弱
-  - 环境优势/陷阱辅助
-
----
-
-### 错误 2: 爽点缺失
-
-❌ **错误示例**: 整章都是主角赶路，无冲突无爽点
-
-✅ **修正**:
-- 赶路途中遭遇事件（强盗/妖兽/奇遇）
-- 路上巧遇重要角色（伙伴/敌人/女主）
-- 发现隐藏地点/宝物
-
----
-
-### 错误 3: 擅自发明
-
-❌ **错误示例**: 突然出现"紫霄宗"，但设定集中无此势力
-
-✅ **修正**:
-```xml
-<entity type="势力" name="紫霄宗" desc="与天云宗齐名的大宗门，位于东域" tier="支线"/>
-```
-并询问用户是否加入设定集
-
----
-
-### 错误 4: 人物 OOC
-
-❌ **错误示例**: 主角性格"隐忍冷静"，突然暴怒失控
-
-✅ **修正**:
-- 参考角色卡性格
-- 如需性格转变，须有合理铺垫（触及底线/重大刺激）
-- 标注性格变化的原因
+详见 **[common-mistakes.md](references/common-mistakes.md)**，包含：
+- 战力崩坏、爽点缺失、擅自发明、人物 OOC 等 7 类错误
+- 每类错误的识别方法和修正策略
+- 快速自检清单
 
 ---
 
@@ -447,52 +401,14 @@ Ch 10: Quest + Fire（融合）
 
 ### 题材专项指南
 
-#### 狗血言情 (genres/dog-blood-romance/)
-- **[romance-tropes.md](references/genres/dog-blood-romance/romance-tropes.md)** - 经典言情套路公式
-- **[character-archetypes.md](references/genres/dog-blood-romance/character-archetypes.md)** - 角色原型设计
-- **[emotional-tension.md](references/genres/dog-blood-romance/emotional-tension.md)** - 情感张力构建
-- **[romance-pacing.md](references/genres/dog-blood-romance/romance-pacing.md)** - 言情节奏控制
-- **[sweet-moments.md](references/genres/dog-blood-romance/sweet-moments.md)** - 甜蜜场景设计
-- **[torture-points.md](references/genres/dog-blood-romance/torture-points.md)** - 虐点设计技巧
-- **[plot-templates.md](references/genres/dog-blood-romance/plot-templates.md)** - 剧情模板库（长/中/短篇）
-
-#### 知乎短篇 (genres/zhihu-short/)
-- **[hook-techniques.md](references/genres/zhihu-short/hook-techniques.md)** - 开篇钩子技巧（十大模板）
-- **[pacing-rhythm.md](references/genres/zhihu-short/pacing-rhythm.md)** - 短篇节奏控制
-- **[character-quick-build.md](references/genres/zhihu-short/character-quick-build.md)** - 快速人设构建
-- **[plot-compression.md](references/genres/zhihu-short/plot-compression.md)** - 剧情压缩技巧
-- **[ending-patterns.md](references/genres/zhihu-short/ending-patterns.md)** - 结局模式（HE/BE/开放式）
-- **[emotional-peaks.md](references/genres/zhihu-short/emotional-peaks.md)** - 情绪高潮设计
-- **[genre-templates.md](references/genres/zhihu-short/genre-templates.md)** - 体裁模板（追妻/重生/豪门等）
-
-#### 现实题材 (genres/realistic/)
-- **[reality-anchoring.md](references/genres/realistic/reality-anchoring.md)** - 真实感锚定技巧
-- **[social-issues.md](references/genres/realistic/social-issues.md)** - 社会议题处理
-- **[dialogue-authenticity.md](references/genres/realistic/dialogue-authenticity.md)** - 对话真实感
-- **[character-depth.md](references/genres/realistic/character-depth.md)** - 人物深度塑造
-- **[plot-logic.md](references/genres/realistic/plot-logic.md)** - 剧情逻辑构建
-
-#### 古言题材 (genres/period-drama/)
-- **[historical-setting.md](references/genres/period-drama/historical-setting.md)** - 历史背景设定
-- **[ancient-dialogue.md](references/genres/period-drama/ancient-dialogue.md)** - 古风对话与文风
-- **[palace-intrigue.md](references/genres/period-drama/palace-intrigue.md)** - 宫斗权谋设计
-- **[character-design.md](references/genres/period-drama/character-design.md)** - 古言人物设计
-- **[plot-patterns.md](references/genres/period-drama/plot-patterns.md)** - 古言剧情模式
-
-#### 玄幻题材 (genres/xuanhuan/)
-- **[power-systems.md](references/genres/xuanhuan/power-systems.md)** - 玄幻力量体系
-- **[cultivation-levels.md](references/genres/xuanhuan/cultivation-levels.md)** - 修炼等级设计
-- **[xuanhuan-plot-patterns.md](references/genres/xuanhuan/xuanhuan-plot-patterns.md)** - 玄幻剧情模式
-- **[xuanhuan-cool-points.md](references/genres/xuanhuan/xuanhuan-cool-points.md)** - 玄幻爽点设计
-
-#### 规则怪谈 (genres/rules-mystery/)
-- **[core-elements.md](references/genres/rules-mystery/core-elements.md)** - 规则怪谈核心要素
-- **[clue-design.md](references/genres/rules-mystery/clue-design.md)** - 线索设计技巧
-- **[trick-design.md](references/genres/rules-mystery/trick-design.md)** - 诡计设计方法
-- **[suspect-management.md](references/genres/rules-mystery/suspect-management.md)** - 嫌疑人管理
-- **[detective-design.md](references/genres/rules-mystery/detective-design.md)** - 侦探角色设计
-- **[revelation-design.md](references/genres/rules-mystery/revelation-design.md)** - 真相揭露设计
-- **[structure-pacing.md](references/genres/rules-mystery/structure-pacing.md)** - 结构与节奏控制
+| 题材 | 目录 | 主要内容 |
+|------|------|---------|
+| 狗血言情 | `genres/dog-blood-romance/` | 套路公式、角色原型、情感张力、甜虐设计 |
+| 知乎短篇 | `genres/zhihu-short/` | 钩子技巧、快速人设、剧情压缩、结局模式 |
+| 现实题材 | `genres/realistic/` | 真实感锚定、社会议题、对话/人物深度 |
+| 古言题材 | `genres/period-drama/` | 历史背景、宫斗权谋、古风对话 |
+| 玄幻题材 | `genres/xuanhuan/` | 力量体系、修炼等级、剧情/爽点模式 |
+| 规则怪谈 | `genres/rules-mystery/` | 核心要素、线索/诡计设计、结构节奏 |
 
 ---
 
@@ -501,17 +417,17 @@ Ch 10: Quest + Fire（融合）
 开始新项目时，可以直接套用以下模板快速构建世界观和大纲：
 
 ### 通用模板
-- **[golden-finger-templates.md](templates/golden-finger-templates.md)** - 金手指设计框架（系统流/鉴定流/签到流）
+- **[golden-finger-templates.md](assets/templates/golden-finger-templates.md)** - 金手指设计框架（系统流/鉴定流/签到流）
 
 ### 题材专用模板
-- **[修仙.md](templates/genres/修仙.md)** - 凡人流/无敌流/家族流/苟道流 + 境界体系 + 200万字大纲
-- **[系统流.md](templates/genres/系统流.md)** - 数值面板/任务生成/系统与宿主关系
-- **[都市异能.md](templates/genres/都市异能.md)** - 都市异能题材核心套路
-- **[狗血言情.md](templates/genres/狗血言情.md)** - 霸总/追妻火葬场/重生复仇/替身文学
-- **[知乎短篇.md](templates/genres/知乎短篇.md)** - 十大开篇钩子/黄金300字/节奏控制
-- **[古言.md](templates/genres/古言.md)** - 宫斗/宅斗/权谋框架/古风对话规范
-- **[现实题材.md](templates/genres/现实题材.md)** - 职场/婚恋/社会议题处理
-- **[规则怪谈.md](templates/genres/规则怪谈.md)** - 本格推理十诫/线索设计/诡计分类
+- **[修仙.md](assets/templates/genres/修仙.md)** - 凡人流/无敌流/家族流/苟道流 + 境界体系 + 200万字大纲
+- **[系统流.md](assets/templates/genres/系统流.md)** - 数值面板/任务生成/系统与宿主关系
+- **[都市异能.md](assets/templates/genres/都市异能.md)** - 都市异能题材核心套路
+- **[狗血言情.md](assets/templates/genres/狗血言情.md)** - 霸总/追妻火葬场/重生复仇/替身文学
+- **[知乎短篇.md](assets/templates/genres/知乎短篇.md)** - 十大开篇钩子/黄金300字/节奏控制
+- **[古言.md](assets/templates/genres/古言.md)** - 宫斗/宅斗/权谋框架/古风对话规范
+- **[现实题材.md](assets/templates/genres/现实题材.md)** - 职场/婚恋/社会议题处理
+- **[规则怪谈.md](assets/templates/genres/规则怪谈.md)** - 本格推理十诫/线索设计/诡计分类
 
 ---
 

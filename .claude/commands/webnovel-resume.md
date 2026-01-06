@@ -1,5 +1,5 @@
 ---
-allowed-tools: Read, Bash, AskUserQuestion
+allowed-tools: Read Bash AskUserQuestion
 description: 恢复中断的网文创作任务，基于精确的workflow状态追踪
 ---
 

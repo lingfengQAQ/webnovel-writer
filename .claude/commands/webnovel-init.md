@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash, Write, Read, Edit, AskUserQuestion, Task
+allowed-tools: Bash Write Read Edit AskUserQuestion Task
 argument-hint: [题材类型] | 留空交互式选择
 description: 初始化网文项目，强制生成设定集、大纲框架和 state.json。创建 AI 工作室的完整项目结构。
 ---

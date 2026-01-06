@@ -1,7 +1,7 @@
 ---
 name: metadata-extractor
 description: Extract structured metadata from webnovel chapter content for indexing.
-allowed-tools: Read, Grep
+allowed-tools: Read Grep
 ---
 
 # Metadata Extractor Agent

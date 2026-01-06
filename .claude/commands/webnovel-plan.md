@@ -1,5 +1,5 @@
 ---
-allowed-tools: Read, Write, Edit, AskUserQuestion, Bash
+allowed-tools: Read Write Edit AskUserQuestion Bash
 argument-hint: [卷号]
 description: 规划指定卷的详细大纲，强制将总纲细化为章节级别。支持交互式询问补充设定。**集成爽点规划和Strand Weave节奏预规划**。
 ---

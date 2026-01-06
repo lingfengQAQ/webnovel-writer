@@ -1,5 +1,5 @@
 ---
-allowed-tools: Read, Grep, Bash, AskUserQuestion
+allowed-tools: Read Grep Bash AskUserQuestion
 argument-hint: [关键词]
 description: 快速查询设定集中的信息（角色/实力/势力/物品/伏笔），**支持伏笔紧急度分析和金手指状态追踪**，严格遵循查询流程
 ---

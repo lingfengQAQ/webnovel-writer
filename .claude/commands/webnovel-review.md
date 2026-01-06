@@ -1,5 +1,5 @@
 ---
-allowed-tools: Read, Grep, Write, Edit, Bash, Task, AskUserQuestion
+allowed-tools: Read Grep Write Edit Bash Task AskUserQuestion
 argument-hint: [起始章-结束章]
 description: 对指定范围的章节进行质量审查，强制调用 5 个专职审查员生成综合报告
 ---

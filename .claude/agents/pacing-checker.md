@@ -1,7 +1,7 @@
 ---
 name: pacing-checker
 description: Specialized subagent for analyzing narrative pacing using the Strand Weave system in Chinese webnovel chapters. Use when reviewing webnovel chapters to verify Quest/Fire/Constellation strand balance and prevent monotonous pacing.
-allowed-tools: Read, Grep
+allowed-tools: Read Grep
 ---
 
 # pacing-checker (节奏检查器)

@@ -1,7 +1,7 @@
 ---
 name: consistency-checker
 description: Specialized subagent for verifying world-building consistency in Chinese webnovel chapters. Use when reviewing webnovel chapters to check adherence to established settings, power systems, and character abilities (设定即物理).
-allowed-tools: Read, Grep
+allowed-tools: Read Grep
 ---
 
 # consistency-checker (设定一致性检查器)
