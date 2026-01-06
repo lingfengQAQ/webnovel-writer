@@ -34,6 +34,18 @@ description: 按大纲创作指定章节的正文内容（3000-5000字），自�
 
 ---
 
+## Step -2: Load Knowledge Base (MANDATORY - FIRST)
+
+**YOU MUST read the skill knowledge base before any other action**:
+
+```
+Read .claude/skills/webnovel-writer/SKILL.md
+```
+
+**Purpose**: Load anti-hallucination protocols, cool-points strategy, and Strand Weave pacing control into context.
+
+---
+
 ## Step -1: Environment Setup (MANDATORY - BEFORE ALL STEPS)
 
 ### 1. Locate Project Directory
@@ -164,10 +176,10 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 **Step 1.5: Load Reference Materials (CONDITIONAL - OPTIONAL)**
 
 **When to Load**:
-- **First time using this command** → Load `references/cool-points-guide.md` for爽点type overview
-- **Unsure about pacing** → Load `references/pacing-control.md` for Strand Weave rules
-- **Need genre-specific templates** → Load `templates/genres/修仙.md` (or相应题材)
-- **Designing golden finger** → Load `templates/golden-finger-templates.md`
+- **First time using this command** → Load `.claude/skills/webnovel-writer/references/cool-points-guide.md` for爽点type overview
+- **Unsure about pacing** → Load `.claude/skills/webnovel-writer/references/pacing-control.md` for Strand Weave rules
+- **Need genre-specific templates** → Load `.claude/skills/webnovel-writer/assets/templates/genres/修仙.md` (or相应题材)
+- **Designing golden finger** → Load `.claude/skills/webnovel-writer/assets/templates/golden-finger-templates.md`
 
 **How to Load** (Example):
 ```markdown
@@ -266,7 +278,7 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
    - ✅ Introduce required Entities with `<entity type="类型" name="名称" desc="描述" tier="层级"/>` tags（层级: 核心/支线/装饰）
    - ✅ Track new golden finger skills with `<skill name="技能名" level="等级" desc="描述" cooldown="冷却时间"/>`
    - ✅ Plant Foreshadowing as planned with `<foreshadow content="伏笔内容" tier="层级" target="目标章节"/>`
-   - ✅ **禁止自创"工作流标签"**：除 `<entity>` / `<skill>` / `<foreshadow>` / `<deviation>` 外，不要在正文里新增任何自定义标签；详见 `references/tag-specification.md`
+   - ✅ **禁止自创"工作流标签"**：除 `<entity>` / `<skill>` / `<foreshadow>` / `<deviation>` 外，不要在正文里新增任何自定义标签；详见 `.claude/skills/webnovel-writer/references/tag-specification.md`
    - ✅ **禁用占位符正文**：正文里不要出现"???系统/???功能/???"；未知信息用"代号/称呼"或"权限屏蔽/无法读取"等叙述句替代
    - ✅ **都市异能（隐秘期）余波要求**：若出现"会被普通人注意到的大动静"（爆炸/坍塌/火光/多人伤亡），本章或下一章必须交代一个现实层面的"余波/遮蔽机制"细节（警戒线、监控调取、热搜/群聊传闻、官方说法等）
    - ✅ Protagonist power ≤ state.json (no power inflation)
@@ -305,7 +317,7 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 >
 > **标签放置位置**: 在角色/地点/物品首次出现的段落末尾，或章节末尾统一放置。为便于后处理，建议**标签单独成行**（不要把标签夹在一句正文里）
 >
-> **详细规范**: 见 `references/tag-specification.md`
+> **详细规范**: 见 `.claude/skills/webnovel-writer/references/tag-specification.md`
 
 ---
 
@@ -818,53 +830,13 @@ python .claude/skills/webnovel-writer/scripts/archive_manager.py --auto-check
 
 ---
 
-### Step 5: Git Backup (MANDATORY)
+### Step 5: Update Strand Tracker (MANDATORY)
 
 **Before executing Step 5**, **YOU MUST run**:
 
 ```bash
 python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
   --step-id "Step 5" \
-  --step-name "Git Backup"
-```
-
-> ⚠️ **命令格式警告 - 复制下方模板使用**
-
-**命令模板**:
-```bash
-python .claude/skills/webnovel-writer/scripts/backup_manager.py \
-  --chapter {chapter_num} \
-  --chapter-title "{章节标题}"
-```
-
-**示例（第1章）**:
-```bash
-python .claude/skills/webnovel-writer/scripts/backup_manager.py \
-  --chapter 1 \
-  --chapter-title "死亡降临"
-```
-
-> ❌ **错误示例**: `backup --message "完成第1章"` （不需要 backup 子命令和 --message 参数）
-
-**What this does**: `git add .` + `git commit` + `git tag ch{N:04d}`
-
-**After completing Step 5**, **YOU MUST run**:
-
-```bash
-python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-step \
-  --step-id "Step 5" \
-  --artifacts '{"git_committed": true, "git_tag": "ch{N:04d}"}'
-```
-
----
-
-### Step 6: Update Strand Tracker (MANDATORY)
-
-**Before executing Step 6**, **YOU MUST run**:
-
-```bash
-python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
-  --step-id "Step 6" \
   --step-name "Update Strand Tracker"
 ```
 
@@ -896,23 +868,23 @@ python .claude/skills/webnovel-writer/scripts/update_state.py --strand-dominant 
 
 **FORBIDDEN**: Skipping strand_tracker update.
 
-**After completing Step 6**, **YOU MUST run**:
+**After completing Step 5**, **YOU MUST run**:
 
 ```bash
 python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-step \
-  --step-id "Step 6" \
+  --step-id "Step 5" \
   --artifacts '{"strand_tracker_updated": true, "dominant_strand": "{quest|fire|constellation}"}'
 ```
 
 ---
 
-### Step 7: Bi-Chapter Review (CONDITIONAL - CRITICAL)
+### Step 6: Bi-Chapter Review (CONDITIONAL - CRITICAL)
 
-**Before executing Step 7** (if chapter_num % 2 == 0), **YOU MUST run**:
+**Before executing Step 6** (if chapter_num % 2 == 0), **YOU MUST run**:
 
 ```bash
 python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
-  --step-id "Step 7" \
+  --step-id "Step 6" \
   --step-name "Bi-Chapter Review"
 ```
 
@@ -935,7 +907,7 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
 
 **After ALL 5 subagents return their reports**:
 
-**Step 7.1: Consolidate Review Reports (MANDATORY)**
+**Step 6.1: Consolidate Review Reports (MANDATORY)**
 
 1. **Collect all 5 reports** from the subagents
 2. **Create consolidated report file**:
@@ -981,14 +953,14 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
    - [Top 3-5 actionable recommendations]
    ```
 
-**Step 7.2: Update state.json Review Checkpoint (MANDATORY)**
+**Step 6.2: Update state.json Review Checkpoint (MANDATORY)**
 
 ```bash
 python .claude/skills/webnovel-writer/scripts/update_state.py \
   --add-review "{N-1}-{N}" "审查报告/Review_Ch{N-1}-{N}_YYYYMMDD.md"
 ```
 
-**Step 7.3: Present Summary to User**
+**Step 6.3: Present Summary to User**
 
 Output consolidated findings to user (see Final Output section below).
 
@@ -1001,7 +973,7 @@ Output consolidated findings to user (see Final Output section below).
 
 ---
 
-**Step 7.4: Interactive Fix Option (CONDITIONAL - CRITICAL)**
+**Step 6.4: Interactive Fix Option (CONDITIONAL - CRITICAL)**
 
 **IF** the consolidated review report contains **Critical Issues** (🔴 severity: critical/high):
 
@@ -1056,12 +1028,52 @@ Output consolidated findings to user (see Final Output section below).
 - 发现Critical Issues却不询问用户
 - 自动修复而不征求用户意见
 
+**After completing Step 6**, **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-step \
+  --step-id "Step 6" \
+  --artifacts '{"review_completed": true, "review_report_path": "审查报告/Review_Ch{N-1}-{N}_YYYYMMDD.md"}'
+```
+
+---
+
+### Step 7: Git Backup (MANDATORY)
+
+**Before executing Step 7**, **YOU MUST run**:
+
+```bash
+python .claude/skills/webnovel-writer/scripts/workflow_manager.py start-step \
+  --step-id "Step 7" \
+  --step-name "Git Backup"
+```
+
+> ⚠️ **命令格式警告 - 复制下方模板使用**
+
+**命令模板**:
+```bash
+python .claude/skills/webnovel-writer/scripts/backup_manager.py \
+  --chapter {chapter_num} \
+  --chapter-title "{章节标题}"
+```
+
+**示例（第1章）**:
+```bash
+python .claude/skills/webnovel-writer/scripts/backup_manager.py \
+  --chapter 1 \
+  --chapter-title "死亡降临"
+```
+
+> ❌ **错误示例**: `backup --message "完成第1章"` （不需要 backup 子命令和 --message 参数）
+
+**What this does**: `git add .` + `git commit` + `git tag ch{N:04d}`
+
 **After completing Step 7**, **YOU MUST run**:
 
 ```bash
 python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-step \
   --step-id "Step 7" \
-  --artifacts '{"review_completed": true, "review_report_path": "审查报告/Review_Ch{N-1}-{N}_YYYYMMDD.md"}'
+  --artifacts '{"git_committed": true, "git_tag": "ch{N:04d}"}'
 ```
 
 ---
@@ -1122,8 +1134,8 @@ python .claude/skills/webnovel-writer/scripts/workflow_manager.py complete-task
 
 🔧 系统操作
 - ✅ state.json 已更新
-- ✅ Git 备份已完成 (commit: {git_hash})
 - ✅ strand_tracker 已更新 (dominant: {dominant_strand})
+- ✅ Git 备份已完成 (commit: {git_hash})
 
 {IF chapter_num % 2 == 0}
 🔍 双章审查

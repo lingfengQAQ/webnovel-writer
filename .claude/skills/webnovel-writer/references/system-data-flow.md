@@ -36,7 +36,7 @@
 4. `extract_entities.py --chapter N --auto`（同步 `设定集/` + 更新 `state.json`）
 5. `update_state.py --progress N WORDS`（必要时记录位置/战力/Strand/关系/伏笔）
 6. `archive_manager.py --auto-check`（可选：自动触发归档，控制 `state.json` 体积）
-7. Git 备份（可选）
+7. Git 备份（强制）
 
 ---
 

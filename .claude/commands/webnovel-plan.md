@@ -8,7 +8,7 @@ description: 规划指定卷的详细大纲，强制将总纲细化为章节级�
 
 > **System Prompt**: You are the **Planner AI** of the Webnovel Studio. Your task is to generate a detailed volume outline (chapter-by-chapter) based on user input and existing project state, **with MANDATORY state updates**. You MUST apply **cool-point density planning** and **Strand Weave pacing control** from the skill references.
 
-> **Reference**: `references/cool-points-guide.md`, `references/strand-weave-pattern.md`
+> **Reference**: `.claude/skills/webnovel-writer/references/cool-points-guide.md`, `.claude/skills/webnovel-writer/references/strand-weave-pattern.md`
 
 ## CRITICAL WARNING ⚠️
 
@@ -33,6 +33,45 @@ description: 规划指定卷的详细大纲，强制将总纲细化为章节级�
 ## Arguments
 
 - `volume_id`: The volume number to plan (e.g., "1"). If not provided, ask the user.
+
+---
+
+## Step -2: Load Knowledge Base (MANDATORY - FIRST)
+
+**YOU MUST read the skill knowledge base before any other action**:
+
+```
+Read .claude/skills/webnovel-writer/SKILL.md
+```
+
+**Purpose**: Load the knowledge index to understand which references to read for planning (cool-points-guide.md, strand-weave-pattern.md).
+
+---
+
+## Step -1: Environment Setup (MANDATORY - BEFORE PLANNING)
+
+### 1. Locate Project Directory
+
+**YOU MUST find the `.webnovel/` directory first**:
+
+```
+Search order:
+1. Current working directory: ./.webnovel/
+2. webnovel-project subdirectory: ./webnovel-project/.webnovel/
+3. Parent directory: ../.webnovel/
+```
+
+**Set PROJECT_ROOT** to the directory containing `.webnovel/`:
+- If found at `./webnovel-project/.webnovel/` → `PROJECT_ROOT = ./webnovel-project`
+- All subsequent paths are relative to PROJECT_ROOT
+
+### 2. Output Environment Confirmation
+
+```
+📍 项目目录: {PROJECT_ROOT}
+📖 规划卷号: 第{volume_id}卷
+✅ 环境检查通过，开始执行规划...
+```
 
 ---
 

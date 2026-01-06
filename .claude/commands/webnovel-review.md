@@ -31,6 +31,59 @@ description: 对指定范围的章节进行质量审查，强制调用 5 个专�
 
 ---
 
+## Step -2: Load Knowledge Base (MANDATORY - FIRST)
+
+**YOU MUST read the skill knowledge base before any other action**:
+
+```
+Read .claude/skills/webnovel-writer/SKILL.md
+```
+
+**Purpose**: Load the knowledge index to understand quality standards and checker protocols.
+
+---
+
+## Step -1: Environment Setup (MANDATORY - BEFORE CHECKERS)
+
+### 1. Locate Project Directory
+
+**YOU MUST find the `.webnovel/` directory first**:
+
+```
+Search order:
+1. Current working directory: ./.webnovel/
+2. webnovel-project subdirectory: ./webnovel-project/.webnovel/
+3. Parent directory: ../.webnovel/
+```
+
+**Set PROJECT_ROOT** to the directory containing `.webnovel/`:
+- If found at `./webnovel-project/.webnovel/` → `PROJECT_ROOT = ./webnovel-project`
+- All subsequent paths are relative to PROJECT_ROOT
+
+### 2. Validate Chapter Files Exist
+
+**YOU MUST verify** chapter files exist before proceeding:
+
+```bash
+# Check if 正文 directory exists under PROJECT_ROOT
+ls {PROJECT_ROOT}/正文/第1卷/
+```
+
+**IF no chapter files found**:
+- STOP immediately
+- Inform user: "No chapter files found. Please run /webnovel-write first."
+
+### 3. Output Environment Confirmation
+
+```
+📍 项目目录: {PROJECT_ROOT}
+📖 审查范围: 第{start}-{end}章
+📂 正文目录: {PROJECT_ROOT}/正文/第X卷/
+✅ 环境检查通过，开始执行审查...
+```
+
+---
+
 ## Invocation (MANDATORY)
 
 **YOU MUST use the Task tool** to call all 5 checker subagents (can be parallel).

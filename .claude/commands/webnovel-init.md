@@ -31,6 +31,18 @@ description: 初始化网文项目，强制生成设定集、大纲框架和 sta
 
 ---
 
+## Step -2: Load Knowledge Base (MANDATORY - FIRST)
+
+**YOU MUST read the skill knowledge base before any other action**:
+
+```
+Read .claude/skills/webnovel-writer/SKILL.md
+```
+
+**Purpose**: Load the knowledge index to understand which references to read for each phase.
+
+---
+
 ## Phase 0: Detect Existing Project & Choose Mode (MANDATORY)
 
 ### Step 0.1: Check Existing Project
@@ -147,7 +159,7 @@ fi
 
 ## Phase 2: Golden Finger & Core Selling Points (标准模式 + 深度模式)
 
-> **Reference**: `templates/golden-finger-templates.md`, `references/creativity/selling-points.md`
+> **Reference**: `.claude/skills/webnovel-writer/assets/templates/golden-finger-templates.md`, `.claude/skills/webnovel-writer/references/creativity/selling-points.md`
 
 ### Step 2.1: Golden Finger Type Selection
 
@@ -255,7 +267,7 @@ fi
 
 ## Phase 3: Creative Deep Dive (仅深度模式)
 
-> **Reference**: `references/creativity/` 全部4个文档
+> **Reference**: `.claude/skills/webnovel-writer/references/creativity/` 全部4个文档
 
 ### Step 3.1: Inspiration Assessment (灵感评估)
 
@@ -572,13 +584,13 @@ cat 设定集/主角卡.md       # 补充主角细节
 {根据题材动态列出}
 
 **题材专项**:
-- `references/genres/{题材}/` - 题材专项指南
+- `.claude/skills/webnovel-writer/references/genres/{题材}/` - 题材专项指南
 
 **金手指设计**:
-- `templates/golden-finger-templates.md` - 金手指模板库
+- `.claude/skills/webnovel-writer/assets/templates/golden-finger-templates.md` - 金手指模板库
 
 **角色设计**:
-- `references/worldbuilding/character-design.md` - 人物设计指南
+- `.claude/skills/webnovel-writer/references/worldbuilding/character-design.md` - 人物设计指南
 
 ---
 

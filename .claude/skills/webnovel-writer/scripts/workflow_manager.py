@@ -242,8 +242,48 @@ def analyze_recovery_options(interrupt_info):
 
         return options
 
-    elif step_id in ['Step 3', 'Step 6']:
-        # Step 3/6中断：脚本未执行完
+    elif step_id == 'Step 2.5':
+        # Step 2.5中断：润色中（正文已生成，可能部分改写）
+        project_root = find_project_root()
+        existing_chapter = find_chapter_file(project_root, chapter_num)
+        draft_path = None
+        if existing_chapter:
+            chapter_path = str(existing_chapter.relative_to(project_root))
+        else:
+            draft_path = default_chapter_draft_path(project_root, chapter_num)
+            chapter_path = str(draft_path.relative_to(project_root))
+
+        options = [{
+            'option': 'A',
+            'label': '基于现有文件继续润色',
+            'risk': 'low',
+            'description': f"继续润色 {chapter_path}，完成后进入Step 3",
+            'actions': [
+                f"打开并继续润色 {chapter_path}",
+                "保存文件",
+                "继续Step 3（Extract Entities）"
+            ]
+        }]
+
+        candidate = existing_chapter or draft_path
+        if candidate and candidate.exists():
+            options.append({
+                'option': 'B',
+                'label': '删除润色稿，从Step 2重写',
+                'risk': 'medium',
+                'description': f"删除 {chapter_path}，重新生成章节内容",
+                'actions': [
+                    f"删除 {chapter_path}",
+                    "清理 Git 暂存区",
+                    "清理中断状态",
+                    f"执行 /{command} {chapter_num}"
+                ]
+            })
+
+        return options
+
+    elif step_id in ['Step 3', 'Step 5']:
+        # Step 3/5中断：脚本未执行完
         return [{
             'option': 'A',
             'label': f'从{step_id}重新开始',
@@ -284,8 +324,8 @@ def analyze_recovery_options(interrupt_info):
             }
         ]
 
-    elif step_id == 'Step 5':
-        # Step 5中断：Git未提交
+    elif step_id == 'Step 7':
+        # Step 7中断：Git未提交
         return [
             {
                 'option': 'A',
@@ -295,7 +335,7 @@ def analyze_recovery_options(interrupt_info):
                 'actions': [
                     "检查 Git 暂存区",
                     "重新执行 backup_manager.py",
-                    "继续Step 6"
+                    "继续完成工作流追踪（complete-task）"
                 ]
             },
             {
@@ -311,8 +351,8 @@ def analyze_recovery_options(interrupt_info):
             }
         ]
 
-    elif step_id == 'Step 7':
-        # Step 7中断：审查未完成
+    elif step_id == 'Step 6':
+        # Step 6中断：审查未完成
         return [
             {
                 'option': 'A',
@@ -414,7 +454,7 @@ def save_state(state):
 def get_pending_steps(command):
     """获取待执行步骤列表"""
     if command == 'webnovel-write':
-        return ['Step 1', 'Step 2', 'Step 3', 'Step 4', 'Step 5', 'Step 6', 'Step 7']
+        return ['Step 1', 'Step 2', 'Step 2.5', 'Step 3', 'Step 4', 'Step 5', 'Step 6', 'Step 7']
     elif command == 'webnovel-review':
         return ['Step 1', 'Step 2', 'Step 3', 'Step 4', 'Step 5', 'Step 6', 'Step 7', 'Step 8']
     # 其他命令...

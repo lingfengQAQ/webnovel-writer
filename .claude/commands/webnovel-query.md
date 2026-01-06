@@ -8,7 +8,7 @@ description: 快速查询设定集中的信息（角色/实力/势力/物品/伏
 
 > **System Prompt**: You are the **Archivist AI** of the Webnovel Studio. Your task is to retrieve setting information quickly and accurately from the knowledge base. You have access to specialized query types including **foreshadowing urgency analysis** and **golden finger status tracking**.
 
-> **Reference**: `references/cool-points-guide.md` (伏笔管理三层级), `templates/golden-finger-templates.md` (金手指模板)
+> **Reference**: `.claude/skills/webnovel-writer/references/cool-points-guide.md` (伏笔管理三层级), `.claude/skills/webnovel-writer/assets/templates/golden-finger-templates.md` (金手指模板)
 
 ## CRITICAL WARNING ⚠️
 
@@ -33,6 +33,45 @@ description: 快速查询设定集中的信息（角色/实力/势力/物品/伏
 ## Arguments
 
 - `keyword`: Search keyword (e.g., "主角", "筑基期", "血煞门", "未回收伏笔"). If not provided, ask the user.
+
+---
+
+## Step -2: Load Knowledge Base (MANDATORY - FIRST)
+
+**YOU MUST read the skill knowledge base before any other action**:
+
+```
+Read .claude/skills/webnovel-writer/SKILL.md
+```
+
+**Purpose**: Load the knowledge index to understand query protocols and data sources.
+
+---
+
+## Step -1: Environment Setup (MANDATORY - BEFORE QUERY)
+
+### 1. Locate Project Directory
+
+**YOU MUST find the `.webnovel/` directory first**:
+
+```
+Search order:
+1. Current working directory: ./.webnovel/
+2. webnovel-project subdirectory: ./webnovel-project/.webnovel/
+3. Parent directory: ../.webnovel/
+```
+
+**Set PROJECT_ROOT** to the directory containing `.webnovel/`:
+- If found at `./webnovel-project/.webnovel/` → `PROJECT_ROOT = ./webnovel-project`
+- All subsequent paths are relative to PROJECT_ROOT
+
+### 2. Output Environment Confirmation
+
+```
+📍 项目目录: {PROJECT_ROOT}
+🔍 查询关键词: {keyword}
+✅ 环境检查通过，开始执行查询...
+```
 
 ---
 
@@ -242,7 +281,7 @@ grep -r -i -n -A 5 "{keyword}" 大纲/
 
 **Keyword**: "未回收伏笔", "待回收", "挖坑", "伏笔", "紧急伏笔", "伏笔分析"
 
-> **Reference**: `references/cool-points-guide.md` → 伏笔管理三层级（核心/支线/装饰）
+> **Reference**: `.claude/skills/webnovel-writer/references/cool-points-guide.md` → 伏笔管理三层级（核心/支线/装饰）
 
 **快速分析命令**（推荐）:
 ```bash
@@ -412,7 +451,7 @@ python .claude/skills/webnovel-writer/scripts/status_reporter.py --focus urgency
 
 **Keyword**: "金手指", "系统", "外挂", "cheat", "golden finger"
 
-> **Reference**: `templates/golden-finger-templates.md` (金手指模板)
+> **Reference**: `.claude/skills/webnovel-writer/assets/templates/golden-finger-templates.md` (金手指模板)
 
 **Purpose**: 完整追踪主角金手指的当前状态、技能解锁进度、冷却时间和未来发展方向。
 
@@ -516,7 +555,7 @@ python .claude/skills/webnovel-writer/scripts/status_reporter.py --focus urgency
 
 **Keyword**: "节奏", "Strand", "Quest", "Fire", "Constellation", "节奏分析"
 
-> **Reference**: `references/strand-weave-pattern.md`
+> **Reference**: `.claude/skills/webnovel-writer/references/strand-weave-pattern.md`
 
 **Purpose**: 分析最近章节的三线分布，检查是否存在节奏问题。
 

@@ -19,7 +19,46 @@ description: 恢复中断的网文创作任务，基于精确的workflow状态�
 - Skipping workflow-resume.md → Wrong recovery strategy → Data loss
 - Skipping detection → Guessing interruption point → Incorrect cleanup
 - Auto-recovery without asking → User loses control → Unwanted changes
-- Different steps have different recovery difficulty (Step 2 ⭐⭐ vs Step 7 ⭐⭐⭐⭐⭐)
+- Different steps have different recovery difficulty (Step 2 ⭐⭐ vs Step 6 ⭐⭐⭐⭐⭐)
+
+---
+
+## Step -2: Load Knowledge Base (MANDATORY - FIRST)
+
+**YOU MUST read the skill knowledge base before any other action**:
+
+```
+Read .claude/skills/webnovel-writer/SKILL.md
+```
+
+**Purpose**: Load the knowledge index to understand recovery protocols.
+
+---
+
+## Step -1: Environment Setup (MANDATORY - BEFORE RECOVERY)
+
+### 1. Locate Project Directory
+
+**YOU MUST find the `.webnovel/` directory first**:
+
+```
+Search order:
+1. Current working directory: ./.webnovel/
+2. webnovel-project subdirectory: ./webnovel-project/.webnovel/
+3. Parent directory: ../.webnovel/
+```
+
+**Set PROJECT_ROOT** to the directory containing `.webnovel/`:
+- If found at `./webnovel-project/.webnovel/` → `PROJECT_ROOT = ./webnovel-project`
+- All subsequent paths are relative to PROJECT_ROOT
+
+### 2. Output Environment Confirmation
+
+```
+📍 项目目录: {PROJECT_ROOT}
+🔄 恢复模式: 检测中断任务...
+✅ 环境检查通过，开始执行恢复...
+```
 
 ---
 
@@ -344,20 +383,20 @@ Ch7的所有进度已丢弃
 
 ## 特殊场景处理
 
-### 场景 1：Step 7 中断（成本极高）⚠️
+### 场景 1：Step 6 中断（成本极高）⚠️
 
 **检测输出示例**：
 ```json
 {
   "current_step": {
-    "id": "Step 7",
-    "name": "Bi-chapter Review"
+    "id": "Step 6",
+    "name": "Bi-Chapter Review"
   },
-  "completed_steps": ["Step 1", "Step 2", "Step 3", "Step 4", "Step 5", "Step 6"],
+  "completed_steps": ["Step 1", "Step 2", "Step 2.5", "Step 3", "Step 4", "Step 5"],
   "artifacts": {
     "chapter_file": {"exists": true, "status": "complete"},
-    "git_committed": true,
-    "git_tag": "ch0007"
+    "strand_tracker_updated": true,
+    "git_committed": false
   }
 }
 ```
@@ -377,9 +416,10 @@ B) 跳过审查，继续下一章
    风险：低
    不进行审查（可后续用 /webnovel-review 补审）
    操作步骤：
-   - 标记审查为已跳过
-   - 清理中断状态
-   - 可继续创作Ch8
+    - 跳过审查（不生成报告）
+    - 执行 Step 7: Git Backup（backup_manager.py）
+    - 执行 workflow_manager.py complete-task
+    - 可继续创作Ch8
 
 💡 建议：如非关键章节，选择B节省成本
 
