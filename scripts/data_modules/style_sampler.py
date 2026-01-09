@@ -16,6 +16,7 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from enum import Enum
+from contextlib import contextmanager
 
 from .config import get_config
 
@@ -53,9 +54,7 @@ class StyleSampler:
     def _init_db(self):
         """初始化数据库"""
         self.config.ensure_dirs()
-        db_path = self.config.webnovel_dir / "style_samples.db"
-
-        with sqlite3.connect(str(db_path)) as conn:
+        with self._get_conn() as conn:
             cursor = conn.cursor()
 
             cursor.execute("""
@@ -75,9 +74,15 @@ class StyleSampler:
 
             conn.commit()
 
+    @contextmanager
     def _get_conn(self):
+        """获取数据库连接（确保关闭，避免 Windows 下文件句柄泄漏导致无法清理临时目录）"""
         db_path = self.config.webnovel_dir / "style_samples.db"
-        return sqlite3.connect(str(db_path))
+        conn = sqlite3.connect(str(db_path))
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     # ==================== 样本管理 ====================
 

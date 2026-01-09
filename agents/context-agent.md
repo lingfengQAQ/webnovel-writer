@@ -66,6 +66,14 @@ tools: Read, Grep, Bash
     "related_scenes": [
       {"chapter": 45, "scene": 2, "summary": "相关场景摘要", "relevance": 0.85}
     ]
+  },
+  "alerts": {
+    "disambiguation_warnings": [
+      {"chapter": 99, "mention": "宗主", "chosen_id": "lintian", "confidence": 0.63, "note": "中置信度匹配"}
+    ],
+    "disambiguation_pending": [
+      {"chapter": 99, "mention": "那位前辈", "suggested_id": "yaolao", "confidence": 0.42}
+    ]
   }
 }
 ```
@@ -98,9 +106,11 @@ Read: .webnovel/state.json
 
 **提取**:
 - `progress.current_chapter` (进度)
-- `entities` 中主角实体的属性 (境界/位置/物品)
+- `entities_v3.角色` 中主角实体的属性 (境界/位置/物品)
 - `relationships` (重要关系)
 - `state_changes` 最近变化记录
+- `disambiguation_warnings` 最近消歧警告（0.5-0.8 采用但提示风险）
+- `disambiguation_pending` 待确认消歧（<0.5 不自动采用，需人工确认）
 
 ### Step 3: 查询相关实体
 

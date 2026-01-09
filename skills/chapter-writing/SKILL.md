@@ -36,9 +36,9 @@ allowed-tools: Read Write Edit Grep Bash Task
 
 **Agent 自动完成**:
 1. 读取本章大纲，分析需要什么信息
-2. 读取 state.json 获取主角状态
-3. 调用 structured_index.py 查询相关实体
-4. 调用 novel_rag_v2 语义检索
+2. 读取 state.json 获取主角状态（使用 entities_v3 格式）
+3. 调用 data_modules.index_manager 查询相关实体
+4. 调用 data_modules.rag_adapter 语义检索
 5. Grep 设定集搜索相关设定
 6. 评估伏笔紧急度
 7. 选择风格样本
@@ -49,6 +49,7 @@ allowed-tools: Read Write Edit Grep Bash Task
 - `scene`: 地点上下文、出场角色、紧急伏笔
 - `global`: 世界观骨架、力量体系、风格样本
 - `rag`: 语义检索召回的相关场景
+- `alerts`: 关键风险提示（如消歧警告/待确认项）
 
 **失败处理**：
 - 如果大纲不存在 → 提示用户先创建大纲
@@ -213,7 +214,7 @@ cat "${CLAUDE_PLUGIN_ROOT}/skills/chapter-writing/references/polish-guide.md"
    - 生成场景摘要
 
 5. **向量嵌入**
-   - 调用 novel_rag_v2 存入向量库
+   - 调用 data_modules.rag_adapter 存入向量库
 
 6. **风格样本评估**
    - 如果 review_score > 80，提取高质量片段作为样本候选
@@ -221,11 +222,10 @@ cat "${CLAUDE_PLUGIN_ROOT}/skills/chapter-writing/references/polish-guide.md"
 **输出**:
 ```json
 {
-  "entities_extracted": 5,
+  "entities_appeared": 5,
   "entities_new": 1,
   "state_changes": 2,
   "scenes_chunked": 4,
-  "vectors_stored": true,
   "uncertain": [...],
   "warnings": [...]
 }

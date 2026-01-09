@@ -72,6 +72,13 @@ class DataModulesConfig:
     rerank_top_n: int = 10
     rrf_k: int = 60
 
+    # 向量检索性能开关
+    # - 向量数量较少时（<= full_scan_max_vectors）可全表扫描，召回更稳
+    # - 规模变大后默认走预筛选（BM25 + 最近片段），避免 O(n) 扫描拖慢 Context Agent
+    vector_full_scan_max_vectors: int = 500
+    vector_prefilter_bm25_candidates: int = 200
+    vector_prefilter_recent_candidates: int = 200
+
     # ================= 实体提取配置 =================
     extraction_confidence_high: float = 0.8
     extraction_confidence_medium: float = 0.5

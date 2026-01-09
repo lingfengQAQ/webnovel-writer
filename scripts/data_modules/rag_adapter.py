@@ -19,6 +19,8 @@ from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 from collections import Counter
 import re
+from contextlib import contextmanager
+import itertools
 
 from .config import get_config
 from .api_client import get_client
@@ -86,9 +88,85 @@ class RAGAdapter:
 
             conn.commit()
 
+    @contextmanager
     def _get_conn(self):
-        """获取数据库连接"""
-        return sqlite3.connect(str(self.config.vector_db))
+        """获取数据库连接（确保关闭，避免 Windows 下文件句柄泄漏）"""
+        conn = sqlite3.connect(str(self.config.vector_db))
+        try:
+            yield conn
+        finally:
+            conn.close()
+
+    def _get_vectors_count(self) -> int:
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM vectors")
+            row = cursor.fetchone()
+            return int(row[0] or 0) if row else 0
+
+    def _get_recent_chunk_ids(self, limit: int) -> List[str]:
+        if limit <= 0:
+            return []
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT chunk_id FROM vectors ORDER BY chapter DESC, scene_index DESC LIMIT ?",
+                (int(limit),),
+            )
+            return [str(r[0]) for r in cursor.fetchall() if r and r[0]]
+
+    def _fetch_vectors_by_chunk_ids(self, chunk_ids: List[str]) -> List[Tuple]:
+        if not chunk_ids:
+            return []
+
+        # SQLite 参数数量限制（默认 999），这里做分片查询
+        def _chunks(xs: List[str], size: int = 500):
+            it = iter(xs)
+            while True:
+                batch = list(itertools.islice(it, size))
+                if not batch:
+                    break
+                yield batch
+
+        rows: List[Tuple] = []
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            for batch in _chunks(chunk_ids):
+                placeholders = ",".join(["?"] * len(batch))
+                cursor.execute(
+                    f"SELECT chunk_id, chapter, scene_index, content, embedding FROM vectors WHERE chunk_id IN ({placeholders})",
+                    tuple(batch),
+                )
+                rows.extend(cursor.fetchall())
+        return rows
+
+    def _vector_search_rows(
+        self,
+        query_embedding: List[float],
+        rows: List[Tuple],
+        *,
+        top_k: int,
+    ) -> List[SearchResult]:
+        results: List[SearchResult] = []
+        for row in rows:
+            chunk_id, chapter, scene_index, content, embedding_bytes = row
+            if not embedding_bytes:
+                continue
+            embedding = self._deserialize_embedding(embedding_bytes)
+            score = self._cosine_similarity(query_embedding, embedding)
+            results.append(
+                SearchResult(
+                    chunk_id=chunk_id,
+                    chapter=chapter,
+                    scene_index=scene_index,
+                    content=content,
+                    score=score,
+                    source="vector",
+                )
+            )
+
+        results.sort(key=lambda x: x.score, reverse=True)
+        return results[:top_k]
 
     # ==================== 向量存储 ====================
 
@@ -352,11 +430,56 @@ class RAGAdapter:
         bm25_top_k = bm25_top_k or self.config.bm25_top_k
         rerank_top_n = rerank_top_n or self.config.rerank_top_n
 
-        # 并行执行向量和 BM25 检索
-        vector_results, bm25_results = await asyncio.gather(
-            self.vector_search(query, vector_top_k),
-            asyncio.to_thread(self.bm25_search, query, bm25_top_k)
-        )
+        # 小规模：全表向量扫描（召回更稳）；大规模：预筛选避免 O(n) 扫描拖慢
+        vectors_count = await asyncio.to_thread(self._get_vectors_count)
+        use_full_scan = vectors_count <= int(self.config.vector_full_scan_max_vectors)
+
+        if use_full_scan:
+            # 并行执行向量和 BM25 检索
+            vector_results, bm25_results = await asyncio.gather(
+                self.vector_search(query, vector_top_k),
+                asyncio.to_thread(self.bm25_search, query, bm25_top_k)
+            )
+        else:
+            bm25_candidates = max(
+                int(self.config.vector_prefilter_bm25_candidates),
+                int(bm25_top_k),
+                int(vector_top_k) * 5,
+                int(rerank_top_n) * 10,
+            )
+            recent_candidates = max(
+                int(self.config.vector_prefilter_recent_candidates),
+                int(vector_top_k) * 5,
+                int(rerank_top_n) * 10,
+            )
+
+            bm25_task = asyncio.to_thread(self.bm25_search, query, bm25_candidates)
+            recent_task = asyncio.to_thread(self._get_recent_chunk_ids, recent_candidates)
+            embed_task = self.api_client.embed([query])
+
+            bm25_candidates_results, recent_ids, query_embeddings = await asyncio.gather(
+                bm25_task,
+                recent_task,
+                embed_task,
+            )
+
+            if not query_embeddings:
+                return []
+            query_embedding = query_embeddings[0]
+
+            candidate_ids = {r.chunk_id for r in bm25_candidates_results}
+            candidate_ids.update(recent_ids)
+
+            rows = await asyncio.to_thread(self._fetch_vectors_by_chunk_ids, list(candidate_ids))
+            vector_results = await asyncio.to_thread(
+                self._vector_search_rows,
+                query_embedding,
+                rows,
+                top_k=int(vector_top_k),
+            )
+
+            # BM25 结果用于融合时只取 top_k
+            bm25_results = list(bm25_candidates_results)[: int(bm25_top_k)]
 
         # RRF 融合
         rrf_scores = {}

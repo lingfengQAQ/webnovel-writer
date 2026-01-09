@@ -13,8 +13,16 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
+import filelock
 
 from .config import get_config
+
+try:
+    # 常见：从 scripts/ 目录运行，security_utils 在 sys.path 顶层
+    from security_utils import atomic_write_json, read_json_safe
+except ImportError:  # pragma: no cover
+    # 兼容：从仓库根目录以 `python -m scripts...` 运行
+    from scripts.security_utils import atomic_write_json, read_json_safe
 
 
 @dataclass
@@ -29,43 +37,125 @@ class DisambiguationResult:
 
 
 class EntityLinker:
-    """实体链接器 - 辅助 Data Agent 进行实体消歧"""
+    """实体链接器 - 辅助 Data Agent 进行实体消歧 (v5.0 一对多别名)"""
 
     def __init__(self, config=None):
         self.config = config or get_config()
-        self._alias_index: Dict[str, str] = {}
+        # v5.0: alias_index 改为一对多格式 {alias: [{"type": ..., "id": ...}, ...]}
+        self._alias_index: Dict[str, List[Dict]] = {}
+        self._state_file = self.config.state_file
         self._load_alias_index()
 
     def _load_alias_index(self):
-        """加载别名索引"""
-        if self.config.alias_index_file.exists():
-            with open(self.config.alias_index_file, "r", encoding="utf-8") as f:
-                self._alias_index = json.load(f)
+        """从 state.json 加载 alias_index"""
+        if self._state_file.exists():
+            try:
+                with open(self._state_file, "r", encoding="utf-8") as f:
+                    state = json.load(f)
+                self._alias_index = state.get("alias_index", {})
+            except (json.JSONDecodeError, IOError):
+                self._alias_index = {}
+        else:
+            self._alias_index = {}
 
     def save_alias_index(self):
-        """保存别名索引"""
-        self.config.ensure_dirs()
-        with open(self.config.alias_index_file, "w", encoding="utf-8") as f:
-            json.dump(self._alias_index, f, ensure_ascii=False, indent=2)
+        """保存 alias_index 到 state.json（v5.0 内嵌格式，锁内合并 + 原子写入）"""
+        if not self._state_file.exists():
+            return
 
-    # ==================== 别名管理 ====================
+        lock_path = self._state_file.with_suffix(self._state_file.suffix + ".lock")
+        lock = filelock.FileLock(str(lock_path), timeout=10)
+        try:
+            with lock:
+                state = read_json_safe(self._state_file, default={})
 
-    def register_alias(self, entity_id: str, alias: str) -> bool:
-        """注册新别名"""
-        if alias in self._alias_index:
-            existing = self._alias_index[alias]
-            if existing != entity_id:
-                return False  # 别名冲突
-        self._alias_index[alias] = entity_id
+                disk_alias = state.get("alias_index", {})
+                if not isinstance(disk_alias, dict):
+                    disk_alias = {}
+
+                # 一对多：合并去重（避免覆盖其他进程刚写入的 state 字段/别名）
+                for alias, entries in (self._alias_index or {}).items():
+                    if not alias or not isinstance(entries, list):
+                        continue
+
+                    existing = disk_alias.get(alias)
+                    if not isinstance(existing, list):
+                        existing = []
+                        disk_alias[alias] = existing
+
+                    for entry in entries:
+                        if not isinstance(entry, dict):
+                            continue
+                        et = entry.get("type")
+                        eid = entry.get("id")
+                        if not et or not eid:
+                            continue
+                        if any(
+                            isinstance(e, dict) and e.get("type") == et and e.get("id") == eid
+                            for e in existing
+                        ):
+                            continue
+                        existing.append({"type": et, "id": eid})
+
+                state["alias_index"] = disk_alias
+
+                self.config.ensure_dirs()
+                atomic_write_json(self._state_file, state, use_lock=False, backup=True)
+
+                # 同步内存到磁盘最新快照
+                self._alias_index = disk_alias
+        except filelock.Timeout:
+            raise RuntimeError("无法获取 state.json 文件锁，请稍后重试")
+
+    # ==================== 别名管理 (v5.0 一对多) ====================
+
+    def register_alias(self, entity_id: str, alias: str, entity_type: str = "角色") -> bool:
+        """注册新别名（v5.0 一对多：同一别名可映射多个实体）"""
+        if not alias:
+            return False
+
+        if alias not in self._alias_index:
+            self._alias_index[alias] = []
+
+        # 检查是否已存在相同 (type, id) 组合
+        for entry in self._alias_index[alias]:
+            if entry.get("type") == entity_type and entry.get("id") == entity_id:
+                return True  # 已存在，视为成功
+
+        self._alias_index[alias].append({
+            "type": entity_type,
+            "id": entity_id
+        })
         return True
 
-    def lookup_alias(self, mention: str) -> Optional[str]:
-        """查找别名对应的实体ID"""
-        return self._alias_index.get(mention)
+    def lookup_alias(self, mention: str, entity_type: str = None) -> Optional[str]:
+        """查找别名对应的实体ID（返回第一个匹配，可选按类型过滤）"""
+        entries = self._alias_index.get(mention, [])
+        if not entries:
+            return None
 
-    def get_all_aliases(self, entity_id: str) -> List[str]:
+        if entity_type:
+            for entry in entries:
+                if entry.get("type") == entity_type:
+                    return entry.get("id")
+            return None
+        else:
+            return entries[0].get("id") if entries else None
+
+    def lookup_alias_all(self, mention: str) -> List[Dict]:
+        """查找别名对应的所有实体（一对多）"""
+        return self._alias_index.get(mention, [])
+
+    def get_all_aliases(self, entity_id: str, entity_type: str = None) -> List[str]:
         """获取实体的所有别名"""
-        return [alias for alias, eid in self._alias_index.items() if eid == entity_id]
+        aliases = []
+        for alias, entries in self._alias_index.items():
+            for entry in entries:
+                if entry.get("id") == entity_id:
+                    if entity_type is None or entry.get("type") == entity_type:
+                        aliases.append(alias)
+                        break
+        return aliases
 
     # ==================== 置信度判断 ====================
 
@@ -144,7 +234,7 @@ class EntityLinker:
         new_entities: List[Dict]
     ) -> List[str]:
         """
-        注册新实体的别名
+        注册新实体的别名 (v5.0)
 
         返回注册的实体ID列表
         """
@@ -155,15 +245,17 @@ class EntityLinker:
             if not entity_id or entity_id == "NEW":
                 continue
 
+            entity_type = entity.get("type", "角色")
+
             # 注册主名称
             name = entity.get("name", "")
             if name:
-                self.register_alias(entity_id, name)
+                self.register_alias(entity_id, name, entity_type)
 
             # 注册提及方式
             for mention in entity.get("mentions", []):
                 if mention and mention != name:
-                    self.register_alias(entity_id, mention)
+                    self.register_alias(entity_id, mention, entity_type)
 
             registered.append(entity_id)
 
@@ -175,7 +267,7 @@ class EntityLinker:
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description="Entity Linker CLI")
+    parser = argparse.ArgumentParser(description="Entity Linker CLI (v5.0 一对多别名)")
     parser.add_argument("--project-root", type=str, help="项目根目录")
 
     subparsers = parser.add_subparsers(dest="command")
@@ -184,14 +276,21 @@ def main():
     register_parser = subparsers.add_parser("register-alias")
     register_parser.add_argument("--entity", required=True, help="实体ID")
     register_parser.add_argument("--alias", required=True, help="别名")
+    register_parser.add_argument("--type", default="角色", help="实体类型（默认：角色）")
 
     # 查找别名
     lookup_parser = subparsers.add_parser("lookup")
     lookup_parser.add_argument("--mention", required=True, help="提及文本")
+    lookup_parser.add_argument("--type", help="按类型过滤")
+
+    # 查找所有匹配（一对多）
+    lookup_all_parser = subparsers.add_parser("lookup-all")
+    lookup_all_parser.add_argument("--mention", required=True, help="提及文本")
 
     # 列出别名
     list_parser = subparsers.add_parser("list-aliases")
     list_parser.add_argument("--entity", required=True, help="实体ID")
+    list_parser.add_argument("--type", help="实体类型")
 
     args = parser.parse_args()
 
@@ -204,23 +303,34 @@ def main():
     linker = EntityLinker(config)
 
     if args.command == "register-alias":
-        success = linker.register_alias(args.entity, args.alias)
+        entity_type = getattr(args, "type", "角色")
+        success = linker.register_alias(args.entity, args.alias, entity_type)
         if success:
             linker.save_alias_index()
-            print(f"✓ 已注册: {args.alias} → {args.entity}")
+            print(f"✓ 已注册: {args.alias} → {args.entity} (类型: {entity_type})")
         else:
-            existing = linker.lookup_alias(args.alias)
-            print(f"✗ 别名冲突: {args.alias} 已绑定到 {existing}")
+            print(f"✗ 注册失败")
 
     elif args.command == "lookup":
-        entity_id = linker.lookup_alias(args.mention)
+        entity_type = getattr(args, "type", None)
+        entity_id = linker.lookup_alias(args.mention, entity_type)
         if entity_id:
             print(f"{args.mention} → {entity_id}")
         else:
             print(f"未找到: {args.mention}")
 
+    elif args.command == "lookup-all":
+        entries = linker.lookup_alias_all(args.mention)
+        if entries:
+            print(f"{args.mention} 的所有匹配:")
+            for entry in entries:
+                print(f"  - {entry.get('id')} (类型: {entry.get('type')})")
+        else:
+            print(f"未找到: {args.mention}")
+
     elif args.command == "list-aliases":
-        aliases = linker.get_all_aliases(args.entity)
+        entity_type = getattr(args, "type", None)
+        aliases = linker.get_all_aliases(args.entity, entity_type)
         if aliases:
             print(f"{args.entity} 的别名:")
             for alias in aliases:
