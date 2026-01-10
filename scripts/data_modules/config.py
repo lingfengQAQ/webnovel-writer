@@ -46,11 +46,35 @@ class DataModulesConfig:
         return self.project_root / "大纲"
 
     # ================= Modal API Endpoints =================
+    # 注意：以下为默认 Modal 端点，可通过环境变量或显式传参覆盖
     llm_base_url: str = "https://lingfengqaq--qwen3-30b-vllm-serve.modal.run/v1"
     llm_model: str = "Qwen/Qwen3-30B-A3B-Instruct-2507"
 
-    embed_url: str = "https://lingfengqaq--qwen-embedding-server-qwenembedding-embeddings.modal.run"
-    rerank_url: str = "https://lingfengqaq--qwen-reranker-server-qwenreranker-rerank.modal.run"
+    # ================= Embedding API 配置 =================
+    # api_type: "openai" (通用 OpenAI 兼容接口) | "modal" (Modal 自定义接口)
+    embed_api_type: str = "openai"
+    embed_base_url: str = "https://lingfengqaq--qwen-embedding-server-qwenembedding-embeddings.modal.run"
+    embed_model: str = "qwen-embedding"
+    embed_api_key: str = ""  # OpenAI 兼容接口需要 API Key
+
+    # 保留旧字段兼容
+    @property
+    def embed_url(self) -> str:
+        """兼容旧代码：返回 embed_base_url"""
+        return self.embed_base_url
+
+    # ================= Rerank API 配置 =================
+    # api_type: "openai" (如 Jina/Cohere 兼容接口) | "modal" (Modal 自定义接口)
+    rerank_api_type: str = "modal"
+    rerank_base_url: str = "https://lingfengqaq--qwen-reranker-server-qwenreranker-rerank.modal.run"
+    rerank_model: str = "qwen-reranker"
+    rerank_api_key: str = ""  # Jina/Cohere 等需要 API Key
+
+    # 保留旧字段兼容
+    @property
+    def rerank_url(self) -> str:
+        """兼容旧代码：返回 rerank_base_url"""
+        return self.rerank_base_url
 
     # ================= 并发配置 =================
     llm_concurrency: int = 32
