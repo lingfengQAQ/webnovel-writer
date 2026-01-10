@@ -63,11 +63,31 @@ your-novel-project/
 │   └── templates/              # 题材模板
 ├── .webnovel/                  # 运行时数据
 │   ├── state.json              # 权威状态
-│   └── index.db                # 索引数据库
+│   ├── index.db                # 索引数据库
+│   └── vectors.db              # RAG 向量库
 ├── 正文/                       # 章节文件
 ├── 大纲/                       # 卷纲/章纲
 └── 设定集/                     # 世界观/角色/力量体系
 ```
+
+## RAG 系统
+
+混合检索系统，支持语义搜索历史场景：
+
+| 组件 | 提供商 | 模型 |
+|-----|-------|------|
+| Embedding | ModelScope | Qwen/Qwen3-Embedding-8B |
+| Rerank | Jina AI | jina-reranker-v3 |
+
+**配置环境变量**：
+```bash
+export EMBED_API_KEY="your-modelscope-token"
+export RERANK_API_KEY="your-jina-api-key"
+```
+
+**使用方式**：
+- Context Agent 自动调用 RAG 检索相关历史场景
+- Data Agent 自动将章节场景向量化存入数据库
 
 ## License
 

@@ -88,7 +88,8 @@ class EmbeddingAPIClient:
         if self.config.embed_api_type == "openai":
             return {
                 "input": texts,
-                "model": self.config.embed_model
+                "model": self.config.embed_model,
+                "encoding_format": "float"
             }
         else:
             # Modal 格式
@@ -135,7 +136,9 @@ class EmbeddingAPIClient:
                     timeout=aiohttp.ClientTimeout(total=timeout)
                 ) as resp:
                     if resp.status == 200:
-                        data = await resp.json()
+                        text = await resp.text()
+                        import json as json_module
+                        data = json_module.loads(text)
                         embeddings = self._parse_response(data)
 
                         if embeddings:
@@ -144,7 +147,8 @@ class EmbeddingAPIClient:
                             return embeddings
 
                     self.stats.errors += 1
-                    print(f"[ERR] Embed {resp.status}: {await resp.text()[:200]}")
+                    err_text = await resp.text()
+                    print(f"[ERR] Embed {resp.status}: {err_text[:200]}")
                     return None
 
             except Exception as e:
@@ -303,7 +307,8 @@ class RerankAPIClient:
                         return self._parse_response(data)
                     else:
                         self.stats.errors += 1
-                        print(f"[ERR] Rerank {resp.status}: {await resp.text()[:200]}")
+                        err_text = await resp.text()
+                        print(f"[ERR] Rerank {resp.status}: {err_text[:200]}")
                         return None
 
             except Exception as e:
