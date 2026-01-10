@@ -1,20 +1,25 @@
 ---
 name: metadata-extractor
-description: Extract structured metadata from webnovel chapter content for indexing. Works as second stage after extract_entities.py script, supplementing with semantic analysis.
+description: "⚠️ DEPRECATED in v5.0 - 功能已合并到 data-agent。保留此文件仅供参考。"
 tools: Read, Grep
+deprecated: true
+replaced_by: data-agent
 ---
 
-# Metadata Extractor Agent
+# Metadata Extractor Agent (已废弃)
 
-> **Purpose**: Extract structured metadata from webnovel chapter content for indexing.
+> **⚠️ 已废弃**: v5.0 起，此 Agent 的功能已完全合并到 `data-agent`。
 >
-> **Role**: Specialized agent for analyzing chapter Markdown content and extracting key metadata (location, characters, title, etc.) with high accuracy using semantic understanding.
+> **替代方案**: 使用 `data-agent`，它同时负责：
+> - AI 语义实体提取（替代 XML 标签解析）
+> - 章节标题/地点推断
+> - 场景切片和索引构建
 >
-> **Pipeline Position**: Second stage after `extract_entities.py` script. Receives script output and supplements with semantic analysis.
+> 以下内容保留仅供历史参考。
 
 ---
 
-## 🎯 Core Responsibility
+## 🎯 Core Responsibility (历史参考)
 
 Extract **structured metadata** from webnovel chapter content to populate the structured index database, enabling:
 - Fast location-based chapter queries (O(log n) performance)
