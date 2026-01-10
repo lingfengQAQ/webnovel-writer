@@ -378,7 +378,7 @@ class StateManager:
                         existing_keys.add(k)
 
                     # 只保留最近 N 条，避免文件无限增长
-                    max_keep = 500
+                    max_keep = self.config.max_disambiguation_warnings
                     if len(warnings_list) > max_keep:
                         disk_state["disambiguation_warnings"] = warnings_list[-max_keep:]
 
@@ -407,7 +407,7 @@ class StateManager:
                         pending_list.append(w)
                         existing_keys.add(k)
 
-                    max_keep = 1000
+                    max_keep = self.config.max_disambiguation_pending
                     if len(pending_list) > max_keep:
                         disk_state["disambiguation_pending"] = pending_list[-max_keep:]
 
@@ -880,10 +880,10 @@ class StateManager:
             "progress": self._state.get("progress", {}),
             "entities": entities_flat,
             "alias_index": self._state.get("alias_index", {}),
-            "recent_changes": self._state.get("state_changes", [])[-20:],
+            "recent_changes": self._state.get("state_changes", [])[-self.config.export_recent_changes_slice:],
             "disambiguation": {
-                "warnings": self._state.get("disambiguation_warnings", [])[-20:],
-                "pending": self._state.get("disambiguation_pending", [])[-20:],
+                "warnings": self._state.get("disambiguation_warnings", [])[-self.config.export_disambiguation_slice:],
+                "pending": self._state.get("disambiguation_pending", [])[-self.config.export_disambiguation_slice:],
             },
         }
 

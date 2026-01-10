@@ -89,6 +89,12 @@ from collections import defaultdict
 from project_locator import resolve_project_root
 from chapter_paths import extract_chapter_num_from_filename
 
+# 导入配置
+try:
+    from data_modules.config import get_config, DataModulesConfig
+except ImportError:
+    from scripts.data_modules.config import get_config, DataModulesConfig
+
 def _is_resolved_foreshadowing_status(raw_status: Any) -> bool:
     """判断伏笔是否已回收（兼容历史字段与同义词）。"""
     if raw_status is None:
@@ -118,6 +124,7 @@ class StatusReporter:
 
     def __init__(self, project_root: str):
         self.project_root = Path(project_root)
+        self.config = get_config(self.project_root)
         self.state_file = self.project_root / ".webnovel/state.json"
         self.chapters_dir = self.project_root / "正文"
 
@@ -235,7 +242,7 @@ class StatusReporter:
                 candidates = []
                 if protagonist_name:
                     candidates.append(protagonist_name)
-                candidates.extend(known_character_names[:800])
+                candidates.extend(known_character_names[:self.config.character_candidates_limit])
 
                 seen = set()
                 for name in candidates:
@@ -293,9 +300,9 @@ class StatusReporter:
         """判断掉线状态"""
         if absence == 0:
             return "✅ 活跃"
-        elif absence < 30:
+        elif absence < self.config.character_absence_warning:
             return "🟢 正常"
-        elif absence < 100:
+        elif absence < self.config.character_absence_critical:
             return "🟡 轻度掉线"
         else:
             return "🔴 严重掉线"
@@ -341,9 +348,9 @@ class StatusReporter:
 
     def _get_foreshadowing_status(self, elapsed: int) -> str:
         """判断伏笔超时状态"""
-        if elapsed < 50:
+        if elapsed < self.config.foreshadowing_urgency_pending_medium:
             return "🟢 正常"
-        elif elapsed < 150:
+        elif elapsed < self.config.foreshadowing_urgency_pending_high + 50:
             return "🟡 轻度超时"
         else:
             return "🔴 严重超时"
@@ -369,12 +376,12 @@ class StatusReporter:
 
         # 层级权重映射
         tier_weights = {
-            "核心": 3.0,
-            "core": 3.0,
-            "支线": 2.0,
-            "sub": 2.0,
-            "装饰": 1.0,
-            "decor": 1.0
+            "核心": self.config.foreshadowing_tier_weight_core,
+            "core": self.config.foreshadowing_tier_weight_core,
+            "支线": self.config.foreshadowing_tier_weight_sub,
+            "sub": self.config.foreshadowing_tier_weight_sub,
+            "装饰": self.config.foreshadowing_tier_weight_decor,
+            "decor": self.config.foreshadowing_tier_weight_decor
         }
 
         urgency_list = []
@@ -388,7 +395,7 @@ class StatusReporter:
             planted_chapter = item.get("planted_chapter", 1)
             target_chapter = item.get("target_chapter", planted_chapter + 100)
 
-            weight = tier_weights.get(tier.lower(), 2.0)
+            weight = tier_weights.get(tier.lower(), self.config.foreshadowing_tier_weight_sub)
             elapsed = current_chapter - planted_chapter
             remaining = target_chapter - current_chapter
 
@@ -417,7 +424,7 @@ class StatusReporter:
         """判断紧急度状态"""
         if remaining < 0:
             return "🔴 已超期"
-        elif urgency >= 2.0:
+        elif urgency >= self.config.foreshadowing_tier_weight_sub:
             return "🔴 紧急"
         elif urgency >= 1.0:
             return "🟡 警告"
@@ -484,8 +491,8 @@ class StatusReporter:
             else:
                 quest_streak = 0
 
-        if max_quest_streak > 5:
-            violations.append(f"Quest 线连续 {max_quest_streak} 章（超过 5 章限制）")
+        if max_quest_streak > self.config.strand_quest_max_consecutive:
+            violations.append(f"Quest 线连续 {max_quest_streak} 章（超过 {self.config.strand_quest_max_consecutive} 章限制）")
 
         # 检查 Fire 缺失超过 10 章
         fire_gap = 0
@@ -499,8 +506,8 @@ class StatusReporter:
                 fire_gap += 1
         max_fire_gap = max(max_fire_gap, fire_gap)
 
-        if max_fire_gap > 10:
-            violations.append(f"Fire 线缺失 {max_fire_gap} 章（超过 10 章限制）")
+        if max_fire_gap > self.config.strand_fire_max_gap:
+            violations.append(f"Fire 线缺失 {max_fire_gap} 章（超过 {self.config.strand_fire_max_gap} 章限制）")
 
         # 检查 Constellation 缺失超过 15 章
         const_gap = 0
@@ -514,24 +521,25 @@ class StatusReporter:
                 const_gap += 1
         max_const_gap = max(max_const_gap, const_gap)
 
-        if max_const_gap > 15:
-            violations.append(f"Constellation 线缺失 {max_const_gap} 章（超过 15 章限制）")
+        if max_const_gap > self.config.strand_constellation_max_gap:
+            violations.append(f"Constellation 线缺失 {max_const_gap} 章（超过 {self.config.strand_constellation_max_gap} 章限制）")
 
         # 检查占比是否在合理范围
-        if quest_ratio < 55:
-            violations.append(f"Quest 占比 {quest_ratio:.1f}% 偏低（目标 55-65%）")
-        elif quest_ratio > 65:
-            violations.append(f"Quest 占比 {quest_ratio:.1f}% 偏高（目标 55-65%）")
+        cfg = self.config
+        if quest_ratio < cfg.strand_quest_ratio_min:
+            violations.append(f"Quest 占比 {quest_ratio:.1f}% 偏低（目标 {cfg.strand_quest_ratio_min}-{cfg.strand_quest_ratio_max}%）")
+        elif quest_ratio > cfg.strand_quest_ratio_max:
+            violations.append(f"Quest 占比 {quest_ratio:.1f}% 偏高（目标 {cfg.strand_quest_ratio_min}-{cfg.strand_quest_ratio_max}%）")
 
-        if fire_ratio < 20:
-            violations.append(f"Fire 占比 {fire_ratio:.1f}% 偏低（目标 20-30%）")
-        elif fire_ratio > 30:
-            violations.append(f"Fire 占比 {fire_ratio:.1f}% 偏高（目标 20-30%）")
+        if fire_ratio < cfg.strand_fire_ratio_min:
+            violations.append(f"Fire 占比 {fire_ratio:.1f}% 偏低（目标 {cfg.strand_fire_ratio_min}-{cfg.strand_fire_ratio_max}%）")
+        elif fire_ratio > cfg.strand_fire_ratio_max:
+            violations.append(f"Fire 占比 {fire_ratio:.1f}% 偏高（目标 {cfg.strand_fire_ratio_min}-{cfg.strand_fire_ratio_max}%）")
 
-        if constellation_ratio < 10:
-            violations.append(f"Constellation 占比 {constellation_ratio:.1f}% 偏低（目标 10-20%）")
-        elif constellation_ratio > 20:
-            violations.append(f"Constellation 占比 {constellation_ratio:.1f}% 偏高（目标 10-20%）")
+        if constellation_ratio < cfg.strand_constellation_ratio_min:
+            violations.append(f"Constellation 占比 {constellation_ratio:.1f}% 偏低（目标 {cfg.strand_constellation_ratio_min}-{cfg.strand_constellation_ratio_max}%）")
+        elif constellation_ratio > cfg.strand_constellation_ratio_max:
+            violations.append(f"Constellation 占比 {constellation_ratio:.1f}% 偏高（目标 {cfg.strand_constellation_ratio_min}-{cfg.strand_constellation_ratio_max}%）")
 
         return {
             "has_data": True,
@@ -547,8 +555,8 @@ class StatusReporter:
         }
 
     def analyze_pacing(self) -> List[Dict]:
-        """分析爽点节奏分布（每 100 章为一段）"""
-        segment_size = 100
+        """分析爽点节奏分布（每 N 章为一段）"""
+        segment_size = self.config.pacing_segment_size
         segments = []
 
         for i in range(0, len(self.chapters_data), segment_size):
@@ -580,11 +588,11 @@ class StatusReporter:
 
     def _get_pacing_rating(self, words_per_point: float) -> str:
         """判断节奏评级"""
-        if words_per_point < 1000:
+        if words_per_point < self.config.pacing_words_per_point_excellent:
             return "优秀"
-        elif words_per_point < 1500:
+        elif words_per_point < self.config.pacing_words_per_point_good:
             return "良好"
-        elif words_per_point < 2000:
+        elif words_per_point < self.config.pacing_words_per_point_acceptable:
             return "及格"
         else:
             return "偏低⚠️"
@@ -818,6 +826,7 @@ class StatusReporter:
             return lines
 
         # 占比统计
+        cfg = self.config
         lines.extend([
             "### 三线占比",
             "",
@@ -826,16 +835,16 @@ class StatusReporter:
         ])
 
         q = strand_data["quest"]
-        q_status = "✅" if 55 <= q["ratio"] <= 65 else "⚠️"
-        lines.append(f"| Quest（主线） | {q['count']} | {q['ratio']:.1f}% | 55-65% | {q_status} |")
+        q_status = "✅" if cfg.strand_quest_ratio_min <= q["ratio"] <= cfg.strand_quest_ratio_max else "⚠️"
+        lines.append(f"| Quest（主线） | {q['count']} | {q['ratio']:.1f}% | {cfg.strand_quest_ratio_min}-{cfg.strand_quest_ratio_max}% | {q_status} |")
 
         f = strand_data["fire"]
-        f_status = "✅" if 20 <= f["ratio"] <= 30 else "⚠️"
-        lines.append(f"| Fire（感情） | {f['count']} | {f['ratio']:.1f}% | 20-30% | {f_status} |")
+        f_status = "✅" if cfg.strand_fire_ratio_min <= f["ratio"] <= cfg.strand_fire_ratio_max else "⚠️"
+        lines.append(f"| Fire（感情） | {f['count']} | {f['ratio']:.1f}% | {cfg.strand_fire_ratio_min}-{cfg.strand_fire_ratio_max}% | {f_status} |")
 
         c = strand_data["constellation"]
-        c_status = "✅" if 10 <= c["ratio"] <= 20 else "⚠️"
-        lines.append(f"| Constellation（世界观） | {c['count']} | {c['ratio']:.1f}% | 10-20% | {c_status} |")
+        c_status = "✅" if cfg.strand_constellation_ratio_min <= c["ratio"] <= cfg.strand_constellation_ratio_max else "⚠️"
+        lines.append(f"| Constellation（世界观） | {c['count']} | {c['ratio']:.1f}% | {cfg.strand_constellation_ratio_min}-{cfg.strand_constellation_ratio_max}% | {c_status} |")
 
         lines.append("")
 

@@ -41,6 +41,12 @@ from typing import Optional, Dict, List, Any
 from project_locator import resolve_project_root
 from chapter_paths import find_chapter_file
 
+# 导入配置
+try:
+    from data_modules.config import get_config, DataModulesConfig
+except ImportError:
+    from scripts.data_modules.config import get_config, DataModulesConfig
+
 
 class ContextPackBuilder:
     """上下文包构建器"""
@@ -55,6 +61,7 @@ class ContextPackBuilder:
             project_root = Path(project_root)
 
         self.project_root = project_root
+        self.config = get_config(project_root)
         self.state_file = project_root / ".webnovel" / "state.json"
         self.index_db = project_root / ".webnovel" / "index.db"
         self.outline_dir = project_root / "大纲"
@@ -96,7 +103,9 @@ class ContextPackBuilder:
         return {
             "chapter_outline": self._get_chapter_outline(chapter_num),
             "protagonist_snapshot": self._get_protagonist_snapshot(state),
-            "recent_summaries": self._get_recent_summaries(chapter_num, window=5)
+            "recent_summaries": self._get_recent_summaries(
+                chapter_num, window=self.config.context_recent_summaries_window
+            )
         }
 
     def _build_scene(self, chapter_num: int) -> Dict[str, Any]:
@@ -124,9 +133,10 @@ class ContextPackBuilder:
 
     def _build_alerts(self, state: Dict) -> Dict[str, Any]:
         """风险提示：消歧警告、待确认项（v5.0）"""
+        slice_size = self.config.context_alerts_slice
         return {
-            "disambiguation_warnings": state.get("disambiguation_warnings", [])[-10:],
-            "disambiguation_pending": state.get("disambiguation_pending", [])[-10:]
+            "disambiguation_warnings": state.get("disambiguation_warnings", [])[-slice_size:],
+            "disambiguation_pending": state.get("disambiguation_pending", [])[-slice_size:]
         }
 
     # ================== 辅助方法 ==================
@@ -361,7 +371,7 @@ class ContextPackBuilder:
             )
 
         matched.sort(key=lambda x: tier_order.get(x.get("tier", ""), 3))
-        return matched[:10]
+        return matched[:self.config.context_max_appearing_characters]
 
     def _get_urgent_foreshadowing(self, state: Dict, chapter_num: int) -> List[Dict]:
         """获取紧急伏笔（优先使用 index.db 伏笔索引）"""
@@ -401,16 +411,18 @@ class ContextPackBuilder:
 
             chapters_pending = chapter_num - planted_chapter if planted_chapter else 0
 
-            if chapters_pending > 100:
-                urgency = 100
-            elif chapters_pending > 50:
-                urgency = 60
-            elif target_chapter and chapter_num >= target_chapter - 5:
-                urgency = 80
+            # 使用配置的紧急度阈值
+            cfg = self.config
+            if chapters_pending > cfg.foreshadowing_urgency_pending_high:
+                urgency = cfg.foreshadowing_urgency_score_high
+            elif chapters_pending > cfg.foreshadowing_urgency_pending_medium:
+                urgency = cfg.foreshadowing_urgency_score_medium
+            elif target_chapter and chapter_num >= target_chapter - cfg.foreshadowing_urgency_target_proximity:
+                urgency = cfg.foreshadowing_urgency_score_target
             else:
-                urgency = 20
+                urgency = cfg.foreshadowing_urgency_score_low
 
-            if urgency >= 60:
+            if urgency >= cfg.foreshadowing_urgency_threshold_show:
                 urgent.append(
                     {
                         "content": fs.get("content") or fs.get("description") or "",
@@ -422,7 +434,7 @@ class ContextPackBuilder:
                 )
 
         urgent.sort(key=lambda x: x.get("urgency", 0), reverse=True)
-        return urgent[:5]
+        return urgent[:self.config.context_max_urgent_foreshadowing]
 
     def _load_skeleton(self, setting_type: str) -> str:
         """加载设定骨架"""

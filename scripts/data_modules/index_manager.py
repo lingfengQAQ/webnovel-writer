@@ -144,8 +144,10 @@ class IndexManager:
                 return self._row_to_dict(row, parse_json=["characters"])
             return None
 
-    def get_recent_chapters(self, limit: int = 10) -> List[Dict]:
+    def get_recent_chapters(self, limit: int = None) -> List[Dict]:
         """获取最近章节"""
+        if limit is None:
+            limit = self.config.query_recent_chapters_limit
         with self._get_conn() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -194,8 +196,10 @@ class IndexManager:
             """, (chapter,))
             return [self._row_to_dict(row, parse_json=["characters"]) for row in cursor.fetchall()]
 
-    def search_scenes_by_location(self, location: str, limit: int = 20) -> List[Dict]:
+    def search_scenes_by_location(self, location: str, limit: int = None) -> List[Dict]:
         """按地点搜索场景"""
+        if limit is None:
+            limit = self.config.query_scenes_by_location_limit
         with self._get_conn() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -230,8 +234,10 @@ class IndexManager:
             ))
             conn.commit()
 
-    def get_entity_appearances(self, entity_id: str, limit: int = 50) -> List[Dict]:
+    def get_entity_appearances(self, entity_id: str, limit: int = None) -> List[Dict]:
         """获取实体出场记录"""
+        if limit is None:
+            limit = self.config.query_entity_appearances_limit
         with self._get_conn() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -242,8 +248,10 @@ class IndexManager:
             """, (entity_id, limit))
             return [self._row_to_dict(row, parse_json=["mentions"]) for row in cursor.fetchall()]
 
-    def get_recent_appearances(self, limit: int = 20) -> List[Dict]:
+    def get_recent_appearances(self, limit: int = None) -> List[Dict]:
         """获取最近出场的实体"""
+        if limit is None:
+            limit = self.config.query_recent_appearances_limit
         with self._get_conn() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -385,17 +393,17 @@ def main():
 
     # 查询最近出场
     recent_parser = subparsers.add_parser("recent-appearances")
-    recent_parser.add_argument("--limit", type=int, default=20)
+    recent_parser.add_argument("--limit", type=int, default=None)
 
     # 查询实体出场
     entity_parser = subparsers.add_parser("entity-appearances")
     entity_parser.add_argument("--entity", required=True)
-    entity_parser.add_argument("--limit", type=int, default=50)
+    entity_parser.add_argument("--limit", type=int, default=None)
 
     # 搜索场景
     search_parser = subparsers.add_parser("search-scenes")
     search_parser.add_argument("--location", required=True)
-    search_parser.add_argument("--limit", type=int, default=20)
+    search_parser.add_argument("--limit", type=int, default=None)
 
     # 处理章节数据 (写入)
     process_parser = subparsers.add_parser("process-chapter")
