@@ -483,6 +483,9 @@ class StateManager:
         sqlite_data = self._pending_sqlite_data
         chapter = sqlite_data.get("chapter")
 
+        # 记录已处理的 (entity_id, chapter) 组合，避免重复写入 appearances
+        processed_appearances = set()
+
         if chapter is not None:
             try:
                 self._sql_state_manager.process_chapter_entities(
@@ -492,20 +495,36 @@ class StateManager:
                     state_changes=sqlite_data.get("state_changes", []),
                     relationships_new=sqlite_data.get("relationships_new", [])
                 )
+                # 标记已处理的出场记录
+                for entity in sqlite_data.get("entities_appeared", []):
+                    if entity.get("id"):
+                        processed_appearances.add((entity.get("id"), chapter))
+                for entity in sqlite_data.get("entities_new", []):
+                    eid = entity.get("suggested_id") or entity.get("id")
+                    if eid:
+                        processed_appearances.add((eid, chapter))
             except Exception:
                 pass  # SQLite 同步失败时静默降级，不影响主流程
 
         # 方式2: 通过 add_entity/update_entity 等直接调用收集的数据
         # 这些数据存储在 _pending_entity_patches 等变量中
-        self._sync_pending_patches_to_sqlite()
+        self._sync_pending_patches_to_sqlite(processed_appearances)
 
         # 清空
         self._clear_pending_sqlite_data()
 
-    def _sync_pending_patches_to_sqlite(self):
-        """v5.1: 同步 _pending_entity_patches 等到 SQLite"""
+    def _sync_pending_patches_to_sqlite(self, processed_appearances: set = None):
+        """v5.1: 同步 _pending_entity_patches 等到 SQLite
+
+        Args:
+            processed_appearances: 已通过 process_chapter_entities 处理的 (entity_id, chapter) 集合，
+                                   用于避免重复写入 appearances 表（防止覆盖 mentions）
+        """
         if not self._sql_state_manager:
             return
+
+        if processed_appearances is None:
+            processed_appearances = set()
 
         # 元数据字段（不应写入 current_json）
         METADATA_FIELDS = {"canonical_name", "tier", "desc", "is_protagonist", "is_archived"}
@@ -532,14 +551,15 @@ class StateManager:
                     )
                     self._sql_state_manager.upsert_entity(entity_data)
 
-                    # 记录首次出场
+                    # 记录首次出场（跳过已处理的，避免覆盖 mentions）
                     if patch.appearance_chapter is not None:
-                        self._sql_state_manager._index_manager.record_appearance(
-                            entity_id=entity_id,
-                            chapter=patch.appearance_chapter,
-                            mentions=[entity_data.name],
-                            confidence=1.0
-                        )
+                        if (entity_id, patch.appearance_chapter) not in processed_appearances:
+                            self._sql_state_manager._index_manager.record_appearance(
+                                entity_id=entity_id,
+                                chapter=patch.appearance_chapter,
+                                mentions=[entity_data.name],
+                                confidence=1.0
+                            )
                 else:
                     # 更新现有实体
                     has_metadata_updates = bool(patch.top_updates and
@@ -557,10 +577,13 @@ class StateManager:
                             if patch.current_updates:
                                 current.update(patch.current_updates)
 
+                            new_canonical_name = patch.top_updates.get("canonical_name")
+                            old_canonical_name = existing.get("canonical_name", "")
+
                             entity_meta = EntityMeta(
                                 id=entity_id,
                                 type=existing.get("type", entity_type),
-                                canonical_name=patch.top_updates.get("canonical_name", existing.get("canonical_name", "")),
+                                canonical_name=new_canonical_name or old_canonical_name,
                                 tier=patch.top_updates.get("tier", existing.get("tier", "装饰")),
                                 desc=patch.top_updates.get("desc", existing.get("desc", "")),
                                 current=current,
@@ -570,20 +593,27 @@ class StateManager:
                                 is_archived=patch.top_updates.get("is_archived", existing.get("is_archived", False))
                             )
                             self._sql_state_manager._index_manager.upsert_entity(entity_meta, update_metadata=True)
+
+                            # 如果 canonical_name 改名，自动注册新名字为 alias
+                            if new_canonical_name and new_canonical_name != old_canonical_name:
+                                self._sql_state_manager.register_alias(
+                                    new_canonical_name, entity_id, existing.get("type", entity_type)
+                                )
                     elif patch.current_updates:
                         # 只有 current 更新
                         self._sql_state_manager.update_entity_current(entity_id, patch.current_updates)
 
-                    # 更新 last_appearance 并记录出场
+                    # 更新 last_appearance 并记录出场（跳过已处理的，避免覆盖 mentions）
                     if patch.appearance_chapter is not None:
                         self._sql_state_manager._update_last_appearance(entity_id, patch.appearance_chapter)
-                        # 补充 appearances 记录
-                        self._sql_state_manager._index_manager.record_appearance(
-                            entity_id=entity_id,
-                            chapter=patch.appearance_chapter,
-                            mentions=[],
-                            confidence=1.0
-                        )
+                        # 补充 appearances 记录（仅当未被 process_chapter_entities 处理时）
+                        if (entity_id, patch.appearance_chapter) not in processed_appearances:
+                            self._sql_state_manager._index_manager.record_appearance(
+                                entity_id=entity_id,
+                                chapter=patch.appearance_chapter,
+                                mentions=[],
+                                confidence=1.0
+                            )
 
             # 同步别名
             for alias, entries in self._pending_alias_entries.items():
