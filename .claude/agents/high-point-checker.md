@@ -22,15 +22,16 @@ Read all chapters in the specified range from `正文/` directory.
 
 ### Step 2: Identify Cool-Points (爽点)
 
-Scan for the **5 standard cool-point types**:
+Scan for the **6 standard execution modes** (执行模式):
 
-| Type | Pattern Keywords | Minimal Requirements |
+| Mode | Pattern Keywords | Minimal Requirements |
 |------|-----------------|---------------------|
-| **打脸型** (Face-slapping) | 嘲讽/废物/不屑 → 反转/震惊/目瞪口呆 | Setup + Reversal + Reaction |
-| **升级型** (Level-up) | 突破/境界/瓶颈/顿悟 → 实力暴涨 | Struggle + Breakthrough + Display |
-| **收获型** (Reward) | 奖励/宝物/认可/机缘 | Effort + Acquisition + Value |
-| **扮猪吃虎** (Underdog) | 示弱/隐藏实力 → 碾压 | Concealment + Underestimation + Domination |
-| **装逼打脸** (Counter-flexing) | 对手炫耀 → 主角展示更强 | Opponent Flex + Protagonist Counter + Shock |
+| **装逼打脸** (Flex & Counter) | 嘲讽/废物/不屑 → 反转/震惊/目瞪口呆 | Setup + Reversal + Reaction |
+| **扮猪吃虎** (Underdog Reveal) | 示弱/隐藏实力 → 碾压 | Concealment + Underestimation + Domination |
+| **越级反杀** (Underdog Victory) | 实力差距 → 以弱胜强 → 震撼 | Gap Display + Strategy/Power-up + Reversal |
+| **打脸权威** (Authority Challenge) | 权威/前辈/强者 → 主角挑战成功 | Authority Established + Challenge + Success |
+| **反派翻车** (Villain Downfall) | 反派得意/阴谋 → 计划失败/被反杀 | Villain Setup + Protagonist Counter + Downfall |
+| **甜蜜超预期** (Sweet Surprise) | 期待/心动 → 超预期表现 → 情感升华 | Anticipation + Exceeding Expectation + Emotion |
 
 ### Step 3: Density Check
 
@@ -51,18 +52,18 @@ Chapter X: [✓ 2 cool-points] or [✗ 0 cool-points - VIOLATION]
 **Example**:
 ```
 Chapters 1-2:
-- 打脸型: 3 (75%) ✓
-- 升级型: 1 (25%)
-Type diversity: Acceptable
+- 装逼打脸: 3 (75%) ✓
+- 越级反杀: 1 (25%)
+Mode diversity: Acceptable
 ```
 
 vs.
 
 ```
 Chapters 45-46:
-- 打脸型: 7 (87.5%) ✗ OVER-RELIANCE
-- 升级型: 1 (12.5%)
-Type diversity: Warning - Monotonous pacing
+- 装逼打脸: 7 (87.5%) ✗ OVER-RELIANCE
+- 扮猪吃虎: 1 (12.5%)
+Mode diversity: Warning - Monotonous pacing
 ```
 
 ### Step 5: Execution Quality Assessment
@@ -96,31 +97,32 @@ For each identified cool-point, check:
 Chapters {N} - {M}
 
 ## 密度检查 (Density)
-- Chapter {N}: ✓ 2 cool-points (打脸型 + 升级型)
+- Chapter {N}: ✓ 2 cool-points (装逼打脸 + 越级反杀)
 - Chapter {M}: ✗ 0 cool-points **[VIOLATION - 需要补充]**
 
 **Verdict**: {PASS/FAIL} ({X}/{Y} chapters meet baseline)
 
-## 类型分布 (Type Diversity)
-- 打脸型 (Face-slapping): {count} ({percent}%)
-- 升级型 (Level-up): {count} ({percent}%)
-- 收获型 (Reward): {count} ({percent}%)
-- 扮猪吃虎 (Underdog): {count} ({percent}%)
-- 装逼打脸 (Counter-flexing): {count} ({percent}%)
+## 类型分布 (Mode Diversity)
+- 装逼打脸 (Flex & Counter): {count} ({percent}%)
+- 扮猪吃虎 (Underdog Reveal): {count} ({percent}%)
+- 越级反杀 (Underdog Victory): {count} ({percent}%)
+- 打脸权威 (Authority Challenge): {count} ({percent}%)
+- 反派翻车 (Villain Downfall): {count} ({percent}%)
+- 甜蜜超预期 (Sweet Surprise): {count} ({percent}%)
 
 **Verdict**: {PASS/WARNING} (Monotony risk if one type > 80%)
 
 ## 质量评级 (Quality)
-| Chapter | Cool-Point | Type | Grade | 30/40/30 | 压扬比 | Issue (if any) |
+| Chapter | Cool-Point | Mode | Grade | 30/40/30 | 压扬比 | Issue (if any) |
 |---------|-----------|------|-------|---------|--------|----------------|
-| {N} | 主角被嘲讽后一招秒杀对手 | 打脸型 | A | ✓ | 压3扬7 | - |
-| {M} | 突然顿悟突破境界 | 升级型 | C | ✗ | 压1扬9 | 缺少铺垫（no prior struggle），压扬比失衡 |
+| {N} | 主角被嘲讽后一招秒杀对手 | 装逼打脸 | A | ✓ | 压3扬7 | - |
+| {M} | 突然顿悟突破境界 | 越级反杀 | C | ✗ | 压1扬9 | 缺少铺垫（no prior struggle），压扬比失衡 |
 
 **Verdict**: Average grade = {X}
 
 ## 建议 (Recommendations)
-- [If density violation] Chapter {M} 缺少爽点，建议添加{type}型爽点
-- [If monotony] 过度依赖{type}型，建议增加{other_types}
+- [If density violation] Chapter {M} 缺少爽点，建议添加{mode}型爽点
+- [If monotony] 过度依赖{mode}型，建议增加{other_modes}
 - [If quality issue] Chapter {M} 的爽点执行不足，需要补充{missing_element}
 - [If 30/40/30 violation] 爽点结构失衡，建议调整铺垫/兑现/微反转比例
 - [If pressure/relief violation] 压扬比例不符合{genre}类型，建议调整为{ratio}

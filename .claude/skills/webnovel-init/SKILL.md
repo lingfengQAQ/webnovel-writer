@@ -99,6 +99,12 @@ cat "${CLAUDE_PLUGIN_ROOT}/templates/golden-finger-templates.md"
 
 ## Step 6: 金手指设计（Standard + Deep）
 
+**加载核心设计参考**：
+```bash
+cat "${CLAUDE_PLUGIN_ROOT}/skills/webnovel-init/references/creativity/selling-points.md"
+cat "${CLAUDE_PLUGIN_ROOT}/skills/webnovel-init/references/worldbuilding/character-design.md"
+```
+
 **使用 AskUserQuestion 收集**：
 - 金手指类型（系统面板/签到/鉴定/吞噬）
 - 系统名称/代号
