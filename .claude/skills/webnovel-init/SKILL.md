@@ -88,6 +88,9 @@ ls .webnovel/state.json 2>/dev/null && echo "项目已存在"
 | 古言 | `cat "${CLAUDE_PLUGIN_ROOT}/templates/genres/古言.md"` |
 | 现实题材 | `cat "${CLAUDE_PLUGIN_ROOT}/templates/genres/现实题材.md"` |
 | 规则怪谈 | `cat "${CLAUDE_PLUGIN_ROOT}/templates/genres/规则怪谈.md"` |
+| 替身文 | `cat "${CLAUDE_PLUGIN_ROOT}/templates/genres/替身文.md"` |
+| 多子多福 | `cat "${CLAUDE_PLUGIN_ROOT}/templates/genres/多子多福.md"` |
+| 黑暗题材 | `cat "${CLAUDE_PLUGIN_ROOT}/templates/genres/黑暗题材.md"` |
 
 **金手指设计参考**（Standard+ 模式必须加载）：
 ```bash
@@ -95,6 +98,12 @@ cat "${CLAUDE_PLUGIN_ROOT}/templates/golden-finger-templates.md"
 ```
 
 ## Step 6: 金手指设计（Standard + Deep）
+
+**加载核心设计参考**：
+```bash
+cat "${CLAUDE_PLUGIN_ROOT}/skills/webnovel-init/references/creativity/selling-points.md"
+cat "${CLAUDE_PLUGIN_ROOT}/skills/webnovel-init/references/worldbuilding/character-design.md"
+```
 
 **使用 AskUserQuestion 收集**：
 - 金手指类型（系统面板/签到/鉴定/吞噬）
