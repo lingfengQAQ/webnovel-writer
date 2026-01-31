@@ -14,6 +14,7 @@ v5.1 变更:
 """
 
 import json
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field, asdict
@@ -763,7 +764,13 @@ class StateManager:
         if not entity_type:
             return
 
-        entity = self._state["entities_v3"][entity_type].get(entity_id)
+        entities_v3 = self._state.get("entities_v3")
+        if not isinstance(entities_v3, dict):
+            entities_v3 = {t: {} for t in self.ENTITY_TYPES}
+            self._state["entities_v3"] = entities_v3
+        entities_v3.setdefault(entity_type, {})
+
+        entity = entities_v3[entity_type].get(entity_id)
         if entity:
             if entity.get("first_appearance", 0) == 0:
                 entity["first_appearance"] = chapter
@@ -1093,7 +1100,16 @@ class StateManager:
         if not entity:
             return
 
-        current = entity.get("current", {})
+        current = entity.get("current")
+        if not isinstance(current, dict):
+            current = entity.get("current_json", {})
+        if isinstance(current, str):
+            try:
+                current = json.loads(current) if current else {}
+            except (json.JSONDecodeError, TypeError):
+                current = {}
+        if not isinstance(current, dict):
+            current = {}
         protag = self._state.setdefault("protagonist_state", {})
 
         # 同步境界
@@ -1214,4 +1230,8 @@ def main():
 
 
 if __name__ == "__main__":
+    if sys.platform == "win32":
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
     main()

@@ -18,6 +18,11 @@ import re
 import sys
 from pathlib import Path
 
+try:
+    from chapter_paths import find_chapter_file
+except ImportError:  # pragma: no cover
+    from scripts.chapter_paths import find_chapter_file
+
 
 def find_project_root(start_path: Path = None) -> Path:
     """查找包含 .webnovel 目录的项目根目录"""
@@ -91,22 +96,7 @@ def extract_chapter_summary(project_root: Path, chapter_num: int) -> str:
     if summary:
         return summary
 
-    volume_num = (chapter_num - 1) // 50 + 1
-    chapter_dir = project_root / "正文" / f"第{volume_num}卷"
-
-    # 尝试匹配章节文件
-    patterns = [
-        f"第{chapter_num:03d}章*.md",
-        f"第{chapter_num:04d}章*.md",
-    ]
-
-    chapter_file = None
-    for pattern in patterns:
-        matches = list(chapter_dir.glob(pattern))
-        if matches:
-            chapter_file = matches[0]
-            break
-
+    chapter_file = find_chapter_file(project_root, chapter_num)
     if not chapter_file or not chapter_file.exists():
         return f"⚠️ 第 {chapter_num} 章文件不存在"
 
@@ -165,9 +155,10 @@ def extract_state_summary(project_root: Path) -> str:
             summary_parts.append(f"**近5章Strand**: {strand_str}")
 
     # 活跃伏笔（只显示紧急的）
-    if "foreshadowing" in state:
-        fs = state["foreshadowing"]
-        active = [f for f in fs if f.get("status") == "active"]
+    plot_threads = state.get("plot_threads", {}) if isinstance(state.get("plot_threads"), dict) else {}
+    foreshadowing = plot_threads.get("foreshadowing", [])
+    if isinstance(foreshadowing, list) and foreshadowing:
+        active = [f for f in foreshadowing if f.get("status") in {"active", "未回收"}]
         urgent = [f for f in active if f.get("urgency", 0) > 50]
         if urgent:
             urgent_list = [f"{f.get('content', '?')[:30]}... (紧急度:{f.get('urgency')})" for f in urgent[:3]]

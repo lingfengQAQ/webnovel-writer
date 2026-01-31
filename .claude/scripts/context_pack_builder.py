@@ -190,9 +190,22 @@ class ContextPackBuilder:
             with open(vf, 'r', encoding='utf-8') as f:
                 content = f.read()
 
-            # 查找章节标记
-            pattern = rf'第{chapter_num}章[^\n]*\n(.*?)(?=第\d+章|$)'
-            match = re.search(pattern, content, re.DOTALL)
+            # 查找章节标记（兼容空格/中英文冒号/不同标题级别）
+            # 常见格式：### 第 1 章：标题 或 ### 第1章: 标题
+            heading_pattern = (
+                rf"(?m)^#+\s*第\s*{chapter_num}\s*章[：:][^\n]*\n"
+                rf".*?(?=^#+\s*第\s*\d+\s*章|^##\s|\Z)"
+            )
+            match = re.search(heading_pattern, content, re.DOTALL)
+            if match:
+                return match.group(0).strip()
+
+            # 兼容无标题级别的格式：第 1 章 标题
+            plain_pattern = (
+                rf"(?m)^第\s*{chapter_num}\s*章[^\n]*\n"
+                rf".*?(?=^第\s*\d+\s*章|\Z)"
+            )
+            match = re.search(plain_pattern, content, re.DOTALL)
             if match:
                 return match.group(0).strip()
 
@@ -546,7 +559,7 @@ class ContextPackBuilder:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Context Pack Builder v5.1")
+    parser = argparse.ArgumentParser(description="Context Pack Builder v5.2")
     parser.add_argument("--chapter", type=int, required=True, help="章节编号")
     parser.add_argument("--project-root", metavar="PATH", help="项目根目录")
     parser.add_argument("--output", metavar="FILE", help="输出文件路径（默认输出到 stdout）")
