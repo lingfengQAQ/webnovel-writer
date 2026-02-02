@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Index Manager - 索引管理模块 (v5.1)
+Index Manager - 索引管理模块 (v5.3)
 
 管理 index.db (SQLite) 的读写操作：
 - 章节元数据索引
@@ -12,6 +12,13 @@ Index Manager - 索引管理模块 (v5.1)
 - 状态变化记录
 - 关系存储
 - 快速查询接口
+- 追读力债务管理 (v5.3 新增)
+
+v5.3 变更:
+- 新增 override_contracts 表：记录违背软建议时的Override Contract
+- 新增 chase_debt 表：追读力债务追踪
+- 新增 debt_events 表：债务事件日志（产生/偿还/利息）
+- 新增 chapter_reading_power 表：章节追读力元数据
 
 v5.1 变更:
 - 新增 entities 表替代 state.json 中的 entities_v3
@@ -34,6 +41,7 @@ from .config import get_config
 @dataclass
 class ChapterMeta:
     """章节元数据"""
+
     chapter: int
     title: str
     location: str
@@ -45,6 +53,7 @@ class ChapterMeta:
 @dataclass
 class SceneMeta:
     """场景元数据"""
+
     chapter: int
     scene_index: int
     start_line: int
@@ -57,6 +66,7 @@ class SceneMeta:
 @dataclass
 class EntityMeta:
     """实体元数据 (v5.1 新增)"""
+
     id: str
     type: str  # 角色/地点/物品/势力/招式
     canonical_name: str
@@ -72,6 +82,7 @@ class EntityMeta:
 @dataclass
 class StateChangeMeta:
     """状态变化记录 (v5.1 新增)"""
+
     entity_id: str
     field: str
     old_value: str
@@ -83,11 +94,70 @@ class StateChangeMeta:
 @dataclass
 class RelationshipMeta:
     """关系记录 (v5.1 新增)"""
+
     from_entity: str
     to_entity: str
     type: str
     description: str
     chapter: int
+
+
+@dataclass
+class OverrideContractMeta:
+    """Override Contract (v5.3 新增)"""
+
+    chapter: int
+    constraint_type: str  # SOFT_HOOK_STRENGTH / SOFT_MICROPAYOFF / etc.
+    constraint_id: str  # 具体约束标识
+    rationale_type: str  # TRANSITIONAL_SETUP / LOGIC_INTEGRITY / etc.
+    rationale_text: str  # 具体理由说明
+    payback_plan: str  # 偿还计划描述
+    due_chapter: int  # 偿还截止章节
+    status: str = "pending"  # pending / fulfilled / overdue / cancelled
+
+
+@dataclass
+class ChaseDebtMeta:
+    """追读力债务 (v5.3 新增)"""
+
+    id: int = 0
+    debt_type: str = ""  # hook_strength / micropayoff / coolpoint / etc.
+    original_amount: float = 1.0  # 初始债务量
+    current_amount: float = 1.0  # 当前债务量（含利息）
+    interest_rate: float = 0.1  # 利息率（每章）
+    source_chapter: int = 0  # 产生债务的章节
+    due_chapter: int = 0  # 截止章节
+    override_contract_id: int = 0  # 关联的Override Contract
+    status: str = "active"  # active / paid / overdue / written_off
+
+
+@dataclass
+class DebtEventMeta:
+    """债务事件日志 (v5.3 新增)"""
+
+    debt_id: int
+    event_type: (
+        str  # created / interest_accrued / partial_payment / full_payment / overdue
+    )
+    amount: float
+    chapter: int
+    note: str = ""
+
+
+@dataclass
+class ChapterReadingPowerMeta:
+    """章节追读力元数据 (v5.3 新增)"""
+
+    chapter: int
+    hook_type: str = ""  # 章末钩子类型
+    hook_strength: str = "medium"  # strong / medium / weak
+    coolpoint_patterns: List[str] = field(default_factory=list)  # 使用的爽点模式
+    micropayoffs: List[str] = field(default_factory=list)  # 微兑现列表
+    hard_violations: List[str] = field(default_factory=list)  # 硬约束违规
+    soft_suggestions: List[str] = field(default_factory=list)  # 软建议
+    is_transition: bool = False  # 是否为过渡章
+    override_count: int = 0  # Override Contract数量
+    debt_balance: float = 0.0  # 当前债务余额
 
 
 class IndexManager:
@@ -145,9 +215,15 @@ class IndexManager:
             """)
 
             # 创建索引
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_scenes_chapter ON scenes(chapter)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_appearances_entity ON appearances(entity_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_appearances_chapter ON appearances(chapter)")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_scenes_chapter ON scenes(chapter)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_appearances_entity ON appearances(entity_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_appearances_chapter ON appearances(chapter)"
+            )
 
             # ==================== v5.1 新增表 ====================
 
@@ -209,16 +285,132 @@ class IndexManager:
             """)
 
             # v5.1 新索引
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_entities_tier ON entities(tier)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_entities_protagonist ON entities(is_protagonist)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_aliases_entity ON aliases(entity_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_aliases_alias ON aliases(alias)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_state_changes_entity ON state_changes(entity_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_state_changes_chapter ON state_changes(chapter)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_relationships_from ON relationships(from_entity)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_relationships_to ON relationships(to_entity)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_relationships_chapter ON relationships(chapter)")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_entities_tier ON entities(tier)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_entities_protagonist ON entities(is_protagonist)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_aliases_entity ON aliases(entity_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_aliases_alias ON aliases(alias)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_state_changes_entity ON state_changes(entity_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_state_changes_chapter ON state_changes(chapter)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_relationships_from ON relationships(from_entity)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_relationships_to ON relationships(to_entity)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_relationships_chapter ON relationships(chapter)"
+            )
+
+            # ==================== v5.3 新增表：追读力债务管理 ====================
+
+            # Override Contract 表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS override_contracts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    chapter INTEGER NOT NULL,
+                    constraint_type TEXT NOT NULL,
+                    constraint_id TEXT NOT NULL,
+                    rationale_type TEXT NOT NULL,
+                    rationale_text TEXT,
+                    payback_plan TEXT,
+                    due_chapter INTEGER NOT NULL,
+                    status TEXT DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    fulfilled_at TIMESTAMP,
+                    UNIQUE(chapter, constraint_type, constraint_id)
+                )
+            """)
+
+            # 追读力债务表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS chase_debt (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    debt_type TEXT NOT NULL,
+                    original_amount REAL DEFAULT 1.0,
+                    current_amount REAL DEFAULT 1.0,
+                    interest_rate REAL DEFAULT 0.1,
+                    source_chapter INTEGER NOT NULL,
+                    due_chapter INTEGER NOT NULL,
+                    override_contract_id INTEGER,
+                    status TEXT DEFAULT 'active',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (override_contract_id) REFERENCES override_contracts(id)
+                )
+            """)
+
+            # 债务事件日志表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS debt_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    debt_id INTEGER NOT NULL,
+                    event_type TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    chapter INTEGER NOT NULL,
+                    note TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (debt_id) REFERENCES chase_debt(id)
+                )
+            """)
+
+            # 章节追读力元数据表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS chapter_reading_power (
+                    chapter INTEGER PRIMARY KEY,
+                    hook_type TEXT,
+                    hook_strength TEXT DEFAULT 'medium',
+                    coolpoint_patterns TEXT,
+                    micropayoffs TEXT,
+                    hard_violations TEXT,
+                    soft_suggestions TEXT,
+                    is_transition INTEGER DEFAULT 0,
+                    override_count INTEGER DEFAULT 0,
+                    debt_balance REAL DEFAULT 0.0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # v5.3 新索引
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_override_contracts_chapter ON override_contracts(chapter)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_override_contracts_status ON override_contracts(status)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_override_contracts_due ON override_contracts(due_chapter)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_chase_debt_status ON chase_debt(status)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_chase_debt_source ON chase_debt(source_chapter)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_chase_debt_due ON chase_debt(due_chapter)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_debt_events_debt ON debt_events(debt_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_debt_events_chapter ON debt_events(chapter)"
+            )
 
             conn.commit()
 
@@ -238,18 +430,21 @@ class IndexManager:
         """添加/更新章节元数据"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT OR REPLACE INTO chapters
                 (chapter, title, location, word_count, characters, summary)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                meta.chapter,
-                meta.title,
-                meta.location,
-                meta.word_count,
-                json.dumps(meta.characters, ensure_ascii=False),
-                meta.summary
-            ))
+            """,
+                (
+                    meta.chapter,
+                    meta.title,
+                    meta.location,
+                    meta.word_count,
+                    json.dumps(meta.characters, ensure_ascii=False),
+                    meta.summary,
+                ),
+            )
             conn.commit()
 
     def get_chapter(self, chapter: int) -> Optional[Dict]:
@@ -268,12 +463,18 @@ class IndexManager:
             limit = self.config.query_recent_chapters_limit
         with self._get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT * FROM chapters
                 ORDER BY chapter DESC
                 LIMIT ?
-            """, (limit,))
-            return [self._row_to_dict(row, parse_json=["characters"]) for row in cursor.fetchall()]
+            """,
+                (limit,),
+            )
+            return [
+                self._row_to_dict(row, parse_json=["characters"])
+                for row in cursor.fetchall()
+            ]
 
     # ==================== 场景操作 ====================
 
@@ -287,19 +488,22 @@ class IndexManager:
 
             # 插入新场景
             for scene in scenes:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO scenes
                     (chapter, scene_index, start_line, end_line, location, summary, characters)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    scene.chapter,
-                    scene.scene_index,
-                    scene.start_line,
-                    scene.end_line,
-                    scene.location,
-                    scene.summary,
-                    json.dumps(scene.characters, ensure_ascii=False)
-                ))
+                """,
+                    (
+                        scene.chapter,
+                        scene.scene_index,
+                        scene.start_line,
+                        scene.end_line,
+                        scene.location,
+                        scene.summary,
+                        json.dumps(scene.characters, ensure_ascii=False),
+                    ),
+                )
 
             conn.commit()
 
@@ -307,12 +511,18 @@ class IndexManager:
         """获取章节场景"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT * FROM scenes
                 WHERE chapter = ?
                 ORDER BY scene_index
-            """, (chapter,))
-            return [self._row_to_dict(row, parse_json=["characters"]) for row in cursor.fetchall()]
+            """,
+                (chapter,),
+            )
+            return [
+                self._row_to_dict(row, parse_json=["characters"])
+                for row in cursor.fetchall()
+            ]
 
     def search_scenes_by_location(self, location: str, limit: int = None) -> List[Dict]:
         """按地点搜索场景"""
@@ -320,13 +530,19 @@ class IndexManager:
             limit = self.config.query_scenes_by_location_limit
         with self._get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT * FROM scenes
                 WHERE location LIKE ?
                 ORDER BY chapter DESC
                 LIMIT ?
-            """, (f"%{location}%", limit))
-            return [self._row_to_dict(row, parse_json=["characters"]) for row in cursor.fetchall()]
+            """,
+                (f"%{location}%", limit),
+            )
+            return [
+                self._row_to_dict(row, parse_json=["characters"])
+                for row in cursor.fetchall()
+            ]
 
     # ==================== 出场记录操作 ====================
 
@@ -336,7 +552,7 @@ class IndexManager:
         chapter: int,
         mentions: List[str],
         confidence: float = 1.0,
-        skip_if_exists: bool = False
+        skip_if_exists: bool = False,
     ):
         """记录实体出场
 
@@ -354,21 +570,24 @@ class IndexManager:
                 # 先检查是否已存在
                 cursor.execute(
                     "SELECT 1 FROM appearances WHERE entity_id = ? AND chapter = ?",
-                    (entity_id, chapter)
+                    (entity_id, chapter),
                 )
                 if cursor.fetchone():
                     return  # 已存在，跳过
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT OR REPLACE INTO appearances
                 (entity_id, chapter, mentions, confidence)
                 VALUES (?, ?, ?, ?)
-            """, (
-                entity_id,
-                chapter,
-                json.dumps(mentions, ensure_ascii=False),
-                confidence
-            ))
+            """,
+                (
+                    entity_id,
+                    chapter,
+                    json.dumps(mentions, ensure_ascii=False),
+                    confidence,
+                ),
+            )
             conn.commit()
 
     def get_entity_appearances(self, entity_id: str, limit: int = None) -> List[Dict]:
@@ -377,13 +596,19 @@ class IndexManager:
             limit = self.config.query_entity_appearances_limit
         with self._get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT * FROM appearances
                 WHERE entity_id = ?
                 ORDER BY chapter DESC
                 LIMIT ?
-            """, (entity_id, limit))
-            return [self._row_to_dict(row, parse_json=["mentions"]) for row in cursor.fetchall()]
+            """,
+                (entity_id, limit),
+            )
+            return [
+                self._row_to_dict(row, parse_json=["mentions"])
+                for row in cursor.fetchall()
+            ]
 
     def get_recent_appearances(self, limit: int = None) -> List[Dict]:
         """获取最近出场的实体"""
@@ -391,25 +616,34 @@ class IndexManager:
             limit = self.config.query_recent_appearances_limit
         with self._get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT entity_id, MAX(chapter) as last_chapter, COUNT(*) as total
                 FROM appearances
                 GROUP BY entity_id
                 ORDER BY last_chapter DESC
                 LIMIT ?
-            """, (limit,))
+            """,
+                (limit,),
+            )
             return [dict(row) for row in cursor.fetchall()]
 
     def get_chapter_appearances(self, chapter: int) -> List[Dict]:
         """获取某章所有出场实体"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT * FROM appearances
                 WHERE chapter = ?
                 ORDER BY confidence DESC
-            """, (chapter,))
-            return [self._row_to_dict(row, parse_json=["mentions"]) for row in cursor.fetchall()]
+            """,
+                (chapter,),
+            )
+            return [
+                self._row_to_dict(row, parse_json=["mentions"])
+                for row in cursor.fetchall()
+            ]
 
     # ==================== v5.1 实体操作 ====================
 
@@ -427,7 +661,9 @@ class IndexManager:
             cursor = conn.cursor()
 
             # 检查是否存在
-            cursor.execute("SELECT id, current_json FROM entities WHERE id = ?", (entity.id,))
+            cursor.execute(
+                "SELECT id, current_json FROM entities WHERE id = ?", (entity.id,)
+            )
             existing = cursor.fetchone()
 
             if existing:
@@ -444,7 +680,8 @@ class IndexManager:
 
                 if update_metadata:
                     # 完整更新（包括元数据）
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         UPDATE entities SET
                             canonical_name = ?,
                             tier = ?,
@@ -455,50 +692,58 @@ class IndexManager:
                             is_archived = ?,
                             updated_at = CURRENT_TIMESTAMP
                         WHERE id = ?
-                    """, (
-                        entity.canonical_name,
-                        entity.tier,
-                        entity.desc,
-                        json.dumps(merged_current, ensure_ascii=False),
-                        entity.last_appearance,
-                        1 if entity.is_protagonist else 0,
-                        1 if entity.is_archived else 0,
-                        entity.id
-                    ))
+                    """,
+                        (
+                            entity.canonical_name,
+                            entity.tier,
+                            entity.desc,
+                            json.dumps(merged_current, ensure_ascii=False),
+                            entity.last_appearance,
+                            1 if entity.is_protagonist else 0,
+                            1 if entity.is_archived else 0,
+                            entity.id,
+                        ),
+                    )
                 else:
                     # 只更新 current 和 last_appearance
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         UPDATE entities SET
                             current_json = ?,
                             last_appearance = ?,
                             updated_at = CURRENT_TIMESTAMP
                         WHERE id = ?
-                    """, (
-                        json.dumps(merged_current, ensure_ascii=False),
-                        entity.last_appearance,
-                        entity.id
-                    ))
+                    """,
+                        (
+                            json.dumps(merged_current, ensure_ascii=False),
+                            entity.last_appearance,
+                            entity.id,
+                        ),
+                    )
                 conn.commit()
                 return False
             else:
                 # 新实体: 插入
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO entities
                     (id, type, canonical_name, tier, desc, current_json,
                      first_appearance, last_appearance, is_protagonist, is_archived)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    entity.id,
-                    entity.type,
-                    entity.canonical_name,
-                    entity.tier,
-                    entity.desc,
-                    json.dumps(entity.current, ensure_ascii=False),
-                    entity.first_appearance,
-                    entity.last_appearance,
-                    1 if entity.is_protagonist else 0,
-                    1 if entity.is_archived else 0
-                ))
+                """,
+                    (
+                        entity.id,
+                        entity.type,
+                        entity.canonical_name,
+                        entity.tier,
+                        entity.desc,
+                        json.dumps(entity.current, ensure_ascii=False),
+                        entity.first_appearance,
+                        entity.last_appearance,
+                        1 if entity.is_protagonist else 0,
+                        1 if entity.is_archived else 0,
+                    ),
+                )
                 conn.commit()
                 return True
 
@@ -512,31 +757,48 @@ class IndexManager:
                 return self._row_to_dict(row, parse_json=["current_json"])
             return None
 
-    def get_entities_by_type(self, entity_type: str, include_archived: bool = False) -> List[Dict]:
+    def get_entities_by_type(
+        self, entity_type: str, include_archived: bool = False
+    ) -> List[Dict]:
         """按类型获取实体"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
             if include_archived:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT * FROM entities WHERE type = ?
                     ORDER BY last_appearance DESC
-                """, (entity_type,))
+                """,
+                    (entity_type,),
+                )
             else:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT * FROM entities WHERE type = ? AND is_archived = 0
                     ORDER BY last_appearance DESC
-                """, (entity_type,))
-            return [self._row_to_dict(row, parse_json=["current_json"]) for row in cursor.fetchall()]
+                """,
+                    (entity_type,),
+                )
+            return [
+                self._row_to_dict(row, parse_json=["current_json"])
+                for row in cursor.fetchall()
+            ]
 
     def get_entities_by_tier(self, tier: str) -> List[Dict]:
         """按重要度获取实体 (核心/重要/次要/装饰)"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT * FROM entities WHERE tier = ? AND is_archived = 0
                 ORDER BY last_appearance DESC
-            """, (tier,))
-            return [self._row_to_dict(row, parse_json=["current_json"]) for row in cursor.fetchall()]
+            """,
+                (tier,),
+            )
+            return [
+                self._row_to_dict(row, parse_json=["current_json"])
+                for row in cursor.fetchall()
+            ]
 
     def get_core_entities(self) -> List[Dict]:
         """获取所有核心实体 (用于 Context Agent 全量加载)"""
@@ -547,7 +809,10 @@ class IndexManager:
                 WHERE (tier IN ('核心', '重要') OR is_protagonist = 1) AND is_archived = 0
                 ORDER BY is_protagonist DESC, tier, last_appearance DESC
             """)
-            return [self._row_to_dict(row, parse_json=["current_json"]) for row in cursor.fetchall()]
+            return [
+                self._row_to_dict(row, parse_json=["current_json"])
+                for row in cursor.fetchall()
+            ]
 
     def get_protagonist(self) -> Optional[Dict]:
         """获取主角实体"""
@@ -568,7 +833,9 @@ class IndexManager:
         with self._get_conn() as conn:
             cursor = conn.cursor()
 
-            cursor.execute("SELECT current_json FROM entities WHERE id = ?", (entity_id,))
+            cursor.execute(
+                "SELECT current_json FROM entities WHERE id = ?", (entity_id,)
+            )
             row = cursor.fetchone()
             if not row:
                 return False
@@ -582,12 +849,15 @@ class IndexManager:
 
             current.update(updates)
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 UPDATE entities SET
                     current_json = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
-            """, (json.dumps(current, ensure_ascii=False), entity_id))
+            """,
+                (json.dumps(current, ensure_ascii=False), entity_id),
+            )
             conn.commit()
             return True
 
@@ -595,10 +865,13 @@ class IndexManager:
         """归档实体 (不删除，只是标记)"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 UPDATE entities SET is_archived = 1, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
-            """, (entity_id,))
+            """,
+                (entity_id,),
+            )
             conn.commit()
             return cursor.rowcount > 0
 
@@ -613,10 +886,13 @@ class IndexManager:
         with self._get_conn() as conn:
             cursor = conn.cursor()
             try:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT OR IGNORE INTO aliases (alias, entity_id, entity_type)
                     VALUES (?, ?, ?)
-                """, (alias, entity_id, entity_type))
+                """,
+                    (alias, entity_id, entity_type),
+                )
                 conn.commit()
                 return cursor.rowcount > 0
             except sqlite3.IntegrityError:
@@ -630,26 +906,37 @@ class IndexManager:
         """
         with self._get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT e.*, a.entity_type as alias_type
                 FROM entities e
                 JOIN aliases a ON e.id = a.entity_id
                 WHERE a.alias = ?
-            """, (alias,))
-            return [self._row_to_dict(row, parse_json=["current_json"]) for row in cursor.fetchall()]
+            """,
+                (alias,),
+            )
+            return [
+                self._row_to_dict(row, parse_json=["current_json"])
+                for row in cursor.fetchall()
+            ]
 
     def get_entity_aliases(self, entity_id: str) -> List[str]:
         """获取实体的所有别名"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT alias FROM aliases WHERE entity_id = ?", (entity_id,))
+            cursor.execute(
+                "SELECT alias FROM aliases WHERE entity_id = ?", (entity_id,)
+            )
             return [row["alias"] for row in cursor.fetchall()]
 
     def remove_alias(self, alias: str, entity_id: str) -> bool:
         """移除别名"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM aliases WHERE alias = ? AND entity_id = ?", (alias, entity_id))
+            cursor.execute(
+                "DELETE FROM aliases WHERE alias = ? AND entity_id = ?",
+                (alias, entity_id),
+            )
             conn.commit()
             return cursor.rowcount > 0
 
@@ -663,18 +950,21 @@ class IndexManager:
         """
         with self._get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO state_changes
                 (entity_id, field, old_value, new_value, reason, chapter)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                change.entity_id,
-                change.field,
-                change.old_value,
-                change.new_value,
-                change.reason,
-                change.chapter
-            ))
+            """,
+                (
+                    change.entity_id,
+                    change.field,
+                    change.old_value,
+                    change.new_value,
+                    change.reason,
+                    change.chapter,
+                ),
+            )
             conn.commit()
             return cursor.lastrowid
 
@@ -682,34 +972,43 @@ class IndexManager:
         """获取实体的状态变化历史"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT * FROM state_changes
                 WHERE entity_id = ?
                 ORDER BY chapter DESC, id DESC
                 LIMIT ?
-            """, (entity_id, limit))
+            """,
+                (entity_id, limit),
+            )
             return [dict(row) for row in cursor.fetchall()]
 
     def get_recent_state_changes(self, limit: int = 50) -> List[Dict]:
         """获取最近的状态变化"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT * FROM state_changes
                 ORDER BY chapter DESC, id DESC
                 LIMIT ?
-            """, (limit,))
+            """,
+                (limit,),
+            )
             return [dict(row) for row in cursor.fetchall()]
 
     def get_chapter_state_changes(self, chapter: int) -> List[Dict]:
         """获取某章的所有状态变化"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT * FROM state_changes
                 WHERE chapter = ?
                 ORDER BY id
-            """, (chapter,))
+            """,
+                (chapter,),
+            )
             return [dict(row) for row in cursor.fetchall()]
 
     # ==================== v5.1 关系操作 ====================
@@ -725,37 +1024,48 @@ class IndexManager:
             cursor = conn.cursor()
 
             # 检查是否存在
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT id FROM relationships
                 WHERE from_entity = ? AND to_entity = ? AND type = ?
-            """, (rel.from_entity, rel.to_entity, rel.type))
+            """,
+                (rel.from_entity, rel.to_entity, rel.type),
+            )
             existing = cursor.fetchone()
 
             if existing:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     UPDATE relationships SET
                         description = ?,
                         chapter = ?
                     WHERE id = ?
-                """, (rel.description, rel.chapter, existing["id"]))
+                """,
+                    (rel.description, rel.chapter, existing["id"]),
+                )
                 conn.commit()
                 return False
             else:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO relationships
                     (from_entity, to_entity, type, description, chapter)
                     VALUES (?, ?, ?, ?, ?)
-                """, (
-                    rel.from_entity,
-                    rel.to_entity,
-                    rel.type,
-                    rel.description,
-                    rel.chapter
-                ))
+                """,
+                    (
+                        rel.from_entity,
+                        rel.to_entity,
+                        rel.type,
+                        rel.description,
+                        rel.chapter,
+                    ),
+                )
                 conn.commit()
                 return True
 
-    def get_entity_relationships(self, entity_id: str, direction: str = "both") -> List[Dict]:
+    def get_entity_relationships(
+        self, entity_id: str, direction: str = "both"
+    ) -> List[Dict]:
         """
         获取实体的关系
 
@@ -765,21 +1075,30 @@ class IndexManager:
             cursor = conn.cursor()
 
             if direction == "from":
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT * FROM relationships WHERE from_entity = ?
                     ORDER BY chapter DESC
-                """, (entity_id,))
+                """,
+                    (entity_id,),
+                )
             elif direction == "to":
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT * FROM relationships WHERE to_entity = ?
                     ORDER BY chapter DESC
-                """, (entity_id,))
+                """,
+                    (entity_id,),
+                )
             else:  # both
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT * FROM relationships
                     WHERE from_entity = ? OR to_entity = ?
                     ORDER BY chapter DESC
-                """, (entity_id, entity_id))
+                """,
+                    (entity_id, entity_id),
+                )
 
             return [dict(row) for row in cursor.fetchall()]
 
@@ -787,24 +1106,518 @@ class IndexManager:
         """获取两个实体之间的所有关系"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT * FROM relationships
                 WHERE (from_entity = ? AND to_entity = ?)
                    OR (from_entity = ? AND to_entity = ?)
                 ORDER BY chapter DESC
-            """, (entity1, entity2, entity2, entity1))
+            """,
+                (entity1, entity2, entity2, entity1),
+            )
             return [dict(row) for row in cursor.fetchall()]
 
     def get_recent_relationships(self, limit: int = 30) -> List[Dict]:
         """获取最近建立的关系"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT * FROM relationships
                 ORDER BY chapter DESC, id DESC
                 LIMIT ?
-            """, (limit,))
+            """,
+                (limit,),
+            )
             return [dict(row) for row in cursor.fetchall()]
+
+    # ==================== v5.3 Override Contract 操作 ====================
+
+    def create_override_contract(self, contract: OverrideContractMeta) -> int:
+        """
+        创建 Override Contract
+
+        返回合约 ID
+        """
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO override_contracts
+                (chapter, constraint_type, constraint_id, rationale_type,
+                 rationale_text, payback_plan, due_chapter, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    contract.chapter,
+                    contract.constraint_type,
+                    contract.constraint_id,
+                    contract.rationale_type,
+                    contract.rationale_text,
+                    contract.payback_plan,
+                    contract.due_chapter,
+                    contract.status,
+                ),
+            )
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_pending_overrides(self, before_chapter: int = None) -> List[Dict]:
+        """获取待偿还的Override Contracts"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            if before_chapter:
+                cursor.execute(
+                    """
+                    SELECT * FROM override_contracts
+                    WHERE status = 'pending' AND due_chapter <= ?
+                    ORDER BY due_chapter ASC
+                """,
+                    (before_chapter,),
+                )
+            else:
+                cursor.execute("""
+                    SELECT * FROM override_contracts
+                    WHERE status = 'pending'
+                    ORDER BY due_chapter ASC
+                """)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_overdue_overrides(self, current_chapter: int) -> List[Dict]:
+        """获取已逾期的Override Contracts"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM override_contracts
+                WHERE status = 'pending' AND due_chapter < ?
+                ORDER BY due_chapter ASC
+            """,
+                (current_chapter,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def fulfill_override(self, contract_id: int) -> bool:
+        """标记Override Contract为已偿还"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE override_contracts SET
+                    status = 'fulfilled',
+                    fulfilled_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """,
+                (contract_id,),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def get_chapter_overrides(self, chapter: int) -> List[Dict]:
+        """获取某章创建的Override Contracts"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM override_contracts WHERE chapter = ?
+            """,
+                (chapter,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    # ==================== v5.3 追读力债务操作 ====================
+
+    def create_debt(self, debt: ChaseDebtMeta) -> int:
+        """
+        创建追读力债务
+
+        返回债务 ID
+        """
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO chase_debt
+                (debt_type, original_amount, current_amount, interest_rate,
+                 source_chapter, due_chapter, override_contract_id, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    debt.debt_type,
+                    debt.original_amount,
+                    debt.current_amount,
+                    debt.interest_rate,
+                    debt.source_chapter,
+                    debt.due_chapter,
+                    debt.override_contract_id if debt.override_contract_id else None,
+                    debt.status,
+                ),
+            )
+            conn.commit()
+            debt_id = cursor.lastrowid
+
+            # 记录创建事件
+            self._record_debt_event(
+                cursor,
+                debt_id,
+                "created",
+                debt.original_amount,
+                debt.source_chapter,
+                f"创建债务: {debt.debt_type}",
+            )
+            conn.commit()
+            return debt_id
+
+    def get_active_debts(self) -> List[Dict]:
+        """获取所有活跃债务"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM chase_debt
+                WHERE status = 'active'
+                ORDER BY due_chapter ASC
+            """)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_overdue_debts(self, current_chapter: int) -> List[Dict]:
+        """获取已逾期的债务"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM chase_debt
+                WHERE status = 'active' AND due_chapter < ?
+                ORDER BY due_chapter ASC
+            """,
+                (current_chapter,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_total_debt_balance(self) -> float:
+        """获取总债务余额"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COALESCE(SUM(current_amount), 0) FROM chase_debt
+                WHERE status = 'active'
+            """)
+            return cursor.fetchone()[0]
+
+    def accrue_interest(self, current_chapter: int) -> Dict[str, Any]:
+        """
+        计算利息（每章调用一次）
+
+        返回: {debts_processed, total_interest, new_overdues}
+        """
+        result = {"debts_processed": 0, "total_interest": 0.0, "new_overdues": 0}
+
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+
+            # 获取所有活跃债务
+            cursor.execute("""
+                SELECT * FROM chase_debt WHERE status = 'active'
+            """)
+            debts = cursor.fetchall()
+
+            for debt in debts:
+                debt_id = debt["id"]
+                current_amount = debt["current_amount"]
+                interest_rate = debt["interest_rate"]
+                due_chapter = debt["due_chapter"]
+
+                # 计算利息
+                interest = current_amount * interest_rate
+                new_amount = current_amount + interest
+
+                # 更新债务
+                cursor.execute(
+                    """
+                    UPDATE chase_debt SET
+                        current_amount = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """,
+                    (new_amount, debt_id),
+                )
+
+                # 记录利息事件
+                self._record_debt_event(
+                    cursor,
+                    debt_id,
+                    "interest_accrued",
+                    interest,
+                    current_chapter,
+                    f"利息: {interest:.2f} (利率: {interest_rate * 100:.0f}%)",
+                )
+
+                result["debts_processed"] += 1
+                result["total_interest"] += interest
+
+                # 检查是否逾期
+                if current_chapter > due_chapter:
+                    cursor.execute(
+                        """
+                        UPDATE chase_debt SET status = 'overdue'
+                        WHERE id = ? AND status = 'active'
+                    """,
+                        (debt_id,),
+                    )
+                    if cursor.rowcount > 0:
+                        result["new_overdues"] += 1
+                        self._record_debt_event(
+                            cursor,
+                            debt_id,
+                            "overdue",
+                            new_amount,
+                            current_chapter,
+                            f"债务逾期 (截止: 第{due_chapter}章)",
+                        )
+
+            conn.commit()
+
+        return result
+
+    def pay_debt(self, debt_id: int, amount: float, chapter: int) -> Dict[str, Any]:
+        """
+        偿还债务
+
+        返回: {remaining, fully_paid}
+        """
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+
+            cursor.execute(
+                "SELECT current_amount FROM chase_debt WHERE id = ?", (debt_id,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return {"remaining": 0, "fully_paid": False, "error": "债务不存在"}
+
+            current = row["current_amount"]
+            remaining = max(0, current - amount)
+
+            if remaining == 0:
+                # 完全偿还
+                cursor.execute(
+                    """
+                    UPDATE chase_debt SET
+                        current_amount = 0,
+                        status = 'paid',
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """,
+                    (debt_id,),
+                )
+                self._record_debt_event(
+                    cursor, debt_id, "full_payment", amount, chapter, "债务已完全偿还"
+                )
+            else:
+                # 部分偿还
+                cursor.execute(
+                    """
+                    UPDATE chase_debt SET
+                        current_amount = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """,
+                    (remaining, debt_id),
+                )
+                self._record_debt_event(
+                    cursor,
+                    debt_id,
+                    "partial_payment",
+                    amount,
+                    chapter,
+                    f"部分偿还，剩余: {remaining:.2f}",
+                )
+
+            conn.commit()
+            return {"remaining": remaining, "fully_paid": remaining == 0}
+
+    def _record_debt_event(
+        self,
+        cursor,
+        debt_id: int,
+        event_type: str,
+        amount: float,
+        chapter: int,
+        note: str = "",
+    ):
+        """记录债务事件（内部方法）"""
+        cursor.execute(
+            """
+            INSERT INTO debt_events (debt_id, event_type, amount, chapter, note)
+            VALUES (?, ?, ?, ?, ?)
+        """,
+            (debt_id, event_type, amount, chapter, note),
+        )
+
+    def get_debt_history(self, debt_id: int) -> List[Dict]:
+        """获取债务的事件历史"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM debt_events
+                WHERE debt_id = ?
+                ORDER BY created_at ASC
+            """,
+                (debt_id,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    # ==================== v5.3 章节追读力元数据操作 ====================
+
+    def save_chapter_reading_power(self, meta: ChapterReadingPowerMeta):
+        """保存章节追读力元数据"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO chapter_reading_power
+                (chapter, hook_type, hook_strength, coolpoint_patterns,
+                 micropayoffs, hard_violations, soft_suggestions,
+                 is_transition, override_count, debt_balance)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    meta.chapter,
+                    meta.hook_type,
+                    meta.hook_strength,
+                    json.dumps(meta.coolpoint_patterns, ensure_ascii=False),
+                    json.dumps(meta.micropayoffs, ensure_ascii=False),
+                    json.dumps(meta.hard_violations, ensure_ascii=False),
+                    json.dumps(meta.soft_suggestions, ensure_ascii=False),
+                    1 if meta.is_transition else 0,
+                    meta.override_count,
+                    meta.debt_balance,
+                ),
+            )
+            conn.commit()
+
+    def get_chapter_reading_power(self, chapter: int) -> Optional[Dict]:
+        """获取章节追读力元数据"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM chapter_reading_power WHERE chapter = ?", (chapter,)
+            )
+            row = cursor.fetchone()
+            if row:
+                return self._row_to_dict(
+                    row,
+                    parse_json=[
+                        "coolpoint_patterns",
+                        "micropayoffs",
+                        "hard_violations",
+                        "soft_suggestions",
+                    ],
+                )
+            return None
+
+    def get_recent_reading_power(self, limit: int = 10) -> List[Dict]:
+        """获取最近章节的追读力元数据"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM chapter_reading_power
+                ORDER BY chapter DESC
+                LIMIT ?
+            """,
+                (limit,),
+            )
+            return [
+                self._row_to_dict(
+                    row,
+                    parse_json=[
+                        "coolpoint_patterns",
+                        "micropayoffs",
+                        "hard_violations",
+                        "soft_suggestions",
+                    ],
+                )
+                for row in cursor.fetchall()
+            ]
+
+    def get_pattern_usage_stats(self, last_n_chapters: int = 20) -> Dict[str, int]:
+        """获取最近N章的爽点模式使用统计"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT coolpoint_patterns FROM chapter_reading_power
+                ORDER BY chapter DESC
+                LIMIT ?
+            """,
+                (last_n_chapters,),
+            )
+
+            stats = {}
+            for row in cursor.fetchall():
+                if row["coolpoint_patterns"]:
+                    try:
+                        patterns = json.loads(row["coolpoint_patterns"])
+                        for p in patterns:
+                            stats[p] = stats.get(p, 0) + 1
+                    except json.JSONDecodeError:
+                        pass
+            return stats
+
+    def get_hook_type_stats(self, last_n_chapters: int = 20) -> Dict[str, int]:
+        """获取最近N章的钩子类型使用统计"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT hook_type FROM chapter_reading_power
+                WHERE hook_type IS NOT NULL AND hook_type != ''
+                ORDER BY chapter DESC
+                LIMIT ?
+            """,
+                (last_n_chapters,),
+            )
+
+            stats = {}
+            for row in cursor.fetchall():
+                hook = row["hook_type"]
+                stats[hook] = stats.get(hook, 0) + 1
+            return stats
+
+    def get_debt_summary(self) -> Dict[str, Any]:
+        """获取债务汇总信息"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+
+            # 活跃债务
+            cursor.execute("""
+                SELECT COUNT(*) as count, COALESCE(SUM(current_amount), 0) as total
+                FROM chase_debt WHERE status = 'active'
+            """)
+            active = cursor.fetchone()
+
+            # 逾期债务
+            cursor.execute("""
+                SELECT COUNT(*) as count, COALESCE(SUM(current_amount), 0) as total
+                FROM chase_debt WHERE status = 'overdue'
+            """)
+            overdue = cursor.fetchone()
+
+            # 待偿还Override
+            cursor.execute("""
+                SELECT COUNT(*) FROM override_contracts WHERE status = 'pending'
+            """)
+            pending_overrides = cursor.fetchone()[0]
+
+            return {
+                "active_debts": active["count"],
+                "active_total": active["total"],
+                "overdue_debts": overdue["count"],
+                "overdue_total": overdue["total"],
+                "pending_overrides": pending_overrides,
+                "total_balance": active["total"] + overdue["total"],
+            }
 
     # ==================== 批量操作 ====================
 
@@ -815,7 +1628,7 @@ class IndexManager:
         location: str,
         word_count: int,
         entities: List[Dict],
-        scenes: List[Dict]
+        scenes: List[Dict],
     ) -> Dict[str, int]:
         """
         处理章节数据，批量写入索引
@@ -828,28 +1641,32 @@ class IndexManager:
         characters = [e.get("id") for e in entities if e.get("type") == "角色"]
 
         # 写入章节元数据
-        self.add_chapter(ChapterMeta(
-            chapter=chapter,
-            title=title,
-            location=location,
-            word_count=word_count,
-            characters=characters,
-            summary=""  # 可后续由 Data Agent 生成
-        ))
+        self.add_chapter(
+            ChapterMeta(
+                chapter=chapter,
+                title=title,
+                location=location,
+                word_count=word_count,
+                characters=characters,
+                summary="",  # 可后续由 Data Agent 生成
+            )
+        )
         stats["chapters"] = 1
 
         # 写入场景
         scene_metas = []
         for s in scenes:
-            scene_metas.append(SceneMeta(
-                chapter=chapter,
-                scene_index=s.get("index", 0),
-                start_line=s.get("start_line", 0),
-                end_line=s.get("end_line", 0),
-                location=s.get("location", ""),
-                summary=s.get("summary", ""),
-                characters=s.get("characters", [])
-            ))
+            scene_metas.append(
+                SceneMeta(
+                    chapter=chapter,
+                    scene_index=s.get("index", 0),
+                    start_line=s.get("start_line", 0),
+                    end_line=s.get("end_line", 0),
+                    location=s.get("location", ""),
+                    summary=s.get("summary", ""),
+                    characters=s.get("characters", []),
+                )
+            )
         self.add_scenes(chapter, scene_metas)
         stats["scenes"] = len(scene_metas)
 
@@ -861,7 +1678,7 @@ class IndexManager:
                     entity_id=entity_id,
                     chapter=chapter,
                     mentions=entity.get("mentions", []),
-                    confidence=entity.get("confidence", 1.0)
+                    confidence=entity.get("confidence", 1.0),
                 )
                 stats["appearances"] += 1
 
@@ -914,6 +1731,26 @@ class IndexManager:
             cursor.execute("SELECT COUNT(*) FROM relationships")
             relationships = cursor.fetchone()[0]
 
+            # v5.3 新增统计
+            cursor.execute("SELECT COUNT(*) FROM override_contracts")
+            override_contracts = cursor.fetchone()[0]
+
+            cursor.execute(
+                "SELECT COUNT(*) FROM override_contracts WHERE status = 'pending'"
+            )
+            pending_overrides = cursor.fetchone()[0]
+
+            cursor.execute("SELECT COUNT(*) FROM chase_debt WHERE status = 'active'")
+            active_debts = cursor.fetchone()[0]
+
+            cursor.execute(
+                "SELECT COALESCE(SUM(current_amount), 0) FROM chase_debt WHERE status IN ('active', 'overdue')"
+            )
+            total_debt = cursor.fetchone()[0]
+
+            cursor.execute("SELECT COUNT(*) FROM chapter_reading_power")
+            reading_power_records = cursor.fetchone()[0]
+
             return {
                 "chapters": chapters,
                 "scenes": scenes,
@@ -924,16 +1761,23 @@ class IndexManager:
                 "active_entities": active_entities,
                 "aliases": aliases,
                 "state_changes": state_changes,
-                "relationships": relationships
+                "relationships": relationships,
+                # v5.3 新增
+                "override_contracts": override_contracts,
+                "pending_overrides": pending_overrides,
+                "active_debts": active_debts,
+                "total_debt": total_debt,
+                "reading_power_records": reading_power_records,
             }
 
 
 # ==================== CLI 接口 ====================
 
+
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description="Index Manager CLI (v5.1)")
+    parser = argparse.ArgumentParser(description="Index Manager CLI (v5.3)")
     parser.add_argument("--project-root", type=str, help="项目根目录")
 
     subparsers = parser.add_subparsers(dest="command")
@@ -982,7 +1826,9 @@ def main():
 
     # 按类型获取实体
     type_parser = subparsers.add_parser("get-entities-by-type")
-    type_parser.add_argument("--type", required=True, help="实体类型 (角色/地点/物品/势力/招式)")
+    type_parser.add_argument(
+        "--type", required=True, help="实体类型 (角色/地点/物品/势力/招式)"
+    )
     type_parser.add_argument("--include-archived", action="store_true")
 
     # 按别名查找实体
@@ -1002,7 +1848,9 @@ def main():
     # 获取实体关系
     rel_parser = subparsers.add_parser("get-relationships")
     rel_parser.add_argument("--entity", required=True)
-    rel_parser.add_argument("--direction", choices=["from", "to", "both"], default="both")
+    rel_parser.add_argument(
+        "--direction", choices=["from", "to", "both"], default="both"
+    )
 
     # 获取状态变化
     changes_parser = subparsers.add_parser("get-state-changes")
@@ -1011,7 +1859,9 @@ def main():
 
     # 写入实体
     upsert_entity_parser = subparsers.add_parser("upsert-entity")
-    upsert_entity_parser.add_argument("--data", required=True, help="JSON 格式的实体数据")
+    upsert_entity_parser.add_argument(
+        "--data", required=True, help="JSON 格式的实体数据"
+    )
 
     # 写入关系
     upsert_rel_parser = subparsers.add_parser("upsert-relationship")
@@ -1019,7 +1869,75 @@ def main():
 
     # 写入状态变化
     state_change_parser = subparsers.add_parser("record-state-change")
-    state_change_parser.add_argument("--data", required=True, help="JSON 格式的状态变化数据")
+    state_change_parser.add_argument(
+        "--data", required=True, help="JSON 格式的状态变化数据"
+    )
+
+    # ==================== v5.3 新增命令 ====================
+
+    # 获取债务汇总
+    subparsers.add_parser("get-debt-summary")
+
+    # 获取最近章节追读力元数据
+    reading_power_parser = subparsers.add_parser("get-recent-reading-power")
+    reading_power_parser.add_argument("--limit", type=int, default=10)
+
+    # 获取章节追读力元数据
+    chapter_rp_parser = subparsers.add_parser("get-chapter-reading-power")
+    chapter_rp_parser.add_argument("--chapter", type=int, required=True)
+
+    # 获取爽点模式使用统计
+    pattern_stats_parser = subparsers.add_parser("get-pattern-usage-stats")
+    pattern_stats_parser.add_argument("--last-n", type=int, default=20)
+
+    # 获取钩子类型使用统计
+    hook_stats_parser = subparsers.add_parser("get-hook-type-stats")
+    hook_stats_parser.add_argument("--last-n", type=int, default=20)
+
+    # 获取待偿还Override
+    pending_override_parser = subparsers.add_parser("get-pending-overrides")
+    pending_override_parser.add_argument("--before-chapter", type=int, default=None)
+
+    # 获取逾期Override
+    overdue_override_parser = subparsers.add_parser("get-overdue-overrides")
+    overdue_override_parser.add_argument("--current-chapter", type=int, required=True)
+
+    # 获取活跃债务
+    subparsers.add_parser("get-active-debts")
+
+    # 获取逾期债务
+    overdue_debt_parser = subparsers.add_parser("get-overdue-debts")
+    overdue_debt_parser.add_argument("--current-chapter", type=int, required=True)
+
+    # 计算利息
+    accrue_parser = subparsers.add_parser("accrue-interest")
+    accrue_parser.add_argument("--current-chapter", type=int, required=True)
+
+    # 偿还债务
+    pay_debt_parser = subparsers.add_parser("pay-debt")
+    pay_debt_parser.add_argument("--debt-id", type=int, required=True)
+    pay_debt_parser.add_argument("--amount", type=float, required=True)
+    pay_debt_parser.add_argument("--chapter", type=int, required=True)
+
+    # 创建Override Contract
+    create_override_parser = subparsers.add_parser("create-override-contract")
+    create_override_parser.add_argument(
+        "--data", required=True, help="JSON 格式的Override Contract数据"
+    )
+
+    # 创建债务
+    create_debt_parser = subparsers.add_parser("create-debt")
+    create_debt_parser.add_argument("--data", required=True, help="JSON 格式的债务数据")
+
+    # 标记Override已偿还
+    fulfill_override_parser = subparsers.add_parser("fulfill-override")
+    fulfill_override_parser.add_argument("--contract-id", type=int, required=True)
+
+    # 保存章节追读力元数据
+    save_rp_parser = subparsers.add_parser("save-chapter-reading-power")
+    save_rp_parser.add_argument(
+        "--data", required=True, help="JSON 格式的章节追读力元数据"
+    )
 
     args = parser.parse_args()
 
@@ -1027,6 +1945,7 @@ def main():
     config = None
     if args.project_root:
         from .config import DataModulesConfig
+
         config = DataModulesConfig.from_project_root(args.project_root)
 
     manager = IndexManager(config)
@@ -1045,7 +1964,9 @@ def main():
     elif args.command == "recent-appearances":
         appearances = manager.get_recent_appearances(args.limit)
         for a in appearances:
-            print(f"{a['entity_id']}: 最后出场第 {a['last_chapter']} 章, 共 {a['total']} 次")
+            print(
+                f"{a['entity_id']}: 最后出场第 {a['last_chapter']} 章, 共 {a['total']} 次"
+            )
 
     elif args.command == "entity-appearances":
         appearances = manager.get_entity_appearances(args.entity, args.limit)
@@ -1068,10 +1989,12 @@ def main():
             location=args.location,
             word_count=args.word_count,
             entities=entities,
-            scenes=scenes
+            scenes=scenes,
         )
         print(f"✓ 已处理第 {args.chapter} 章")
-        print(f"  章节: {stats['chapters']}, 场景: {stats['scenes']}, 出场记录: {stats['appearances']}")
+        print(
+            f"  章节: {stats['chapters']}, 场景: {stats['scenes']}, 出场记录: {stats['appearances']}"
+        )
 
     # ==================== v5.1 新增命令处理 ====================
 
@@ -1138,7 +2061,7 @@ def main():
             first_appearance=data.get("first_appearance", 0),
             last_appearance=data.get("last_appearance", 0),
             is_protagonist=data.get("is_protagonist", False),
-            is_archived=data.get("is_archived", False)
+            is_archived=data.get("is_archived", False),
         )
         is_new = manager.upsert_entity(entity)
         print(f"✓ {'新建' if is_new else '更新'}实体: {entity.id}")
@@ -1150,10 +2073,12 @@ def main():
             to_entity=data["to_entity"],
             type=data["type"],
             description=data.get("description", ""),
-            chapter=data["chapter"]
+            chapter=data["chapter"],
         )
         is_new = manager.upsert_relationship(rel)
-        print(f"✓ {'新建' if is_new else '更新'}关系: {rel.from_entity} → {rel.to_entity} ({rel.type})")
+        print(
+            f"✓ {'新建' if is_new else '更新'}关系: {rel.from_entity} → {rel.to_entity} ({rel.type})"
+        )
 
     elif args.command == "record-state-change":
         data = json.loads(args.data)
@@ -1163,10 +2088,121 @@ def main():
             old_value=data.get("old_value", ""),
             new_value=data["new_value"],
             reason=data.get("reason", ""),
-            chapter=data["chapter"]
+            chapter=data["chapter"],
         )
         record_id = manager.record_state_change(change)
         print(f"✓ 已记录状态变化 #{record_id}: {change.entity_id}.{change.field}")
+
+    # ==================== v5.3 新增命令处理 ====================
+
+    elif args.command == "get-debt-summary":
+        summary = manager.get_debt_summary()
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+
+    elif args.command == "get-recent-reading-power":
+        records = manager.get_recent_reading_power(args.limit)
+        print(json.dumps(records, ensure_ascii=False, indent=2))
+
+    elif args.command == "get-chapter-reading-power":
+        record = manager.get_chapter_reading_power(args.chapter)
+        if record:
+            print(json.dumps(record, ensure_ascii=False, indent=2))
+        else:
+            print(f"未找到第 {args.chapter} 章的追读力元数据")
+
+    elif args.command == "get-pattern-usage-stats":
+        stats = manager.get_pattern_usage_stats(args.last_n)
+        print(json.dumps(stats, ensure_ascii=False, indent=2))
+
+    elif args.command == "get-hook-type-stats":
+        stats = manager.get_hook_type_stats(args.last_n)
+        print(json.dumps(stats, ensure_ascii=False, indent=2))
+
+    elif args.command == "get-pending-overrides":
+        overrides = manager.get_pending_overrides(args.before_chapter)
+        print(json.dumps(overrides, ensure_ascii=False, indent=2))
+
+    elif args.command == "get-overdue-overrides":
+        overrides = manager.get_overdue_overrides(args.current_chapter)
+        print(json.dumps(overrides, ensure_ascii=False, indent=2))
+
+    elif args.command == "get-active-debts":
+        debts = manager.get_active_debts()
+        print(json.dumps(debts, ensure_ascii=False, indent=2))
+
+    elif args.command == "get-overdue-debts":
+        debts = manager.get_overdue_debts(args.current_chapter)
+        print(json.dumps(debts, ensure_ascii=False, indent=2))
+
+    elif args.command == "accrue-interest":
+        result = manager.accrue_interest(args.current_chapter)
+        print(f"✓ 利息计算完成")
+        print(f"  处理债务: {result['debts_processed']} 笔")
+        print(f"  总利息: {result['total_interest']:.2f}")
+        print(f"  新逾期: {result['new_overdues']} 笔")
+
+    elif args.command == "pay-debt":
+        result = manager.pay_debt(args.debt_id, args.amount, args.chapter)
+        if "error" in result:
+            print(f"✗ {result['error']}")
+        elif result["fully_paid"]:
+            print(f"✓ 债务 #{args.debt_id} 已完全偿还")
+        else:
+            print(f"✓ 债务 #{args.debt_id} 部分偿还，剩余: {result['remaining']:.2f}")
+
+    elif args.command == "create-override-contract":
+        data = json.loads(args.data)
+        contract = OverrideContractMeta(
+            chapter=data["chapter"],
+            constraint_type=data["constraint_type"],
+            constraint_id=data["constraint_id"],
+            rationale_type=data["rationale_type"],
+            rationale_text=data.get("rationale_text", ""),
+            payback_plan=data.get("payback_plan", ""),
+            due_chapter=data["due_chapter"],
+            status=data.get("status", "pending"),
+        )
+        contract_id = manager.create_override_contract(contract)
+        print(f"✓ 已创建Override Contract #{contract_id}")
+
+    elif args.command == "create-debt":
+        data = json.loads(args.data)
+        debt = ChaseDebtMeta(
+            debt_type=data["debt_type"],
+            original_amount=data.get("original_amount", 1.0),
+            current_amount=data.get("current_amount", data.get("original_amount", 1.0)),
+            interest_rate=data.get("interest_rate", 0.1),
+            source_chapter=data["source_chapter"],
+            due_chapter=data["due_chapter"],
+            override_contract_id=data.get("override_contract_id", 0),
+            status=data.get("status", "active"),
+        )
+        debt_id = manager.create_debt(debt)
+        print(f"✓ 已创建债务 #{debt_id}: {debt.debt_type}")
+
+    elif args.command == "fulfill-override":
+        success = manager.fulfill_override(args.contract_id)
+        if success:
+            print(f"✓ Override Contract #{args.contract_id} 已标记为已偿还")
+        else:
+            print(f"✗ 未找到 Override Contract #{args.contract_id}")
+
+    elif args.command == "save-chapter-reading-power":
+        data = json.loads(args.data)
+        meta = ChapterReadingPowerMeta(
+            chapter=data["chapter"],
+            hook_type=data.get("hook_type", ""),
+            hook_strength=data.get("hook_strength", "medium"),
+            coolpoint_patterns=data.get("coolpoint_patterns", []),
+            micropayoffs=data.get("micropayoffs", []),
+            hard_violations=data.get("hard_violations", []),
+            soft_suggestions=data.get("soft_suggestions", []),
+            is_transition=data.get("is_transition", False),
+            override_count=data.get("override_count", 0),
+            debt_balance=data.get("debt_balance", 0.0),
+        )
+        manager.save_chapter_reading_power(meta)
+        print(f"✓ 已保存第 {meta.chapter} 章追读力元数据")
 
 
 if __name__ == "__main__":

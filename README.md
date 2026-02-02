@@ -35,6 +35,26 @@
 | **设定即物理** | 遵守设定，不自相矛盾 | Consistency Checker 实时校验 |
 | **发明需识别** | 新实体必须入库管理 | Data Agent 自动提取并消歧 |
 
+### 追读力机制 (v5.3 新增)
+
+**约束分层系统**：
+
+| 层级 | 说明 | 处理方式 |
+|------|------|---------|
+| **Hard Invariants** | 不可违反的硬约束 | 必须修复，无法跳过 |
+| **Soft Guidance** | 可违反的软建议 | 可通过 Override Contract 跳过 |
+
+**Hard Invariants (4条)**：
+- HARD-001: 可读性底线 - 读者必须能理解发生了什么
+- HARD-002: 承诺违背 - 上章钩子必须有回应
+- HARD-003: 节奏灾难 - 不可连续N章无推进
+- HARD-004: 冲突真空 - 每章必须有问题/目标/代价
+
+**Override Contract 机制**：
+- 违反软建议时需记录理由和偿还计划
+- 每个 Override 产生债务，含利息（默认 10%/章）
+- 逾期债务会影响后续章节评分
+
 ### Strand Weave 节奏系统
 
 三线交织的叙事节奏控制：
@@ -197,22 +217,22 @@ pip install -r .claude/scripts/requirements.txt
 /webnovel-write 45      # 创作第45章
 ```
 
-**创作流程 (v5.2)**：
+**创作流程 (v5.3)**：
 
 ```
-Step 1: Context Agent 搜集上下文 → 创作任务书
+Step 1: Context Agent 搜集上下文 → 创作任务书（含追读力设计）
         ↓
-Step 1.5: 章节设计（开头/钩子/爽点模式选择）
+Step 1.5: 章节设计（开头/钩子/爽点/微兑现规划）
         ↓
 Step 2A: 生成粗稿（3000-5000字）
         ↓
 Step 2B: 风格适配器（网文化改写）
         ↓
-Step 3: 6 Agent 并行审查
+Step 3: 6 Agent 并行审查（含 reader-pull-checker）
         ↓
 Step 4: 网文化润色
         ↓
-Step 5: Data Agent 提取实体/更新索引
+Step 5: Data Agent 提取实体/更新索引/记录追读力元数据
         ↓
 Step 6: Git 自动提交备份
 ```
@@ -290,7 +310,7 @@ Step 6: Git 自动提交备份
 8. 推断角色动机/情绪
 9. 组装**创作任务书**
 
-**输出结构（8个章节）**：
+**输出结构（10个章节）**：
 1. **本章核心任务**（冲突一句话、必须完成、绝对不能）
 2. **接住上章**（上章钩子、读者期待、开头必须）
 3. **出场角色**（状态、动机、情绪底色、说话风格、红线）
@@ -299,6 +319,8 @@ Step 6: Git 自动提交备份
 6. **伏笔管理**（必须处理、可选提及）
 7. **连贯性检查点**（时间、位置、情绪）
 8. **章末钩子设置**（建议类型、禁止事项）
+9. **追读力设计**（v5.3 新增：钩子策略、微兑现规划、模式差异化）
+10. **债务与Override状态**（v5.3 新增：当前债务、待偿还Override）
 
 ---
 
@@ -346,7 +368,7 @@ Step 6: Git 自动提交备份
 | **Continuity Checker** | 场景转换流畅度 | 伏笔回收情况 |
 | **Reader-pull Checker** | 追读力检查 | 钩子强度、模式重复、读者期待 |
 
-### 爽点六大执行模式
+### 爽点八大执行模式 (v5.3)
 
 | 模式 | 模式标识 | 典型触发 |
 |------|---------|---------|
@@ -356,6 +378,30 @@ Step 6: Git 自动提交备份
 | 打脸权威 | Authority Challenge | 权威 → 挑战 → 成功 |
 | 反派翻车 | Villain Downfall | 得意 → 反杀 → 落幕 |
 | 甜蜜超预期 | Sweet Surprise | 期待 → 超预期 → 升华 |
+| **迪化误解** | Misunderstanding Elevation | 随意行为 → 配角脑补 → 读者优越感 |
+| **身份掉马** | Identity Reveal | 伪装 → 揭露 → 周围震惊 |
+
+### 钩子五大类型 (v5.3)
+
+| 类型 | 驱动力 | 示例 |
+|------|--------|------|
+| 危机钩 | 危险逼近，读者担心 | "门外传来脚步声..." |
+| 悬念钩 | 信息缺口，读者好奇 | "他看到信上的名字，脸色骤变" |
+| 情绪钩 | 强情绪触发 | 愤怒/心疼/心动 |
+| 选择钩 | 两难抉择 | "救师父还是救爱人？" |
+| 渴望钩 | 好事将至，读者期待 | "明天就是突破的日子" |
+
+### 微兑现七大类型 (v5.3)
+
+| 类型 | 说明 |
+|------|------|
+| 信息兑现 | 揭示新信息/线索/真相 |
+| 关系兑现 | 关系推进/确认/变化 |
+| 能力兑现 | 能力提升/新技能展示 |
+| 资源兑现 | 获得物品/资源/财富 |
+| 认可兑现 | 获得认可/面子/地位 |
+| 情绪兑现 | 情绪释放/共鸣 |
+| 线索兑现 | 伏笔回收/推进 |
 
 ### 爽点密度基准
 
@@ -479,7 +525,7 @@ your-novel-project/
 │   │   └── webnovel-resume/
 │   ├── scripts/                # Python 脚本
 │   │   ├── data_modules/
-│   │   │   ├── index_manager.py    # SQLite 索引管理 (v5.1)
+│   │   │   ├── index_manager.py    # SQLite 索引管理 (v5.3)
 │   │   │   ├── rag_adapter.py      # RAG 检索层
 │   │   │   ├── api_client.py       # API 客户端
 │   │   │   └── config.py           # 配置管理
@@ -496,6 +542,8 @@ your-novel-project/
 │   └── references/             # 写作指南
 │       ├── strand-weave.md
 │       ├── cool-points-guide.md
+│       ├── reading-power-taxonomy.md  # 追读力分类标准 (v5.3)
+│       ├── genre-profiles.md          # 题材配置档案 (v5.3)
 │       └── ...
 ├── .webnovel/                  # 运行时数据
 │   ├── state.json              # 权威状态 (含 chapter_meta)
@@ -539,6 +587,28 @@ done
 python -m data_modules.index_manager stats --project-root "."
 ```
 
+### 追读力数据查询 (v5.3)
+
+```bash
+# 查看债务汇总
+python -m data_modules.index_manager get-debt-summary --project-root "."
+
+# 查看最近章节追读力元数据
+python -m data_modules.index_manager get-recent-reading-power --limit 10 --project-root "."
+
+# 查看爽点模式使用统计
+python -m data_modules.index_manager get-pattern-usage-stats --last-n 20 --project-root "."
+
+# 查看钩子类型使用统计
+python -m data_modules.index_manager get-hook-type-stats --last-n 20 --project-root "."
+
+# 查看待偿还Override
+python -m data_modules.index_manager get-pending-overrides --project-root "."
+
+# 计算利息（每章调用一次）
+python -m data_modules.index_manager accrue-interest --current-chapter 100 --project-root "."
+```
+
 ### 向量重建
 
 当 `vectors.db` 损坏或嵌入模型更换时：
@@ -567,7 +637,17 @@ git checkout ch0045
 
 ## 版本历史
 
-### v5.2 (当前)
+### v5.3 (当前)
+- **追读力分类标准**：钩子5类型、爽点8模式、微兑现7类型
+- **约束分层机制**：Hard Invariants (4条) + Soft Guidance (可Override)
+- **Override Contract**：违反软建议需记录理由和偿还计划
+- **追读力债务**：债务追踪、利息计算、逾期管理
+- **题材Profile**：8种内置题材配置（偏好钩子/爽点/微兑现要求）
+- **SQLite新表**：override_contracts、chase_debt、debt_events、chapter_reading_power
+- **Context Agent**：输出扩展至10章节（新增追读力设计、债务状态）
+- **CLI新命令**：get-debt-summary、get-recent-reading-power、accrue-interest 等
+
+### v5.2
 - 创作任务书：Context Agent 输出人话版 8 章节格式（替代 JSON）
 - 追读力检查：新增 reader-pull-checker（第 6 个审查 Agent）
 - 章节设计：Step 1.5 选择开头/钩子/爽点模式，避免重复

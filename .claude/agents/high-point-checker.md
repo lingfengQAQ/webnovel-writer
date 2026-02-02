@@ -1,12 +1,17 @@
 ---
 name: high-point-checker
-description: 爽点密度检查，输出结构化报告供润色步骤参考
-tools: Read, Grep
+description: 爽点密度检查 v5.3，支持迪化误解/身份掉马模式，输出结构化报告
+tools: Read, Grep, Bash
 ---
 
-# high-point-checker (爽点检查器)
+# high-point-checker (爽点检查器) v5.3
 
 > **Role**: Quality assurance specialist focused on reader satisfaction mechanics (爽点设计).
+
+## 核心参考
+
+- **Taxonomy**: `.claude/references/reading-power-taxonomy.md`
+- **Genre Profile**: `.claude/references/genre-profiles.md`
 
 ## Scope
 
@@ -22,7 +27,7 @@ Read all chapters in the specified range from `正文/` directory.
 
 ### Step 2: Identify Cool-Points (爽点)
 
-Scan for the **6 standard execution modes** (执行模式):
+Scan for the **8 standard execution modes** (执行模式):
 
 | Mode | Pattern Keywords | Minimal Requirements |
 |------|-----------------|---------------------|
@@ -32,6 +37,45 @@ Scan for the **6 standard execution modes** (执行模式):
 | **打脸权威** (Authority Challenge) | 权威/前辈/强者 → 主角挑战成功 | Authority Established + Challenge + Success |
 | **反派翻车** (Villain Downfall) | 反派得意/阴谋 → 计划失败/被反杀 | Villain Setup + Protagonist Counter + Downfall |
 | **甜蜜超预期** (Sweet Surprise) | 期待/心动 → 超预期表现 → 情感升华 | Anticipation + Exceeding Expectation + Emotion |
+| **迪化误解** (Misunderstanding Elevation) | 主角随意行为 → 配角脑补升华 → 读者优越感 | Casual Action + Info Gap + Misinterpretation + Reader Superiority |
+| **身份掉马** (Identity Reveal) | 身份伪装 → 关键时刻揭露 → 周围震惊 | Concealment (long-term) + Trigger Event + Reveal + Mass Reaction |
+
+### Step 2.1: 迪化误解模式检测（v5.3 新增）
+
+**核心结构**:
+1. 主角随意行为（无心插柳）
+2. 配角信息差（不知道主角真实情况）
+3. 配角脑补升华（合理化主角行为）
+4. 读者优越感（我知道真相）
+
+**识别信号**:
+- "竟然"/"难道"/"莫非" + 配角内心戏
+- 主角行为与配角解读的反差
+- 读者视角知道真相
+
+**质量评估**:
+- A级：脑补合理，读者优越感强
+- B级：脑补尚可，效果一般
+- C级：脑补太刻意，配角显得蠢
+
+### Step 2.2: 身份掉马模式检测（v5.3 新增）
+
+**核心结构**:
+1. 身份伪装（需长期铺垫）
+2. 关键时刻（危机/高光）
+3. 身份揭露（意外或主动）
+4. 周围反应（震惊/后悔/敬畏）
+
+**识别信号**:
+- 身份相关词汇（真实身份/原来是/竟然是）
+- 周围角色大规模反应
+- 前后反差描写
+
+**质量评估**:
+- A级：有长期铺垫，反应层次丰富
+- B级：有铺垫，反应单一
+- C级：无铺垫，突兀
+- F级：硬编身份，逻辑矛盾
 
 ### Step 3: Density Check
 
@@ -136,10 +180,49 @@ Chapters {N} - {M}
 ❌ Accepting chapters with 0 cool-points without flagging
 ❌ Ignoring sudden cool-points without setup
 ❌ Approving 5+ consecutive chapters of the same type
+❌ 迪化误解中配角智商明显下线
+❌ 身份掉马无任何前期暗示
 
 ## Success Criteria
 
 - All chapters have ≥ 1 cool-point
 - Type distribution shows variety (no single type > 80%)
 - Average quality grade ≥ B
+- 迪化误解的脑补需合理
+- 身份掉马需有铺垫
 - Report includes actionable recommendations
+
+## v5.3 输出格式增强
+
+```json
+{
+  "agent": "high-point-checker",
+  "chapters": [45, 46],
+  "overall_pass": true,
+  "density": {
+    "total_coolpoints": 4,
+    "per_chapter_avg": 2.0,
+    "meets_baseline": true
+  },
+  "diversity": {
+    "distribution": {
+      "装逼打脸": 1,
+      "迪化误解": 2,
+      "身份掉马": 1
+    },
+    "dominant_type": null,
+    "monotony_risk": false
+  },
+  "coolpoints": [
+    {
+      "chapter": 45,
+      "description": "主角随口评价被当做高人指点",
+      "mode": "迪化误解",
+      "grade": "A",
+      "structure_30_40_30": true,
+      "pressure_relief_ratio": "压3扬7"
+    }
+  ],
+  "recommendations": []
+}
+```
