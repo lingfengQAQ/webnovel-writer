@@ -86,7 +86,7 @@
 │  │  review  │ │  query   │ │  resume  │                     │
 │  └──────────┘ └──────────┘ └──────────┘                     │
 ├─────────────────────────────────────────────────────────────┤
-│  Agents (9个)                                                │
+│  Agents (8个)                                                │
 │  ┌─────────────────┐  ┌─────────────────┐                   │
 │  │  Context Agent  │  │   Data Agent    │                   │
 │  │     (读取)      │  │     (写入)      │                   │
@@ -134,6 +134,8 @@ pip install -r .claude/scripts/requirements.txt
 |------|------|
 | aiohttp | 异步 HTTP 客户端，用于 Embedding/Reranker API 调用 |
 | filelock | 文件锁，防止 state.json 并发写入冲突 |
+| pytest | 单元测试（可选） |
+| pytest-cov | 覆盖率统计（可选） |
 
 ### 2. 初始化项目
 
@@ -507,7 +509,7 @@ context_max_urgent_foreshadowing = 5  # 最大紧急伏笔数
 ```
 your-novel-project/
 ├── .claude/                    # 插件目录
-│   ├── agents/                 # 9 个专职 Agent
+│   ├── agents/                 # 8 个专职 Agent
 │   │   ├── context-agent.md    # 创作任务书工程师
 │   │   ├── data-agent.md       # 数据链工程师
 │   │   ├── high-point-checker.md
