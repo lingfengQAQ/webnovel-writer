@@ -1,0 +1,7 @@
+[run]
+source = .claude/scripts/data_modules
+omit =
+    */tests/*
+
+[report]
+show_missing = True
