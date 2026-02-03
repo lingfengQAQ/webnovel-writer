@@ -16,6 +16,7 @@ allowed-tools: Bash Write Read Edit AskUserQuestion Task
 - [ ] Phase 4: 金手指设计 (Standard+)
 - [ ] Phase 5: 世界构建 (Standard+)
 - [ ] Phase 6: 创意深挖 (Deep)
+- [ ] Phase 6.5: 创意约束生成 (Standard+) ← 新增
 - [ ] Phase 7: 生成项目文件
 - [ ] Phase 8: 验证并报告
 ```
@@ -57,10 +58,13 @@ cat "${CLAUDE_PLUGIN_ROOT}/skills/webnovel-init/references/system-data-flow.md"
 
 | 大类 | 具体题材选项 |
 |------|-------------|
-| 玄幻修仙类 | 修仙 / 系统流 |
-| 都市现代类 | 都市异能 / 现实题材 |
-| 言情类 | 狗血言情 / 古言 / 替身文 / 多子多福 |
-| 特殊题材 | 知乎短篇 / 规则怪谈 / 黑暗题材 |
+| 玄幻修仙类 | 修仙 / 系统流 / 高武 / 西幻 / 无限流 / 末世 / 科幻 |
+| 都市现代类 | 都市日常 / 都市异能 / 都市脑洞 / 现实题材 |
+| 言情类 | 古言 / 宫斗宅斗 / 青春甜宠 / 豪门总裁 / 职场婚恋 / 民国言情 / 幻想言情 / 现言脑洞 / 女频悬疑 / 狗血言情 / 替身文 / 多子多福 / 种田 / 年代 |
+| 特殊题材 | 规则怪谈 / 悬疑脑洞 / 悬疑灵异 / 历史古代 / 历史脑洞 / 游戏体育 / 抗战谍战 / 知乎短篇 |
+
+**支持复合题材**：可输入“题材A+题材B”（最多 2 个），例如：`都市脑洞+规则怪谈`。  
+**复合规则**：1 主 1 辅（约 7:3），主线保持主题材逻辑，副题材只提供规则/钩子/爽点。
 
 同时询问：
 
@@ -70,10 +74,13 @@ cat "${CLAUDE_PLUGIN_ROOT}/skills/webnovel-init/references/system-data-flow.md"
 
 ### 2.3 加载题材模板（必须执行）
 
-根据选择的题材执行：
+根据选择的题材执行（复合题材需分别加载）：
 
 ```bash
-cat "${CLAUDE_PLUGIN_ROOT}/templates/genres/{题材}.md"
+# 主题材
+cat "${CLAUDE_PLUGIN_ROOT}/templates/genres/{题材A}.md"
+# 副题材（可选）
+cat "${CLAUDE_PLUGIN_ROOT}/templates/genres/{题材B}.md"
 ```
 
 ---
@@ -99,6 +106,19 @@ cat "${CLAUDE_PLUGIN_ROOT}/templates/genres/{题材}.md"
 | 姓名风格 | 古风名（林天/萧炎/叶凡/陈平安） / 现代名（李明/张伟/王强） / 特殊名（需自定义） |
 
 > 选择风格后，Claude 可生成具体姓名建议供用户确认。
+
+### 3.3 主角结构与女主配置
+
+**[AskUserQuestion Round 4-Q3]**
+
+| 问题 | 选项 |
+|------|------|
+| 主角结构 | 单主角 / 多主角（2-5人） |
+| 女主配置 | 无女主 / 重要女主（1人） / 多女主（2-3人） |
+
+> 若选“多主角”，追问主角姓名与各自定位（主线/副线/反差角色）。
+> 若选“有女主”，追问女主姓名与定位（事业线/情感线/对抗线）。
+> 若选“多女主”，追问 2-3 位女主姓名与定位。
 
 ---
 
@@ -132,6 +152,8 @@ cat "${CLAUDE_PLUGIN_ROOT}/skills/webnovel-init/references/worldbuilding/charact
 |------|------|
 | 金手指类型 | 根据题材动态显示 + “无金手指” |
 | 成长曲线 | 前期爆发型 / 稳步提升型 / 厚积薄发型 |
+| 读者可见度 | 明牌 / 半明牌 / 暗牌 |
+| 不可逆代价 | 寿命 / 记忆 / 关系 / 资源 / 无 |
 
 ### 4.3 根据金手指类型动态调整问题
 
@@ -182,6 +204,30 @@ cat "${CLAUDE_PLUGIN_ROOT}/skills/webnovel-init/references/worldbuilding/world-r
 | 世界规模 | 单一大陆 / 多大陆 / 多位面/多世界 / 星际宇宙 |
 | 势力格局 | 门派/宗门 / 家族/世家 / 国家/帝国 / 组织/联盟 |
 | 力量体系 | 境界修炼型 / 等级数值型 / 血脉觉醒型 / 职业技能型 |
+| 社会阶层 | 阶级森严 / 相对平等 / 高流动性 |
+| 资源分配 | 资源稀缺 / 资源中等 / 资源充足 |
+| 货币体系 | 银两/铜钱 / 灵石/灵晶 / 贡献点/功勋点 / 信用点/配给券 / 双币制 / 自定义 |
+| 兑换规则 | 可选：填写主要面值或兑换比率（可空） |
+| 宗门/组织层级 | 宗主-长老-核心-内门-外门 / 家族(嫡系-旁系) / 官僚(军衔) / 无宗门 |
+
+### 5.2.1 境界链模板（仅境界修炼型）
+
+**[AskUserQuestion Round 6-Q1]**
+
+| 问题 | 选项 |
+|------|------|
+| 典型境界链 | 练气-筑基-金丹-元婴-化神 / 三阶九段 / 自定义 |
+| 小境界划分 | 初/中/后/巅 / 初/中/后/圆满 / 无 |
+
+### 5.3 反派分层（可选）
+
+**[AskUserQuestion Round 6-Q2]**
+
+| 问题 | 选项 |
+|------|------|
+| 反派分层 | 暂不设定 / 提供小反派 / 提供小+中反派 / 提供小+中+大反派 |
+
+> 若选择提供，收集名称与定位（示例：小反派:张三;中反派:李四;大反派:王五）。
 
 ---
 
@@ -229,6 +275,106 @@ cat "${CLAUDE_PLUGIN_ROOT}/skills/webnovel-init/references/creativity/market-pos
 
 ---
 
+## Phase 6.5: 创意约束生成 (Standard + Deep)
+
+**跳过条件**: Quick 模式跳过此阶段
+
+> **核心理念**: 约束不是限制，而是创意的催化剂；用结构化约束迫使非套路选择。
+
+### 6.5.1 加载创意约束资料
+
+```bash
+cat "${CLAUDE_PLUGIN_ROOT}/skills/webnovel-init/references/creativity/creativity-constraints.md"
+```
+
+**可选：按平台分类生成创意包**
+
+```bash
+cat "${CLAUDE_PLUGIN_ROOT}/skills/webnovel-init/references/creativity/category-constraint-packs.md"
+```
+
+根据题材**只加载一个**反套路库：
+
+```bash
+# 修仙/玄幻
+cat "${CLAUDE_PLUGIN_ROOT}/skills/webnovel-init/references/creativity/anti-trope-xianxia.md"
+```
+
+或
+
+```bash
+# 规则怪谈
+cat "${CLAUDE_PLUGIN_ROOT}/skills/webnovel-init/references/creativity/anti-trope-rules-mystery.md"
+```
+
+**可选：市场扫描（仅在用户明确要求时）**
+
+```bash
+cat "${CLAUDE_PLUGIN_ROOT}/skills/webnovel-init/references/creativity/market-trends-2026.md"
+```
+
+### 6.5.2 生成创意包（3-5个）
+
+基于前面收集的信息，生成 3-5 个创意包，每个包含：
+
+若 Phase 6 未执行，先补问 1-2 个关键问题（保持简短）：
+- 规则限制偏好（从创意约束库中选 1-2 条）
+- 角色矛盾类型（主角“想要什么”与“怕失去什么”）
+
+| 字段 | 说明 |
+|------|------|
+| 书名 | 吸引眼球的标题 |
+| 一句话卖点 | 10秒电梯演讲 |
+| 三轴混搭 | 题材基础 + 规则限制 + 角色矛盾（至少2/3非默认） |
+| 反套路规则 | 从反套路库选择至少1条 |
+| 主角缺陷 | 必填，驱动成长 |
+| 反派镜像 | 与主角共享欲望/缺陷，采取相反道路 |
+| 开篇钩子 | 一句钩子 + 开场场景 + 第一章末悬念 |
+| 硬约束 | 2-3条世界观/能力/行为约束 |
+
+### 6.5.3 三问筛选
+
+对每个创意包进行三问筛选：
+
+| # | 问题 | 通过标准 |
+|---|------|---------|
+| Q1 | 这题材为什么"只能这样写"？ | 能说出至少1个独特理由 |
+| Q2 | 这主角如果换成常规人设会崩吗？ | 是（主角与故事深度绑定） |
+| Q3 | 这个卖点一句话能讲清、且不撞常见套路吗？ | 是（卖点清晰且有差异化） |
+
+**筛选结果**:
+- 通过 3/3 → 进入评分
+- 通过 2/3 → 修改后重新筛选
+- 通过 1/3 或 0/3 → 淘汰
+
+### 6.5.4 五维评分
+
+| 维度 | 权重 | 1分 | 3分 | 5分 |
+|------|------|-----|-----|-----|
+| 新颖度 | 25% | 烂大街 | 微创新 | 开创新品类 |
+| 市场性 | 20% | 小众冷门 | 中等受众 | 大众热门 |
+| 可写性 | 20% | 极难驾驭 | 中等难度 | 易于实现 |
+| 爽点密度 | 20% | 爽点稀疏 | 中等密度 | 高密度 |
+| 长线潜力 | 15% | 难以续写 | 可续写 | 无限扩展 |
+
+**计算**: 总分 = 新颖度×2.5 + 市场性×2 + 可写性×2 + 爽点密度×2 + 长线潜力×1.5（满分50）
+
+### 6.5.5 选择最佳创意
+
+**[AskUserQuestion Round 9]**
+
+展示评分后的创意包，让用户选择：
+
+| 问题 | 选项 |
+|------|------|
+| 选择哪个创意？ | 创意1: {title} ({score}分) / 创意2: {title} ({score}分) / ... / 重新生成 |
+
+### 6.5.6 记录创意（延后保存）
+
+先在输出中**明确标注**最终选中的创意包与继承约束；实际写入磁盘放到 Phase 7（确保已进入项目目录）。
+
+---
+
 ## Phase 7: 生成项目文件
 
 ### 7.0 项目目录规则（必须执行）
@@ -251,6 +397,25 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/init_project.py" \
   --target-words {count} \
   --golden-finger-name "{gf_name}" \
   --golden-finger-type "{gf_type}" \
+  --protagonist-structure "{protagonist_structure}" \
+  --heroine-config "{heroine_config}" \
+  --heroine-names "{heroine_names}" \
+  --heroine-role "{heroine_role}" \
+  --co-protagonists "{co_protagonists}" \
+  --co-protagonist-roles "{co_protagonist_roles}" \
+  --antagonist-tiers "{antagonist_tiers}" \
+  --world-scale "{world_scale}" \
+  --factions "{factions}" \
+  --power-system-type "{power_system_type}" \
+  --social-class "{social_class}" \
+  --resource-distribution "{resource_distribution}" \
+  --currency-system "{currency_system}" \
+  --currency-exchange "{currency_exchange}" \
+  --sect-hierarchy "{sect_hierarchy}" \
+  --cultivation-chain "{cultivation_chain}" \
+  --cultivation-subtiers "{cultivation_subtiers}" \
+  --gf-visibility "{gf_visibility}" \
+  --gf-irreversible-cost "{gf_irreversible_cost}" \
   --core-selling-points "{points}"
 ```
 
@@ -258,6 +423,48 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/init_project.py" \
 
 ```bash
 cd "{project_root}"
+```
+
+### 7.2.1 保存创意到 idea_bank（如有）
+
+> 前提：已 `cd` 到项目目录，且 `.webnovel/` 已由 init 脚本创建。
+
+```bash
+@'
+{
+  "selected_idea": {
+    "title": "示例标题",
+    "one_liner": "示例一句话卖点",
+    "anti_trope": "选中的反套路规则",
+    "hard_constraints": ["硬约束1", "硬约束2"]
+  },
+  "rejected_ideas": [],
+  "constraints_inherited": {
+    "anti_trope": "选中的反套路规则",
+    "hard_constraints": ["硬约束1", "硬约束2"],
+    "protagonist_flaw": "主角缺陷",
+    "antagonist_mirror": "反派镜像设计"
+  }
+}
+'@ | Set-Content -Encoding UTF8 ".webnovel/idea_bank.json"
+```
+
+### 7.2.2 保存市场扫描结果（如有）
+
+> 仅在用户明确要求“市场扫描/热门趋势”时执行。
+
+```bash
+@'
+# Market Notes ({YYYY-MM-DD})
+
+来源：
+- {来源1}
+- {来源2}
+
+要点：
+- {标签/方向}
+- {标签/方向}
+'@ | Set-Content -Encoding UTF8 ".webnovel/market_notes-{YYYYMMDD}.md"
 ```
 
 ### 7.3 生成文件清单（含模板写入）
@@ -269,7 +476,11 @@ cd "{project_root}"
 | `设定集/世界观.md` | 世界观设定模板 | init Phase 7 | `设定集/世界观.md` |
 | `设定集/力量体系.md` | 力量体系模板 | init Phase 7 | `设定集/力量体系.md` |
 | `设定集/主角卡.md` | 主角卡模板 | init Phase 7 | `设定集/主角卡.md` |
+| `设定集/女主卡.md` | 女主卡模板 | init Phase 7 | `设定集/女主卡.md` |
+| `设定集/主角组.md` | 多主角协作模板 | init Phase 7 | `设定集/主角组.md` |
 | `设定集/金手指设计.md` | 金手指设计模板 | init Phase 7 | `设定集/金手指设计.md` |
+| `设定集/复合题材-融合逻辑.md` | 复合题材融合模板 | init Phase 7 | `设定集/复合题材-融合逻辑.md` |
+| `设定集/反派设计.md` | 反派模板 | init Phase 7 | `设定集/反派设计.md` |
 | `大纲/总纲.md` | 总纲模板 | init Phase 7 | `大纲/总纲.md` |
 | `大纲/爽点规划.md` | 爽点规划模板 | init Phase 7 | `大纲/爽点规划.md` |
 
@@ -291,8 +502,8 @@ python -m data_modules.index_manager stats --project-root "{project_root}"
 ### 8.1 验证文件
 
 ```bash
-ls -la "{project_root}/.webnovel/state.json"
-ls -la "{project_root}/设定集"/*.md
+Get-Item "{project_root}/.webnovel/state.json"
+Get-ChildItem "{project_root}/设定集" -Filter *.md
 ```
 
 ### 8.2 初始化 Git（可选）
@@ -316,12 +527,43 @@ git -C "{project_root}" init && git -C "{project_root}" add . && git -C "{projec
 | Round 1 | Phase 1 | 1 | All |
 | Round 2 | Phase 2 | 1 | All |
 | Round 3 | Phase 2 | 2 | All |
-| Round 4 | Phase 3 | 2 | All |
-| Round 5 | Phase 4 | 2 | Standard/Deep |
-| Round 6 | Phase 5 | 3 | Standard/Deep |
+| Round 4 | Phase 3 | 3 | All |
+| Round 5 | Phase 4 | 4 | Standard/Deep |
+| Round 6 | Phase 5 | 8 | Standard/Deep |
 | Round 7 | Phase 6 | 3 | Deep |
 | Round 8 | Phase 6 | 3 | Deep |
+| Round 9 | Phase 6.5 | 1 | Standard/Deep |
 
 **Quick 模式**: Round 1-4
-**Standard 模式**: Round 1-6
-**Deep 模式**: Round 1-8
+**Standard 模式**: Round 1-6, 9
+**Deep 模式**: Round 1-9
+
+---
+
+## 变量映射（用于 init_project.py）
+
+> 统一变量名，直接拼接到 Phase 7 的命令参数。
+
+| 来源问题 | 变量名 | 格式示例 |
+|---------|--------|----------|
+| 主角结构 | `protagonist_structure` | 单主角 / 多主角 |
+| 女主配置 | `heroine_config` | 无女主 / 单女主 / 多女主 |
+| 女主姓名 | `heroine_names` | 叶清 / 叶清,苏晚 |
+| 女主定位 | `heroine_role` | 事业线 / 情感线 / 对抗线 |
+| 多主角姓名 | `co_protagonists` | 林天,顾言 |
+| 多主角定位 | `co_protagonist_roles` | 主线,副线 |
+| 反派分层 | `antagonist_tiers` | 小反派:张三;中反派:李四;大反派:王五 |
+| 世界规模 | `world_scale` | 多大陆 |
+| 势力格局 | `factions` | 门派/宗门 |
+| 力量体系 | `power_system_type` | 境界修炼型 |
+| 社会阶层 | `social_class` | 阶级森严 |
+| 资源分配 | `resource_distribution` | 资源稀缺 |
+| 货币体系 | `currency_system` | 灵石/灵晶 |
+| 货币兑换 | `currency_exchange` | 1灵晶=100灵石 |
+| 宗门层级 | `sect_hierarchy` | 宗主-长老-核心-内门-外门 |
+| 典型境界链 | `cultivation_chain` | 练气-筑基-金丹-元婴 |
+| 小境界划分 | `cultivation_subtiers` | 初/中/后/巅 |
+| 金手指可见度 | `gf_visibility` | 明牌 |
+| 金手指不可逆代价 | `gf_irreversible_cost` | 寿命 / 记忆 |
+
+**复合题材**：`genre = 题材A+题材B`（最多 2 个），其余变量不变。

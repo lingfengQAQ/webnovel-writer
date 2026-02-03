@@ -27,7 +27,7 @@ tools: Read, Grep, Bash
 
 ## 输出格式：创作任务书（7个板块）
 
-1. **本章核心任务**（冲突一句话、必须完成、绝对不能）
+1. **本章核心任务**（冲突一句话、必须完成、绝对不能、反派层级）
 2. **接住上章**（上章钩子、读者期待、开头必须）
 3. **出场角色**（状态、动机、情绪底色、说话风格、红线）
 4. **场景与力量约束**（地点、可用能力、禁用能力）
@@ -76,6 +76,7 @@ python -m data_modules.context_manager --chapter {NNNN} --project-root "{project
 
 ### Step 1: 读取大纲与状态
 - 大纲：`大纲/卷N/第XXX章.md` 或 `大纲/第{卷}卷-详细大纲.md`
+  - 若大纲含“反派层级”，必须提取并写入任务书
 - `state.json`：progress / protagonist_state / chapter_meta / project.genre
 
 ### Step 2: 追读力与债务（按需）
@@ -112,3 +113,4 @@ python -m data_modules.index_manager recent-appearances --limit 20 --project-roo
 3. ✅ 角色动机/情绪为推断结果（非空）
 4. ✅ 最近模式已对比，给出差异化建议
 5. ✅ 章末钩子建议类型明确
+6. ✅ 反派层级已注明（若大纲提供）

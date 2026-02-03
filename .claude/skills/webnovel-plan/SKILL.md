@@ -31,11 +31,12 @@ allowed-tools: Read Write Edit AskUserQuestion Bash
 大纲规划进度：
 - [ ] Phase 1: 加载核心资料
 - [ ] Phase 2: 加载项目数据 + 解析总纲
+- [ ] Phase 2.5: 加载创意约束（如存在） ← 新增
 - [ ] Phase 3: 确认上下文充足
 - [ ] Phase 4: 选择规划范围
 - [ ] Phase 5: 微调确认（可选）
 - [ ] Phase 6: 生成章节大纲
-- [ ] Phase 7: 质量验证
+- [ ] Phase 7: 质量验证（含约束继承检查）
 - [ ] Phase 8: 保存并更新状态
 ```
 
@@ -87,6 +88,13 @@ cat "$PROJECT_ROOT/.webnovel/state.json"
 cat "$PROJECT_ROOT/大纲/总纲.md"
 ```
 
+### 2.1.1 读取人物与反派设定（如存在）
+
+```bash
+if (Test-Path "$PROJECT_ROOT/设定集/主角组.md") { Get-Content "$PROJECT_ROOT/设定集/主角组.md" -Encoding UTF8 }
+if (Test-Path "$PROJECT_ROOT/设定集/女主卡.md") { Get-Content "$PROJECT_ROOT/设定集/女主卡.md" -Encoding UTF8 }
+if (Test-Path "$PROJECT_ROOT/设定集/反派设计.md") { Get-Content "$PROJECT_ROOT/设定集/反派设计.md" -Encoding UTF8 }
+```
 ### 2.2 解析总纲卷结构
 
 从总纲中提取：
@@ -104,6 +112,42 @@ cat "$PROJECT_ROOT/大纲/总纲.md"
 ```bash
 Get-ChildItem "$PROJECT_ROOT/大纲/第*卷*.md" -ErrorAction SilentlyContinue
 ```
+
+---
+
+## Phase 2.5: 加载创意约束（如存在）
+
+### 2.5.1 检查 idea_bank.json
+
+```bash
+if (Test-Path "$PROJECT_ROOT/.webnovel/idea_bank.json") {
+    Get-Content "$PROJECT_ROOT/.webnovel/idea_bank.json" -Encoding UTF8
+}
+```
+
+### 2.5.2 提取继承约束
+
+如果 `idea_bank.json` 存在，提取以下约束用于大纲规划：
+
+| 约束类型 | 来源字段 | 用途 |
+|---------|---------|------|
+| 反套路规则 | `constraints_inherited.anti_trope` | 每 N 章至少触发 1 次 |
+| 硬约束 | `constraints_inherited.hard_constraints` | 贯穿全卷的世界观/能力限制 |
+| 主角缺陷 | `constraints_inherited.protagonist_flaw` | 影响主角行为和成长 |
+| 反派镜像 | `constraints_inherited.antagonist_mirror` | 设计反派冲突 |
+
+### 2.5.3 约束触发频率
+
+| 卷规模 | 约束触发频率 |
+|--------|-------------|
+| ≤20章 | 每 5 章至少 1 次 |
+| 21-40章 | 每 5 章至少 1 次 |
+| 41-60章 | 每 6 章至少 1 次 |
+| >60章 | 每 7 章至少 1 次 |
+
+**约束触发示例**：
+- 反套路规则"金手指有代价" → 第5章主角使用金手指付出代价
+- 硬约束"修仙者不能杀凡人" → 第12章主角面临凡人威胁但无法直接出手
 
 ---
 
@@ -145,6 +189,7 @@ Get-ChildItem "$PROJECT_ROOT/大纲/第*卷*.md" -ErrorAction SilentlyContinue
 - 关键爽点: {cool_points}
 - 卷末高潮: {climax}
 - 登场角色: {characters}
+- 反派层级: {antagonist_tier}
 - 伏笔安排: {foreshadowing}
 ```
 
@@ -248,6 +293,21 @@ Get-ChildItem "$PROJECT_ROOT/大纲/第*卷*.md" -ErrorAction SilentlyContinue
 |------|------|---------|------|
 | 第X章 | 埋设 | {内容} | 支线 |
 | 第Y章 | 回收 | {内容} | 核心 |
+
+## 主角/女主推进（如适用）
+
+| 角色 | 本卷目标 | 关键转折 | 关系推进 |
+|------|----------|----------|----------|
+| 主角 | {目标} | {转折} | {关系} |
+| 女主 | {目标} | {转折} | {关系} |
+
+## 反派分层推进
+
+| 层级 | 目标 | 出场章节 | 本卷推进 |
+|------|------|----------|----------|
+| 小反派 | {目标} | {章节} | {推进方式} |
+| 中反派 | {目标} | {章节} | {推进方式} |
+| 大反派 | {目标} | {章节} | {推进方式} |
 ```
 
 **骨架生成后，询问用户是否继续生成章节详情。**
@@ -270,6 +330,8 @@ Get-ChildItem "$PROJECT_ROOT/大纲/第*卷*.md" -ErrorAction SilentlyContinue
 - **开头类型**: {冲突开场/悬疑开场/动作开场/对话开场/氛围开场}
 - **爽点**: {类型} - {30字以内}
 - **Strand**: {Quest|Fire|Constellation}
+- **视角/主角**: {主角A/主角B/女主/群像}
+- **反派层级**: {无/小反派/中反派/大反派}
 - **实体**: {新增角色/物品，如有}
 - **钩子类型**: {危机钩/悬念钩/情绪钩/选择钩/渴望钩}
 - **钩子内容**: {章末悬念，30字以内}
@@ -319,6 +381,26 @@ Get-ChildItem "$PROJECT_ROOT/大纲/第*卷*.md" -ErrorAction SilentlyContinue
 - [ ] 与总纲伏笔安排一致
 - [ ] 登场角色符合总纲设定
 - [ ] 卷末高潮符合预期
+- [ ] 多主角/女主视角分配合理（如适用）
+
+### 约束继承检查（如有 idea_bank.json）
+- [ ] 反套路规则每 N 章至少触发 1 次
+- [ ] 硬约束在关键章节体现
+- [ ] 主角缺陷影响至少 2 个关键决策
+- [ ] 反派镜像设计在反派出场章节体现
+
+**约束触发统计表**（如适用）：
+
+```markdown
+## 约束触发统计
+
+| 约束 | 触发章节 | 触发方式 |
+|------|---------|---------|
+| {反套路规则} | 第X章, 第Y章 | {描述} |
+| {硬约束1} | 第A章, 第B章 | {描述} |
+| {硬约束2} | 第C章 | {描述} |
+| 主角缺陷 | 第D章, 第E章 | {影响决策} |
+```
 
 ---
 

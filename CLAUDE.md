@@ -4,7 +4,7 @@
 
 ## 项目概述
 
-**Webnovel Writer** 是基于 Claude Code 的长篇网文辅助创作系统（v5.4.1），解决 AI 写作中的"遗忘"和"幻觉"问题，支持 200 万字量级连载创作。
+**Webnovel Writer** 是基于 Claude Code 的长篇网文辅助创作系统（v5.4.2），解决 AI 写作中的"遗忘"和"幻觉"问题，支持 200 万字量级连载创作。
 
 ## 核心理念
 
@@ -13,34 +13,38 @@
 2. **设定即物理** - 遵守设定，不自相矛盾
 3. **发明需识别** - 新实体必须入库管理
 
+### 创意约束系统（v5.4.2 新增）
+- **三轴混搭** - 题材基础 + 规则限制 + 角色矛盾（至少2/3非默认）
+- **反套路触发器** - 每项目必选至少1条反常规规则
+- **镜像对抗** - 反派与主角共享欲望/缺陷，采取相反道路
+- **约束继承** - 大纲规划时继承创意约束，每N章触发
+
 ### 追读力机制（v5.3 新增）
 - **Hard Invariants** - 不可违反的硬约束（可读性/承诺/节奏/冲突）
 - **Soft Guidance** - 可通过 Override Contract 违反的软建议
-- **Chase Debt** - 追读力债务追踪与利息机制
+- **Chase Debt** - 追读力债务追踪（利息默认关闭）
 
 ## 关键目录
 
 ```
 .claude/
-├── agents/                 # 9 个专职 Agent
-│   ├── context-agent.md    # 创作任务书生成器 (v5.3)
+├── agents/                 # 8 个专职 Agent
+│   ├── context-agent.md    # 创作任务书生成器
 │   ├── data-agent.md       # 数据链工程师
-│   ├── reader-pull-checker.md  # 追读力检查器 (v5.3)
-│   ├── high-point-checker.md   # 爽点检查器 (v5.3)
+│   ├── reader-pull-checker.md  # 追读力检查器
 │   └── ...
 ├── skills/                 # 7 个核心 Skill
-│   ├── webnovel-init/
-│   ├── webnovel-plan/
-│   ├── webnovel-write/     # 主写作流程 (v5.3)
+│   ├── webnovel-init/      # 含创意约束生成 Phase
+│   ├── webnovel-plan/      # 含约束继承检查
+│   ├── webnovel-write/     # 主写作流程
 │   └── ...
 ├── scripts/                # Python 脚本
 │   └── data_modules/
-│       ├── index_manager.py  # SQLite 管理 (v5.3)
+│       ├── index_manager.py  # SQLite 管理
 │       └── ...
 ├── references/             # 写作指南
-│   ├── reading-power-taxonomy.md  # 追读力分类标准 (v5.3)
-│   ├── genre-profiles.md          # 题材配置档案 (v5.3)
-│   ├── checker-output-schema.md   # Checker 统一输出格式 (v5.4)
+│   ├── reading-power-taxonomy.md  # 追读力分类标准
+│   ├── genre-profiles.md          # 题材配置档案
 │   └── ...
 └── templates/              # 题材模板
 ```
@@ -49,40 +53,31 @@
 
 | 命令 | 说明 |
 |------|------|
-| `/webnovel-init` | 初始化项目 |
-| `/webnovel-plan [卷号]` | 规划大纲 |
+| `/webnovel-init` | 初始化项目（含创意约束生成） |
+| `/webnovel-plan [卷号]` | 规划大纲（含约束继承检查） |
 | `/webnovel-write [章号]` | 创作章节 |
 | `/webnovel-review [范围]` | 质量审查 |
 | `/webnovel-query [关键词]` | 信息查询 |
 | `/webnovel-resume` | 恢复中断任务 |
 | `/webnovel-learn [描述]` | 记忆写入 |
 
-## v5.3 新增功能
+## v5.4.2 新增功能
 
-### 1. 追读力分类标准
-- **钩子类型扩展**：危机钩/悬念钩/情绪钩/选择钩/渴望钩
-- **爽点模式扩展**：8种模式（新增迪化误解/身份掉马）
-- **微兑现体系**：7种类型（信息/关系/能力/资源/认可/情绪/线索）
+### 1. 创意约束系统
+- **creativity-constraints.md** - 创意包 Schema + 三轴混搭 + 三问筛选 + 五维评分
+- **category-constraint-packs.md** - 按平台分类的约束包模板库
+- **anti-trope-xianxia.md** - 修仙/玄幻反套路库（20条限制 + 15种非套路爽点）
+- **anti-trope-rules-mystery.md** - 规则怪谈反套路库（20条限制 + 20种非套路爽点）
+- **market-trends-2026.md** - 市场扫描模板（需联网更新，记录标签/方向）
+- **复合题材** - 支持“题材A+题材B”组合加载模板（1主1辅）
 
-### 2. 题材 Profile 配置
-8种内置题材，每种包含：
-- 偏好钩子类型
-- 偏好爽点模式
-- 微兑现要求
-- 节奏红线阈值
-- Override 允许规则
+### 2. 工作流更新
+- **webnovel-init Phase 6.5** - 创意约束生成（Standard+模式）
+- **webnovel-plan Phase 2.5** - 加载创意约束
+- **webnovel-plan Phase 7** - 约束继承检查
 
-### 3. SQLite 新表
-- `override_contracts` - Override Contract 记录
-- `chase_debt` - 追读力债务
-- `debt_events` - 债务事件日志
-- `chapter_reading_power` - 章节追读力元数据
-
-### 4. 约束分层机制
-- **Hard Invariants** (HARD-001 ~ HARD-004) - 必须修复
-- **Soft Guidance** - 可 Override，产生债务
-- **Override Contract** - 记录违反理由和偿还计划
-- **Chase Debt** - 债务追踪，含利息机制
+### 3. 新增文件
+- `.webnovel/idea_bank.json` - 创意银行（存储生成的创意包）
 
 ## 写作工作流 (Step 1-6)
 
@@ -125,6 +120,11 @@ python -m data_modules.index_manager get-pattern-usage-stats --last-n 20 --proje
 |------|------|
 | `.webnovel/state.json` | 项目状态（精简版） |
 | `.webnovel/index.db` | SQLite 索引数据库 |
+| `.webnovel/idea_bank.json` | 创意银行（v5.4.2） |
+| `设定集/复合题材-融合逻辑.md` | 复合题材融合逻辑模板 |
+| `设定集/女主卡.md` | 女主卡模板 |
+| `设定集/主角组.md` | 多主角设定模板 |
+| `设定集/反派设计.md` | 反派设计模板 |
 | `.claude/references/reading-power-taxonomy.md` | 追读力分类标准 |
 | `.claude/references/genre-profiles.md` | 题材配置档案 |
 
@@ -134,3 +134,4 @@ python -m data_modules.index_manager get-pattern-usage-stats --last-n 20 --proje
 2. **Override Contract 需明确偿还计划** - 每个 Override 产生债务
 3. **债务利息默认关闭** - 仅在明确开启时计算
 4. **题材 Profile 可覆盖** - 在 state.json 中设置 genre_overrides
+5. **创意约束需继承** - 大纲规划时检查约束触发频率

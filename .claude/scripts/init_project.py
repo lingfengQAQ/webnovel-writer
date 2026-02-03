@@ -21,7 +21,8 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
+import re
 
 # 安全修复：导入安全工具函数
 from security_utils import sanitize_commit_message, atomic_write_json, is_git_available
@@ -46,6 +47,69 @@ def _write_text_if_missing(path: Path, content: str) -> None:
     if path.exists():
         return
     path.write_text(content, encoding="utf-8")
+
+
+def _split_genre_keys(genre: str) -> list[str]:
+    raw = (genre or "").strip()
+    if not raw:
+        return []
+    # 支持复合题材：A+B / A+B / A、B / A与B
+    raw = re.sub(r"[＋/、]", "+", raw)
+    raw = raw.replace("与", "+")
+    parts = [p.strip() for p in raw.split("+") if p.strip()]
+    return parts or [raw]
+
+
+def _normalize_genre_key(key: str) -> str:
+    aliases = {
+        "修仙/玄幻": "修仙",
+        "玄幻修仙": "修仙",
+        "玄幻": "修仙",
+        "修真": "修仙",
+        "都市修真": "都市异能",
+        "都市高武": "高武",
+        "都市奇闻": "都市脑洞",
+        "古言脑洞": "古言",
+    }
+    return aliases.get(key, key)
+
+
+def _apply_label_replacements(text: str, replacements: Dict[str, str]) -> str:
+    if not text or not replacements:
+        return text
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        stripped = line.lstrip()
+        for label, value in replacements.items():
+            if not value:
+                continue
+            prefix = f"- {label}："
+            if stripped.startswith(prefix):
+                leading = line[: len(line) - len(stripped)]
+                lines[i] = f"{leading}{prefix}{value}"
+    return "\n".join(lines)
+
+
+def _parse_tier_map(raw: str) -> Dict[str, str]:
+    result: Dict[str, str] = {}
+    if not raw:
+        return result
+    for part in raw.split(";"):
+        part = part.strip()
+        if not part:
+            continue
+        if ":" in part:
+            key, val = part.split(":", 1)
+            result[key.strip()] = val.strip()
+    return result
+
+
+def _render_team_rows(names: List[str], roles: List[str]) -> List[str]:
+    rows = []
+    for idx, name in enumerate(names):
+        role = roles[idx] if idx < len(roles) else ""
+        rows.append(f"| {name} | {role or '主线/副线'} | | | |")
+    return rows
 
 
 def _ensure_state_schema(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -165,12 +229,31 @@ def init_project(
     golden_finger_type: str = "",
     golden_finger_style: str = "",
     core_selling_points: str = "",
+    protagonist_structure: str = "",
+    heroine_config: str = "",
+    heroine_names: str = "",
+    heroine_role: str = "",
+    co_protagonists: str = "",
+    co_protagonist_roles: str = "",
+    antagonist_tiers: str = "",
+    world_scale: str = "",
+    factions: str = "",
+    power_system_type: str = "",
+    social_class: str = "",
+    resource_distribution: str = "",
+    gf_visibility: str = "",
+    gf_irreversible_cost: str = "",
     protagonist_desire: str = "",
     protagonist_flaw: str = "",
     protagonist_archetype: str = "",
     antagonist_level: str = "",
     target_reader: str = "",
     platform: str = "",
+    currency_system: str = "",
+    currency_exchange: str = "",
+    sect_hierarchy: str = "",
+    cultivation_chain: str = "",
+    cultivation_subtiers: str = "",
 ) -> None:
     project_path = Path(project_dir).expanduser().resolve()
     if ".claude" in project_path.parts:
@@ -219,8 +302,27 @@ def init_project(
             "golden_finger_type": golden_finger_type,
             "golden_finger_style": golden_finger_style,
             "core_selling_points": core_selling_points,
+            "protagonist_structure": protagonist_structure,
+            "heroine_config": heroine_config,
+            "heroine_names": heroine_names,
+            "heroine_role": heroine_role,
+            "co_protagonists": co_protagonists,
+            "co_protagonist_roles": co_protagonist_roles,
+            "antagonist_tiers": antagonist_tiers,
+            "world_scale": world_scale,
+            "factions": factions,
+            "power_system_type": power_system_type,
+            "social_class": social_class,
+            "resource_distribution": resource_distribution,
+            "gf_visibility": gf_visibility,
+            "gf_irreversible_cost": gf_irreversible_cost,
             "target_reader": target_reader,
             "platform": platform,
+            "currency_system": currency_system,
+            "currency_exchange": currency_exchange,
+            "sect_hierarchy": sect_hierarchy,
+            "cultivation_chain": cultivation_chain,
+            "cultivation_subtiers": cultivation_subtiers,
         }
     )
 
@@ -249,17 +351,27 @@ def init_project(
     templates_dir = script_dir.parent / "templates"
     output_templates_dir = templates_dir / "output"
     genre_key = (genre or "").strip()
-    genre_template_key = {
-        "修仙/玄幻": "修仙",
-        "玄幻": "修仙",
-    }.get(genre_key, genre_key)
-    genre_template = _read_text_if_exists(templates_dir / "genres" / f"{genre_template_key}.md")
+    genre_keys = [_normalize_genre_key(k) for k in _split_genre_keys(genre_key)]
+    genre_templates = []
+    seen = set()
+    for key in genre_keys:
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        template_text = _read_text_if_exists(templates_dir / "genres" / f"{key}.md")
+        if template_text:
+            genre_templates.append(template_text.strip())
+    genre_template = "\n\n---\n\n".join(genre_templates)
     golden_finger_templates = _read_text_if_exists(templates_dir / "golden-finger-templates.md")
     output_worldview = _read_text_if_exists(output_templates_dir / "设定集-世界观.md")
     output_power = _read_text_if_exists(output_templates_dir / "设定集-力量体系.md")
     output_protagonist = _read_text_if_exists(output_templates_dir / "设定集-主角卡.md")
+    output_heroine = _read_text_if_exists(output_templates_dir / "设定集-女主卡.md")
+    output_team = _read_text_if_exists(output_templates_dir / "设定集-主角组.md")
     output_golden_finger = _read_text_if_exists(output_templates_dir / "设定集-金手指.md")
     output_outline = _read_text_if_exists(output_templates_dir / "大纲-总纲.md")
+    output_fusion = _read_text_if_exists(output_templates_dir / "复合题材-融合逻辑.md")
+    output_antagonist = _read_text_if_exists(output_templates_dir / "设定集-反派设计.md")
 
     # 基础文件（只在缺失时生成，避免覆盖已有内容）
     now = datetime.now().strftime("%Y-%m-%d")
@@ -289,6 +401,19 @@ def init_project(
                 (genre_template.strip() + "\n") if genre_template else "（未找到对应题材模板，可自行补充）\n",
             ]
         ).rstrip() + "\n"
+    else:
+        worldview_content = _apply_label_replacements(
+            worldview_content,
+            {
+                "大陆/位面数量": world_scale,
+                "核心势力": factions,
+                "社会阶层": social_class,
+                "资源分配规则": resource_distribution,
+                "宗门/组织层级": sect_hierarchy,
+                "货币体系": currency_system,
+                "兑换规则": currency_exchange,
+            },
+        )
     _write_text_if_missing(
         project_path / "设定集" / "世界观.md",
         worldview_content,
@@ -316,6 +441,15 @@ def init_project(
                 "",
             ]
         ).rstrip() + "\n"
+    else:
+        power_content = _apply_label_replacements(
+            power_content,
+            {
+                "体系类型": power_system_type,
+                "典型境界链（可选）": cultivation_chain,
+                "小境界划分": cultivation_subtiers,
+            },
+        )
     _write_text_if_missing(
         project_path / "设定集" / "力量体系.md",
         power_content,
@@ -347,10 +481,53 @@ def init_project(
                 "",
             ]
         ).rstrip() + "\n"
+    else:
+        protagonist_content = _apply_label_replacements(
+            protagonist_content,
+            {
+                "姓名": protagonist_name,
+                "真正渴望（可能不自知）": protagonist_desire,
+                "性格缺陷": protagonist_flaw,
+            },
+        )
     _write_text_if_missing(
         project_path / "设定集" / "主角卡.md",
         protagonist_content,
     )
+
+    heroine_content = output_heroine.strip() if output_heroine else ""
+    if heroine_content:
+        heroine_content = _apply_label_replacements(
+            heroine_content,
+            {
+                "姓名": heroine_names,
+                "与主角关系定位（对手/盟友/共谋/牵制）": heroine_role,
+            },
+        )
+        _write_text_if_missing(project_path / "设定集" / "女主卡.md", heroine_content)
+
+    team_content = output_team.strip() if output_team else ""
+    if team_content:
+        names = [n.strip() for n in co_protagonists.split(",") if n.strip()] if co_protagonists else []
+        roles = [r.strip() for r in co_protagonist_roles.split(",") if r.strip()] if co_protagonist_roles else []
+        if names:
+            lines = team_content.splitlines()
+            new_rows = _render_team_rows(names, roles)
+            replaced = False
+            out_lines: List[str] = []
+            for line in lines:
+                if line.strip().startswith("| 主角A"):
+                    out_lines.extend(new_rows)
+                    replaced = True
+                    continue
+                if replaced and line.strip().startswith("| 主角"):
+                    continue
+                out_lines.append(line)
+            team_content = "\n".join(out_lines)
+        _write_text_if_missing(
+            project_path / "设定集" / "主角组.md",
+            team_content,
+        )
 
     golden_finger_content = output_golden_finger.strip() if output_golden_finger else ""
     if not golden_finger_content:
@@ -381,29 +558,64 @@ def init_project(
                 (golden_finger_templates.strip() + "\n") if golden_finger_templates else "（未找到金手指模板库）\n",
             ]
         ).rstrip() + "\n"
+    else:
+        golden_finger_content = _apply_label_replacements(
+            golden_finger_content,
+            {
+                "类型": golden_finger_type,
+                "读者可见度": gf_visibility,
+                "不可逆代价": gf_irreversible_cost,
+            },
+        )
     _write_text_if_missing(
         project_path / "设定集" / "金手指设计.md",
         golden_finger_content,
     )
 
-    if antagonist_level:
+    fusion_content = output_fusion.strip() if output_fusion else ""
+    if fusion_content:
         _write_text_if_missing(
-            project_path / "设定集" / "反派设计.md",
-            "\n".join(
-                [
-                    "# 反派设计",
-                    "",
-                    f"> 项目：{title}｜创建：{now}",
-                    "",
-                    f"- 反派等级：{antagonist_level}",
-                    "- 动机：",
-                    "- 资源/势力：",
-                    "- 与主角的镜像关系：",
-                    "- 终局：",
-                    "",
-                ]
-            ),
+            project_path / "设定集" / "复合题材-融合逻辑.md",
+            fusion_content,
         )
+
+    antagonist_content = output_antagonist.strip() if output_antagonist else ""
+    if not antagonist_content:
+        antagonist_content = "\n".join(
+            [
+                "# 反派设计",
+                "",
+                f"> 项目：{title}｜创建：{now}",
+                "",
+                f"- 反派等级：{antagonist_level or '（待填写）'}",
+                "- 动机：",
+                "- 资源/势力：",
+                "- 与主角的镜像关系：",
+                "- 终局：",
+                "",
+            ]
+        ).rstrip() + "\n"
+    else:
+        tier_map = _parse_tier_map(antagonist_tiers)
+        if tier_map:
+            lines = antagonist_content.splitlines()
+            out_lines = []
+            for line in lines:
+                if line.strip().startswith("| 小反派"):
+                    name = tier_map.get("小反派", "")
+                    out_lines.append(f"| 小反派 | {name} | 前期 | | |")
+                    continue
+                if line.strip().startswith("| 中反派"):
+                    name = tier_map.get("中反派", "")
+                    out_lines.append(f"| 中反派 | {name} | 中期 | | |")
+                    continue
+                if line.strip().startswith("| 大反派"):
+                    name = tier_map.get("大反派", "")
+                    out_lines.append(f"| 大反派 | {name} | 后期 | | |")
+                    continue
+                out_lines.append(line)
+            antagonist_content = "\n".join(out_lines)
+    _write_text_if_missing(project_path / "设定集" / "反派设计.md", antagonist_content)
 
     outline_content = output_outline.strip() if output_outline else ""
     if outline_content:
@@ -503,7 +715,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="网文项目初始化脚本（生成项目结构 + state.json + 基础模板）")
     parser.add_argument("project_dir", help="项目目录（建议 ./webnovel-project）")
     parser.add_argument("title", help="小说标题")
-    parser.add_argument("genre", help="题材类型（如：修仙/系统流/都市异能/狗血言情/古言/现实题材/规则怪谈/知乎短篇）")
+    parser.add_argument(
+        "genre",
+        help="题材类型（可用“+”组合，如：都市脑洞+规则怪谈；示例：修仙/系统流/都市异能/古言/现实题材）",
+    )
 
     parser.add_argument("--protagonist-name", default="", help="主角姓名")
     parser.add_argument("--target-words", type=int, default=2_000_000, help="目标总字数（默认 2000000）")
@@ -513,6 +728,25 @@ def main() -> None:
     parser.add_argument("--golden-finger-type", default="", help="金手指类型（如 系统流/鉴定流/签到流）")
     parser.add_argument("--golden-finger-style", default="", help="金手指风格（如 冷漠工具型/毒舌吐槽型）")
     parser.add_argument("--core-selling-points", default="", help="核心卖点（逗号分隔）")
+    parser.add_argument("--protagonist-structure", default="", help="主角结构（单主角/多主角）")
+    parser.add_argument("--heroine-config", default="", help="女主配置（无女主/单女主/多女主）")
+    parser.add_argument("--heroine-names", default="", help="女主姓名（多个用逗号分隔）")
+    parser.add_argument("--heroine-role", default="", help="女主定位（事业线/情感线/对抗线）")
+    parser.add_argument("--co-protagonists", default="", help="多主角姓名（逗号分隔）")
+    parser.add_argument("--co-protagonist-roles", default="", help="多主角定位（逗号分隔）")
+    parser.add_argument("--antagonist-tiers", default="", help="反派分层（如 小反派:张三;中反派:李四;大反派:王五）")
+    parser.add_argument("--world-scale", default="", help="世界规模")
+    parser.add_argument("--factions", default="", help="势力格局/核心势力")
+    parser.add_argument("--power-system-type", default="", help="力量体系类型")
+    parser.add_argument("--social-class", default="", help="社会阶层")
+    parser.add_argument("--resource-distribution", default="", help="资源分配")
+    parser.add_argument("--gf-visibility", default="", help="金手指可见度（明牌/半明牌/暗牌）")
+    parser.add_argument("--gf-irreversible-cost", default="", help="金手指不可逆代价")
+    parser.add_argument("--currency-system", default="", help="货币体系")
+    parser.add_argument("--currency-exchange", default="", help="货币兑换/面值规则")
+    parser.add_argument("--sect-hierarchy", default="", help="宗门/组织层级")
+    parser.add_argument("--cultivation-chain", default="", help="典型境界链")
+    parser.add_argument("--cultivation-subtiers", default="", help="小境界划分（初/中/后/巅 等）")
 
     # 深度模式可选参数（用于预填模板）
     parser.add_argument("--protagonist-desire", default="", help="主角核心欲望（深度模式）")
@@ -535,12 +769,31 @@ def main() -> None:
         golden_finger_type=args.golden_finger_type,
         golden_finger_style=args.golden_finger_style,
         core_selling_points=args.core_selling_points,
+        protagonist_structure=args.protagonist_structure,
+        heroine_config=args.heroine_config,
+        heroine_names=args.heroine_names,
+        heroine_role=args.heroine_role,
+        co_protagonists=args.co_protagonists,
+        co_protagonist_roles=args.co_protagonist_roles,
+        antagonist_tiers=args.antagonist_tiers,
+        world_scale=args.world_scale,
+        factions=args.factions,
+        power_system_type=args.power_system_type,
+        social_class=args.social_class,
+        resource_distribution=args.resource_distribution,
+        gf_visibility=args.gf_visibility,
+        gf_irreversible_cost=args.gf_irreversible_cost,
         protagonist_desire=args.protagonist_desire,
         protagonist_flaw=args.protagonist_flaw,
         protagonist_archetype=args.protagonist_archetype,
         antagonist_level=args.antagonist_level,
         target_reader=args.target_reader,
         platform=args.platform,
+        currency_system=args.currency_system,
+        currency_exchange=args.currency_exchange,
+        sect_hierarchy=args.sect_hierarchy,
+        cultivation_chain=args.cultivation_chain,
+        cultivation_subtiers=args.cultivation_subtiers,
     )
 
 
