@@ -133,7 +133,7 @@ class StatusReporter:
         self.state = None
         self.chapters_data = []
 
-        # v5.1: 使用 IndexManager 读取实体
+        # v5.1 引入: 使用 IndexManager 读取实体
         self._index_manager = IndexManager(self.config)
 
     def _extract_stats_field(self, content: str, field_name: str) -> str:
@@ -170,7 +170,7 @@ class StatusReporter:
         # 2) 正文/第1卷/第001章-标题.md
         chapter_files = sorted(self.chapters_dir.rglob("第*.md"))
 
-        # v5.1: 从 SQLite 获取已知角色名
+        # v5.1 引入: 从 SQLite 获取已知角色名
         known_character_names: List[str] = []
         protagonist_name = ""
         if self.state:
@@ -206,7 +206,7 @@ class StatusReporter:
             dominant_strand = (self._extract_stats_field(content, "主导Strand") or "").lower()
             cool_point_type = self._extract_stats_field(content, "爽点")
 
-            # v5.1: 角色提取从 SQLite chapters 表读取
+            # v5.1 引入: 角色提取从 SQLite chapters 表读取
             characters: List[str] = []
             try:
                 chapter_info = self._index_manager.get_chapter(chapter_num)
@@ -251,13 +251,13 @@ class StatusReporter:
             })
 
     def analyze_characters(self) -> Dict:
-        """分析角色活跃度 (v5.1 SQLite)"""
+        """分析角色活跃度（v5.1 引入，v5.4 沿用）"""
         if not self.state:
             return {}
 
         current_chapter = self.state.get("progress", {}).get("current_chapter", 0)
 
-        # v5.1: 从 SQLite 获取所有角色
+        # v5.1 引入: 从 SQLite 获取所有角色
         try:
             characters_list = self._index_manager.get_entities_by_type("角色")
         except Exception:

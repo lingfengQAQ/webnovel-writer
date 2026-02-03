@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-SQL State Manager - SQLite 状态管理模块 (v5.1)
+SQL State Manager - SQLite 状态管理模块 (v5.4)
 
 基于 IndexManager 扩展，提供与 StateManager 兼容的高级接口，
 将大数据（实体、别名、状态变化、关系）存储到 SQLite 而非 JSON。
 
-目标：
+目标（v5.1 引入，v5.4 沿用）：
 - 替代 state.json 中的大数据字段
 - 保持与 Data Agent / Context Agent 的接口兼容
 - 支持增量写入和按需查询
@@ -43,7 +43,7 @@ class EntityData:
 
 class SQLStateManager:
     """
-    SQLite 状态管理器 (v5.1)
+    SQLite 状态管理器（v5.1 引入，v5.4 沿用）
 
     提供与 StateManager 兼容的接口，但数据存储在 SQLite (index.db) 中。
     用于替代 state.json 中膨胀的数据结构。
@@ -89,7 +89,7 @@ class SQLStateManager:
     ```
     """
 
-    # v5.0 支持的实体类型
+    # v5.0 引入的实体类型
     ENTITY_TYPES = ["角色", "地点", "物品", "势力", "招式"]
 
     def __init__(self, config=None):
@@ -473,7 +473,7 @@ def main():
     from .cli_output import print_success, print_error
     from .index_manager import IndexManager
 
-    parser = argparse.ArgumentParser(description="SQL State Manager CLI (v5.1)")
+    parser = argparse.ArgumentParser(description="SQL State Manager CLI (v5.4)")
     parser.add_argument("--project-root", type=str, help="项目根目录")
 
     subparsers = parser.add_subparsers(dest="command")

@@ -1,11 +1,12 @@
 ---
 name: core-constraints
 purpose: 每次章节写作前加载，确保三大定律执行
-version: "5.2"
+version: "5.4"
 ---
 
 <context>
 此文件用于章节创作时的核心约束检查。Claude 已知一般写作规范，这里只补充网文特定的防幻觉协议。
+v5.4：版本号对齐，内容沿用 v5.2。
 </context>
 
 <instructions>
@@ -20,7 +21,7 @@ version: "5.2"
 
 ## 新实体处理流程
 
-v5.2 不再要求在正文中写 XML 标签。新实体由 Data Agent 在章节完成后自动提取：
+v5.2 引入的规则，v5.4 沿用：正文不再要求 XML 标签。新实体由 Data Agent 在章节完成后自动提取：
 
 1. **写作时**: 直接写纯正文，新角色/地点/物品正常描写
 2. **完成后**: Data Agent 自动识别新实体并写入 index.db

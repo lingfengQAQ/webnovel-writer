@@ -5,13 +5,14 @@ purpose: 重定向到权威版本
 
 <context>
 此文件已迁移到统一位置，避免多版本不同步问题。
+v5.4：版本号对齐，权威版本已更新。
 </context>
 
 <instructions>
 
 ## 权威版本位置
 
-`skills/webnovel-query/references/system-data-flow.md` (v5.1)
+`skills/webnovel-query/references/system-data-flow.md` (v5.4)
 
 ## 加载方式
 

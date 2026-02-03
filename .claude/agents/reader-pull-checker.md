@@ -1,10 +1,10 @@
 ---
 name: reader-pull-checker
-description: 追读力检查器 v5.3，评估钩子/微兑现/约束分层，支持Override Contract
+description: 追读力检查器 v5.4，评估钩子/微兑现/约束分层，支持 Override Contract
 tools: Read, Grep, Bash
 ---
 
-# reader-pull-checker (追读力检查器) v5.3
+# reader-pull-checker (追读力检查器) v5.4
 
 > **Role**: 审查"读者为什么会点下一章"，执行 Hard/Soft 约束分层。
 
@@ -21,7 +21,7 @@ tools: Read, Grep, Bash
 - 题材 Profile（从 `state.json → project.genre`）
 - 是否为过渡章标记
 
-## 输出格式（v5.3 增强）
+## 输出格式（v5.3 引入，v5.4 沿用）
 
 ```json
 {
@@ -113,7 +113,7 @@ tools: Read, Grep, Bash
 
 ---
 
-## 二、钩子类型扩展（v5.3）
+## 二、钩子类型扩展（v5.3 引入）
 
 ### 2.1 完整钩子类型
 
@@ -135,7 +135,7 @@ tools: Read, Grep, Bash
 
 ---
 
-## 三、微兑现检测（v5.3 新增）
+## 三、微兑现检测（v5.3 引入）
 
 ### 3.1 微兑现类型
 

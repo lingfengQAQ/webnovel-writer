@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-State Manager - 状态管理模块 (v5.1)
+State Manager - 状态管理模块 (v5.4)
 
 管理 state.json 的读写操作：
 - 实体状态管理
 - 进度追踪
 - 关系记录
 
-v5.1 变更:
+v5.1 变更（v5.4 沿用）:
 - 集成 SQLStateManager，同步写入 SQLite (index.db)
 - state.json 保留精简数据，大数据自动迁移到 SQLite
 """
@@ -79,9 +79,9 @@ class _EntityPatch:
 
 
 class StateManager:
-    """状态管理器 (v5.1 entities_v3 格式 + SQLite 同步)"""
+    """状态管理器（v5.1 entities_v3 格式 + SQLite 同步，v5.4 沿用）"""
 
-    # v5.0 支持的实体类型
+    # v5.0 引入的实体类型
     ENTITY_TYPES = ["角色", "地点", "物品", "势力", "招式"]
 
     def __init__(self, config=None, enable_sqlite_sync: bool = True):
@@ -97,7 +97,7 @@ class StateManager:
         # 与 security_utils.atomic_write_json 保持一致：state.json.lock
         self._lock_path = self.config.state_file.with_suffix(self.config.state_file.suffix + ".lock")
 
-        # v5.1: SQLite 同步
+        # v5.1 引入: SQLite 同步
         self._enable_sqlite_sync = enable_sqlite_sync
         self._sql_state_manager = None
         if enable_sqlite_sync:
@@ -118,7 +118,7 @@ class StateManager:
         self._pending_progress_words_delta: int = 0
         self._pending_chapter_meta: Dict[str, Any] = {}
 
-        # v5.1: 缓存待同步到 SQLite 的数据
+        # v5.1 引入: 缓存待同步到 SQLite 的数据
         self._pending_sqlite_data: Dict[str, Any] = {
             "entities_appeared": [],
             "entities_new": [],
@@ -168,7 +168,7 @@ class StateManager:
         )
 
         entities_v3 = state.get("entities_v3")
-        # v5.1: entities_v3, alias_index, state_changes, structured_relationships 已迁移到 index.db
+        # v5.1 引入: entities_v3, alias_index, state_changes, structured_relationships 已迁移到 index.db
         # 不再在 state.json 中初始化或维护这些字段
 
         if not isinstance(state.get("disambiguation_warnings"), list):
@@ -255,7 +255,7 @@ class StateManager:
 
                     progress["last_updated"] = self._now_progress_timestamp()
 
-                # v5.1: 强制使用 SQLite 模式，移除大数据字段
+                # v5.1 引入: 强制使用 SQLite 模式，移除大数据字段
                 # 确保 state.json 中不存在这些膨胀字段
                 for field in ["entities_v3", "alias_index", "state_changes", "structured_relationships"]:
                     disk_state.pop(field, None)
@@ -332,7 +332,7 @@ class StateManager:
                 # 原子写入（锁已持有，不再二次加锁）
                 atomic_write_json(self.config.state_file, disk_state, use_lock=False, backup=True)
 
-                # v5.1: 同步到 SQLite（必须在清空 pending 之前调用）
+                # v5.1 引入: 同步到 SQLite（必须在清空 pending 之前调用）
                 self._sync_to_sqlite()
 
                 # 同步内存为磁盘最新快照，并清空增量队列
@@ -351,7 +351,7 @@ class StateManager:
             raise RuntimeError("无法获取 state.json 文件锁，请稍后重试")
 
     def _sync_to_sqlite(self):
-        """v5.1: 同步待处理数据到 SQLite"""
+        """同步待处理数据到 SQLite（v5.1 引入，v5.4 沿用）"""
         if not self._sql_state_manager:
             return
 
@@ -380,17 +380,16 @@ class StateManager:
                     if eid:
                         processed_appearances.add((eid, chapter))
             except Exception:
-                pass  # SQLite 同步失败时静默降级，不影响主流程
+                pass  # SQLite 同步失败时静默降级（避免中断主流程）
 
-        # 方式2: 通过 add_entity/update_entity 等直接调用收集的数据
-        # 这些数据存储在 _pending_entity_patches 等变量中
+        # 方式2: 使用 add_entity/update_entity 收集的增量数据。
+        # 数据缓存在 _pending_entity_patches 等变量中。
         self._sync_pending_patches_to_sqlite(processed_appearances)
 
-        # 清空
         self._clear_pending_sqlite_data()
 
     def _sync_pending_patches_to_sqlite(self, processed_appearances: set = None):
-        """v5.1: 同步 _pending_entity_patches 等到 SQLite
+        """同步 _pending_entity_patches 等到 SQLite（v5.1 引入，v5.4 沿用）
 
         Args:
             processed_appearances: 已通过 process_chapter_entities 处理的 (entity_id, chapter) 集合，
@@ -574,8 +573,8 @@ class StateManager:
     # ==================== 实体管理 (v5.1 SQLite-first) ====================
 
     def get_entity(self, entity_id: str, entity_type: str = None) -> Optional[Dict]:
-        """获取实体 (v5.1: 优先从 SQLite 读取)"""
-        # v5.1: 优先从 SQLite 读取
+        """获取实体（v5.1 引入：优先从 SQLite 读取）"""
+        # v5.1 引入: 优先从 SQLite 读取
         if self._sql_state_manager:
             entity = self._sql_state_manager._index_manager.get_entity(entity_id)
             if entity:
@@ -594,7 +593,7 @@ class StateManager:
 
     def get_entity_type(self, entity_id: str) -> Optional[str]:
         """获取实体所属类型"""
-        # v5.1: 优先从 SQLite 读取
+        # v5.1 引入: 优先从 SQLite 读取
         if self._sql_state_manager:
             entity = self._sql_state_manager._index_manager.get_entity(entity_id)
             if entity:
@@ -608,7 +607,7 @@ class StateManager:
 
     def get_all_entities(self) -> Dict[str, Dict]:
         """获取所有实体（扁平化视图）"""
-        # v5.1: 优先从 SQLite 读取
+        # v5.1 引入: 优先从 SQLite 读取
         if self._sql_state_manager:
             result = {}
             for entity_type in self.ENTITY_TYPES:
@@ -629,7 +628,7 @@ class StateManager:
 
     def get_entities_by_type(self, entity_type: str) -> Dict[str, Dict]:
         """按类型获取实体"""
-        # v5.1: 优先从 SQLite 读取
+        # v5.1 引入: 优先从 SQLite 读取
         if self._sql_state_manager:
             entities = self._sql_state_manager._index_manager.get_entities_by_type(entity_type)
             if entities:
@@ -640,7 +639,7 @@ class StateManager:
 
     def get_entities_by_tier(self, tier: str) -> Dict[str, Dict]:
         """按层级获取实体"""
-        # v5.1: 优先从 SQLite 读取
+        # v5.1 引入: 优先从 SQLite 读取
         if self._sql_state_manager:
             result = {}
             for entity_type in self.ENTITY_TYPES:
@@ -661,7 +660,7 @@ class StateManager:
         return result
 
     def add_entity(self, entity: EntityState) -> bool:
-        """添加新实体 (v5.0 entities_v3 格式)"""
+        """添加新实体（v5.0 entities_v3 格式，v5.4 沿用）"""
         entity_type = entity.type
         if entity_type not in self.ENTITY_TYPES:
             entity_type = "角色"
@@ -696,7 +695,7 @@ class StateManager:
         patch.replace = True
         patch.base_entity = v3_entity
 
-        # v5.1: 注册别名到 index.db (通过 SQLStateManager)
+        # v5.1 引入: 注册别名到 index.db (通过 SQLStateManager)
         if self._sql_state_manager:
             self._sql_state_manager._index_manager.register_alias(entity.name, entity.id, entity_type)
             for alias in entity.aliases:
@@ -706,15 +705,15 @@ class StateManager:
         return True
 
     def _register_alias_internal(self, entity_id: str, entity_type: str, alias: str):
-        """内部方法：注册别名到 index.db (v5.1)"""
+        """内部方法：注册别名到 index.db（v5.1 引入）"""
         if not alias:
             return
-        # v5.1: 直接写入 SQLite
+        # v5.1 引入: 直接写入 SQLite
         if self._sql_state_manager:
             self._sql_state_manager._index_manager.register_alias(alias, entity_id, entity_type)
 
     def update_entity(self, entity_id: str, updates: Dict[str, Any], entity_type: str = None) -> bool:
-        """更新实体属性 (v5.0)"""
+        """更新实体属性（v5.0 引入，v5.4 沿用）"""
         # 查找实体
         if entity_type:
             if entity_id not in self._state.get("entities_v3", {}).get(entity_type, {}):
@@ -728,7 +727,7 @@ class StateManager:
 
         for key, value in updates.items():
             if key == "attributes" and isinstance(value, dict):
-                # v5.0: attributes 存在 current 字段
+                # v5.0 引入: attributes 存在 current 字段
                 if "current" not in entity:
                     entity["current"] = {}
                 entity["current"].update(value)
@@ -842,7 +841,7 @@ class StateManager:
             chapter=chapter
         )
 
-        # v5.0: 实体关系存入 structured_relationships，避免与 relationships(人物关系字典) 冲突
+        # v5.0 引入: 实体关系存入 structured_relationships，避免与 relationships(人物关系字典) 冲突
         if "structured_relationships" not in self._state:
             self._state["structured_relationships"] = []
         rel_dict = asdict(rel)
@@ -952,7 +951,7 @@ class StateManager:
 
     def process_chapter_result(self, chapter: int, result: Dict) -> List[str]:
         """
-        处理 Data Agent 的章节处理结果 (v5.1)
+        处理 Data Agent 的章节处理结果（v5.1 引入，v5.4 沿用）
 
         输入格式:
         - entities_appeared: 出场实体列表
@@ -964,7 +963,7 @@ class StateManager:
         """
         warnings = []
 
-        # v5.1: 记录章节号用于 SQLite 同步
+        # v5.1 引入: 记录章节号用于 SQLite 同步
         self._pending_sqlite_data["chapter"] = chapter
 
         # 处理出场实体
@@ -973,7 +972,7 @@ class StateManager:
             entity_type = entity.get("type")
             if entity_id:
                 self.update_entity_appearance(entity_id, chapter, entity_type)
-                # v5.1: 缓存用于 SQLite 同步
+                # v5.1 引入: 缓存用于 SQLite 同步
                 self._pending_sqlite_data["entities_appeared"].append(entity)
 
         # 处理新实体
@@ -991,7 +990,7 @@ class StateManager:
                 )
                 if not self.add_entity(new_entity):
                     warnings.append(f"实体已存在: {entity_id}")
-                # v5.1: 缓存用于 SQLite 同步
+                # v5.1 引入: 缓存用于 SQLite 同步
                 self._pending_sqlite_data["entities_new"].append(entity)
 
         # 处理状态变化
@@ -1004,7 +1003,7 @@ class StateManager:
                 reason=change.get("reason", ""),
                 chapter=chapter
             )
-            # v5.1: 缓存用于 SQLite 同步
+            # v5.1 引入: 缓存用于 SQLite 同步
             self._pending_sqlite_data["state_changes"].append(change)
 
         # 处理关系
@@ -1016,7 +1015,7 @@ class StateManager:
                 description=rel.get("description", ""),
                 chapter=chapter
             )
-            # v5.1: 缓存用于 SQLite 同步
+            # v5.1 引入: 缓存用于 SQLite 同步
             self._pending_sqlite_data["relationships_new"].append(rel)
 
         # 处理消歧不确定项（不影响实体写入，但必须对 Writer 可见）
@@ -1041,7 +1040,7 @@ class StateManager:
     # ==================== 导出 ====================
 
     def export_for_context(self) -> Dict:
-        """导出用于上下文的精简版状态 (v5.0)"""
+        """导出用于上下文的精简版状态（v5.0 引入，v5.4 沿用）"""
         # 从 entities_v3 构建精简视图
         entities_flat = {}
         for type_name, entities in self._state.get("entities_v3", {}).items():
@@ -1056,9 +1055,9 @@ class StateManager:
         return {
             "progress": self._state.get("progress", {}),
             "entities": entities_flat,
-            # v5.1: alias_index 已迁移到 index.db，这里返回空（兼容性）
+            # v5.1 引入: alias_index 已迁移到 index.db，这里返回空（兼容性）
             "alias_index": {},
-            "recent_changes": [],  # v5.1: 从 index.db 查询
+            "recent_changes": [],  # v5.1 引入: 从 index.db 查询
             "disambiguation": {
                 "warnings": self._state.get("disambiguation_warnings", [])[-self.config.export_disambiguation_slice:],
                 "pending": self._state.get("disambiguation_pending", [])[-self.config.export_disambiguation_slice:],
@@ -1168,7 +1167,7 @@ def main():
     from .schemas import validate_data_agent_output, format_validation_error, normalize_data_agent_output
     from .index_manager import IndexManager
 
-    parser = argparse.ArgumentParser(description="State Manager CLI (v5.2)")
+    parser = argparse.ArgumentParser(description="State Manager CLI (v5.4)")
     parser.add_argument("--project-root", type=str, help="项目根目录")
 
     subparsers = parser.add_subparsers(dest="command")

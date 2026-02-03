@@ -45,7 +45,7 @@ from pathlib import Path
 from security_utils import create_secure_directory, atomic_write_json
 from project_locator import resolve_project_root
 
-# v5.1: 使用 IndexManager 读取实体
+# v5.1 引入: 使用 IndexManager 读取实体
 try:
     from data_modules.index_manager import IndexManager
     from data_modules.config import get_config
@@ -74,7 +74,7 @@ class ArchiveManager:
         self.state_file = project_root / ".webnovel" / "state.json"
         self.archive_dir = project_root / ".webnovel" / "archive"
 
-        # v5.1: IndexManager 用于读取实体
+        # v5.1 引入: IndexManager 用于读取实体
         self._config = get_config(project_root)
         self._index_manager = IndexManager(self._config)
 
@@ -147,11 +147,11 @@ class ArchiveManager:
         }
 
     def identify_inactive_characters(self, state):
-        """识别不活跃的次要角色 (v5.1 SQLite)"""
+        """识别不活跃的次要角色（v5.1 引入，v5.4 沿用）"""
         current_chapter = state.get("progress", {}).get("current_chapter", 0)
         threshold = self.config["character_inactive_threshold"]
 
-        # v5.1: 从 SQLite 获取所有角色实体
+        # v5.1 引入: 从 SQLite 获取所有角色实体
         characters = self._index_manager.get_entities_by_type("角色")
 
         inactive = []
@@ -296,7 +296,7 @@ class ArchiveManager:
         return old_reviews
 
     def archive_characters(self, inactive_list, dry_run=False):
-        """归档不活跃角色（v5.1: 使用 IndexManager 更新状态）"""
+        """归档不活跃角色（v5.1 引入：使用 IndexManager 更新状态）"""
         if not inactive_list:
             return 0
 
@@ -309,7 +309,7 @@ class ArchiveManager:
             item["character"]["archived_at"] = timestamp
             archived.append(item["character"])
 
-            # v5.1: 通过 IndexManager 更新实体状态
+            # v5.1 引入: 通过 IndexManager 更新实体状态
             if not dry_run:
                 try:
                     entity_id = item["character"].get("id")
@@ -365,8 +365,8 @@ class ArchiveManager:
         return len(old_reviews_list)
 
     def remove_from_state(self, state, inactive_chars, resolved_threads, old_reviews):
-        """从 state.json/SQLite 中移除已归档的数据 (v5.1)"""
-        # v5.1: 角色数据在 SQLite，archive_characters 已处理状态更新
+        """从 state.json/SQLite 中移除已归档的数据（v5.1 引入，v5.4 沿用）"""
+        # v5.1 引入: 角色数据在 SQLite，archive_characters 已处理状态更新
         # 这里只需要处理 state.json 中的伏笔和审查报告
 
         # 移除已归档的伏笔
@@ -477,7 +477,7 @@ class ArchiveManager:
         print(f"\n💾 文件大小: {trigger['file_size_mb']:.2f} MB → {new_size_mb:.2f} MB (节省 {saved_mb:.2f} MB)")
 
     def restore_character(self, name):
-        """恢复归档的角色（v5.1: 使用 IndexManager 恢复状态）"""
+        """恢复归档的角色（v5.1 引入：使用 IndexManager 恢复状态）"""
         archived = self.load_archive(self.characters_archive)
 
         # 查找角色
@@ -498,7 +498,7 @@ class ArchiveManager:
         archived = [char for char in archived if char["name"] != name]
         self.save_archive(self.characters_archive, archived)
 
-        # v5.1: 恢复到 SQLite (通过 IndexManager)
+        # v5.1 引入: 恢复到 SQLite (通过 IndexManager)
         char_id = char_to_restore.get("id", char_to_restore.get("name", "unknown"))
         try:
             # 更新实体状态为 active

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Index Manager - 索引管理模块 (v5.3)
+Index Manager - 索引管理模块 (v5.4)
 
 管理 index.db (SQLite) 的读写操作：
 - 章节元数据索引
@@ -12,7 +12,12 @@ Index Manager - 索引管理模块 (v5.3)
 - 状态变化记录
 - 关系存储
 - 快速查询接口
-- 追读力债务管理 (v5.3 新增)
+- 追读力债务管理 (v5.3 引入，v5.4 沿用)
+
+v5.4 变更:
+- 新增 invalid_facts 表：追踪无效事实 (pending/confirmed)
+- 新增 tool_call_stats 表：记录工具调用成功率与错误信息
+- 新增 review_metrics 表：记录审查指标与趋势数据
 
 v5.3 变更:
 - 新增 override_contracts 表：记录违背软建议时的Override Contract
@@ -65,7 +70,7 @@ class SceneMeta:
 
 @dataclass
 class EntityMeta:
-    """实体元数据 (v5.1 新增)"""
+    """实体元数据 (v5.1 引入)"""
 
     id: str
     type: str  # 角色/地点/物品/势力/招式
@@ -81,7 +86,7 @@ class EntityMeta:
 
 @dataclass
 class StateChangeMeta:
-    """状态变化记录 (v5.1 新增)"""
+    """状态变化记录 (v5.1 引入)"""
 
     entity_id: str
     field: str
@@ -93,7 +98,7 @@ class StateChangeMeta:
 
 @dataclass
 class RelationshipMeta:
-    """关系记录 (v5.1 新增)"""
+    """关系记录 (v5.1 引入)"""
 
     from_entity: str
     to_entity: str
@@ -104,7 +109,7 @@ class RelationshipMeta:
 
 @dataclass
 class OverrideContractMeta:
-    """Override Contract (v5.3 新增)"""
+    """Override Contract (v5.3 引入)"""
 
     chapter: int
     constraint_type: str  # SOFT_HOOK_STRENGTH / SOFT_MICROPAYOFF / etc.
@@ -118,7 +123,7 @@ class OverrideContractMeta:
 
 @dataclass
 class ChaseDebtMeta:
-    """追读力债务 (v5.3 新增)"""
+    """追读力债务 (v5.3 引入)"""
 
     id: int = 0
     debt_type: str = ""  # hook_strength / micropayoff / coolpoint / etc.
@@ -133,7 +138,7 @@ class ChaseDebtMeta:
 
 @dataclass
 class DebtEventMeta:
-    """债务事件日志 (v5.3 新增)"""
+    """债务事件日志 (v5.3 引入)"""
 
     debt_id: int
     event_type: (
@@ -146,7 +151,7 @@ class DebtEventMeta:
 
 @dataclass
 class ChapterReadingPowerMeta:
-    """章节追读力元数据 (v5.3 新增)"""
+    """章节追读力元数据 (v5.3 引入)"""
 
     chapter: int
     hook_type: str = ""  # 章末钩子类型
@@ -158,6 +163,20 @@ class ChapterReadingPowerMeta:
     is_transition: bool = False  # 是否为过渡章
     override_count: int = 0  # Override Contract数量
     debt_balance: float = 0.0  # 当前债务余额
+
+
+@dataclass
+class ReviewMetrics:
+    """审查指标记录 (v5.4 引入)"""
+
+    start_chapter: int
+    end_chapter: int
+    overall_score: float = 0.0
+    dimension_scores: Dict[str, float] = field(default_factory=dict)
+    severity_counts: Dict[str, int] = field(default_factory=dict)
+    critical_issues: List[str] = field(default_factory=list)
+    report_file: str = ""
+    notes: str = ""
 
 
 class IndexManager:
@@ -225,7 +244,7 @@ class IndexManager:
                 "CREATE INDEX IF NOT EXISTS idx_appearances_chapter ON appearances(chapter)"
             )
 
-            # ==================== v5.1 新增表 ====================
+            # ==================== v5.1 引入表 ====================
 
             # 实体表 (替代 state.json 中的 entities_v3)
             cursor.execute("""
@@ -284,7 +303,7 @@ class IndexManager:
                 )
             """)
 
-            # v5.1 新索引
+            # v5.1 引入索引
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type)"
             )
@@ -316,7 +335,7 @@ class IndexManager:
                 "CREATE INDEX IF NOT EXISTS idx_relationships_chapter ON relationships(chapter)"
             )
 
-            # ==================== v5.3 新增表：追读力债务管理 ====================
+            # ==================== v5.3 引入表：追读力债务管理 ====================
 
             # Override Contract 表
             cursor.execute("""
@@ -386,7 +405,7 @@ class IndexManager:
                 )
             """)
 
-            # v5.3 新索引
+            # v5.3 引入索引
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_override_contracts_chapter ON override_contracts(chapter)"
             )
@@ -434,6 +453,26 @@ class IndexManager:
             )
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_invalid_source ON invalid_facts(source_type, source_id)"
+            )
+
+            # 审查指标表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS review_metrics (
+                    start_chapter INTEGER NOT NULL,
+                    end_chapter INTEGER NOT NULL,
+                    overall_score REAL DEFAULT 0,
+                    dimension_scores TEXT,
+                    severity_counts TEXT,
+                    critical_issues TEXT,
+                    report_file TEXT,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (start_chapter, end_chapter)
+                )
+            """)
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_review_metrics_end ON review_metrics(end_chapter)"
             )
 
             # RAG 查询日志
@@ -1767,6 +1806,128 @@ class IndexManager:
                 stats[hook] = stats.get(hook, 0) + 1
             return stats
 
+    # ==================== v5.4 审查指标 ====================
+
+    def save_review_metrics(self, metrics: ReviewMetrics) -> None:
+        """保存审查指标记录"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO review_metrics
+                (start_chapter, end_chapter, overall_score, dimension_scores,
+                 severity_counts, critical_issues, report_file, notes, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT(start_chapter, end_chapter)
+                DO UPDATE SET
+                    overall_score = excluded.overall_score,
+                    dimension_scores = excluded.dimension_scores,
+                    severity_counts = excluded.severity_counts,
+                    critical_issues = excluded.critical_issues,
+                    report_file = excluded.report_file,
+                    notes = excluded.notes,
+                    updated_at = CURRENT_TIMESTAMP
+            """,
+                (
+                    metrics.start_chapter,
+                    metrics.end_chapter,
+                    metrics.overall_score,
+                    json.dumps(metrics.dimension_scores, ensure_ascii=False),
+                    json.dumps(metrics.severity_counts, ensure_ascii=False),
+                    json.dumps(metrics.critical_issues, ensure_ascii=False),
+                    metrics.report_file,
+                    metrics.notes,
+                ),
+            )
+            conn.commit()
+
+    def get_recent_review_metrics(self, limit: int = 5) -> List[Dict]:
+        """获取最近审查记录"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM review_metrics
+                ORDER BY end_chapter DESC, start_chapter DESC
+                LIMIT ?
+            """,
+                (limit,),
+            )
+            return [
+                self._row_to_dict(
+                    row,
+                    parse_json=["dimension_scores", "severity_counts", "critical_issues"],
+                )
+                for row in cursor.fetchall()
+            ]
+
+    def get_review_trend_stats(self, last_n: int = 5) -> Dict[str, Any]:
+        """获取审查趋势统计"""
+        records = self.get_recent_review_metrics(last_n)
+        if not records:
+            return {
+                "count": 0,
+                "overall_avg": 0.0,
+                "dimension_avg": {},
+                "severity_totals": {},
+                "recent_ranges": [],
+            }
+
+        overall_scores: List[float] = []
+        dimension_totals: Dict[str, float] = {}
+        dimension_counts: Dict[str, int] = {}
+        severity_totals: Dict[str, int] = {}
+
+        for record in records:
+            score = record.get("overall_score")
+            if score is not None:
+                try:
+                    overall_scores.append(float(score))
+                except (TypeError, ValueError):
+                    pass
+
+            dimensions = record.get("dimension_scores") or {}
+            if isinstance(dimensions, dict):
+                for key, value in dimensions.items():
+                    try:
+                        val = float(value)
+                    except (TypeError, ValueError):
+                        continue
+                    dimension_totals[key] = dimension_totals.get(key, 0.0) + val
+                    dimension_counts[key] = dimension_counts.get(key, 0) + 1
+
+            severities = record.get("severity_counts") or {}
+            if isinstance(severities, dict):
+                for key, value in severities.items():
+                    try:
+                        count = int(value)
+                    except (TypeError, ValueError):
+                        continue
+                    severity_totals[key] = severity_totals.get(key, 0) + count
+
+        overall_avg = round(sum(overall_scores) / len(overall_scores), 2) if overall_scores else 0.0
+        dimension_avg = {
+            key: round(dimension_totals[key] / dimension_counts[key], 2)
+            for key in dimension_totals
+            if dimension_counts.get(key, 0) > 0
+        }
+        recent_ranges = [
+            {
+                "start_chapter": record.get("start_chapter"),
+                "end_chapter": record.get("end_chapter"),
+                "overall_score": record.get("overall_score", 0),
+            }
+            for record in records
+        ]
+
+        return {
+            "count": len(records),
+            "overall_avg": overall_avg,
+            "dimension_avg": dimension_avg,
+            "severity_totals": severity_totals,
+            "recent_ranges": recent_ranges,
+        }
+
     def get_debt_summary(self) -> Dict[str, Any]:
         """获取债务汇总信息"""
         with self._get_conn() as conn:
@@ -2009,7 +2170,7 @@ class IndexManager:
             cursor.execute("SELECT MAX(chapter) FROM chapters")
             max_chapter = cursor.fetchone()[0] or 0
 
-            # v5.1 新增统计
+            # v5.1 引入统计
             cursor.execute("SELECT COUNT(*) FROM entities")
             entities = cursor.fetchone()[0]
 
@@ -2025,7 +2186,7 @@ class IndexManager:
             cursor.execute("SELECT COUNT(*) FROM relationships")
             relationships = cursor.fetchone()[0]
 
-            # v5.3 新增统计
+            # v5.3 引入统计
             cursor.execute("SELECT COUNT(*) FROM override_contracts")
             override_contracts = cursor.fetchone()[0]
 
@@ -2045,23 +2206,27 @@ class IndexManager:
             cursor.execute("SELECT COUNT(*) FROM chapter_reading_power")
             reading_power_records = cursor.fetchone()[0]
 
+            cursor.execute("SELECT COUNT(*) FROM review_metrics")
+            review_metrics = cursor.fetchone()[0]
+
             return {
                 "chapters": chapters,
                 "scenes": scenes,
                 "appearances": appearances,
                 "max_chapter": max_chapter,
-                # v5.1 新增
+                # v5.1 引入
                 "entities": entities,
                 "active_entities": active_entities,
                 "aliases": aliases,
                 "state_changes": state_changes,
                 "relationships": relationships,
-                # v5.3 新增
+                # v5.3 引入
                 "override_contracts": override_contracts,
                 "pending_overrides": pending_overrides,
                 "active_debts": active_debts,
                 "total_debt": total_debt,
                 "reading_power_records": reading_power_records,
+                "review_metrics": review_metrics,
             }
 
 
@@ -2072,7 +2237,7 @@ def main():
     import argparse
     from .cli_output import print_success, print_error
 
-    parser = argparse.ArgumentParser(description="Index Manager CLI (v5.3)")
+    parser = argparse.ArgumentParser(description="Index Manager CLI (v5.4)")
     parser.add_argument("--project-root", type=str, help="项目根目录")
 
     subparsers = parser.add_subparsers(dest="command")
@@ -2107,7 +2272,7 @@ def main():
     process_parser.add_argument("--entities", required=True, help="JSON 格式的实体列表")
     process_parser.add_argument("--scenes", required=True, help="JSON 格式的场景列表")
 
-    # ==================== v5.1 新增命令 ====================
+    # ==================== v5.1 引入命令 ====================
 
     # 获取实体
     get_entity_parser = subparsers.add_parser("get-entity")
@@ -2183,7 +2348,16 @@ def main():
     list_invalid_parser = subparsers.add_parser("list-invalid")
     list_invalid_parser.add_argument("--status", choices=["pending", "confirmed"], default=None)
 
-    # ==================== v5.3 新增命令 ====================
+    review_save_parser = subparsers.add_parser("save-review-metrics")
+    review_save_parser.add_argument("--data", required=True, help="JSON 格式的审查指标数据")
+
+    review_recent_parser = subparsers.add_parser("get-recent-review-metrics")
+    review_recent_parser.add_argument("--limit", type=int, default=5)
+
+    review_trend_parser = subparsers.add_parser("get-review-trend-stats")
+    review_trend_parser.add_argument("--last-n", type=int, default=5)
+
+    # ==================== v5.3 引入命令 ====================
 
     # 获取债务汇总
     subparsers.add_parser("get-debt-summary")
@@ -2310,7 +2484,7 @@ def main():
         )
         emit_success(stats, message="chapter_processed", chapter=args.chapter)
 
-    # ==================== v5.1 新增命令处理 ====================
+    # ==================== v5.1 引入命令处理 ====================
 
     elif args.command == "get-entity":
         entity = manager.get_entity(args.id)
@@ -2434,7 +2608,33 @@ def main():
         rows = manager.list_invalid_facts(args.status)
         emit_success(rows, message="invalid_list")
 
-    # ==================== v5.3 新增命令处理 ====================
+    elif args.command == "save-review-metrics":
+        data = json.loads(args.data)
+        metrics = ReviewMetrics(
+            start_chapter=data["start_chapter"],
+            end_chapter=data["end_chapter"],
+            overall_score=data.get("overall_score", 0.0),
+            dimension_scores=data.get("dimension_scores", {}),
+            severity_counts=data.get("severity_counts", {}),
+            critical_issues=data.get("critical_issues", []),
+            report_file=data.get("report_file", ""),
+            notes=data.get("notes", ""),
+        )
+        manager.save_review_metrics(metrics)
+        emit_success(
+            {"start_chapter": metrics.start_chapter, "end_chapter": metrics.end_chapter},
+            message="review_metrics_saved",
+        )
+
+    elif args.command == "get-recent-review-metrics":
+        records = manager.get_recent_review_metrics(args.limit)
+        emit_success(records, message="recent_review_metrics")
+
+    elif args.command == "get-review-trend-stats":
+        stats = manager.get_review_trend_stats(args.last_n)
+        emit_success(stats, message="review_trend_stats")
+
+    # ==================== v5.3 引入命令处理 ====================
 
     elif args.command == "get-debt-summary":
         summary = manager.get_debt_summary()

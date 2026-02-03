@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Data Modules - API 客户端 (v5.0 OpenAI 兼容接口)
+Data Modules - API 客户端 (v5.4，v5.0 OpenAI 兼容接口沿用)
 
 支持两种 API 类型：
 1. openai: OpenAI 兼容的 /v1/embeddings 和 /v1/rerank 接口

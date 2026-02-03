@@ -1,11 +1,12 @@
 ---
 name: system-data-flow
 purpose: 项目初始化和状态查询时加载，理解数据结构
-version: "5.2"
+version: "5.4"
 ---
 
 <context>
 此文件用于项目数据结构参考。Claude 已知一般文件组织，这里只补充网文工作流特定的目录约定和脚本职责。
+v5.4：版本号对齐，内容沿用 v5.2。
 </context>
 
 <instructions>

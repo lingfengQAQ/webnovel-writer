@@ -415,9 +415,9 @@ def save_state(state):
     atomic_write_json(state_file, state, use_lock=True, backup=False)
 
 def get_pending_steps(command):
-    """获取待执行步骤列表 (v5.2)"""
+    """获取待执行步骤列表（v5.2 引入，v5.4 沿用）"""
     if command == 'webnovel-write':
-        # v5.2 工作流：8 步（含 Step 1.5 & 2A/2B）
+        # v5.2 引入的 8 步工作流（v5.4 沿用）
         # Step 1: Context Agent 搜集上下文
         # Step 1.5: 章节设计（开头/钩子/爽点模式）
         # Step 2A: 生成粗稿

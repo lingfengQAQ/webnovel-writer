@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Entity Linker - 实体消歧辅助模块 (v5.1)
+Entity Linker - 实体消歧辅助模块 (v5.4)
 
 为 Data Agent 提供实体消歧的辅助功能：
 - 置信度判断
 - 别名索引管理 (通过 index.db aliases 表)
 - 消歧结果记录
 
-v5.1 变更:
+v5.1 变更（v5.4 沿用）:
 - 别名存储从 state.json 迁移到 index.db aliases 表
 - 使用 IndexManager 进行别名读写
 - 移除对 state.json 的直接操作
@@ -33,16 +33,16 @@ class DisambiguationResult:
 
 
 class EntityLinker:
-    """实体链接器 - 辅助 Data Agent 进行实体消歧 (v5.1 SQLite)"""
+    """实体链接器 - 辅助 Data Agent 进行实体消歧 (v5.1 SQLite，v5.4 沿用)"""
 
     def __init__(self, config=None):
         self.config = config or get_config()
         self._index_manager = IndexManager(self.config)
 
-    # ==================== 别名管理 (v5.1 SQLite) ====================
+    # ==================== 别名管理 (v5.1 SQLite，v5.4 沿用) ====================
 
     def register_alias(self, entity_id: str, alias: str, entity_type: str = "角色") -> bool:
-        """注册新别名（v5.1: 写入 index.db aliases 表）"""
+        """注册新别名（v5.1 引入：写入 index.db aliases 表）"""
         if not alias or not entity_id:
             return False
         return self._index_manager.register_alias(alias, entity_id, entity_type)
@@ -147,7 +147,7 @@ class EntityLinker:
         new_entities: List[Dict]
     ) -> List[str]:
         """
-        注册新实体的别名 (v5.1)
+        注册新实体的别名 (v5.1 引入，v5.4 沿用)
 
         返回注册的实体ID列表
         """
@@ -182,7 +182,7 @@ def main():
     from .cli_output import print_success, print_error
     from .index_manager import IndexManager
 
-    parser = argparse.ArgumentParser(description="Entity Linker CLI (v5.1 SQLite)")
+    parser = argparse.ArgumentParser(description="Entity Linker CLI (v5.4 SQLite)")
     parser.add_argument("--project-root", type=str, help="项目根目录")
 
     subparsers = parser.add_subparsers(dest="command")

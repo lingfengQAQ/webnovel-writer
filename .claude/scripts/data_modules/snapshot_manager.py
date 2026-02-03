@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional
 
 from .config import get_config
 
-SNAPSHOT_VERSION = "1.0"
+SNAPSHOT_VERSION = "1.1"
 
 
 class SnapshotVersionMismatch(RuntimeError):

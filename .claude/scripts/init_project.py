@@ -49,7 +49,7 @@ def _write_text_if_missing(path: Path, content: str) -> None:
 
 
 def _ensure_state_schema(state: Dict[str, Any]) -> Dict[str, Any]:
-    """确保 state.json 具备 v5.1 架构所需的字段集合。
+    """确保 state.json 具备 v5.1 架构所需的字段集合（v5.4 沿用）。
 
     v5.1 变更:
     - entities_v3 和 alias_index 已迁移到 index.db，不再存储在 state.json

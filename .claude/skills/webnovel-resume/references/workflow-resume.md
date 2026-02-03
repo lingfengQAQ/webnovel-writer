@@ -1,16 +1,17 @@
 ---
 name: workflow-resume
 purpose: 任务恢复时加载，指导中断恢复流程
-version: "5.2"
+version: "5.4"
 ---
 
 <context>
 此文件用于中断任务恢复。Claude 已知错误处理流程，这里只补充网文创作工作流特定的 Step 难度分级和恢复策略。
+v5.4：版本号对齐，内容沿用 v5.2。
 </context>
 
 <instructions>
 
-## Step 中断难度分级 (v5.2)
+## Step 中断难度分级 (v5.4)
 
 | Step | 名称 | 影响 | 难度 | 默认策略 |
 |------|------|------|------|----------|

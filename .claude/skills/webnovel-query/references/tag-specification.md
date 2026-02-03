@@ -1,13 +1,13 @@
 ---
 name: tag-specification
-purpose: XML 标签格式参考（v5.1 可选使用）
-version: "5.1"
+purpose: XML 标签格式参考（v5.1 引入，v5.4 可选使用）
+version: "5.4"
 ---
 
 <context>
 此文件用于 XML 标签格式参考。
 
-**v5.1 重要变更**:
+**v5.1 引入的变更（v5.4 沿用）**:
 - 章节写作时**不再要求**添加 XML 标签
 - Data Agent 会自动从纯正文中提取实体，写入 index.db
 - 标签仅用于**手动标注**场景（如明确标记重要实体、补充提取遗漏）

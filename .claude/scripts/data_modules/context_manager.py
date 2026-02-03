@@ -6,6 +6,7 @@ ContextManager - assemble context packs with weighted priorities.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -22,6 +23,9 @@ class ContextManager:
         "emotion": {"core": 0.45, "scene": 0.35, "global": 0.20},
         "transition": {"core": 0.50, "scene": 0.25, "global": 0.25},
     }
+    EXTRA_SECTIONS = {"story_skeleton", "memory", "preferences", "alerts"}
+    SECTION_ORDER = ["core", "scene", "global", "story_skeleton", "memory", "preferences", "alerts"]
+    SUMMARY_SECTION_RE = re.compile(r"##\s*剧情摘要\s*\r?\n(.*?)(?=\r?\n##|\Z)", re.DOTALL)
 
     def __init__(self, config=None, snapshot_manager: Optional[SnapshotManager] = None):
         self.config = config or get_config()
@@ -66,16 +70,22 @@ class ContextManager:
     ) -> Dict[str, Any]:
         weights = self.TEMPLATE_WEIGHTS.get(template, self.TEMPLATE_WEIGHTS[self.DEFAULT_TEMPLATE])
         max_chars = max_chars or 8000
+        extra_budget = int(self.config.context_extra_section_budget or 0)
 
         sections = {}
-        for section_name in ["core", "scene", "global", "memory", "preferences", "alerts"]:
+        for section_name in self.SECTION_ORDER:
             if section_name in pack:
                 sections[section_name] = pack[section_name]
 
         assembled: Dict[str, Any] = {"meta": pack.get("meta", {}), "sections": {}}
         for name, content in sections.items():
             weight = weights.get(name, 0.0)
-            budget = int(max_chars * weight) if weight > 0 else None
+            if weight > 0:
+                budget = int(max_chars * weight)
+            elif name in self.EXTRA_SECTIONS and extra_budget > 0:
+                budget = extra_budget
+            else:
+                budget = None
             text = json.dumps(content, ensure_ascii=False)
             if budget is not None and len(text) > budget:
                 text = text[:budget]
@@ -112,13 +122,22 @@ class ContextManager:
         core = {
             "chapter_outline": self._load_outline(chapter),
             "protagonist_snapshot": state.get("protagonist_state", {}),
-            "recent_summaries": self._load_recent_summaries(chapter, window=3),
-            "recent_meta": self._load_recent_meta(state, chapter, window=3),
+            "recent_summaries": self._load_recent_summaries(
+                chapter,
+                window=self.config.context_recent_summaries_window,
+            ),
+            "recent_meta": self._load_recent_meta(
+                state,
+                chapter,
+                window=self.config.context_recent_meta_window,
+            ),
         }
 
         scene = {
             "location_context": state.get("protagonist_state", {}).get("location", {}),
-            "appearing_characters": self._load_recent_appearances(),
+            "appearing_characters": self._load_recent_appearances(
+                limit=self.config.context_max_appearing_characters,
+            ),
         }
         scene["appearing_characters"] = self.filter_invalid_items(
             scene["appearing_characters"], source_type="entity", id_key="entity_id"
@@ -132,17 +151,24 @@ class ContextManager:
 
         preferences = self._load_json_optional(self.config.webnovel_dir / "preferences.json")
         memory = self._load_json_optional(self.config.webnovel_dir / "project_memory.json")
+        story_skeleton = self._load_story_skeleton(chapter)
+        alert_slice = max(0, int(self.config.context_alerts_slice))
 
         return {
             "meta": {"chapter": chapter},
             "core": core,
             "scene": scene,
             "global": global_ctx,
+            "story_skeleton": story_skeleton,
             "preferences": preferences,
             "memory": memory,
             "alerts": {
-                "disambiguation_warnings": state.get("disambiguation_warnings", [])[-10:],
-                "disambiguation_pending": state.get("disambiguation_pending", [])[-10:],
+                "disambiguation_warnings": (
+                    state.get("disambiguation_warnings", [])[-alert_slice:] if alert_slice else []
+                ),
+                "disambiguation_pending": (
+                    state.get("disambiguation_pending", [])[-alert_slice:] if alert_slice else []
+                ),
             },
         }
 
@@ -168,11 +194,10 @@ class ContextManager:
 
     def _load_recent_summaries(self, chapter: int, window: int = 3) -> List[Dict[str, Any]]:
         summaries = []
-        summaries_dir = self.config.webnovel_dir / "summaries"
         for ch in range(max(1, chapter - window), chapter):
-            path = summaries_dir / f"ch{ch:04d}.md"
-            if path.exists():
-                summaries.append({"chapter": ch, "summary": path.read_text(encoding="utf-8")})
+            summary = self._load_summary_text(ch)
+            if summary:
+                summaries.append(summary)
         return summaries
 
     def _load_recent_meta(self, state: Dict[str, Any], chapter: int, window: int = 3) -> List[Dict[str, Any]]:
@@ -185,8 +210,8 @@ class ContextManager:
                     break
         return results
 
-    def _load_recent_appearances(self) -> List[Dict[str, Any]]:
-        appearances = self.index_manager.get_recent_appearances()
+    def _load_recent_appearances(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        appearances = self.index_manager.get_recent_appearances(limit=limit)
         return appearances or []
 
     def _load_setting(self, keyword: str) -> str:
@@ -202,6 +227,45 @@ class ContextManager:
         if matches:
             return matches[0].read_text(encoding="utf-8")
         return f"[{keyword}设定未找到]"
+
+    def _extract_summary_excerpt(self, text: str, max_chars: int) -> str:
+        if not text:
+            return ""
+        match = self.SUMMARY_SECTION_RE.search(text)
+        excerpt = match.group(1).strip() if match else text.strip()
+        if max_chars > 0 and len(excerpt) > max_chars:
+            return excerpt[:max_chars].rstrip()
+        return excerpt
+
+    def _load_summary_text(self, chapter: int, snippet_chars: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        summary_path = self.config.webnovel_dir / "summaries" / f"ch{chapter:04d}.md"
+        if not summary_path.exists():
+            return None
+        text = summary_path.read_text(encoding="utf-8")
+        if snippet_chars:
+            summary_text = self._extract_summary_excerpt(text, snippet_chars)
+        else:
+            summary_text = text
+        return {"chapter": chapter, "summary": summary_text}
+
+    def _load_story_skeleton(self, chapter: int) -> List[Dict[str, Any]]:
+        interval = max(1, int(self.config.context_story_skeleton_interval))
+        max_samples = max(0, int(self.config.context_story_skeleton_max_samples))
+        snippet_chars = int(self.config.context_story_skeleton_snippet_chars)
+
+        if max_samples <= 0 or chapter <= interval:
+            return []
+
+        samples: List[Dict[str, Any]] = []
+        cursor = chapter - interval
+        while cursor >= 1 and len(samples) < max_samples:
+            summary = self._load_summary_text(cursor, snippet_chars=snippet_chars)
+            if summary and summary.get("summary"):
+                samples.append(summary)
+            cursor -= interval
+
+        samples.reverse()
+        return samples
 
     def _load_json_optional(self, path: Path) -> Dict[str, Any]:
         if not path.exists():

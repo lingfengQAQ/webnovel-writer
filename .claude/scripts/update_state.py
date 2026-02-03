@@ -74,7 +74,7 @@ class StateUpdater:
         self.state = None
 
     def _validate_schema(self, state: Dict) -> bool:
-        """验证 state.json 的基本结构 (v5.0)"""
+        """验证 state.json 的基本结构（v5.0 引入，v5.4 沿用）"""
         required_keys = [
             "project_info",
             "progress",

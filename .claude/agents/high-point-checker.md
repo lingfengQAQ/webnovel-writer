@@ -1,10 +1,10 @@
 ---
 name: high-point-checker
-description: 爽点密度检查 v5.3，支持迪化误解/身份掉马模式，输出结构化报告
+description: 爽点密度检查 v5.4，支持迪化误解/身份掉马模式，输出结构化报告
 tools: Read, Grep, Bash
 ---
 
-# high-point-checker (爽点检查器) v5.3
+# high-point-checker (爽点检查器) v5.4
 
 > **Role**: Quality assurance specialist focused on reader satisfaction mechanics (爽点设计).
 
@@ -40,7 +40,7 @@ Scan for the **8 standard execution modes** (执行模式):
 | **迪化误解** (Misunderstanding Elevation) | 主角随意行为 → 配角脑补升华 → 读者优越感 | Casual Action + Info Gap + Misinterpretation + Reader Superiority |
 | **身份掉马** (Identity Reveal) | 身份伪装 → 关键时刻揭露 → 周围震惊 | Concealment (long-term) + Trigger Event + Reveal + Mass Reaction |
 
-### Step 2.1: 迪化误解模式检测（v5.3 新增）
+### Step 2.1: 迪化误解模式检测（v5.3 引入）
 
 **核心结构**:
 1. 主角随意行为（无心插柳）
@@ -58,7 +58,7 @@ Scan for the **8 standard execution modes** (执行模式):
 - B级：脑补尚可，效果一般
 - C级：脑补太刻意，配角显得蠢
 
-### Step 2.2: 身份掉马模式检测（v5.3 新增）
+### Step 2.2: 身份掉马模式检测（v5.3 引入）
 
 **核心结构**:
 1. 身份伪装（需长期铺垫）
@@ -192,7 +192,7 @@ Chapters {N} - {M}
 - 身份掉马需有铺垫
 - Report includes actionable recommendations
 
-## v5.3 输出格式增强
+## v5.3 输出格式增强（v5.4 沿用）
 
 ```json
 {

@@ -35,7 +35,7 @@
 | **设定即物理** | 遵守设定，不自相矛盾 | Consistency Checker 实时校验 |
 | **发明需识别** | 新实体必须入库管理 | Data Agent 自动提取并消歧 |
 
-### 追读力机制 (v5.3 新增)
+### 追读力机制 (v5.3 引入)
 
 **约束分层系统**：
 
@@ -322,8 +322,8 @@ Step 6: Git 自动提交备份
 6. **伏笔管理**（必须处理、可选提及）
 7. **连贯性检查点**（时间、位置、情绪）
 8. **章末钩子设置**（建议类型、禁止事项）
-9. **追读力设计**（v5.3 新增：钩子策略、微兑现规划、模式差异化）
-10. **债务与Override状态**（v5.3 新增：当前债务、待偿还Override）
+9. **追读力设计**（v5.3 引入：钩子策略、微兑现规划、模式差异化）
+10. **债务与Override状态**（v5.3 引入：当前债务、待偿还Override）
 
 ---
 
@@ -534,8 +534,8 @@ your-novel-project/
 │   │   │   ├── context_manager.py  # Token预算管理（v5.4新增）
 │   │   │   ├── api_client.py       # API 客户端
 │   │   │   └── config.py           # 配置管理
-│   │   ├── context_pack_builder.py # 上下文包构建器
-│   │   └── ...
+│   │   ├── ...
+│   │   └── 注：旧的 context_pack_builder.py 已废弃，统一使用 context_manager.py
 │   ├── templates/              # 题材模板
 │   │   └── genres/
 │   │       ├── 修仙.md
@@ -592,7 +592,7 @@ done
 python -m data_modules.index_manager stats --project-root "."
 ```
 
-### 追读力数据查询 (v5.3)
+### 追读力数据查询 (v5.3 引入)
 
 ```bash
 # 查看债务汇总
@@ -612,6 +612,16 @@ python -m data_modules.index_manager get-pending-overrides --project-root "."
 
 # 计算利息（每章调用一次）
 python -m data_modules.index_manager accrue-interest --current-chapter 100 --project-root "."
+```
+
+### 审查趋势查询 (v5.4 引入)
+
+```bash
+# 查看最近审查记录
+python -m data_modules.index_manager get-recent-review-metrics --limit 5 --project-root "."
+
+# 查看审查趋势统计（均值/短板分析）
+python -m data_modules.index_manager get-review-trend-stats --last-n 5 --project-root "."
 ```
 
 ### 向量重建
@@ -643,6 +653,9 @@ git checkout ch0045
 ## 版本历史
 
 ### v5.4 (当前)
+- **审查指标追踪**：review_metrics 表记录每次审查的评分/维度/问题数
+- **审查趋势统计**：get-review-trend-stats 查询近期审查均值和短板
+- **故事骨架采样**：context_manager 每 N 章采样历史摘要，构建长篇感知
 - **上下文工程升级**：基于 Context Engineering Guide 优化
 - **invalid_facts 表**：追踪无效事实，支持 pending/confirmed 状态
 - **父子向量索引**：parent_chunk_id 支持摘要-场景层级检索

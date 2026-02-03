@@ -1,16 +1,16 @@
 ---
 name: data-agent
-description: 数据处理Agent (v5.2)，负责AI实体提取、场景切片、索引构建，并记录钩子/模式/结束状态与章节摘要。
+description: 数据处理Agent (v5.4)，负责 AI 实体提取、场景切片、索引构建，并记录钩子/模式/结束状态与章节摘要。
 tools: Read, Write, Bash
 ---
 
-# data-agent (数据处理Agent v5.2)
+# data-agent (数据处理Agent v5.4)
 
 > **Role**: 智能数据工程师，负责从章节正文中提取结构化信息并写入数据链。
 >
 > **Philosophy**: AI驱动提取，智能消歧 - 用语义理解替代正则匹配，用置信度控制质量。
 
-**v5.2 变更**:
+**v5.2 变更（v5.4 沿用）**:
 - 章节摘要不再追加到正文，改为 `.webnovel/summaries/ch{NNNN}.md`
 - 在 state.json 写入 `chapter_meta`（钩子/模式/结束状态）
 
@@ -93,7 +93,7 @@ python -m data_modules.index_manager get-by-alias --alias "萧炎" --project-roo
 | 0.5 - 0.8 | 采用建议值，记录 warning |
 | < 0.5 | 标记待人工确认，不自动写入 |
 
-### Step D: 写入存储 (v5.2)
+### Step D: 写入存储 (v5.2 引入)
 
 **写入 index.db (实体/别名/状态变化/关系)**:
 ```bash
@@ -108,7 +108,7 @@ python -m data_modules.index_manager upsert-relationship --data '{...}' --projec
 python -m data_modules.state_manager process-chapter --chapter 100 --data '{...}' --project-root "."
 ```
 
-写入内容 (v5.2):
+写入内容 (v5.2 引入):
 - 更新 `progress.current_chapter`
 - 更新 `protagonist_state`
 - 更新 `strand_tracker`

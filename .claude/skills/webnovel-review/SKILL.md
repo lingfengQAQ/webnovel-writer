@@ -87,6 +87,8 @@ cat .webnovel/state.json
 
 **注意**：Claude 会自动根据描述匹配并调用对应的子代理
 
+**汇总要求**：统计 critical / high / medium / low 的问题数量（用于趋势记录）
+
 ## Step 8: 生成审查报告
 
 保存到: `审查报告/第{start}-{end}章审查报告.md`
@@ -128,6 +130,34 @@ cat .webnovel/state.json
 - 7-8: 良好
 - 5-6: 及格
 - <5: 不及格（高流失风险）
+
+**审查指标 JSON（必须输出，用于趋势统计）**：
+```json
+{
+  "start_chapter": {start},
+  "end_chapter": {end},
+  "overall_score": 48,
+  "dimension_scores": {
+    "爽点密度": 8,
+    "设定一致性": 7,
+    "节奏控制": 7,
+    "人物塑造": 8,
+    "连贯性": 9,
+    "追读力": 9
+  },
+  "severity_counts": {"critical": 1, "high": 2, "medium": 3, "low": 1},
+  "critical_issues": ["设定自相矛盾"],
+  "report_file": "审查报告/第{start}-{end}章审查报告.md",
+  "notes": ""
+}
+```
+
+**保存审查指标**：
+```bash
+python -m data_modules.index_manager save-review-metrics \
+  --data '{...}' \
+  --project-root "."
+```
 
 ## Step 9: 处理关键问题
 

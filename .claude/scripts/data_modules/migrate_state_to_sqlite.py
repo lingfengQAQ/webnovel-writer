@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-migrate_state_to_sqlite.py - 数据迁移脚本 (v5.1)
+migrate_state_to_sqlite.py - 数据迁移脚本 (v5.4)
 
 将 state.json 中的大数据迁移到 SQLite (index.db):
 - entities_v3 → entities 表
@@ -249,7 +249,7 @@ def migrate_state_to_sqlite(
             "review_checkpoints": state.get("review_checkpoints", [])[-10:],  # 只保留最近10个
             "disambiguation_warnings": state.get("disambiguation_warnings", [])[-20:],
             "disambiguation_pending": state.get("disambiguation_pending", [])[-10:],
-            # v5.1 标记
+            # v5.1 引入标记
             "_migrated_to_sqlite": True,
             "_migration_timestamp": datetime.now().isoformat()
         }
@@ -327,7 +327,7 @@ def main():
     from .cli_output import print_success, print_error
     from .index_manager import IndexManager
 
-    parser = argparse.ArgumentParser(description="迁移 state.json 到 SQLite (v5.1)")
+    parser = argparse.ArgumentParser(description="迁移 state.json 到 SQLite (v5.4)")
     parser.add_argument("--project-root", type=str, required=True, help="项目根目录")
     parser.add_argument("--dry-run", action="store_true", help="只分析不实际写入")
     parser.add_argument("--backup", action="store_true", default=True, help="迁移前备份")

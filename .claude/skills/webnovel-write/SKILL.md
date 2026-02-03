@@ -1,6 +1,6 @@
 ---
 name: webnovel-write
-description: Writes webnovel chapters (3000-5000 words) using v5.2 architecture. Context Agent outputs creative brief, writer produces pure text, review agents report issues, webnovel polish fixes problems, Data Agent extracts entities and records hooks/patterns.
+description: Writes webnovel chapters (3000-5000 words) using v5.4 architecture. Context Agent outputs creative brief, writer produces pure text, review agents report issues, webnovel polish fixes problems, Data Agent extracts entities and records hooks/patterns.
 allowed-tools: Read Write Edit Grep Bash Task
 ---
 
@@ -11,7 +11,7 @@ allowed-tools: Read Write Edit Grep Bash Task
 ⚠️ **强制要求**: 开始写作前，**必须复制以下清单**到回复中并逐项勾选。跳过任何步骤视为工作流不完整。
 
 ```
-章节创作进度 (v5.2)：
+章节创作进度 (v5.4)：
 - [ ] Step 1: Context Agent 搜集上下文（创作任务书）
 - [ ] Step 1.5: 章节设计（开头/钩子/爽点模式）
 - [ ] Step 2A: 生成粗稿（剧情正确、场面成立）
@@ -60,7 +60,7 @@ allowed-tools: Read Write Edit Grep Bash Task
 **Agent 自动完成**:
 1. 读取本章大纲，分析需要什么信息
 2. 读取 state.json 获取主角状态快照
-3. 查询 index.db (v5.1 schema) 召回实体/别名/关系
+3. 查询 index.db (v5.1+ schema) 召回实体/别名/关系
 4. 调用 data_modules.rag_adapter 语义检索
 5. Grep 设定集搜索相关设定
 6. 评估伏笔紧急度
@@ -83,7 +83,7 @@ allowed-tools: Read Write Edit Grep Bash Task
 
 ---
 
-## Step 1.5: 章节设计（v5.3 增强）
+## Step 1.5: 章节设计（v5.3 引入，v5.4 沿用）
 
 **目标**: 在写作前明确本章结构与变体，避免模式重复，设计追读力策略。
 
@@ -114,7 +114,7 @@ cat "${CLAUDE_PLUGIN_ROOT}/references/genre-profiles.md"
 - 信息密度（low/medium/high）
 - 是否过渡章（true/false）
 
-### 1.5.3 追读力设计块（v5.3 新增）
+### 1.5.3 追读力设计块（v5.3 引入）
 
 **必须输出以下设计**:
 
@@ -278,6 +278,34 @@ cat "${CLAUDE_PLUGIN_ROOT}/skills/webnovel-write/references/style-adapter.md"
 │ critical issues: {N}  |  high issues: {N}       │
 │ 是否可进入润色: {是/否}                           │
 └─────────────────────────────────────────────────┘
+```
+
+**审查指标 JSON（必须输出，用于趋势统计）**：
+```json
+{
+  "start_chapter": {chapter_num},
+  "end_chapter": {chapter_num},
+  "overall_score": 48,
+  "dimension_scores": {
+    "爽点密度": 8,
+    "设定一致性": 7,
+    "节奏控制": 7,
+    "人物塑造": 8,
+    "连贯性": 9,
+    "追读力": 9
+  },
+  "severity_counts": {"critical": 1, "high": 2, "medium": 3, "low": 1},
+  "critical_issues": ["设定自相矛盾"],
+  "report_file": "",
+  "notes": ""
+}
+```
+
+**保存审查指标**：
+```bash
+python -m data_modules.index_manager save-review-metrics \
+  --data '{...}' \
+  --project-root "."
 ```
 
 **Only proceed to Step 4 when:**

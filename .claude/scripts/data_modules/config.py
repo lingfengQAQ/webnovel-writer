@@ -58,7 +58,7 @@ class DataModulesConfig:
     def index_db(self) -> Path:
         return self.webnovel_dir / "index.db"
 
-    # v5.1: alias_index_file 已废弃，别名存储在 index.db aliases 表
+    # v5.1 引入: alias_index_file 已废弃，别名存储在 index.db aliases 表
 
     @property
     def chapters_dir(self) -> Path:
@@ -126,9 +126,14 @@ class DataModulesConfig:
     max_state_changes: int = 2000
 
     context_recent_summaries_window: int = 3
+    context_recent_meta_window: int = 3
     context_alerts_slice: int = 10
     context_max_appearing_characters: int = 10
     context_max_urgent_foreshadowing: int = 5
+    context_story_skeleton_interval: int = 20
+    context_story_skeleton_max_samples: int = 5
+    context_story_skeleton_snippet_chars: int = 400
+    context_extra_section_budget: int = 800
 
     export_recent_changes_slice: int = 20
     export_disambiguation_slice: int = 20

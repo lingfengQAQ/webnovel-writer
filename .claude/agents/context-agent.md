@@ -1,16 +1,16 @@
 ---
 name: context-agent
-description: 上下文搜集Agent (v5.3)，输出创作任务书（人话版），集成追读力设计、题材Profile、债务状态。
+description: 上下文搜集Agent (v5.4)，输出创作任务书（人话版），集成追读力设计、题材Profile、债务状态。
 tools: Read, Grep, Bash
 ---
 
-# context-agent (上下文搜集Agent v5.3)
+# context-agent (上下文搜集Agent v5.4)
 
 > **Role**: 创作任务书生成器。目标不是堆信息，而是给写作"能直接开写"的明确指令。
 >
 > **Philosophy**: 按需召回 + 推断补全，保证"接住上章、带出情绪、留出钩子"。
 >
-> **v5.3 新增**: 追读力设计块、题材Profile引用、债务状态提醒。
+> **v5.3 引入（v5.4 沿用）**: 追读力设计块、题材Profile引用、债务状态提醒。
 
 ## 核心参考
 
@@ -30,18 +30,18 @@ tools: Read, Grep, Bash
 
 ## 输出格式：创作任务书（人话版）
 
-必须按以下 **10 个章节** 输出（v5.3 增加 2 个）：
+必须按以下 **10 个章节** 输出（v5.3 增加 2 个，v5.4 沿用）：
 
 1. **本章核心任务**（冲突一句话、必须完成、绝对不能）
 2. **接住上章**（上章钩子、读者期待、开头必须）
 3. **出场角色**（状态、动机、情绪底色、说话风格、红线）
 4. **场景与力量约束**（地点、可用能力、禁用能力）
-5. **风格指导**（本章类型、参考样本、最近模式、本章建议）
+5. **风格指导**（本章类型、参考样本、最近模式、本章建议、近期审查趋势）
 6. **伏笔管理**（必须处理、可选提及）
 7. **连贯性检查点**（时间、位置、情绪）
 8. **章末钩子设置**（建议类型、禁止事项）
-9. **追读力设计**（v5.3 新增）
-10. **债务与Override状态**（v5.3 新增）
+9. **追读力设计**（v5.3 引入）
+10. **债务与Override状态**（v5.3 引入）
 
 ---
 
@@ -55,6 +55,7 @@ tools: Read, Grep, Bash
 | 角色动机 | 从大纲+角色状态推断 | **必须推断，无默认值** |
 | 题材Profile | `state.json → project.genre` | 默认 "shuangwen" |
 | 当前债务 | `index.db → chase_debt` | 0 |
+| 近期审查趋势 | `index.db → review_metrics` | 无数据则跳过 |
 
 **缺失处理**:
 - 若 `chapter_meta` 不存在（如第1章），跳过"接住上章"部分
@@ -68,6 +69,7 @@ tools: Read, Grep, Bash
 
 - `state.json`: 进度、主角状态、strand_tracker、chapter_meta、project.genre
 - `index.db`: 实体/别名/关系/状态变化/override_contracts/chase_debt/chapter_reading_power
+- `index.db`: review_metrics（审查趋势）
 - `.webnovel/summaries/ch{NNNN}.md`: 章节摘要（含钩子/结束状态）
 - `.webnovel/context_snapshots/`: 上下文快照（优先复用）
 - `.webnovel/preferences.json`: 用户偏好（阶段3）
@@ -87,6 +89,7 @@ python -m data_modules.context_manager --chapter {NNNN} --project-root "."
 - 若存在兼容快照，直接读取
 - 版本不兼容时自动重建并保存
 - 过滤 confirmed 的 invalid_facts，pending 标记为提示
+- context_pack 包含 story_skeleton（按间隔采样的历史摘要）
 
 ### Step 1: 读取题材Profile
 ```bash
@@ -125,6 +128,7 @@ cat ".claude/references/genre-profiles.md"
 python -m data_modules.index_manager get-recent-reading-power --limit 5 --project-root "."
 python -m data_modules.index_manager get-pattern-usage-stats --last-n 20 --project-root "."
 python -m data_modules.index_manager get-hook-type-stats --last-n 20 --project-root "."
+python -m data_modules.index_manager get-review-trend-stats --last-n 5 --project-root "."
 ```
 
 ### Step 5: 查询债务状态
@@ -137,24 +141,24 @@ python -m data_modules.index_manager get-pending-overrides --before-chapter {cur
 - 对所有事实性引用追加来源标注，例如：
   - `【来源: summaries/ch0100.md】`
   - `【来源: 正文/第0100章.md#scene_2】`
-- 若为推断信息，明确标注“推断”。
+- 若为推断信息，明确标注"推断"。
 
-### Step 6: 查询实体与关系（index.db）
+### Step 7: 查询实体与关系（index.db）
 ```bash
 python -m data_modules.index_manager get-core-entities --project-root "."
 python -m data_modules.index_manager recent-appearances --limit 20 --project-root "."
 python -m data_modules.index_manager get-relationships --entity "{protagonist}" --project-root "."
 ```
 
-### Step 7: 读取最近摘要
+### Step 8: 读取最近摘要
 - 优先读取 `.webnovel/summaries/ch{NNNN}.md`
 - 若缺失，降级为章节正文前 300-500 字概述
 
-### Step 8: 伏笔与风格样本
+### Step 9: 伏笔与风格样本
 - 伏笔：优先取 `foreshadowing_index`（若可用）
 - 风格样本：按本章类型选择 1-3 个高质量片段
 
-### Step 9: 推断补全
+### Step 10: 推断补全
 **推断规则（必须执行）**:
 - 动机 = 角色目标 + 当前处境 + 上章钩子压力
 - 情绪底色 = 上章结束情绪 + 事件走向
@@ -190,6 +194,7 @@ python -m data_modules.index_manager get-relationships --entity "{protagonist}" 
 - 参考样本：第42章突破片段
 - 最近模式：危机钩(2次)、渴望钩(1次)
 - 本章建议：使用渴望钩，避免与上章重复
+- 近期审查趋势：过去2次总评均值 48/60，短板在节奏控制（均值6/10）
 
 ### 六、伏笔管理
 - 必须处理：药老提到的"那个人"（第87章埋下）
@@ -205,7 +210,7 @@ python -m data_modules.index_manager get-relationships --entity "{protagonist}" 
 - 强度建议：medium（非卷末）
 - 禁止事项：不要用"他沉沉睡去"收尾
 
-### 九、追读力设计（v5.3 新增）
+### 九、追读力设计（v5.3 引入）
 
 #### 9.1 题材配置（当前：玄幻）
 - 偏好钩子：危机钩、渴望钩、选择钩
@@ -227,7 +232,7 @@ python -m data_modules.index_manager get-relationships --entity "{protagonist}" 
 - 最近5章爽点模式：装逼打脸(2)、越级反杀(1)、扮猪吃虎(1)
 - 本章建议：避免装逼打脸，考虑使用迪化误解（配角对突破的误解）
 
-### 十、债务与Override状态（v5.3 新增）
+### 十、债务与Override状态（v5.3 引入）
 
 #### 10.1 当前债务
 - 活跃债务：1笔

@@ -31,6 +31,7 @@ from data_modules.index_manager import (
     OverrideContractMeta,
     ChaseDebtMeta,
     ChapterReadingPowerMeta,
+    ReviewMetrics,
 )
 
 
@@ -847,6 +848,54 @@ class TestIndexManager:
         assert manager.fulfill_override(other_id) is True
         assert manager.get_chapter_overrides(4)[0]["status"] == "fulfilled"
 
+    def test_review_metrics_and_trends(self, temp_project):
+        manager = IndexManager(temp_project)
+
+        manager.save_review_metrics(
+            ReviewMetrics(
+                start_chapter=1,
+                end_chapter=1,
+                overall_score=48,
+                dimension_scores={
+                    "爽点密度": 8,
+                    "设定一致性": 7,
+                    "节奏控制": 7,
+                    "人物塑造": 8,
+                    "连贯性": 9,
+                    "追读力": 9,
+                },
+                severity_counts={"critical": 0, "high": 1, "medium": 2, "low": 0},
+                critical_issues=[],
+                report_file="审查报告/第1-1章审查报告.md",
+            )
+        )
+        manager.save_review_metrics(
+            ReviewMetrics(
+                start_chapter=2,
+                end_chapter=2,
+                overall_score=42,
+                dimension_scores={
+                    "爽点密度": 6,
+                    "设定一致性": 8,
+                    "节奏控制": 7,
+                    "人物塑造": 7,
+                    "连贯性": 7,
+                    "追读力": 7,
+                },
+                severity_counts={"critical": 1, "high": 0, "medium": 1, "low": 2},
+                critical_issues=["设定自相矛盾"],
+                report_file="审查报告/第2-2章审查报告.md",
+            )
+        )
+
+        recent = manager.get_recent_review_metrics(limit=2)
+        assert len(recent) == 2
+
+        trends = manager.get_review_trend_stats(last_n=5)
+        assert trends["count"] == 2
+        assert trends["overall_avg"] > 0
+        assert "爽点密度" in trends["dimension_avg"]
+
     def test_index_manager_cli(self, temp_project, monkeypatch, capsys):
         root = str(temp_project.project_root)
         manager = IndexManager(temp_project)
@@ -1151,6 +1200,34 @@ class TestIndexManager:
                 ),
             ]
         )
+
+        review_payload = {
+            "start_chapter": 1,
+            "end_chapter": 1,
+            "overall_score": 50,
+            "dimension_scores": {
+                "爽点密度": 8,
+                "设定一致性": 7,
+                "节奏控制": 8,
+                "人物塑造": 8,
+                "连贯性": 9,
+                "追读力": 10,
+            },
+            "severity_counts": {"critical": 0, "high": 1, "medium": 2, "low": 0},
+            "critical_issues": [],
+            "report_file": "审查报告/第1-1章审查报告.md",
+        }
+        run_cli(
+            [
+                "--project-root",
+                root,
+                "save-review-metrics",
+                "--data",
+                json.dumps(review_payload, ensure_ascii=False),
+            ]
+        )
+        run_cli(["--project-root", root, "get-recent-review-metrics", "--limit", "5"])
+        run_cli(["--project-root", root, "get-review-trend-stats", "--last-n", "5"])
 
         capsys.readouterr()
 
