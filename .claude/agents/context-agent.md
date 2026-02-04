@@ -65,6 +65,12 @@ tools: Read, Grep, Bash
 - `.webnovel/context_snapshots/`: 上下文快照（优先复用）
 - `大纲/` 与 `设定集/`
 
+**钩子数据来源说明**：
+- **章纲的"钩子"字段**：本章应设置的章末钩子（规划用）
+- **chapter_meta[N].hook**：本章实际设置的钩子（执行结果）
+- **context-agent 读取**：chapter_meta[N-1].hook 作为"上章钩子"
+- **数据流**：章纲规划 → 写作实现 → 写入 chapter_meta → 下章读取
+
 ---
 
 ## 执行流程（精简版）
