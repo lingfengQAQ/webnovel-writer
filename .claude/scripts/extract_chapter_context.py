@@ -151,7 +151,14 @@ def extract_state_summary(project_root: Path) -> str:
         st = state["strand_tracker"]
         history = st.get("history", [])[-5:]  # 最近5章
         if history:
-            strand_str = ", ".join([f"Ch{h['chapter']}:{h['strand']}" for h in history])
+            items = []
+            for h in history:
+                if not isinstance(h, dict):
+                    continue
+                ch = h.get("chapter", "?")
+                strand = h.get("strand") or h.get("dominant") or "unknown"
+                items.append(f"Ch{ch}:{strand}")
+            strand_str = ", ".join(items)
             summary_parts.append(f"**近5章Strand**: {strand_str}")
 
     # 活跃伏笔（只显示紧急的）

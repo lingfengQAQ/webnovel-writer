@@ -88,3 +88,21 @@ def test_query_router():
     assert router.route("角色是谁") == "entity"
     assert router.route("发生了什么剧情") == "plot"
     assert "A" in router.split("A, B；C")
+
+
+def test_context_snapshot_respects_template(temp_project):
+    state = {
+        "protagonist_state": {"name": "萧炎"},
+        "chapter_meta": {},
+        "disambiguation_warnings": [],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+
+    manager = ContextManager(temp_project)
+
+    plot_payload = manager.build_context(1, template="plot", use_snapshot=True, save_snapshot=True)
+    battle_payload = manager.build_context(1, template="battle", use_snapshot=True, save_snapshot=True)
+
+    assert plot_payload.get("template") == "plot"
+    assert battle_payload.get("template") == "battle"

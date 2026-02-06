@@ -32,6 +32,22 @@ class ContextManager:
         self.snapshot_manager = snapshot_manager or SnapshotManager(self.config)
         self.index_manager = IndexManager(self.config)
 
+    def _is_snapshot_compatible(self, cached: Dict[str, Any], template: str) -> bool:
+        """判断快照是否可用于当前模板。"""
+        if not isinstance(cached, dict):
+            return False
+
+        meta = cached.get("meta")
+        if not isinstance(meta, dict):
+            # 兼容旧快照：未记录 template 时仅允许默认模板复用
+            return template == self.DEFAULT_TEMPLATE
+
+        cached_template = meta.get("template")
+        if not isinstance(cached_template, str):
+            return template == self.DEFAULT_TEMPLATE
+
+        return cached_template == template
+
     def build_context(
         self,
         chapter: int,
@@ -47,7 +63,7 @@ class ContextManager:
         if use_snapshot:
             try:
                 cached = self.snapshot_manager.load_snapshot(chapter)
-                if cached:
+                if cached and self._is_snapshot_compatible(cached, template):
                     return cached.get("payload", cached)
             except SnapshotVersionMismatch:
                 # Snapshot incompatible; rebuild below.

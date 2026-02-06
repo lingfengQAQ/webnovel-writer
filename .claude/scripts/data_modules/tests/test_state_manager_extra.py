@@ -6,6 +6,8 @@ StateManager extra tests
 
 import json
 import sys
+import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -327,6 +329,29 @@ def test_ensure_state_schema_invalid_inputs(temp_project):
     assert isinstance(schema2["relationships"], dict)
     assert isinstance(schema2["disambiguation_warnings"], list)
     assert isinstance(schema2["disambiguation_pending"], list)
+
+
+def test_save_state_preserves_sqlite_pending_on_sync_failure(temp_project):
+    manager = StateManager(temp_project)
+
+    manager.add_entity(EntityState(id="e1", name="测试角色", type="角色", first_appearance=1, last_appearance=1))
+    manager.update_entity("e1", {"current": {"realm": "炼气"}}, "角色")
+
+    class _BrokenSQLManager:
+        def process_chapter_entities(self, **kwargs):
+            raise RuntimeError("boom")
+
+    manager._sql_state_manager = _BrokenSQLManager()
+    manager._pending_sqlite_data["chapter"] = 1
+
+    manager.save_state()
+
+    state = json.loads(temp_project.state_file.read_text(encoding="utf-8"))
+    assert state.get("_migrated_to_sqlite") is True
+
+    # SQLite 同步失败后，SQLite 相关 pending 不应被清空，便于后续重试
+    assert manager._pending_entity_patches
+    assert manager._pending_sqlite_data.get("chapter") == 1
 
 
 def test_save_state_progress_and_disambiguation_merge(temp_project):

@@ -15,6 +15,7 @@ v5.1 变更（v5.4 沿用）:
 
 import json
 import sys
+from copy import deepcopy
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field, asdict
@@ -332,28 +333,37 @@ class StateManager:
                 # 原子写入（锁已持有，不再二次加锁）
                 atomic_write_json(self.config.state_file, disk_state, use_lock=False, backup=True)
 
-                # v5.1 引入: 同步到 SQLite（必须在清空 pending 之前调用）
-                self._sync_to_sqlite()
+                # v5.1 引入: 同步到 SQLite（失败时保留 pending 以便重试）
+                sqlite_pending_snapshot = self._snapshot_sqlite_pending()
+                sqlite_sync_ok = self._sync_to_sqlite()
 
-                # 同步内存为磁盘最新快照，并清空增量队列
+                # 同步内存为磁盘最新快照
                 self._state = disk_state
-                self._pending_entity_patches.clear()
-                self._pending_alias_entries.clear()
-                self._pending_state_changes.clear()
-                self._pending_structured_relationships.clear()
+
+                # state.json 侧 pending 已写盘，直接清空
                 self._pending_disambiguation_warnings.clear()
                 self._pending_disambiguation_pending.clear()
                 self._pending_chapter_meta.clear()
                 self._pending_progress_chapter = None
                 self._pending_progress_words_delta = 0
 
+                # SQLite 侧 pending：成功后清空，失败则恢复快照（避免静默丢数据）
+                if sqlite_sync_ok:
+                    self._pending_entity_patches.clear()
+                    self._pending_alias_entries.clear()
+                    self._pending_state_changes.clear()
+                    self._pending_structured_relationships.clear()
+                    self._clear_pending_sqlite_data()
+                else:
+                    self._restore_sqlite_pending(sqlite_pending_snapshot)
+
         except filelock.Timeout:
             raise RuntimeError("无法获取 state.json 文件锁，请稍后重试")
 
-    def _sync_to_sqlite(self):
+    def _sync_to_sqlite(self) -> bool:
         """同步待处理数据到 SQLite（v5.1 引入，v5.4 沿用）"""
         if not self._sql_state_manager:
-            return
+            return True
 
         # 方式1: 通过 process_chapter_result 收集的数据
         sqlite_data = self._pending_sqlite_data
@@ -379,16 +389,15 @@ class StateManager:
                     eid = entity.get("suggested_id") or entity.get("id")
                     if eid:
                         processed_appearances.add((eid, chapter))
-            except Exception:
-                pass  # SQLite 同步失败时静默降级（避免中断主流程）
+            except Exception as exc:
+                print(f"[WARNING] SQLite sync failed (process_chapter_entities): {exc}", file=sys.stderr)
+                return False
 
         # 方式2: 使用 add_entity/update_entity 收集的增量数据。
         # 数据缓存在 _pending_entity_patches 等变量中。
-        self._sync_pending_patches_to_sqlite(processed_appearances)
+        return self._sync_pending_patches_to_sqlite(processed_appearances)
 
-        self._clear_pending_sqlite_data()
-
-    def _sync_pending_patches_to_sqlite(self, processed_appearances: set = None):
+    def _sync_pending_patches_to_sqlite(self, processed_appearances: set = None) -> bool:
         """同步 _pending_entity_patches 等到 SQLite（v5.1 引入，v5.4 沿用）
 
         Args:
@@ -396,7 +405,7 @@ class StateManager:
                                    用于避免重复写入 appearances 表（防止覆盖 mentions）
         """
         if not self._sql_state_manager:
-            return
+            return True
 
         if processed_appearances is None:
             processed_appearances = set()
@@ -534,10 +543,36 @@ class StateManager:
                     chapter=rel.get("chapter", 0)
                 )
 
+            return True
+
         except Exception as e:
             # SQLite 同步失败时记录警告（不中断主流程）
-            import sys
             print(f"[WARNING] SQLite sync failed: {e}", file=sys.stderr)
+            return False
+
+    def _snapshot_sqlite_pending(self) -> Dict[str, Any]:
+        """抓取 SQLite 侧 pending 快照，用于同步失败回滚内存队列。"""
+        return {
+            "entity_patches": deepcopy(self._pending_entity_patches),
+            "alias_entries": deepcopy(self._pending_alias_entries),
+            "state_changes": deepcopy(self._pending_state_changes),
+            "structured_relationships": deepcopy(self._pending_structured_relationships),
+            "sqlite_data": deepcopy(self._pending_sqlite_data),
+        }
+
+    def _restore_sqlite_pending(self, snapshot: Dict[str, Any]) -> None:
+        """恢复 SQLite 侧 pending 快照，避免同步失败后数据静默丢失。"""
+        self._pending_entity_patches = snapshot.get("entity_patches", {})
+        self._pending_alias_entries = snapshot.get("alias_entries", {})
+        self._pending_state_changes = snapshot.get("state_changes", [])
+        self._pending_structured_relationships = snapshot.get("structured_relationships", [])
+        self._pending_sqlite_data = snapshot.get("sqlite_data", {
+            "entities_appeared": [],
+            "entities_new": [],
+            "state_changes": [],
+            "relationships_new": [],
+            "chapter": None,
+        })
 
     def _clear_pending_sqlite_data(self):
         """清空待同步的 SQLite 数据"""
