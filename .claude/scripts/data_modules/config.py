@@ -167,6 +167,26 @@ class DataModulesConfig:
     context_writing_checklist_min_items: int = 3
     context_writing_checklist_max_items: int = 6
     context_writing_checklist_default_weight: float = 1.0
+    context_writing_score_persist_enabled: bool = True
+    context_writing_score_include_reader_trend: bool = True
+    context_writing_score_trend_window: int = 10
+    context_dynamic_budget_enabled: bool = True
+    context_dynamic_budget_early_chapter: int = 30
+    context_dynamic_budget_late_chapter: int = 120
+    context_dynamic_budget_early_core_bonus: float = 0.08
+    context_dynamic_budget_early_scene_bonus: float = 0.04
+    context_dynamic_budget_late_global_bonus: float = 0.08
+    context_dynamic_budget_late_scene_penalty: float = 0.06
+    context_genre_profile_support_composite: bool = True
+    context_genre_profile_max_genres: int = 2
+    context_genre_profile_separators: tuple[str, ...] = (
+        "+",
+        "/",
+        "|",
+        ",",
+        "，",
+        "、",
+    )
 
     export_recent_changes_slice: int = 20
     export_disambiguation_slice: int = 20

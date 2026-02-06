@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .config import get_config
-from .index_manager import IndexManager
+from .index_manager import IndexManager, WritingChecklistScoreMeta
 from .context_ranker import ContextRanker
 from .snapshot_manager import SnapshotManager, SnapshotVersionMismatch
 
@@ -23,6 +23,27 @@ class ContextManager:
         "battle": {"core": 0.35, "scene": 0.45, "global": 0.20},
         "emotion": {"core": 0.45, "scene": 0.35, "global": 0.20},
         "transition": {"core": 0.50, "scene": 0.25, "global": 0.25},
+    }
+
+    TEMPLATE_WEIGHTS_DYNAMIC = {
+        "early": {
+            "plot": {"core": 0.48, "scene": 0.39, "global": 0.13},
+            "battle": {"core": 0.42, "scene": 0.50, "global": 0.08},
+            "emotion": {"core": 0.52, "scene": 0.38, "global": 0.10},
+            "transition": {"core": 0.56, "scene": 0.28, "global": 0.16},
+        },
+        "mid": {
+            "plot": {"core": 0.40, "scene": 0.35, "global": 0.25},
+            "battle": {"core": 0.35, "scene": 0.45, "global": 0.20},
+            "emotion": {"core": 0.45, "scene": 0.35, "global": 0.20},
+            "transition": {"core": 0.50, "scene": 0.25, "global": 0.25},
+        },
+        "late": {
+            "plot": {"core": 0.36, "scene": 0.29, "global": 0.35},
+            "battle": {"core": 0.31, "scene": 0.39, "global": 0.30},
+            "emotion": {"core": 0.41, "scene": 0.29, "global": 0.30},
+            "transition": {"core": 0.46, "scene": 0.21, "global": 0.33},
+        },
     }
     EXTRA_SECTIONS = {
         "story_skeleton",
@@ -78,8 +99,10 @@ class ContextManager:
         max_chars: Optional[int] = None,
     ) -> Dict[str, Any]:
         template = template or self.DEFAULT_TEMPLATE
+        self._active_template = template
         if template not in self.TEMPLATE_WEIGHTS:
             template = self.DEFAULT_TEMPLATE
+            self._active_template = template
 
         if use_snapshot:
             try:
@@ -107,7 +130,8 @@ class ContextManager:
         template: str = DEFAULT_TEMPLATE,
         max_chars: Optional[int] = None,
     ) -> Dict[str, Any]:
-        weights = self.TEMPLATE_WEIGHTS.get(template, self.TEMPLATE_WEIGHTS[self.DEFAULT_TEMPLATE])
+        chapter = int((pack.get("meta") or {}).get("chapter") or 0)
+        weights = self._resolve_template_weights(template=template, chapter=chapter)
         max_chars = max_chars or 8000
         extra_budget = int(self.config.context_extra_section_budget or 0)
 
@@ -130,6 +154,8 @@ class ContextManager:
 
         assembled["template"] = template
         assembled["weights"] = weights
+        if chapter > 0:
+            assembled.setdefault("meta", {})["context_weight_stage"] = self._resolve_context_stage(chapter)
         return assembled
 
     def filter_invalid_items(self, items: List[Dict[str, Any]], source_type: str, id_key: str) -> List[Dict[str, Any]]:
@@ -260,25 +286,50 @@ class ContextManager:
             return {}
 
         fallback = str(getattr(self.config, "context_genre_profile_fallback", "shuangwen") or "shuangwen")
-        genre = str((state.get("project") or {}).get("genre") or fallback)
+        genre_raw = str((state.get("project") or {}).get("genre") or fallback)
+        genres = self._parse_genre_tokens(genre_raw)
+        if not genres:
+            genres = [fallback]
+        max_genres = max(1, int(getattr(self.config, "context_genre_profile_max_genres", 2)))
+        genres = genres[:max_genres]
+
+        primary_genre = genres[0]
+        secondary_genres = genres[1:]
+        composite = len(genres) > 1
         profile_path = self.config.project_root / ".claude" / "references" / "genre-profiles.md"
         taxonomy_path = self.config.project_root / ".claude" / "references" / "reading-power-taxonomy.md"
 
         profile_text = profile_path.read_text(encoding="utf-8") if profile_path.exists() else ""
         taxonomy_text = taxonomy_path.read_text(encoding="utf-8") if taxonomy_path.exists() else ""
 
-        profile_excerpt = self._extract_genre_section(profile_text, genre)
-        taxonomy_excerpt = self._extract_genre_section(taxonomy_text, genre)
+        profile_excerpt = self._extract_genre_section(profile_text, primary_genre)
+        taxonomy_excerpt = self._extract_genre_section(taxonomy_text, primary_genre)
+
+        secondary_profiles: List[str] = []
+        secondary_taxonomies: List[str] = []
+        for extra in secondary_genres:
+            secondary_profiles.append(self._extract_genre_section(profile_text, extra))
+            secondary_taxonomies.append(self._extract_genre_section(taxonomy_text, extra))
+
         refs = self._extract_markdown_refs(
-            profile_excerpt,
+            "\n".join([profile_excerpt] + secondary_profiles),
             max_items=int(getattr(self.config, "context_genre_profile_max_refs", 8)),
         )
 
+        composite_hints = self._build_composite_genre_hints(genres, refs)
+
         return {
-            "genre": genre,
+            "genre": primary_genre,
+            "genre_raw": genre_raw,
+            "genres": genres,
+            "composite": composite,
+            "secondary_genres": secondary_genres,
             "profile_excerpt": profile_excerpt,
             "taxonomy_excerpt": taxonomy_excerpt,
+            "secondary_profile_excerpts": secondary_profiles,
+            "secondary_taxonomy_excerpts": secondary_taxonomies,
             "reference_hints": refs,
+            "composite_hints": composite_hints,
         }
 
     def _build_writing_guidance(
@@ -334,6 +385,10 @@ class ContextManager:
         if refs:
             guidance.append(f"题材策略可执行提示：{refs[0]}")
 
+        composite_hints = genre_profile.get("composite_hints") or []
+        if composite_hints:
+            guidance.append(f"复合题材协同：{composite_hints[0]}")
+
         if not guidance:
             guidance.append("本章执行默认高可读策略：冲突前置、信息后置、段末留钩。")
 
@@ -344,10 +399,20 @@ class ContextManager:
             genre_profile=genre_profile,
         )
 
+        checklist_score = self._compute_writing_checklist_score(
+            chapter=chapter,
+            checklist=checklist,
+            reader_signal=reader_signal,
+        )
+
+        if getattr(self.config, "context_writing_score_persist_enabled", True):
+            self._persist_writing_checklist_score(checklist_score)
+
         return {
             "chapter": chapter,
             "guidance_items": guidance[:limit],
             "checklist": checklist,
+            "checklist_score": checklist_score,
             "signals_used": {
                 "has_low_score_ranges": bool(low_ranges),
                 "hook_types": list(hook_usage.keys())[:3],
@@ -359,6 +424,181 @@ class ContextManager:
                 "genre": genre,
             },
         }
+
+    def _compute_writing_checklist_score(
+        self,
+        chapter: int,
+        checklist: List[Dict[str, Any]],
+        reader_signal: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        total_items = len(checklist)
+        required_items = 0
+        completed_items = 0
+        completed_required = 0
+        total_weight = 0.0
+        completed_weight = 0.0
+        pending_labels: List[str] = []
+
+        for item in checklist:
+            if not isinstance(item, dict):
+                continue
+            required = bool(item.get("required"))
+            weight = float(item.get("weight") or 1.0)
+            total_weight += weight
+            if required:
+                required_items += 1
+
+            completed = self._is_checklist_item_completed(item, reader_signal)
+            if completed:
+                completed_items += 1
+                completed_weight += weight
+                if required:
+                    completed_required += 1
+            else:
+                pending_labels.append(str(item.get("label") or item.get("id") or "未命名项"))
+
+        completion_rate = (completed_items / total_items) if total_items > 0 else 1.0
+        weighted_rate = (completed_weight / total_weight) if total_weight > 0 else completion_rate
+        required_rate = (completed_required / required_items) if required_items > 0 else 1.0
+
+        score = 100.0 * (0.5 * weighted_rate + 0.3 * required_rate + 0.2 * completion_rate)
+
+        if getattr(self.config, "context_writing_score_include_reader_trend", True):
+            trend_window = max(1, int(getattr(self.config, "context_writing_score_trend_window", 10)))
+            trend = self.index_manager.get_writing_checklist_score_trend(last_n=trend_window)
+            baseline = float(trend.get("score_avg") or 0.0)
+            if baseline > 0:
+                score += max(-10.0, min(10.0, (score - baseline) * 0.1))
+
+        score = round(max(0.0, min(100.0, score)), 2)
+
+        return {
+            "chapter": chapter,
+            "score": score,
+            "completion_rate": round(completion_rate, 4),
+            "weighted_completion_rate": round(weighted_rate, 4),
+            "required_completion_rate": round(required_rate, 4),
+            "total_items": total_items,
+            "required_items": required_items,
+            "completed_items": completed_items,
+            "completed_required": completed_required,
+            "total_weight": round(total_weight, 2),
+            "completed_weight": round(completed_weight, 2),
+            "pending_items": pending_labels,
+            "trend_window": int(getattr(self.config, "context_writing_score_trend_window", 10)),
+        }
+
+    def _is_checklist_item_completed(self, item: Dict[str, Any], reader_signal: Dict[str, Any]) -> bool:
+        item_id = str(item.get("id") or "")
+        if item_id in {"fix_low_score_range", "readability_loop"}:
+            review_trend = reader_signal.get("review_trend") or {}
+            overall = review_trend.get("overall_avg")
+            return isinstance(overall, (int, float)) and float(overall) >= 75.0
+
+        if item_id == "hook_diversification":
+            hook_usage = reader_signal.get("hook_type_usage") or {}
+            return len(hook_usage) >= 2
+
+        if item_id == "coolpoint_combo":
+            pattern_usage = reader_signal.get("pattern_usage") or {}
+            return len(pattern_usage) >= 2
+
+        if item_id == "genre_anchor_consistency":
+            return True
+
+        source = str(item.get("source") or "")
+        if source.startswith("fallback"):
+            return True
+
+        return False
+
+    def _persist_writing_checklist_score(self, checklist_score: Dict[str, Any]) -> None:
+        if not checklist_score:
+            return
+        try:
+            self.index_manager.save_writing_checklist_score(
+                WritingChecklistScoreMeta(
+                    chapter=int(checklist_score.get("chapter") or 0),
+                    template=str(getattr(self, "_active_template", self.DEFAULT_TEMPLATE) or self.DEFAULT_TEMPLATE),
+                    total_items=int(checklist_score.get("total_items") or 0),
+                    required_items=int(checklist_score.get("required_items") or 0),
+                    completed_items=int(checklist_score.get("completed_items") or 0),
+                    completed_required=int(checklist_score.get("completed_required") or 0),
+                    total_weight=float(checklist_score.get("total_weight") or 0.0),
+                    completed_weight=float(checklist_score.get("completed_weight") or 0.0),
+                    completion_rate=float(checklist_score.get("completion_rate") or 0.0),
+                    score=float(checklist_score.get("score") or 0.0),
+                    score_breakdown={
+                        "weighted_completion_rate": checklist_score.get("weighted_completion_rate"),
+                        "required_completion_rate": checklist_score.get("required_completion_rate"),
+                        "trend_window": checklist_score.get("trend_window"),
+                    },
+                    pending_items=list(checklist_score.get("pending_items") or []),
+                    source="context_manager",
+                )
+            )
+        except Exception:
+            pass
+
+    def _resolve_context_stage(self, chapter: int) -> str:
+        early = max(1, int(getattr(self.config, "context_dynamic_budget_early_chapter", 30)))
+        late = max(early + 1, int(getattr(self.config, "context_dynamic_budget_late_chapter", 120)))
+        if chapter <= early:
+            return "early"
+        if chapter >= late:
+            return "late"
+        return "mid"
+
+    def _resolve_template_weights(self, template: str, chapter: int) -> Dict[str, float]:
+        template_key = template if template in self.TEMPLATE_WEIGHTS else self.DEFAULT_TEMPLATE
+        base = dict(self.TEMPLATE_WEIGHTS.get(template_key, self.TEMPLATE_WEIGHTS[self.DEFAULT_TEMPLATE]))
+        if not getattr(self.config, "context_dynamic_budget_enabled", True):
+            return base
+
+        stage = self._resolve_context_stage(chapter)
+        staged = self.TEMPLATE_WEIGHTS_DYNAMIC.get(stage, {}).get(template_key)
+        if staged:
+            return dict(staged)
+
+        return base
+
+    def _parse_genre_tokens(self, genre_raw: str) -> List[str]:
+        text = str(genre_raw or "").strip()
+        if not text:
+            return []
+        if not getattr(self.config, "context_genre_profile_support_composite", True):
+            return [text]
+
+        separators = getattr(self.config, "context_genre_profile_separators", ("+", "/", "|", ",", "，", "、"))
+        pattern = "|".join(re.escape(str(token)) for token in separators if str(token))
+        if not pattern:
+            return [text]
+
+        tokens = [chunk.strip() for chunk in re.split(pattern, text) if chunk and chunk.strip()]
+        deduped: List[str] = []
+        seen = set()
+        for token in tokens:
+            lower = token.lower()
+            if lower in seen:
+                continue
+            seen.add(lower)
+            deduped.append(token)
+        return deduped or [text]
+
+    def _build_composite_genre_hints(self, genres: List[str], refs: List[str]) -> List[str]:
+        if len(genres) <= 1:
+            return []
+
+        primary = genres[0]
+        secondaries = genres[1:]
+        hints: List[str] = []
+        hints.append(
+            f"以“{primary}”作为主引擎推进主线，每章至少保留1处“{'/'.join(secondaries)}”特征表达。"
+        )
+        if refs:
+            hints.append(f"复合题材执行参考：{refs[0]}")
+        hints.append("主辅题材冲突时，优先保证主题材读者承诺，辅题材用于制造新鲜感。")
+        return hints
 
     def _build_writing_checklist(
         self,

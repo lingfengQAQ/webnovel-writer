@@ -281,9 +281,69 @@ def test_context_manager_includes_writing_guidance(temp_project):
     checklist = guidance.get("checklist") or []
     assert isinstance(checklist, list)
     assert checklist
+    checklist_score = guidance.get("checklist_score") or {}
+    assert isinstance(checklist_score, dict)
+    assert "score" in checklist_score
+    assert "completion_rate" in checklist_score
     first_item = checklist[0]
     assert isinstance(first_item, dict)
     assert {"id", "label", "weight", "required", "source", "verify_hint"}.issubset(first_item.keys())
+
+    persisted = idx.get_writing_checklist_score(4)
+    assert isinstance(persisted, dict)
+    assert persisted.get("chapter") == 4
+    assert persisted.get("score") is not None
+
+
+def test_context_manager_dynamic_weights_and_composite_genre(temp_project):
+    refs_dir = temp_project.project_root / ".claude" / "references"
+    refs_dir.mkdir(parents=True, exist_ok=True)
+    (refs_dir / "genre-profiles.md").write_text(
+        """
+## xuanhuan
+- 升级线清晰
+
+## realistic
+- 社会议题映射
+""".strip(),
+        encoding="utf-8",
+    )
+    (refs_dir / "reading-power-taxonomy.md").write_text(
+        """
+## xuanhuan
+- 钩子强度优先
+
+## realistic
+- 人物动机一致
+""".strip(),
+        encoding="utf-8",
+    )
+
+    state = {
+        "project": {"genre": "xuanhuan+realistic"},
+        "protagonist_state": {"name": "萧炎"},
+        "chapter_meta": {},
+        "disambiguation_warnings": [],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+
+    manager = ContextManager(temp_project)
+    payload_early = manager.build_context(10, template="plot", use_snapshot=False, save_snapshot=False)
+    payload_late = manager.build_context(150, template="plot", use_snapshot=False, save_snapshot=False)
+
+    assert payload_early.get("weights", {}).get("core") >= payload_late.get("weights", {}).get("core")
+    assert payload_late.get("weights", {}).get("global") >= payload_early.get("weights", {}).get("global")
+    assert payload_early.get("meta", {}).get("context_weight_stage") == "early"
+    assert payload_late.get("meta", {}).get("context_weight_stage") == "late"
+
+    profile = payload_early["sections"]["genre_profile"]["content"]
+    assert profile.get("composite") is True
+    assert profile.get("genre") == "xuanhuan"
+    assert isinstance(profile.get("genres"), list)
+    assert "realistic" in (profile.get("genres") or [])
+    assert isinstance(profile.get("composite_hints"), list)
+    assert profile.get("composite_hints")
 
 
 def test_context_manager_compact_text_truncation(temp_project):

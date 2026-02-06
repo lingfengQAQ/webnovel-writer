@@ -81,6 +81,43 @@ def safe_append_call_trace(event: str, payload: Optional[Dict[str, Any]] = None)
         pass
 
 
+def expected_step_owner(command: str, step_id: str) -> str:
+    """Resolve expected caller owner by command + step id.
+
+    Returns concise owner tags to align with
+    `.claude/references/claude-code-call-matrix.md`.
+    """
+    if command == "webnovel-write":
+        mapping = {
+            "Step 1": "context-agent",
+            "Step 1.5": "webnovel-write-skill",
+            "Step 2A": "writer-draft",
+            "Step 2B": "style-adapter",
+            "Step 3": "review-agents",
+            "Step 4": "polish-agent",
+            "Step 5": "data-agent",
+            "Step 6": "backup-agent",
+        }
+        return mapping.get(step_id, "webnovel-write-skill")
+
+    if command == "webnovel-review":
+        return "webnovel-review-skill"
+
+    return "unknown"
+
+
+def step_allowed_before(command: str, step_id: str, completed_steps: list[Dict[str, Any]]) -> bool:
+    """Check simple ordering constraints by pending sequence."""
+    sequence = get_pending_steps(command)
+    if step_id not in sequence:
+        return True
+
+    expected_index = sequence.index(step_id)
+    completed_ids = [str(item.get("id")) for item in completed_steps]
+    required_before = sequence[:expected_index]
+    return all(prev in completed_ids for prev in required_before)
+
+
 def _new_task(command: str, args: Dict[str, Any]) -> Dict[str, Any]:
     started_at = now_iso()
     return {
@@ -165,6 +202,19 @@ def start_step(step_id, step_name, progress_note=None):
         print("⚠️ 无活动任务，请先使用 start-task")
         return
 
+    command = str(task.get("command") or "")
+    if not step_allowed_before(command, step_id, task.get("completed_steps", [])):
+        safe_append_call_trace(
+            "step_order_violation",
+            {
+                "step_id": step_id,
+                "command": command,
+                "completed_steps": [row.get("id") for row in task.get("completed_steps", [])],
+            },
+        )
+
+    owner = expected_step_owner(command, step_id)
+
     _finalize_current_step_as_failed(task, reason="step_replaced_before_completion")
 
     started_at = now_iso()
@@ -190,6 +240,7 @@ def start_step(step_id, step_name, progress_note=None):
             "command": task.get("command"),
             "chapter": task.get("args", {}).get("chapter_num"),
             "progress_note": progress_note,
+            "expected_owner": owner,
         },
     )
     print(f"▶️ {step_id} 开始: {step_name}")

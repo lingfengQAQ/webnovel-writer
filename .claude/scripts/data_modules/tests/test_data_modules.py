@@ -32,6 +32,7 @@ from data_modules.index_manager import (
     ChaseDebtMeta,
     ChapterReadingPowerMeta,
     ReviewMetrics,
+    WritingChecklistScoreMeta,
 )
 
 
@@ -896,6 +897,56 @@ class TestIndexManager:
         assert trends["overall_avg"] > 0
         assert "爽点密度" in trends["dimension_avg"]
 
+    def test_writing_checklist_score_persistence_and_trend(self, temp_project):
+        manager = IndexManager(temp_project)
+
+        manager.save_writing_checklist_score(
+            WritingChecklistScoreMeta(
+                chapter=10,
+                template="plot",
+                total_items=6,
+                required_items=4,
+                completed_items=4,
+                completed_required=3,
+                total_weight=6.2,
+                completed_weight=4.1,
+                completion_rate=0.6667,
+                score=78.5,
+                score_breakdown={"weighted_completion_rate": 0.66},
+                pending_items=["段末留钩"],
+            )
+        )
+        manager.save_writing_checklist_score(
+            WritingChecklistScoreMeta(
+                chapter=11,
+                template="plot",
+                total_items=6,
+                required_items=4,
+                completed_items=5,
+                completed_required=4,
+                total_weight=6.2,
+                completed_weight=5.4,
+                completion_rate=0.8333,
+                score=86.0,
+                score_breakdown={"weighted_completion_rate": 0.87},
+                pending_items=[],
+            )
+        )
+
+        one = manager.get_writing_checklist_score(10)
+        assert one is not None
+        assert one["chapter"] == 10
+        assert one["score"] == 78.5
+
+        recent = manager.get_recent_writing_checklist_scores(limit=2)
+        assert len(recent) == 2
+        assert recent[0]["chapter"] == 11
+
+        trend = manager.get_writing_checklist_score_trend(last_n=5)
+        assert trend["count"] == 2
+        assert trend["score_avg"] > 0
+        assert trend["completion_avg"] > 0
+
     def test_index_manager_cli(self, temp_project, monkeypatch, capsys):
         root = str(temp_project.project_root)
         manager = IndexManager(temp_project)
@@ -1228,6 +1279,35 @@ class TestIndexManager:
         )
         run_cli(["--project-root", root, "get-recent-review-metrics", "--limit", "5"])
         run_cli(["--project-root", root, "get-review-trend-stats", "--last-n", "5"])
+
+        checklist_payload = {
+            "chapter": 5,
+            "template": "plot",
+            "total_items": 6,
+            "required_items": 4,
+            "completed_items": 4,
+            "completed_required": 3,
+            "total_weight": 6.5,
+            "completed_weight": 4.8,
+            "completion_rate": 0.6667,
+            "score": 79.2,
+            "score_breakdown": {"weighted_completion_rate": 0.73},
+            "pending_items": ["钩子差异化"],
+            "source": "context_manager",
+        }
+        run_cli(
+            [
+                "--project-root",
+                root,
+                "save-writing-checklist-score",
+                "--data",
+                json.dumps(checklist_payload, ensure_ascii=False),
+            ]
+        )
+        run_cli(["--project-root", root, "get-writing-checklist-score", "--chapter", "5"])
+        run_cli(["--project-root", root, "get-writing-checklist-score", "--chapter", "99"])
+        run_cli(["--project-root", root, "get-recent-writing-checklist-scores", "--limit", "5"])
+        run_cli(["--project-root", root, "get-writing-checklist-score-trend", "--last-n", "5"])
 
         capsys.readouterr()
 

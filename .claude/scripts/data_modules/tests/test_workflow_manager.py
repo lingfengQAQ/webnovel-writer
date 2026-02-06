@@ -76,3 +76,25 @@ def test_complete_step_rejects_mismatch_step_id(tmp_path, monkeypatch):
     assert current_step["id"] == "Step 2A"
     assert current_step["status"] == module.STEP_STATUS_RUNNING
 
+
+def test_workflow_step_owner_and_order_violation_trace(tmp_path, monkeypatch):
+    module = _load_module()
+    monkeypatch.setattr(module, "find_project_root", lambda: tmp_path)
+
+    webnovel_dir = tmp_path / ".webnovel"
+    webnovel_dir.mkdir(parents=True, exist_ok=True)
+
+    assert module.expected_step_owner("webnovel-write", "Step 1") == "context-agent"
+    assert module.expected_step_owner("webnovel-write", "Step 5") == "data-agent"
+
+    module.start_task("webnovel-write", {"chapter_num": 12})
+    module.start_step("Step 3", "Review")
+
+    trace_path = module.get_call_trace_path()
+    lines = [json.loads(line) for line in trace_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    events = [row.get("event") for row in lines]
+    assert "step_order_violation" in events
+
+    step_started = [row for row in lines if row.get("event") == "step_started"]
+    assert step_started
+    assert step_started[-1].get("payload", {}).get("expected_owner") == "review-agents"

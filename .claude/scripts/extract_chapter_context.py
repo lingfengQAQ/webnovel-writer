@@ -186,6 +186,7 @@ def _load_contract_context(project_root: Path, chapter_num: int) -> Dict[str, An
     sections = payload.get("sections", {})
     return {
         "context_contract_version": (payload.get("meta") or {}).get("context_contract_version"),
+        "context_weight_stage": (payload.get("meta") or {}).get("context_weight_stage"),
         "reader_signal": (sections.get("reader_signal") or {}).get("content", {}),
         "genre_profile": (sections.get("genre_profile") or {}).get("content", {}),
         "writing_guidance": (sections.get("writing_guidance") or {}).get("content", {}),
@@ -210,6 +211,7 @@ def build_chapter_context_payload(project_root: Path, chapter_num: int) -> Dict[
         "previous_summaries": prev_summaries,
         "state_summary": state_summary,
         "context_contract_version": contract_context.get("context_contract_version"),
+        "context_weight_stage": contract_context.get("context_weight_stage"),
         "reader_signal": contract_context.get("reader_signal", {}),
         "genre_profile": contract_context.get("genre_profile", {}),
         "writing_guidance": contract_context.get("writing_guidance", {}),
@@ -247,10 +249,15 @@ def _render_text(payload: Dict[str, Any]) -> str:
     if contract_version:
         lines.append(f"## Contract ({contract_version})")
         lines.append("")
+        stage = payload.get("context_weight_stage")
+        if stage:
+            lines.append(f"- 上下文阶段权重: {stage}")
+            lines.append("")
 
     writing_guidance = payload.get("writing_guidance") or {}
     guidance_items = writing_guidance.get("guidance_items") or []
     checklist = writing_guidance.get("checklist") or []
+    checklist_score = writing_guidance.get("checklist_score") or {}
     if guidance_items or checklist:
         lines.append("## 写作执行建议")
         lines.append("")
@@ -289,6 +296,14 @@ def _render_text(payload: Dict[str, Any]) -> str:
                 if verify_hint:
                     lines.append(f"   - 验收: {verify_hint}")
 
+        if checklist_score:
+            lines.append("")
+            lines.append("### 执行评分")
+            lines.append("")
+            lines.append(f"- 评分: {checklist_score.get('score')}")
+            lines.append(f"- 完成率: {checklist_score.get('completion_rate')}")
+            lines.append(f"- 必做完成率: {checklist_score.get('required_completion_rate')}")
+
         lines.append("")
 
     reader_signal = payload.get("reader_signal") or {}
@@ -308,6 +323,12 @@ def _render_text(payload: Dict[str, Any]) -> str:
         lines.append("## 题材锚定")
         lines.append("")
         lines.append(f"- 题材: {genre_profile.get('genre')}")
+        genres = genre_profile.get("genres") or []
+        if len(genres) > 1:
+            lines.append(f"- 复合题材: {' + '.join(str(token) for token in genres)}")
+            composite_hints = genre_profile.get("composite_hints") or []
+            for row in composite_hints[:2]:
+                lines.append(f"- {row}")
         refs = genre_profile.get("reference_hints") or []
         for row in refs[:3]:
             lines.append(f"- {row}")

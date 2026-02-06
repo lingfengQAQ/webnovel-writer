@@ -793,6 +793,36 @@ git checkout ch0045
 - **Pydantic Schema**：DataAgentOutput 等结构化验证
 - **不向前兼容**：vectors.db 表结构变更时自动 DROP+CREATE
 
+### Context Contract v2（阶段 E）
+
+- `writing_guidance` 新增 `checklist`：可执行、可验收、可加权
+- checklist 项包含：`id/label/weight/required/source/verify_hint`
+- `extract_chapter_context.py` 文本输出新增“执行检查清单（可评分）”
+
+### Context Contract v2（阶段 F）
+
+- 新增 `writing_guidance.checklist_score`：章节执行评分与完成率
+- `index.db` 新增 `writing_checklist_scores` 持久化评分记录
+- 支持趋势查询：最近评分、评分均值、完成率均值
+
+### Context Contract v2（阶段 G）
+
+- `workflow_manager.py` 新增 Step 调用方标注（expected owner）
+- 新增步骤顺序违规追踪事件 `step_order_violation`
+- `call_trace.jsonl` 可用于定位“谁在何时调用了哪一步”
+
+### Context Contract v2（阶段 H）
+
+- 新增动态上下文预算：按章节阶段 early/mid/late 调整权重
+- `meta.context_weight_stage` 公开当前权重阶段
+- 目标：开篇重冲突与角色、中后期重世界与线索收束
+
+### Context Contract v2（阶段 I）
+
+- `genre_profile` 支持复合题材（如 `xuanhuan+realistic`）
+- 输出新增：`genres/composite/secondary_genres/composite_hints`
+- 写作建议自动加入“复合题材协同”提示
+
 ### v5.3
 - **追读力分类标准**：钩子5类型、爽点8模式、微兑现7类型
 - **约束分层机制**：Hard Invariants (4条) + Soft Guidance (可Override)

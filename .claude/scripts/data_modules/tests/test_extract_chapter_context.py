@@ -87,9 +87,11 @@ def test_build_chapter_context_payload_includes_contract_sections(tmp_path):
 
     payload = build_chapter_context_payload(tmp_path, 3)
     assert payload["context_contract_version"] == "v2"
+    assert payload.get("context_weight_stage") in {"early", "mid", "late"}
     assert "writing_guidance" in payload
     assert isinstance(payload["writing_guidance"].get("guidance_items"), list)
     assert isinstance(payload["writing_guidance"].get("checklist"), list)
+    assert isinstance(payload["writing_guidance"].get("checklist_score"), dict)
     assert payload["genre_profile"].get("genre") == "xuanhuan"
 
 
@@ -106,8 +108,14 @@ def test_render_text_contains_writing_guidance_section(tmp_path):
         "previous_summaries": ["### 第9章摘要\n上一章"],
         "state_summary": "状态",
         "context_contract_version": "v2",
+        "context_weight_stage": "early",
         "reader_signal": {"review_trend": {"overall_avg": 72}, "low_score_ranges": [{"start_chapter": 8, "end_chapter": 9}]},
-        "genre_profile": {"genre": "xuanhuan", "reference_hints": ["升级线清晰"]},
+        "genre_profile": {
+            "genre": "xuanhuan",
+            "genres": ["xuanhuan", "realistic"],
+            "composite_hints": ["以玄幻主线推进，同时保留现实议题表达"],
+            "reference_hints": ["升级线清晰"],
+        },
         "writing_guidance": {
             "guidance_items": ["先修低分", "钩子差异化"],
             "checklist": [
@@ -120,6 +128,11 @@ def test_render_text_contains_writing_guidance_section(tmp_path):
                     "verify_hint": "至少完成1处冲突升级",
                 }
             ],
+            "checklist_score": {
+                "score": 81.5,
+                "completion_rate": 0.66,
+                "required_completion_rate": 0.75,
+            },
         },
     }
 
@@ -127,6 +140,10 @@ def test_render_text_contains_writing_guidance_section(tmp_path):
     assert "## 写作执行建议" in text
     assert "先修低分" in text
     assert "## Contract (v2)" in text
+    assert "- 上下文阶段权重: early" in text
     assert "### 执行检查清单（可评分）" in text
     assert "- 总权重: 1.40" in text
     assert "[必做][w=1.4] 修复低分区间问题" in text
+    assert "### 执行评分" in text
+    assert "- 评分: 81.5" in text
+    assert "- 复合题材: xuanhuan + realistic" in text

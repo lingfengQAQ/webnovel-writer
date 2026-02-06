@@ -83,3 +83,27 @@ Phase C:
 - `context_writing_guidance_max_items`
 - `context_writing_guidance_low_score_threshold`
 - `context_writing_guidance_hook_diversify`
+
+Phase E:
+- `context_writing_checklist_enabled`
+- `context_writing_checklist_min_items`
+- `context_writing_checklist_max_items`
+- `context_writing_checklist_default_weight`
+
+Phase F:
+- `context_writing_score_persist_enabled`
+- `context_writing_score_include_reader_trend`
+- `context_writing_score_trend_window`
+- `writing_guidance.checklist_score` 写入 `index.db -> writing_checklist_scores`
+
+Phase H:
+- `context_dynamic_budget_enabled`
+- `context_dynamic_budget_early_chapter`
+- `context_dynamic_budget_late_chapter`
+- 新增 `meta.context_weight_stage`（early/mid/late）
+
+Phase I:
+- `context_genre_profile_support_composite`
+- `context_genre_profile_max_genres`
+- `context_genre_profile_separators`
+- 新增 `genre_profile.genres/composite/composite_hints`

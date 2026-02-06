@@ -179,6 +179,26 @@ class ReviewMetrics:
     notes: str = ""
 
 
+@dataclass
+class WritingChecklistScoreMeta:
+    """写作清单评分记录（Context Contract v2 Phase F）"""
+
+    chapter: int
+    template: str = "plot"
+    total_items: int = 0
+    required_items: int = 0
+    completed_items: int = 0
+    completed_required: int = 0
+    total_weight: float = 0.0
+    completed_weight: float = 0.0
+    completion_rate: float = 0.0
+    score: float = 0.0
+    score_breakdown: Dict[str, Any] = field(default_factory=dict)
+    pending_items: List[str] = field(default_factory=list)
+    source: str = "context_manager"
+    notes: str = ""
+
+
 class IndexManager:
     """索引管理器"""
 
@@ -513,6 +533,31 @@ class IndexManager:
             )
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_tool_stats_chapter ON tool_call_stats(chapter)"
+            )
+
+            # 写作清单评分记录（Phase F）
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS writing_checklist_scores (
+                    chapter INTEGER PRIMARY KEY,
+                    template TEXT DEFAULT 'plot',
+                    total_items INTEGER DEFAULT 0,
+                    required_items INTEGER DEFAULT 0,
+                    completed_items INTEGER DEFAULT 0,
+                    completed_required INTEGER DEFAULT 0,
+                    total_weight REAL DEFAULT 0,
+                    completed_weight REAL DEFAULT 0,
+                    completion_rate REAL DEFAULT 0,
+                    score REAL DEFAULT 0,
+                    score_breakdown TEXT,
+                    pending_items TEXT,
+                    source TEXT,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_checklist_score_value ON writing_checklist_scores(score)"
             )
 
             conn.commit()
@@ -1928,6 +1973,132 @@ class IndexManager:
             "recent_ranges": recent_ranges,
         }
 
+    # ==================== 写作清单评分（Phase F） ====================
+
+    def save_writing_checklist_score(self, meta: WritingChecklistScoreMeta) -> None:
+        """保存章节写作清单评分。"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO writing_checklist_scores (
+                    chapter, template, total_items, required_items,
+                    completed_items, completed_required,
+                    total_weight, completed_weight, completion_rate, score,
+                    score_breakdown, pending_items, source, notes
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(chapter) DO UPDATE SET
+                    template=excluded.template,
+                    total_items=excluded.total_items,
+                    required_items=excluded.required_items,
+                    completed_items=excluded.completed_items,
+                    completed_required=excluded.completed_required,
+                    total_weight=excluded.total_weight,
+                    completed_weight=excluded.completed_weight,
+                    completion_rate=excluded.completion_rate,
+                    score=excluded.score,
+                    score_breakdown=excluded.score_breakdown,
+                    pending_items=excluded.pending_items,
+                    source=excluded.source,
+                    notes=excluded.notes,
+                    updated_at=CURRENT_TIMESTAMP
+            """,
+                (
+                    meta.chapter,
+                    meta.template,
+                    meta.total_items,
+                    meta.required_items,
+                    meta.completed_items,
+                    meta.completed_required,
+                    meta.total_weight,
+                    meta.completed_weight,
+                    meta.completion_rate,
+                    meta.score,
+                    json.dumps(meta.score_breakdown, ensure_ascii=False),
+                    json.dumps(meta.pending_items, ensure_ascii=False),
+                    meta.source,
+                    meta.notes,
+                ),
+            )
+            conn.commit()
+
+    def get_writing_checklist_score(self, chapter: int) -> Optional[Dict[str, Any]]:
+        """获取指定章节的写作清单评分。"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM writing_checklist_scores WHERE chapter = ?",
+                (chapter,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return self._row_to_dict(row, parse_json=["score_breakdown", "pending_items"])
+
+    def get_recent_writing_checklist_scores(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """获取最近章节写作清单评分。"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM writing_checklist_scores
+                ORDER BY chapter DESC
+                LIMIT ?
+            """,
+                (limit,),
+            )
+            return [
+                self._row_to_dict(row, parse_json=["score_breakdown", "pending_items"])
+                for row in cursor.fetchall()
+            ]
+
+    def get_writing_checklist_score_trend(self, last_n: int = 10) -> Dict[str, Any]:
+        """获取写作清单评分趋势统计。"""
+        records = self.get_recent_writing_checklist_scores(limit=max(1, int(last_n)))
+        if not records:
+            return {
+                "count": 0,
+                "score_avg": 0.0,
+                "completion_avg": 0.0,
+                "required_completion_avg": 0.0,
+                "recent": [],
+            }
+
+        scores: List[float] = []
+        completion_rates: List[float] = []
+        required_rates: List[float] = []
+        for row in records:
+            try:
+                scores.append(float(row.get("score", 0.0)))
+            except (TypeError, ValueError):
+                pass
+            try:
+                completion_rates.append(float(row.get("completion_rate", 0.0)))
+            except (TypeError, ValueError):
+                pass
+
+            required_items = int(row.get("required_items") or 0)
+            completed_required = int(row.get("completed_required") or 0)
+            if required_items > 0:
+                required_rates.append(completed_required / required_items)
+            else:
+                required_rates.append(1.0)
+
+        return {
+            "count": len(records),
+            "score_avg": round(sum(scores) / len(scores), 2) if scores else 0.0,
+            "completion_avg": round(sum(completion_rates) / len(completion_rates), 4) if completion_rates else 0.0,
+            "required_completion_avg": round(sum(required_rates) / len(required_rates), 4) if required_rates else 0.0,
+            "recent": [
+                {
+                    "chapter": row.get("chapter"),
+                    "score": row.get("score"),
+                    "completion_rate": row.get("completion_rate"),
+                }
+                for row in records
+            ],
+        }
+
     def get_debt_summary(self) -> Dict[str, Any]:
         """获取债务汇总信息"""
         with self._get_conn() as conn:
@@ -2357,6 +2528,18 @@ def main():
     review_trend_parser = subparsers.add_parser("get-review-trend-stats")
     review_trend_parser.add_argument("--last-n", type=int, default=5)
 
+    checklist_score_save_parser = subparsers.add_parser("save-writing-checklist-score")
+    checklist_score_save_parser.add_argument("--data", required=True, help="JSON 格式的写作清单评分数据")
+
+    checklist_score_get_parser = subparsers.add_parser("get-writing-checklist-score")
+    checklist_score_get_parser.add_argument("--chapter", type=int, required=True)
+
+    checklist_score_recent_parser = subparsers.add_parser("get-recent-writing-checklist-scores")
+    checklist_score_recent_parser.add_argument("--limit", type=int, default=10)
+
+    checklist_score_trend_parser = subparsers.add_parser("get-writing-checklist-score-trend")
+    checklist_score_trend_parser.add_argument("--last-n", type=int, default=10)
+
     # ==================== v5.3 引入命令 ====================
 
     # 获取债务汇总
@@ -2633,6 +2816,42 @@ def main():
     elif args.command == "get-review-trend-stats":
         stats = manager.get_review_trend_stats(args.last_n)
         emit_success(stats, message="review_trend_stats")
+
+    elif args.command == "save-writing-checklist-score":
+        data = json.loads(args.data)
+        metrics = WritingChecklistScoreMeta(
+            chapter=data["chapter"],
+            template=data.get("template", "plot"),
+            total_items=data.get("total_items", 0),
+            required_items=data.get("required_items", 0),
+            completed_items=data.get("completed_items", 0),
+            completed_required=data.get("completed_required", 0),
+            total_weight=data.get("total_weight", 0.0),
+            completed_weight=data.get("completed_weight", 0.0),
+            completion_rate=data.get("completion_rate", 0.0),
+            score=data.get("score", 0.0),
+            score_breakdown=data.get("score_breakdown", {}),
+            pending_items=data.get("pending_items", []),
+            source=data.get("source", "context_manager"),
+            notes=data.get("notes", ""),
+        )
+        manager.save_writing_checklist_score(metrics)
+        emit_success({"chapter": metrics.chapter, "score": metrics.score}, message="writing_checklist_score_saved")
+
+    elif args.command == "get-writing-checklist-score":
+        score = manager.get_writing_checklist_score(args.chapter)
+        if score:
+            emit_success(score, message="writing_checklist_score")
+        else:
+            emit_error("NOT_FOUND", f"未找到第 {args.chapter} 章的写作清单评分")
+
+    elif args.command == "get-recent-writing-checklist-scores":
+        scores = manager.get_recent_writing_checklist_scores(args.limit)
+        emit_success(scores, message="recent_writing_checklist_scores")
+
+    elif args.command == "get-writing-checklist-score-trend":
+        trend = manager.get_writing_checklist_score_trend(args.last_n)
+        emit_success(trend, message="writing_checklist_score_trend")
 
     # ==================== v5.3 引入命令处理 ====================
 
