@@ -19,6 +19,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
+from runtime_compat import enable_windows_utf8_stdio
+
 try:
     from chapter_paths import find_chapter_file
 except ImportError:  # pragma: no cover
@@ -360,4 +362,6 @@ def main():
 
 
 if __name__ == "__main__":
+    if sys.platform == "win32":
+        enable_windows_utf8_stdio()
     main()
