@@ -14,26 +14,31 @@ Goal: create a writing-ready project skeleton + creative constraints. No Quick/S
 4. Patch 总纲.md with the collected core info.
 5. Verify files.
 
-## References (read at specific phases)
-**Before Wave 1**:
-- skills/webnovel-init/references/genre-tropes.md
+## Reference Loading Levels (strict, lazy)
 
-**After genre selection**:
-- templates/genres/{genre}.md (read for each genre in A+B)
+Apply progressive disclosure:
+- L0: Load nothing extra until task type is confirmed.
+- L1: Load only the minimum file needed for the current wave.
+- L2: Load conditional files only when the user choice requires them.
+- L3: Load optional/time-sensitive files only on explicit user request.
 
-**Before Wave 3 (golden finger)**:
-- templates/golden-finger-templates.md
+Do not recursively chase references inside a reference file unless blocked.
 
-**Before Wave 4 (world)**:
-- skills/webnovel-init/references/worldbuilding/faction-systems.md
+### L1 (minimum, wave-gated)
+- Before Wave 1: `references/genre-tropes.md`
 
-**Before Wave 4 (constraints)**:
-- skills/webnovel-init/references/creativity/creativity-constraints.md
-- skills/webnovel-init/references/creativity/anti-trope-xianxia.md (修仙/玄幻/高武/西幻)
-- skills/webnovel-init/references/creativity/anti-trope-rules-mystery.md (规则/悬疑/灵异)
+### L2 (conditional)
+- After genre selection: `templates/genres/{genre}.md` (only for selected genres in A+B)
+- Before Wave 3 (golden finger): `templates/golden-finger-templates.md`
+- Before Wave 4 (world): `references/worldbuilding/faction-systems.md`
+- Before Wave 4 (constraints):
+  - `references/creativity/creativity-constraints.md`
+  - `references/creativity/anti-trope-xianxia.md` (修仙/玄幻/高武/西幻)
+  - `references/creativity/anti-trope-rules-mystery.md` (规则/悬疑/灵异)
 
-**Optional (only if user explicitly asks)**:
-- skills/webnovel-init/references/creativity/market-trends-2026.md
+### L3 (optional, explicit only)
+- `references/creativity/market-trends-2026.md`
+- If used, explicitly mark it as time-sensitive and verify freshness before relying on it.
 
 ## Questioning style
 - Ask in 3–4 conversational waves; avoid rigid templates.

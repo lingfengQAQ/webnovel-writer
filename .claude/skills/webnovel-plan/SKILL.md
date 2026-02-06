@@ -11,14 +11,23 @@ Purpose: refine 总纲 into volume + chapter outlines. Do not redesign the globa
 - Must run inside a project containing `.webnovel/state.json`.
 - If missing, ask for the project path and `cd` into it.
 
-## References (read at specific phases)
-**Before Step 3 (volume skeleton)**:
-- skills/webnovel-plan/references/strand-weave-pattern.md
-- skills/webnovel-plan/references/cool-points-guide.md
-- .claude/references/genre-profiles.md (load genre-specific standards)
+## Reference Loading Levels (strict, lazy)
 
-**Before Step 4 (chapter outlines)**:
-- .claude/references/reading-power-taxonomy.md (for hook types and pacing)
+Use progressive disclosure and load only what current step requires:
+- L0: No references before scope/volume is confirmed.
+- L1: Minimum set for current generation step.
+- L2: Conditional references only if constraints/genre details are needed.
+
+### L1 (step-gated minimum)
+- Before Step 3 (volume skeleton):
+  - `references/strand-weave-pattern.md`
+  - `.claude/references/genre-profiles.md`
+
+### L2 (conditional)
+- Before Step 3, load only if爽点结构需要细化:
+  - `references/cool-points-guide.md`
+- Before Step 4, load only if需要钩子/节奏细分:
+  - `.claude/references/reading-power-taxonomy.md`
 
 ## Workflow
 1. Load project data.

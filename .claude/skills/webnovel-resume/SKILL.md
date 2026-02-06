@@ -29,6 +29,18 @@ Copy and track progress:
 
 ---
 
+## Reference Loading Levels (strict, lazy)
+
+- L0: 不加载任何参考，直到确认存在中断恢复需求。
+- L1: 只加载恢复协议主文件。
+- L2: 仅在数据一致性检查时加载数据规范。
+
+### L1 (minimum)
+- `references/workflow-resume.md`
+
+### L2 (conditional)
+- `references/system-data-flow.md`（仅在需要核对状态字段/恢复策略时）
+
 ## Step 1: 加载恢复协议（必须执行）
 
 ```bash

@@ -19,6 +19,23 @@ allowed-tools: Read Grep Write Edit Bash Task AskUserQuestion
 
 ## Step 1: 加载参考（按需）
 
+## Reference Loading Levels (strict, lazy)
+
+- L0: 先确定审查深度（Core / Full），再加载参考。
+- L1: 每次只加载当前深度的最小文件。
+- L2: 仅在问题定位需要时加载扩展参考。
+
+### L1 (minimum)
+- Core 必读：`references/core-constraints.md`
+
+### L2 (conditional)
+- Full 或节奏/爽点相关问题时加载：
+  - `references/cool-points-guide.md`
+  - `references/strand-weave-pattern.md`
+- 仅在返工建议需要时加载：
+  - `references/common-mistakes.md`
+  - `references/pacing-control.md`
+
 **必读**:
 ```bash
 cat "${CLAUDE_PLUGIN_ROOT}/skills/webnovel-review/references/core-constraints.md"

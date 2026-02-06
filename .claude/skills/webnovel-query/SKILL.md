@@ -29,6 +29,22 @@ Copy and track progress:
 
 ---
 
+## Reference Loading Levels (strict, lazy)
+
+- L0: 先识别查询类型，不预加载全部参考。
+- L1: 所有查询仅加载基础数据流规范。
+- L2: 仅按查询类型加载对应专题参考。
+
+### L1 (minimum)
+- `references/system-data-flow.md`
+
+### L2 (conditional by query type)
+- 伏笔查询：`references/advanced/foreshadowing.md`
+- 节奏查询：`../webnovel-plan/references/strand-weave-pattern.md`
+- 标签格式查询：`references/tag-specification.md`
+
+Do not load two or more L2 files unless the user request clearly spans multiple query types.
+
 ## Step 1: 识别查询类型
 
 | 关键词 | 查询类型 | 需加载 |

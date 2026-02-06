@@ -65,6 +65,25 @@ cat "${CLAUDE_PLUGIN_ROOT}/skills/webnovel-write/references/core-constraints.md"
 
 场景写作与风格参考按需加载（见 `references/workflow-details.md`）。
 
+## Reference Loading Levels (strict, lazy)
+
+- L0: 不加载额外参考，直到当前 step 明确。
+- L1: 仅加载本 step 的最小必需文件。
+- L2: 仅在触发条件满足时加载扩展参考。
+
+### L1 (minimum)
+- Step 2 写作前：`references/core-constraints.md`
+- Step 4 润色前：`references/polish-guide.md`
+
+### L2 (conditional)
+- 仅当 Step 1.5 需要风格/体裁细化时加载：
+  - `references/style-variants.md`
+  - `.claude/references/reading-power-taxonomy.md`
+  - `.claude/references/genre-profiles.md`
+- 仅当需要模板细节时加载：
+  - `references/workflow-details.md`
+  - `references/writing/typesetting.md`
+
 ## Step 3: 审查
 
 **默认核心4个 Checker**：
