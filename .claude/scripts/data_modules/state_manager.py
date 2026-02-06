@@ -14,6 +14,7 @@ v5.1 变更（v5.4 沿用）:
 """
 
 import json
+import logging
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -26,6 +27,9 @@ import filelock
 
 from .config import get_config
 from .observability import safe_log_tool_call
+
+
+logger = logging.getLogger(__name__)
 
 try:
     # 当 scripts 目录在 sys.path 中（常见：从 scripts/ 运行）
@@ -393,7 +397,7 @@ class StateManager:
                     if eid:
                         processed_appearances.add((eid, chapter))
             except Exception as exc:
-                print(f"[WARNING] SQLite sync failed (process_chapter_entities): {exc}", file=sys.stderr)
+                logger.warning("SQLite sync failed (process_chapter_entities): %s", exc)
                 return False
 
         # 方式2: 使用 add_entity/update_entity 收集的增量数据。
@@ -550,7 +554,7 @@ class StateManager:
 
         except Exception as e:
             # SQLite 同步失败时记录警告（不中断主流程）
-            print(f"[WARNING] SQLite sync failed: {e}", file=sys.stderr)
+            logger.warning("SQLite sync failed: %s", e)
             return False
 
     def _snapshot_sqlite_pending(self) -> Dict[str, Any]:

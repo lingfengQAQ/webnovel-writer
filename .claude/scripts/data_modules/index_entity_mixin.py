@@ -7,9 +7,12 @@ IndexEntityMixin extracted from IndexManager.
 from __future__ import annotations
 
 import json
-import sys
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+
+
+logger = logging.getLogger(__name__)
 
 
 class IndexEntityMixin:
@@ -39,7 +42,10 @@ class IndexEntityMixin:
                     try:
                         old_current = json.loads(existing["current_json"])
                     except json.JSONDecodeError as exc:
-                        print(f"[index_manager] failed to parse JSON in entities.current_json: {exc}", file=sys.stderr)
+                        logger.warning(
+                            "failed to parse JSON in entities.current_json: %s",
+                            exc,
+                        )
 
                 # 合并 current (新值覆盖旧值)
                 merged_current = {**old_current, **entity.current}
@@ -211,9 +217,9 @@ class IndexEntityMixin:
                 try:
                     current = json.loads(row["current_json"])
                 except json.JSONDecodeError as exc:
-                    print(
-                        f"[index_manager] failed to parse JSON in update_entity_current current_json: {exc}",
-                        file=sys.stderr,
+                    logger.warning(
+                        "failed to parse JSON in update_entity_current current_json: %s",
+                        exc,
                     )
 
             current.update(updates)

@@ -7,6 +7,7 @@ RAGAdapter tests
 import sys
 import json
 import asyncio
+import logging
 
 import pytest
 
@@ -187,7 +188,7 @@ def test_rag_adapter_cli(temp_project, monkeypatch, capsys):
     capsys.readouterr()
 
 
-def test_rag_adapter_log_query_failure_is_reported(temp_project, monkeypatch, capsys):
+def test_rag_adapter_log_query_failure_is_reported(temp_project, monkeypatch, caplog):
     adapter = RAGAdapter(temp_project)
 
     def _raise_log_error(*args, **kwargs):
@@ -195,7 +196,8 @@ def test_rag_adapter_log_query_failure_is_reported(temp_project, monkeypatch, ca
 
     monkeypatch.setattr(adapter.index_manager, "log_rag_query", _raise_log_error)
 
-    adapter._log_query("q", "vector", [], 1)
+    with caplog.at_level(logging.WARNING):
+        adapter._log_query("q", "vector", [], 1)
 
-    captured = capsys.readouterr()
-    assert "failed to log rag query" in captured.err
+    message_text = "\n".join(record.getMessage() for record in caplog.records)
+    assert "failed to log rag query" in message_text

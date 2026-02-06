@@ -5,6 +5,7 @@ ContextManager and SnapshotManager tests
 """
 
 import json
+import logging
 
 import pytest
 
@@ -460,7 +461,7 @@ def test_context_manager_compact_text_truncation(temp_project):
     assert len(raw_cut) <= 100
 
 
-def test_context_manager_persist_writing_checklist_score_logs_failure(temp_project, monkeypatch, capsys):
+def test_context_manager_persist_writing_checklist_score_logs_failure(temp_project, monkeypatch, caplog):
     manager = ContextManager(temp_project)
 
     def _raise_save_error(_meta):
@@ -468,23 +469,24 @@ def test_context_manager_persist_writing_checklist_score_logs_failure(temp_proje
 
     monkeypatch.setattr(manager.index_manager, "save_writing_checklist_score", _raise_save_error)
 
-    manager._persist_writing_checklist_score(
-        {
-            "chapter": 6,
-            "score": 70.0,
-            "total_items": 3,
-            "required_items": 1,
-            "completed_items": 1,
-            "completed_required": 1,
-            "total_weight": 3.0,
-            "completed_weight": 1.0,
-            "completion_rate": 0.33,
-            "pending_items": ["test"],
-        }
-    )
+    with caplog.at_level(logging.WARNING):
+        manager._persist_writing_checklist_score(
+            {
+                "chapter": 6,
+                "score": 70.0,
+                "total_items": 3,
+                "required_items": 1,
+                "completed_items": 1,
+                "completed_required": 1,
+                "total_weight": 3.0,
+                "completed_weight": 1.0,
+                "completion_rate": 0.33,
+                "pending_items": ["test"],
+            }
+        )
 
-    captured = capsys.readouterr()
-    assert "failed to persist writing checklist score" in captured.err
+    message_text = "\n".join(record.getMessage() for record in caplog.records)
+    assert "failed to persist writing checklist score" in message_text
 
 
 def test_context_manager_composite_genre_boundary_three_plus(temp_project):

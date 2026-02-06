@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import logging
 from pathlib import Path
 
 from runtime_compat import enable_windows_utf8_stdio
@@ -34,6 +35,9 @@ from .writing_guidance_builder import (
     build_writing_checklist,
     is_checklist_item_completed,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class ContextManager:
@@ -486,10 +490,7 @@ class ContextManager:
                 )
             )
         except Exception as exc:
-            print(
-                f"[context_manager] failed to persist writing checklist score: {exc}",
-                file=sys.stderr,
-            )
+            logger.warning("failed to persist writing checklist score: %s", exc)
 
     def _resolve_context_stage(self, chapter: int) -> str:
         early = max(1, int(getattr(self.config, "context_dynamic_budget_early_chapter", 30)))
@@ -719,7 +720,7 @@ def main():
         try:
             manager.index_manager.log_tool_call("context_manager:build", True, chapter=args.chapter)
         except Exception as exc:
-            print(f"[context_manager] failed to log successful tool call: {exc}", file=sys.stderr)
+            logger.warning("failed to log successful tool call: %s", exc)
     except Exception as exc:
         print_error("CONTEXT_BUILD_FAILED", str(exc), suggestion="请检查项目结构与依赖文件")
         try:
@@ -727,7 +728,7 @@ def main():
                 "context_manager:build", False, error_code="CONTEXT_BUILD_FAILED", error_message=str(exc), chapter=args.chapter
             )
         except Exception as log_exc:
-            print(f"[context_manager] failed to log failed tool call: {log_exc}", file=sys.stderr)
+            logger.warning("failed to log failed tool call: %s", log_exc)
 
 
 if __name__ == "__main__":

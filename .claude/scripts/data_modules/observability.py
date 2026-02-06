@@ -6,12 +6,15 @@ Shared observability helpers for data modules.
 
 from __future__ import annotations
 
-import sys
+import logging
 from typing import Optional
 
 
+logger = logging.getLogger(__name__)
+
+
 def safe_log_tool_call(
-    logger,
+    tool_logger,
     *,
     tool_name: str,
     success: bool,
@@ -21,7 +24,7 @@ def safe_log_tool_call(
     chapter: Optional[int] = None,
 ) -> None:
     try:
-        logger.log_tool_call(
+        tool_logger.log_tool_call(
             tool_name,
             success,
             retry_count=retry_count,
@@ -30,8 +33,8 @@ def safe_log_tool_call(
             chapter=chapter,
         )
     except Exception as exc:
-        print(
-            f"[observability] failed to log tool call {tool_name}: {exc}",
-            file=sys.stderr,
+        logger.warning(
+            "failed to log tool call %s: %s",
+            tool_name,
+            exc,
         )
-

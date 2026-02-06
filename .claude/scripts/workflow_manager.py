@@ -10,6 +10,7 @@ Workflow state manager
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -21,6 +22,9 @@ from chapter_paths import default_chapter_draft_path, find_chapter_file
 from project_locator import resolve_project_root
 from runtime_compat import enable_windows_utf8_stdio
 from security_utils import atomic_write_json, create_secure_directory
+
+
+logger = logging.getLogger(__name__)
 
 
 # UTF-8 output for Windows console (CLI run only, avoid pytest capture issues)
@@ -76,7 +80,7 @@ def safe_append_call_trace(event: str, payload: Optional[Dict[str, Any]] = None)
     try:
         append_call_trace(event, payload)
     except Exception as exc:
-        print(f"[workflow_manager] failed to append call trace for event '{event}': {exc}", file=sys.stderr)
+        logger.warning("failed to append call trace for event '%s': %s", event, exc)
 
 
 def expected_step_owner(command: str, step_id: str) -> str:

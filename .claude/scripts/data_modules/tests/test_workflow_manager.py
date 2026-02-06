@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -100,7 +101,7 @@ def test_workflow_step_owner_and_order_violation_trace(tmp_path, monkeypatch):
     assert step_started[-1].get("payload", {}).get("expected_owner") == "review-agents"
 
 
-def test_safe_append_call_trace_logs_failure(monkeypatch, capsys):
+def test_safe_append_call_trace_logs_failure(monkeypatch, caplog):
     module = _load_module()
 
     def _raise_trace_error(event, payload=None):
@@ -108,11 +109,12 @@ def test_safe_append_call_trace_logs_failure(monkeypatch, capsys):
 
     monkeypatch.setattr(module, "append_call_trace", _raise_trace_error)
 
-    module.safe_append_call_trace("unit_test_event", {"ok": True})
+    with caplog.at_level(logging.WARNING):
+        module.safe_append_call_trace("unit_test_event", {"ok": True})
 
-    captured = capsys.readouterr()
-    assert "failed to append call trace" in captured.err
-    assert "unit_test_event" in captured.err
+    message_text = "\n".join(record.getMessage() for record in caplog.records)
+    assert "failed to append call trace" in message_text
+    assert "unit_test_event" in message_text
 
 
 def test_workflow_reentry_does_not_duplicate_history(tmp_path, monkeypatch):

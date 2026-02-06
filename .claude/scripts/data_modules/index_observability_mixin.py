@@ -7,9 +7,12 @@ IndexObservabilityMixin extracted from IndexManager.
 from __future__ import annotations
 
 import json
-import sys
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+
+
+logger = logging.getLogger(__name__)
 
 
 class IndexObservabilityMixin:
@@ -22,7 +25,11 @@ class IndexObservabilityMixin:
                     try:
                         d[key] = json.loads(d[key])
                     except json.JSONDecodeError as exc:
-                        print(f"[index_manager] failed to parse JSON field {key} in _row_to_dict: {exc}", file=sys.stderr)
+                        logger.warning(
+                            "failed to parse JSON field %s in _row_to_dict: %s",
+                            key,
+                            exc,
+                        )
         return d
 
     # ==================== 无效事实管理 ====================

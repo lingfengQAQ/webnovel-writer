@@ -14,6 +14,7 @@ import asyncio
 import sqlite3
 import json
 import math
+import logging
 from pathlib import Path
 
 from runtime_compat import enable_windows_utf8_stdio
@@ -29,6 +30,9 @@ from .config import get_config
 from .api_client import get_client
 from .index_manager import IndexManager
 from .observability import safe_log_tool_call
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -315,18 +319,20 @@ class RAGAdapter:
             try:
                 conn.commit()
             except Exception as e:
-                import sys
-                print(f"[ERROR] SQLite commit failed: {e}", file=sys.stderr)
+                logger.error("SQLite commit failed: %s", e)
                 errors.append(f"SQLite commit failed: {e}")
 
         # 输出警告日志
         if skipped > 0:
-            import sys
-            print(f"[WARN] Vector embedding: {stored} stored, {skipped} skipped (embedding failed)", file=sys.stderr)
+            logger.warning(
+                "Vector embedding: %s stored, %s skipped (embedding failed)",
+                stored,
+                skipped,
+            )
         if errors:
-            import sys
+
             for err in errors[:5]:  # 最多显示5条
-                print(f"[WARN] {err}", file=sys.stderr)
+                logger.warning("%s", err)
 
         return stored
 
@@ -360,9 +366,7 @@ class RAGAdapter:
                 chapter=chapter,
             )
         except Exception as exc:
-            import sys
-
-            print(f"[rag_adapter] failed to log rag query: {exc}", file=sys.stderr)
+            logger.warning("failed to log rag query: %s", exc)
 
     # ==================== BM25 索引 ====================
 
