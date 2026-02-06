@@ -346,6 +346,49 @@ def test_context_manager_dynamic_weights_and_composite_genre(temp_project):
     assert profile.get("composite_hints")
 
 
+def test_context_manager_genre_alias_guidance_and_heading_extraction(temp_project):
+    refs_dir = temp_project.project_root / ".claude" / "references"
+    refs_dir.mkdir(parents=True, exist_ok=True)
+    (refs_dir / "genre-profiles.md").write_text(
+        """
+### 电竞
+- 联赛升级
+
+### 直播文
+- 反馈闭环
+
+### 克苏鲁
+- 真相代价
+""".strip(),
+        encoding="utf-8",
+    )
+    (refs_dir / "reading-power-taxonomy.md").write_text(
+        """
+### 电竞
+- 战术决策点
+""".strip(),
+        encoding="utf-8",
+    )
+
+    state = {
+        "project": {"genre": "电竞"},
+        "protagonist_state": {"name": "林燃"},
+        "chapter_meta": {},
+        "disambiguation_warnings": [],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+
+    manager = ContextManager(temp_project)
+    payload = manager.build_context(12, template="plot", use_snapshot=False, save_snapshot=False)
+    guidance = payload["sections"]["writing_guidance"]["content"]
+    items = guidance.get("guidance_items") or []
+
+    assert any("战术决策点" in str(text) for text in items)
+    assert any("网文节奏基线" in str(text) for text in items)
+    assert any("兑现密度基线" in str(text) for text in items)
+
+
 def test_context_manager_compact_text_truncation(temp_project):
     manager = ContextManager(temp_project)
     manager.config.context_compact_text_enabled = True

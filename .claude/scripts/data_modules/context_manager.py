@@ -385,6 +385,48 @@ class ContextManager:
         if refs:
             guidance.append(f"题材策略可执行提示：{refs[0]}")
 
+        guidance.append("网文节奏基线：章首300字内给出目标与阻力，章末保留未闭合问题。")
+        guidance.append("兑现密度基线：每600-900字给一次微兑现，并确保本章至少1处可量化变化。")
+
+        genre_aliases = {
+            "修仙": "xianxia",
+            "玄幻": "xianxia",
+            "高武": "xianxia",
+            "西幻": "xianxia",
+            "都市异能": "urban-power",
+            "都市脑洞": "urban-power",
+            "都市日常": "urban-power",
+            "狗血言情": "romance",
+            "古言": "romance",
+            "青春甜宠": "romance",
+            "替身文": "substitute",
+            "规则怪谈": "rules-mystery",
+            "悬疑脑洞": "mystery",
+            "悬疑灵异": "mystery",
+            "知乎短篇": "zhihu-short",
+            "电竞": "esports",
+            "直播文": "livestream",
+            "克苏鲁": "cosmic-horror",
+        }
+        normalized_genre = genre_aliases.get(genre, genre.lower())
+
+        genre_guidance = {
+            "xianxia": "题材加权：强化升级/对抗结果的可见反馈，术语解释后置。",
+            "shuangwen": "题材加权：维持高爽点密度，主爽点外叠加一个副轴反差。",
+            "urban-power": "题材加权：优先写社会反馈链（他人反应→资源变化→地位变化）。",
+            "romance": "题材加权：每章推进关系位移，避免情绪原地打转。",
+            "mystery": "题材加权：线索必须可回收，优先以规则冲突制造悬念。",
+            "rules-mystery": "题材加权：规则先于解释，代价先于胜利。",
+            "zhihu-short": "题材加权：压缩铺垫，优先反转与高强度结尾钩。",
+            "substitute": "题材加权：强化误解-拉扯-决断链路，避免重复虐点。",
+            "esports": "题材加权：每场对抗至少写清一个战术决策点与其后果。",
+            "livestream": "题材加权：强化“外部反馈→主角反制→数据变化”即时闭环。",
+            "cosmic-horror": "题材加权：恐怖来源于规则与代价，不依赖空泛惊悚形容。",
+        }
+        genre_hint = genre_guidance.get(normalized_genre) or genre_guidance.get(genre)
+        if genre_hint:
+            guidance.append(genre_hint)
+
         composite_hints = genre_profile.get("composite_hints") or []
         if composite_hints:
             guidance.append(f"复合题材协同：{composite_hints[0]}")
@@ -780,7 +822,7 @@ class ContextManager:
 
         for line in lines:
             normalized = line.strip().lower()
-            if normalized.startswith("## "):
+            if normalized.startswith("## ") or normalized.startswith("### "):
                 if active:
                     break
                 active = target in normalized
