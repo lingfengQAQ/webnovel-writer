@@ -106,3 +106,31 @@ def test_context_snapshot_respects_template(temp_project):
 
     assert plot_payload.get("template") == "plot"
     assert battle_payload.get("template") == "battle"
+
+
+def test_context_manager_applies_ranker_and_contract_meta(temp_project):
+    state = {
+        "protagonist_state": {"name": "萧炎"},
+        "chapter_meta": {
+            "0002": {"hook": "平稳"},
+            "0003": {"hook": "留下悬念"},
+        },
+        "disambiguation_warnings": [
+            {"chapter": 1, "message": "普通告警"},
+            {"chapter": 3, "message": "critical 冲突告警", "severity": "high"},
+        ],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+
+    manager = ContextManager(temp_project)
+    payload = manager.build_context(4, use_snapshot=False, save_snapshot=False)
+
+    assert payload["meta"].get("context_contract_version") == "v2"
+    recent_meta = payload["sections"]["core"]["content"]["recent_meta"]
+    if recent_meta:
+        assert recent_meta[0]["chapter"] == 3
+
+    warnings = payload["sections"]["alerts"]["content"]["disambiguation_warnings"]
+    if warnings and isinstance(warnings[0], dict):
+        assert "critical" in str(warnings[0].get("message", "")) or warnings[0].get("severity") == "high"

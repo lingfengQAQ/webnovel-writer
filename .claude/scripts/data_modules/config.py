@@ -134,6 +134,20 @@ class DataModulesConfig:
     context_story_skeleton_max_samples: int = 5
     context_story_skeleton_snippet_chars: int = 400
     context_extra_section_budget: int = 800
+    context_ranker_enabled: bool = True
+    context_ranker_recency_weight: float = 0.7
+    context_ranker_frequency_weight: float = 0.3
+    context_ranker_hook_bonus: float = 0.2
+    context_ranker_length_bonus_cap: float = 0.2
+    context_ranker_alert_critical_keywords: tuple[str, ...] = (
+        "冲突",
+        "矛盾",
+        "critical",
+        "break",
+        "违规",
+        "断裂",
+    )
+    context_ranker_debug: bool = False
 
     export_recent_changes_slice: int = 20
     export_disambiguation_slice: int = 20

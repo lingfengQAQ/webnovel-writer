@@ -758,6 +758,15 @@ git checkout ch0045
 - **审查趋势统计**：get-review-trend-stats 查询近期审查均值和短板
 - **故事骨架采样**：context_manager 每 N 章采样历史摘要，构建长篇感知
 - **上下文工程升级**：基于 Context Engineering Guide 优化
+
+### Context Contract v2（阶段 A）
+
+- 上下文契约升级为 v2：新增 `meta.context_contract_version = "v2"`
+- 新增上下文排序器：`data_modules/context_ranker.py`
+- 排序策略：近期优先 + 频次稳定 + 钩子/风险信号加权
+- 工作流可观测性：`workflow_manager.py` 会写入 `.webnovel/observability/call_trace.jsonl`
+
+参考文档：`.claude/references/context-contract-v2.md`
 - **invalid_facts 表**：追踪无效事实，支持 pending/confirmed 状态
 - **父子向量索引**：parent_chunk_id 支持摘要-场景层级检索
 - **Token 预算管理**：ContextManager 实现 40%/35%/25% 优先级分配

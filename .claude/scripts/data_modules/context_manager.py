@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from .config import get_config
 from .index_manager import IndexManager
+from .context_ranker import ContextRanker
 from .snapshot_manager import SnapshotManager, SnapshotVersionMismatch
 
 
@@ -31,6 +32,7 @@ class ContextManager:
         self.config = config or get_config()
         self.snapshot_manager = snapshot_manager or SnapshotManager(self.config)
         self.index_manager = IndexManager(self.config)
+        self.context_ranker = ContextRanker(self.config)
 
     def _is_snapshot_compatible(self, cached: Dict[str, Any], template: str) -> bool:
         """判断快照是否可用于当前模板。"""
@@ -70,6 +72,8 @@ class ContextManager:
                 pass
 
         pack = self._build_pack(chapter)
+        if getattr(self.config, "context_ranker_enabled", True):
+            pack = self.context_ranker.rank_pack(pack, chapter)
         assembled = self.assemble_context(pack, template=template, max_chars=max_chars)
 
         if save_snapshot:
