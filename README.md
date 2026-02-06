@@ -571,6 +571,7 @@ context_max_urgent_foreshadowing = 5  # 最大紧急伏笔数
 - 当前基线文档：`README.md`、`CLAUDE.md`、`.claude/references/*.md`
 - 历史归档文档：`docs/archive/reports/`
 - 文档状态规则：`docs/doc-lifecycle.md`
+- 本地未跟踪归类：`docs/untracked-classification.md`
 
 ---
 

@@ -21,3 +21,20 @@ Thumbs.db
 # Workspace artifacts
 node_modules/
 nul
+
+# Local research / sibling projects (avoid accidental commit)
+.sisyphus/
+De-AI-Prompt/
+MuMuAINovel/
+hapi-tool/
+ai-writing-knowledge/
+novel/
+novel-refined/
+
+# Local analysis snapshots and draft docs
+PROJECT_MINDMAP*.md
+webnovel-writer-v5*-architecture.svg
+_v52_*.json
+_v52_*.txt
+claude_inventory.csv
+*_utf8_sample.txt
