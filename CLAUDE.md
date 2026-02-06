@@ -72,7 +72,7 @@
 - **复合题材** - 支持“题材A+题材B”组合加载模板（1主1辅）
 
 ### 2. 工作流更新
-- **webnovel-init Phase 6.5** - 创意约束生成（Standard+模式）
+- **webnovel-init Phase 6.5** - 创意约束生成（Deep 模式）
 - **webnovel-plan Phase 2.5** - 加载创意约束
 - **webnovel-plan Phase 7** - 约束继承检查
 
@@ -99,6 +99,17 @@ Step 6: Git 备份
 ```
 
 ## 常用 Python 命令
+
+在项目根目录运行 `python -m data_modules.*` 前，请先确保模块路径可见：
+
+```bash
+# 方式1：先切到脚本目录
+cd .claude/scripts
+
+# 方式2：或在根目录设置 PYTHONPATH
+# Windows PowerShell: $env:PYTHONPATH = ".claude/scripts"
+# macOS/Linux: export PYTHONPATH=".claude/scripts"
+```
 
 ```bash
 # 查询统计
@@ -135,3 +146,4 @@ python -m data_modules.index_manager get-pattern-usage-stats --last-n 20 --proje
 3. **债务利息默认关闭** - 仅在明确开启时计算
 4. **题材 Profile 可覆盖** - 在 state.json 中设置 genre_overrides
 5. **创意约束需继承** - 大纲规划时检查约束触发频率
+6. **status_reporter 真实数据优先** - 伏笔/爽点分析优先读取 `state.json` 与 `index.db`，缺数据时标记“数据不足”，避免估算误导

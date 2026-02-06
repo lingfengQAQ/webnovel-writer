@@ -1,7 +1,7 @@
 # Webnovel Writer
 
 [![License](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Compatible-purple.svg)](https://claude.ai/claude-code)
 
 基于 Claude Code 的长篇网文辅助创作系统，解决 AI 写作中的「遗忘」和「幻觉」问题，支持 **200 万字量级** 连载创作。
@@ -120,7 +120,7 @@
 
 | 依赖 | 版本要求 | 说明 |
 |------|---------|------|
-| Python | >= 3.8 | 数据处理脚本运行环境 |
+| Python | >= 3.10 | 数据处理脚本运行环境 |
 | Claude Code | 最新版 | Anthropic 官方 CLI 工具 |
 | Git | 任意版本 | 版本控制和章节备份 |
 
@@ -135,6 +135,18 @@ git clone https://github.com/lingfengQAQ/webnovel-writer.git .claude
 
 # 安装 Python 依赖
 pip install -r .claude/scripts/requirements.txt
+```
+
+可选（推荐）：设置 `data_modules` 模块路径，便于在项目根目录直接执行 `python -m data_modules.*`。
+
+```powershell
+# Windows PowerShell
+$env:PYTHONPATH = ".claude/scripts"
+```
+
+```bash
+# macOS / Linux
+export PYTHONPATH=".claude/scripts"
 ```
 
 **Python 依赖说明**：
@@ -155,7 +167,7 @@ pip install -r .claude/scripts/requirements.txt
 ```
 
 系统会引导你完成：
-- 选择初始化模式（Quick/Standard/Deep）
+- Deep 初始化信息采集（完整建模）
 - 选择题材类型
 - 设计金手指/核心卖点
 - 生成项目结构和设定模板
@@ -191,11 +203,7 @@ pip install -r .claude/scripts/requirements.txt
 
 **初始化模式**：
 
-| 模式 | 时间 | 内容 |
-|------|------|------|
-| ⚡ Quick | 5分钟 | 基础结构 + 核心卖点 |
-| 📝 Standard | 15-20分钟 | + 金手指设计 + 题材模板 |
-| 🎯 Deep | 30-45分钟 | + 深度世界观 + 创意验证 |
+当前默认执行 **Deep 模式**（完整初始化流程，约 30-45 分钟）。
 
 **产出文件**：
 - `.webnovel/state.json` - 项目状态
@@ -251,8 +259,8 @@ Step 6: Git 自动提交备份
 
 **写作模式**：
 - **标准模式**: 完整执行 Step 1-6
-- **快速模式** (`--mode fast`): 跳过 Step 2B
-- **极简模式** (`--mode minimal`): 跳过 Step 2B + 仅 3 个核心审查（无追读力数据）
+- **快速模式** (`--fast`): 跳过 Step 2B
+- **极简模式** (`--minimal`): 跳过 Step 2B + 仅 3 个核心审查（无追读力数据）
 
 **产出**：
 - `正文/第N章-标题.md`
@@ -528,9 +536,9 @@ RERANK_API_KEY=jina_xxx
 
 ```python
 # API 设置
-embed_concurrency = 50          # 嵌入并发数
-cold_start_timeout = 120        # 冷启动超时(秒)
-normal_timeout = 30             # 正常超时(秒)
+embed_concurrency = 64          # 嵌入并发数
+cold_start_timeout = 300        # 冷启动超时(秒)
+normal_timeout = 180            # 正常超时(秒)
 api_max_retries = 3             # 最大重试次数
 api_retry_delay = 1.0           # 重试延迟(秒)
 
@@ -539,14 +547,16 @@ strand_quest_max_consecutive = 5   # Quest 最大连续章数
 strand_fire_max_gap = 10           # Fire 最大断档章数
 
 # 爽点密度
-pacing_words_per_point = (1000, 2000)  # 每个爽点字数范围
+pacing_words_per_point_excellent = 1000  # 优秀阈值
+pacing_words_per_point_good = 1500       # 良好阈值
+pacing_words_per_point_acceptable = 2000 # 及格阈值
 
 # 实体置信度
 extraction_confidence_high = 0.8   # 高置信度阈值（自动采用）
-extraction_confidence_low = 0.5    # 低置信度阈值（待确认）
+extraction_confidence_medium = 0.5 # 中置信度阈值（待确认）
 
 # 上下文窗口
-context_recent_summaries_window = 5   # 最近摘要数量
+context_recent_summaries_window = 3   # 最近摘要数量
 context_max_appearing_characters = 10 # 最大出场角色数
 context_max_urgent_foreshadowing = 5  # 最大紧急伏笔数
 ```
@@ -627,6 +637,10 @@ your-novel-project/
 
 当 `index.db` 损坏或与实际数据不一致时：
 
+先确保当前 shell 能找到 `data_modules`（二选一）：
+- 设置环境变量：`PYTHONPATH=.claude/scripts`
+- 或先执行：`cd .claude/scripts`
+
 ```bash
 # 重新处理单章
 python -m data_modules.index_manager process-chapter --chapter 1 --project-root "."
@@ -672,6 +686,24 @@ python -m data_modules.index_manager get-recent-review-metrics --limit 5 --proje
 python -m data_modules.index_manager get-review-trend-stats --last-n 5 --project-root "."
 ```
 
+### 健康报告（status_reporter）
+
+```bash
+# 全量健康报告
+python .claude/scripts/status_reporter.py --focus all --project-root "."
+
+# 仅看伏笔紧急度
+python .claude/scripts/status_reporter.py --focus urgency --project-root "."
+
+# 仅看爽点节奏
+python .claude/scripts/status_reporter.py --focus pacing --project-root "."
+```
+
+说明：
+- 伏笔分析优先使用 `plot_threads.foreshadowing` 的真实章节字段（如 `planted_chapter` / `target_chapter`）。
+- 爽点节奏优先使用 `chapter_reading_power.coolpoint_patterns`，其次回退 `chapter_meta`。
+- 若章节数据缺失，报告会标记“数据不足”，不会再用固定假设值估算。
+
 ### 向量重建
 
 当 `vectors.db` 损坏或嵌入模型更换时：
@@ -690,7 +722,7 @@ python -m data_modules.rag_adapter stats --project-root "."
 
 ```bash
 # 查看章节标签
-git tag | grep "ch"
+git tag --list "ch*"
 
 # 回滚到第45章
 git checkout ch0045
@@ -716,7 +748,7 @@ git checkout ch0045
 - **Checker分层**：审查Agent输出结构化报告
 - **Context精简**：创作任务书优化
 
-### v5.4 (当前)
+### v5.4
 - **审查指标追踪**：review_metrics 表记录每次审查的评分/维度/问题数
 - **审查趋势统计**：get-review-trend-stats 查询近期审查均值和短板
 - **故事骨架采样**：context_manager 每 N 章采样历史摘要，构建长篇感知
@@ -746,7 +778,7 @@ git checkout ch0045
 - 风格适配器：Step 2A/2B 拆分，先写剧情后网文化
 - 摘要分离：章节摘要存入 `.webnovel/summaries/ch{NNNN}.md`
 - chapter_meta：记录钩子/模式/结束状态到 state.json
-- 轻量模式：支持 `--mode fast/minimal` 加速写作
+- 轻量模式：支持 `--fast` / `--minimal` 加速写作
 - 输出模板：7 个标准模板文件（state/index schema、设定集、大纲）
 
 ### v5.1

@@ -1,2 +1,23 @@
 .claude/settings.local.json
-.claude/settings.local.json
+
+# Python caches & virtualenv
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Local runtime data
+.webnovel/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Workspace artifacts
+node_modules/
+nul

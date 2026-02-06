@@ -83,7 +83,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional
 from datetime import datetime
 from collections import defaultdict
 from project_locator import resolve_project_root
@@ -115,11 +115,25 @@ def _is_resolved_foreshadowing_status(raw_status: Any) -> bool:
         return True
     return False
 
-# Windows 编码兼容性修复
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+def _enable_windows_utf8_stdio() -> None:
+    """在 Windows 下启用 UTF-8 输出；pytest 环境跳过以避免捕获冲突。"""
+    if sys.platform != "win32":
+        return
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+
+    try:
+        import io
+
+        stdout_buffer = getattr(sys.stdout, "buffer", None)
+        stderr_buffer = getattr(sys.stderr, "buffer", None)
+        if stdout_buffer is not None:
+            sys.stdout = io.TextIOWrapper(stdout_buffer, encoding="utf-8")
+        if stderr_buffer is not None:
+            sys.stderr = io.TextIOWrapper(stderr_buffer, encoding="utf-8")
+    except Exception:
+        pass
+
 
 class StatusReporter:
     """状态报告生成器"""
@@ -132,6 +146,7 @@ class StatusReporter:
 
         self.state = None
         self.chapters_data = []
+        self._reading_power_cache: Dict[int, Optional[Dict[str, Any]]] = {}
 
         # v5.1 引入: 使用 IndexManager 读取实体
         self._index_manager = IndexManager(self.config)
@@ -158,6 +173,206 @@ class StatusReporter:
             self.state = json.load(f)
 
         return True
+
+    def _to_positive_int(self, value: Any) -> Optional[int]:
+        """将输入解析为正整数；解析失败返回 None。"""
+        if value is None or isinstance(value, bool):
+            return None
+
+        try:
+            number = int(value)
+            return number if number > 0 else None
+        except (TypeError, ValueError):
+            if isinstance(value, str):
+                match = re.search(r"\d+", value)
+                if match:
+                    number = int(match.group(0))
+                    return number if number > 0 else None
+        return None
+
+    def _normalize_foreshadowing_tier(self, raw_tier: Any) -> Tuple[str, float]:
+        """标准化伏笔层级并返回对应权重。"""
+        text = str(raw_tier or "").strip()
+        lower = text.lower()
+
+        if text in {"核心", "主线"} or lower in {"core", "main"}:
+            return "核心", self.config.foreshadowing_tier_weight_core
+        if text in {"装饰", "次要"} or lower in {"decor", "decoration"}:
+            return "装饰", self.config.foreshadowing_tier_weight_decor
+        return "支线", self.config.foreshadowing_tier_weight_sub
+
+    def _resolve_chapter_field(self, item: Dict[str, Any], keys: List[str]) -> Optional[int]:
+        """按候选键顺序读取章节号。"""
+        for key in keys:
+            if key in item:
+                chapter = self._to_positive_int(item.get(key))
+                if chapter is not None:
+                    return chapter
+        return None
+
+    def _collect_foreshadowing_records(self) -> List[Dict[str, Any]]:
+        """收集未回收伏笔，并基于真实字段构建分析记录。"""
+        if not self.state:
+            return []
+
+        current_chapter = self.state.get("progress", {}).get("current_chapter", 0)
+        plot_threads = self.state.get("plot_threads", {}) if isinstance(self.state.get("plot_threads"), dict) else {}
+        foreshadowing = plot_threads.get("foreshadowing", [])
+        if not isinstance(foreshadowing, list):
+            return []
+
+        records: List[Dict[str, Any]] = []
+        for item in foreshadowing:
+            if not isinstance(item, dict):
+                continue
+            if _is_resolved_foreshadowing_status(item.get("status")):
+                continue
+
+            content = str(item.get("content") or "").strip() or "[未命名伏笔]"
+            tier, weight = self._normalize_foreshadowing_tier(item.get("tier"))
+
+            planted_chapter = self._resolve_chapter_field(
+                item,
+                [
+                    "planted_chapter",
+                    "added_chapter",
+                    "source_chapter",
+                    "start_chapter",
+                    "chapter",
+                ],
+            )
+            target_chapter = self._resolve_chapter_field(
+                item,
+                [
+                    "target_chapter",
+                    "due_chapter",
+                    "deadline_chapter",
+                    "resolve_by_chapter",
+                    "target",
+                ],
+            )
+
+            elapsed = None
+            if planted_chapter is not None:
+                elapsed = max(0, current_chapter - planted_chapter)
+
+            remaining = None
+            if target_chapter is not None:
+                remaining = target_chapter - current_chapter
+
+            if remaining is not None and remaining < 0:
+                overtime_status = "🔴 已超期"
+            elif elapsed is None:
+                overtime_status = "⚪ 数据不足"
+            else:
+                overtime_status = self._get_foreshadowing_status(elapsed)
+
+            urgency: Optional[float] = None
+            if (
+                planted_chapter is not None
+                and target_chapter is not None
+                and target_chapter > planted_chapter
+                and elapsed is not None
+            ):
+                urgency = round((elapsed / (target_chapter - planted_chapter)) * weight, 2)
+            elif (
+                planted_chapter is not None
+                and target_chapter is not None
+                and target_chapter <= planted_chapter
+                and elapsed is not None
+            ):
+                urgency = round(weight * 2.0, 2)
+
+            if remaining is not None and remaining < 0:
+                urgency_status = "🔴 已超期"
+            elif urgency is None:
+                urgency_status = "⚪ 数据不足"
+            else:
+                urgency_status = self._get_urgency_status(urgency, remaining if remaining is not None else 0)
+
+            records.append(
+                {
+                    "content": content,
+                    "tier": tier,
+                    "weight": weight,
+                    "planted_chapter": planted_chapter,
+                    "target_chapter": target_chapter,
+                    "elapsed": elapsed,
+                    "remaining": remaining,
+                    "status": overtime_status,
+                    "urgency": urgency,
+                    "urgency_status": urgency_status,
+                }
+            )
+
+        return records
+
+    def _get_chapter_meta(self, chapter: int) -> Dict[str, Any]:
+        """读取指定章节的 chapter_meta（支持 0001/1 两种键）。"""
+        if not self.state:
+            return {}
+        chapter_meta = self.state.get("chapter_meta", {})
+        if not isinstance(chapter_meta, dict):
+            return {}
+
+        for key in (f"{chapter:04d}", str(chapter)):
+            value = chapter_meta.get(key)
+            if isinstance(value, dict):
+                return value
+        return {}
+
+    def _parse_pattern_count(self, raw_value: Any) -> Optional[int]:
+        """解析爽点模式数量，解析失败返回 None。"""
+        if raw_value is None:
+            return None
+
+        if isinstance(raw_value, list):
+            patterns = [str(x).strip() for x in raw_value if str(x).strip()]
+            return len(set(patterns))
+
+        if isinstance(raw_value, str):
+            text = raw_value.strip()
+            if not text:
+                return None
+            parts = [p.strip() for p in re.split(r"[、,，/|+；;]+", text) if p.strip()]
+            if parts:
+                return len(set(parts))
+            return 1
+
+        return None
+
+    def _get_chapter_reading_power_cached(self, chapter: int) -> Optional[Dict[str, Any]]:
+        """读取并缓存 chapter_reading_power。"""
+        if chapter in self._reading_power_cache:
+            return self._reading_power_cache[chapter]
+
+        try:
+            record = self._index_manager.get_chapter_reading_power(chapter)
+        except Exception:
+            record = None
+
+        self._reading_power_cache[chapter] = record
+        return record
+
+    def _get_chapter_cool_points(self, chapter: int, chapter_data: Dict[str, Any]) -> Tuple[Optional[int], str]:
+        """获取单章爽点数量（真实元数据优先）。"""
+        reading_power = self._get_chapter_reading_power_cached(chapter)
+        if isinstance(reading_power, dict):
+            count = self._parse_pattern_count(reading_power.get("coolpoint_patterns"))
+            if count is not None:
+                return count, "chapter_reading_power"
+
+        chapter_meta = self._get_chapter_meta(chapter)
+        for key in ("coolpoint_patterns", "coolpoint_pattern", "cool_point_patterns", "cool_point_pattern", "patterns", "pattern"):
+            count = self._parse_pattern_count(chapter_meta.get(key))
+            if count is not None:
+                return count, "chapter_meta"
+
+        count = self._parse_pattern_count(chapter_data.get("cool_point"))
+        if count is not None:
+            return count, "chapter_stats"
+
+        return None, "none"
 
     def scan_chapters(self):
         """扫描所有章节文件"""
@@ -302,42 +517,18 @@ class StatusReporter:
 
     def analyze_foreshadowing(self) -> List[Dict]:
         """分析伏笔深度"""
-        if not self.state:
-            return []
-
-        current_chapter = self.state.get("progress", {}).get("current_chapter", 0)
-        plot_threads = self.state.get("plot_threads", {})
-        foreshadowing = plot_threads.get("foreshadowing", [])
-
-        overdue = []
-
-        for item in foreshadowing:
-            status = item.get("status")
-            if _is_resolved_foreshadowing_status(status):
-                continue
-
-            # 假设每个伏笔记录了"added_chapter"（埋设章节）
-            # 如果没有，使用 added_at 日期估算（粗略）
-            # 这里简化：假设第 1 章开始，平均每天写 1 章
-
-            # 简化：假设伏笔按添加顺序，第 N 个伏笔大约在第 N*10 章埋下
-            # 实际项目应该在伏笔记录中加入 "埋设章节号" 字段
-
-            # 这里使用 content 中的关键词匹配（极度简化）
-            content = item.get("content", "")
-
-            # 假设伏笔平均埋设时间 = 当前章节的一半（极度粗糙估算）
-            estimated_chapter = current_chapter // 2
-            elapsed = current_chapter - estimated_chapter
-
-            overdue.append({
-                "content": content,
-                "estimated_chapter": estimated_chapter,
-                "elapsed": elapsed,
-                "status": self._get_foreshadowing_status(elapsed)
-            })
-
-        return overdue
+        records = self._collect_foreshadowing_records()
+        return [
+            {
+                "content": item["content"],
+                "planted_chapter": item["planted_chapter"],
+                "estimated_chapter": item["planted_chapter"],
+                "target_chapter": item["target_chapter"],
+                "elapsed": item["elapsed"],
+                "status": item["status"],
+            }
+            for item in records
+        ]
 
     def _get_foreshadowing_status(self, elapsed: int) -> str:
         """判断伏笔超时状态"""
@@ -360,58 +551,27 @@ class StatusReporter:
         紧急度计算公式：
         urgency = (已过章节 / 目标回收章节) × 层级权重
         """
-        if not self.state:
-            return []
+        records = self._collect_foreshadowing_records()
+        urgency_list = [
+            {
+                "content": item["content"],
+                "tier": item["tier"],
+                "weight": item["weight"],
+                "planted_chapter": item["planted_chapter"],
+                "target_chapter": item["target_chapter"],
+                "elapsed": item["elapsed"],
+                "remaining": item["remaining"],
+                "urgency": item["urgency"],
+                "status": item["urgency_status"],
+            }
+            for item in records
+        ]
 
-        current_chapter = self.state.get("progress", {}).get("current_chapter", 0)
-        plot_threads = self.state.get("plot_threads", {})
-        foreshadowing = plot_threads.get("foreshadowing", [])
-
-        # 层级权重映射
-        tier_weights = {
-            "核心": self.config.foreshadowing_tier_weight_core,
-            "core": self.config.foreshadowing_tier_weight_core,
-            "支线": self.config.foreshadowing_tier_weight_sub,
-            "sub": self.config.foreshadowing_tier_weight_sub,
-            "装饰": self.config.foreshadowing_tier_weight_decor,
-            "decor": self.config.foreshadowing_tier_weight_decor
-        }
-
-        urgency_list = []
-
-        for item in foreshadowing:
-            if _is_resolved_foreshadowing_status(item.get("status")):
-                continue
-
-            content = item.get("content", "")
-            tier = item.get("tier", "支线")  # 默认支线
-            planted_chapter = item.get("planted_chapter", 1)
-            target_chapter = item.get("target_chapter", planted_chapter + 100)
-
-            weight = tier_weights.get(tier.lower(), self.config.foreshadowing_tier_weight_sub)
-            elapsed = current_chapter - planted_chapter
-            remaining = target_chapter - current_chapter
-
-            # 紧急度计算
-            if target_chapter > planted_chapter:
-                urgency = (elapsed / (target_chapter - planted_chapter)) * weight
-            else:
-                urgency = weight * 2  # 已超期
-
-            urgency_list.append({
-                "content": content,
-                "tier": tier,
-                "weight": weight,
-                "planted_chapter": planted_chapter,
-                "target_chapter": target_chapter,
-                "elapsed": elapsed,
-                "remaining": remaining,
-                "urgency": round(urgency, 2),
-                "status": self._get_urgency_status(urgency, remaining)
-            })
-
-        # 按紧急度排序（降序）
-        return sorted(urgency_list, key=lambda x: x["urgency"], reverse=True)
+        # 先按“是否可计算”，再按紧急度降序
+        return sorted(
+            urgency_list,
+            key=lambda x: (x["urgency"] is None, -(x["urgency"] if x["urgency"] is not None else -1)),
+        )
 
     def _get_urgency_status(self, urgency: float, remaining: int) -> str:
         """判断紧急度状态"""
@@ -562,25 +722,47 @@ class StatusReporter:
             end_ch = segment_chapters[-1]["chapter"]
             total_words = sum(ch["word_count"] for ch in segment_chapters)
 
-            # 假设爽点数量 = 章节数（简化：每章至少 1 个爽点）
-            # 实际项目应该在审查报告中记录爽点数量
-            assumed_cool_points = len(segment_chapters)
+            cool_points = 0
+            chapters_with_data = 0
+            source_counter: Dict[str, int] = {}
 
-            words_per_point = total_words / assumed_cool_points if assumed_cool_points > 0 else 0
+            for chapter_data in segment_chapters:
+                chapter = chapter_data["chapter"]
+                count, source = self._get_chapter_cool_points(chapter, chapter_data)
+                source_counter[source] = source_counter.get(source, 0) + 1
+                if count is None:
+                    continue
+                chapters_with_data += 1
+                cool_points += count
+
+            words_per_point = None
+            if cool_points > 0:
+                words_per_point = total_words / cool_points
+
+            rating = self._get_pacing_rating(words_per_point)
+            missing_chapters = len(segment_chapters) - chapters_with_data
+            dominant_source = "none"
+            if source_counter:
+                dominant_source = max(source_counter.items(), key=lambda x: x[1])[0]
 
             segments.append({
                 "start": start_ch,
                 "end": end_ch,
                 "total_words": total_words,
-                "cool_points": assumed_cool_points,
+                "cool_points": cool_points,
                 "words_per_point": words_per_point,
-                "rating": self._get_pacing_rating(words_per_point)
+                "rating": rating,
+                "missing_chapters": missing_chapters,
+                "data_coverage": (chapters_with_data / len(segment_chapters)) if segment_chapters else 0.0,
+                "dominant_source": dominant_source,
             })
 
         return segments
 
-    def _get_pacing_rating(self, words_per_point: float) -> str:
+    def _get_pacing_rating(self, words_per_point: Optional[float]) -> str:
         """判断节奏评级"""
+        if words_per_point is None:
+            return "数据不足"
         if words_per_point < self.config.pacing_words_per_point_excellent:
             return "优秀"
         elif words_per_point < self.config.pacing_words_per_point_good:
@@ -745,7 +927,10 @@ class StatusReporter:
         overdue = self.analyze_foreshadowing()
 
         # 筛选超时伏笔
-        overdue_items = [item for item in overdue if "超时" in item["status"]]
+        overdue_items = [
+            item for item in overdue if "超时" in item["status"] or "超期" in item["status"]
+        ]
+        unknown_items = [item for item in overdue if item["status"] == "⚪ 数据不足"]
 
         lines = [
             f"## ⚠️ 伏笔超时（{len(overdue_items)}条）",
@@ -754,17 +939,23 @@ class StatusReporter:
 
         if overdue_items:
             lines.extend([
-                "| 伏笔内容 | 估计埋设 | 已过章节 | 状态 |",
+                "| 伏笔内容 | 埋设章节 | 已过章节 | 状态 |",
                 "|---------|---------|---------|------|"
             ])
 
-            for item in sorted(overdue_items, key=lambda x: x["elapsed"], reverse=True):
+            for item in sorted(overdue_items, key=lambda x: (x["elapsed"] if x["elapsed"] is not None else -1), reverse=True):
+                planted = item["planted_chapter"] if item["planted_chapter"] is not None else "未知"
+                elapsed = item["elapsed"] if item["elapsed"] is not None else "未知"
                 lines.append(
-                    f"| {item['content'][:30]}... | 第 {item['estimated_chapter']} 章 | "
-                    f"{item['elapsed']} 章 | {item['status']} |"
+                    f"| {item['content'][:30]}... | 第 {planted} 章 | "
+                    f"{elapsed} 章 | {item['status']} |"
                 )
         else:
             lines.append("✅ 所有伏笔进度正常")
+
+        if unknown_items:
+            lines.append("")
+            lines.append(f"⚪ 另有 {len(unknown_items)} 条伏笔缺少章节信息，无法判断是否超时")
 
         lines.extend(["", "---", ""])
 
@@ -775,15 +966,24 @@ class StatusReporter:
         urgency_list = self.analyze_foreshadowing_urgency()
 
         # 筛选紧急伏笔
-        urgent_items = [item for item in urgency_list if item["urgency"] >= 1.0]
+        urgent_items = [
+            item
+            for item in urgency_list
+            if (item["urgency"] is not None and item["urgency"] >= 1.0) or item["status"] == "🔴 已超期"
+        ]
 
         lines = [
             f"## 🚨 伏笔紧急度排序（{len(urgent_items)}条需关注）",
             "",
             "> 基于三层级系统：核心(×3) / 支线(×2) / 装饰(×1)",
-            "> 紧急度 = (已过章节 / 目标回收章节) × 层级权重",
+            "> 紧急度 = (已过章节 / (目标章节-埋设章节)) × 层级权重",
             ""
         ]
+
+        unknown_items = [item for item in urgency_list if item["urgency"] is None]
+        if unknown_items:
+            lines.append(f"> {len(unknown_items)} 条伏笔缺少埋设/目标章节，紧急度记为 N/A")
+            lines.append("")
 
         if urgency_list:
             lines.extend([
@@ -792,10 +992,13 @@ class StatusReporter:
             ])
 
             for item in urgency_list[:10]:  # 只显示前10条
+                planted = f"第{item['planted_chapter']}章" if item["planted_chapter"] is not None else "未知"
+                target = f"第{item['target_chapter']}章" if item["target_chapter"] is not None else "未知"
+                urgency_text = f"{item['urgency']:.2f}" if item["urgency"] is not None else "N/A"
                 lines.append(
                     f"| {item['content'][:20]}... | {item['tier']} | "
-                    f"第{item['planted_chapter']}章 | 第{item['target_chapter']}章 | "
-                    f"{item['urgency']:.2f} | {item['status']} |"
+                    f"{planted} | {target} | "
+                    f"{urgency_text} | {item['status']} |"
                 )
         else:
             lines.append("✅ 暂无伏笔数据")
@@ -877,14 +1080,25 @@ class StatusReporter:
         ]
 
         for seg in segments:
-            bar_length = int(12 - (seg["words_per_point"] / 2000 * 12))
-            bar_length = max(1, min(12, bar_length))
+            words_per_point = seg["words_per_point"]
+            if words_per_point is None:
+                lines.append(
+                    f"第 {seg['start']}-{seg['end']}章   ░ 数据不足"
+                    f"（缺少爽点数据 {seg['missing_chapters']} 章）"
+                )
+                continue
 
+            bar_length = int(12 - (words_per_point / 2000 * 12))
+            bar_length = max(1, min(12, bar_length))
             bar = "█" * bar_length
 
+            suffix = ""
+            if seg["missing_chapters"] > 0:
+                suffix = f"，缺少爽点数据 {seg['missing_chapters']} 章"
+
             lines.append(
-                f"第 {seg['start']}-{seg['end']}章   {bar} "
-                f"{seg['rating']}（{seg['words_per_point']:.0f}字/爽点）"
+                f"第 {seg['start']}-{seg['end']}章   {bar} {seg['rating']}"
+                f"（{words_per_point:.0f}字/爽点，记录 {seg['cool_points']} 个爽点{suffix}）"
             )
 
         lines.extend(["```", "", "---", ""])
@@ -908,6 +1122,8 @@ class StatusReporter:
 
 def main():
     import argparse
+
+    _enable_windows_utf8_stdio()
 
     parser = argparse.ArgumentParser(
         description="可视化状态报告生成器",

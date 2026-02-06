@@ -1,5 +1,5 @@
 # Webnovel Writer - Python Dependencies
-# Python >= 3.8 required
+# Python >= 3.10 required
 
 # 核心依赖
 aiohttp>=3.8.0          # 异步 HTTP 客户端（API 调用）
