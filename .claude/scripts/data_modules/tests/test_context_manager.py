@@ -526,3 +526,26 @@ def test_context_manager_dynamic_weights_from_config_override(temp_project):
 
     weights = manager._resolve_template_weights("plot", chapter=1)
     assert weights == {"core": 0.60, "scene": 0.20, "global": 0.20}
+
+
+def test_context_manager_genre_profile_fallbacks_to_project_info(temp_project):
+    manager = ContextManager(temp_project)
+
+    profile = manager._load_genre_profile({"project_info": {"genre": "xuanhuan"}})
+
+    assert profile.get("genre_raw") == "xuanhuan"
+    assert profile.get("genre") == "xuanhuan"
+
+
+def test_context_manager_genre_profile_prefers_project_over_project_info(temp_project):
+    manager = ContextManager(temp_project)
+
+    profile = manager._load_genre_profile(
+        {
+            "project": {"genre": "xuanhuan"},
+            "project_info": {"genre": "dushi"},
+        }
+    )
+
+    assert profile.get("genre_raw") == "xuanhuan"
+    assert profile.get("genre") == "xuanhuan"

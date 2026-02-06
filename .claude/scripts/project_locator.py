@@ -20,7 +20,15 @@ from typing import Iterable, Optional
 DEFAULT_PROJECT_DIR_NAMES: tuple[str, ...] = ("webnovel-project",)
 
 
-def _candidate_roots(cwd: Path) -> Iterable[Path]:
+def _find_git_root(cwd: Path) -> Optional[Path]:
+    """Return nearest git root for cwd, if any."""
+    for candidate in (cwd, *cwd.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return None
+
+
+def _candidate_roots(cwd: Path, *, stop_at: Optional[Path] = None) -> Iterable[Path]:
     yield cwd
     for name in DEFAULT_PROJECT_DIR_NAMES:
         yield cwd / name
@@ -29,6 +37,8 @@ def _candidate_roots(cwd: Path) -> Iterable[Path]:
         yield parent
         for name in DEFAULT_PROJECT_DIR_NAMES:
             yield parent / name
+        if stop_at is not None and parent == stop_at:
+            break
 
 
 def _is_project_root(path: Path) -> bool:
@@ -43,6 +53,10 @@ def resolve_project_root(explicit_project_root: Optional[str] = None, *, cwd: Op
     1) explicit_project_root (if provided)
     2) env var WEBNOVEL_PROJECT_ROOT (if set)
     3) Search from cwd and parents, including common subdir `webnovel-project/`
+
+    Search safety:
+    - If current location is inside a Git repo, parent search stops at the repo root.
+      This avoids accidentally binding to unrelated parent directories.
 
     Raises:
         FileNotFoundError: if no valid project root can be found.
@@ -61,7 +75,8 @@ def resolve_project_root(explicit_project_root: Optional[str] = None, *, cwd: Op
         raise FileNotFoundError(f"WEBNOVEL_PROJECT_ROOT is set but invalid (missing .webnovel/state.json): {root}")
 
     base = (cwd or Path.cwd()).resolve()
-    for candidate in _candidate_roots(base):
+    git_root = _find_git_root(base)
+    for candidate in _candidate_roots(base, stop_at=git_root):
         if _is_project_root(candidate):
             return candidate.resolve()
 
