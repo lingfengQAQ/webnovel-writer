@@ -61,6 +61,11 @@
 | `/webnovel-resume` | 恢复中断任务 |
 | `/webnovel-learn [描述]` | 记忆写入 |
 
+## Claude Code 调用矩阵
+
+- 调用责任与触发时机统一见：`.claude/references/claude-code-call-matrix.md`
+- 原则：脚本默认由 Skill/Agent 在流程节点触发；除非明确声明，不作为人工常规入口。
+
 ## v5.4.2 新增功能
 
 ### 1. 创意约束系统

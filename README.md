@@ -704,6 +704,11 @@ python .claude/scripts/status_reporter.py --focus pacing --project-root "."
 - 爽点节奏优先使用 `chapter_reading_power.coolpoint_patterns`，其次回退 `chapter_meta`。
 - 若章节数据缺失，报告会标记“数据不足”，不会再用固定假设值估算。
 
+### Claude Code 调用责任（重要）
+
+- 本项目脚本默认由 Claude Code 的 Skill/Agent 在流程节点自动触发，不以人工手动调用为主。
+- 详细“谁调用、何时调用、调用什么”见：`.claude/references/claude-code-call-matrix.md`。
+
 ### 向量重建
 
 当 `vectors.db` 损坏或嵌入模型更换时：
