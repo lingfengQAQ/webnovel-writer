@@ -24,12 +24,16 @@ Apply progressive disclosure:
 
 Do not recursively chase references inside a reference file unless blocked.
 
+Path conventions:
+- `references/...` → relative to this skill directory (i.e. `.claude/skills/webnovel-init/references/...`)
+- `@templates/...` → relative to `.claude/templates/...` (project-level shared templates)
+
 ### L1 (minimum, wave-gated)
 - Before Wave 1: `references/genre-tropes.md`
 
 ### L2 (conditional)
-- After genre selection: `templates/genres/{genre}.md` (only for selected genres in A+B)
-- Before Wave 3 (golden finger): `templates/golden-finger-templates.md`
+- After genre selection: `@templates/genres/{genre}.md` (only for selected genres in A+B)
+- Before Wave 3 (golden finger): `@templates/golden-finger-templates.md`
 - Before Wave 4 (world): `references/worldbuilding/faction-systems.md`
 - Before Wave 4 (constraints):
   - `references/creativity/creativity-constraints.md`
