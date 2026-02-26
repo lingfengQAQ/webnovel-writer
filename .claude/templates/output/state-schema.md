@@ -2,19 +2,23 @@
 
 > 该文件为运行态精简状态，避免体量膨胀。实体等大数据存于 index.db。
 >
-> **v5.4**：结构沿用 v5.2。
+> **v5.4**：以下示例与 `update_state.py` 当前校验字段保持一致。
 
 ```json
 {
   "project_info": {
     "title": "",
     "genre": "",
-    "target_words": 0
+    "target_words": 0,
+    "target_chapters": 0
   },
   "progress": {
     "current_chapter": 0,
     "total_words": 0,
-    "last_updated": ""
+    "last_updated": "",
+    "volumes_completed": [],
+    "current_volume": 1,
+    "volumes_planned": []
   },
   "protagonist_state": {
     "name": "",
@@ -22,6 +26,13 @@
     "location": {"current": "", "last_chapter": 0},
     "golden_finger": {"name": "", "level": 0, "cooldown": 0}
   },
+  "relationships": {},
+  "world_settings": {
+    "power_system": [],
+    "factions": [],
+    "locations": []
+  },
+  "review_checkpoints": [],
   "strand_tracker": {
     "last_quest_chapter": 0,
     "last_fire_chapter": 0,
@@ -31,6 +42,7 @@
     "history": []
   },
   "plot_threads": {
+    "active_threads": [],
     "foreshadowing": []
   },
   "disambiguation_warnings": [],

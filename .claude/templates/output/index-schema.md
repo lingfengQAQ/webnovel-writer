@@ -2,9 +2,11 @@
 
 > 以 SQLite 存储大规模数据（实体/别名/场景/关系）。
 >
-> **v5.4**：结构沿用 v5.1/v5.2，并在脚本侧扩展新表。
+> **v5.4**：结构沿用 v5.1/v5.2，并新增追读力/可观测性相关表。
 
 ## 表一览
+
+### 核心索引表
 
 ### chapters
 - chapter (INTEGER, PK)
@@ -66,4 +68,17 @@
 - description (TEXT)
 - chapter (INTEGER)
 
-> 实际字段以 `data_modules/index_manager.py` 为准。
+### v5.3 追读力债务相关表
+- override_contracts
+- chase_debt
+- debt_events
+- chapter_reading_power
+
+### v5.4 可观测性与审查相关表
+- invalid_facts
+- review_metrics
+- rag_query_log
+- tool_call_stats
+- writing_checklist_scores
+
+> 实际字段与约束以 `.claude/scripts/data_modules/index_manager.py` 为准。
