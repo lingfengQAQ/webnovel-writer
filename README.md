@@ -138,6 +138,22 @@ git clone https://github.com/lingfengQAQ/webnovel-writer.git .claude
 
 # 安装 Python 依赖
 pip install -r .claude/scripts/requirements.txt
+
+###############################################
+Debian 环境下，采用以下方案
+###############################################
+
+# 1. 创建虚拟环境（放在项目目录或用户目录）
+python3 -m venv ~/.venv
+
+# 2. 激活环境
+source ~/.venv/bin/activate
+
+# 3. 安装依赖（现在 pip 可以正常工作）
+pip install -r .claude/scripts/requirements.txt
+
+# 4. 使用 Claude（确保在虚拟环境中运行）
+~/.venv/bin/python -m claude
 ```
 
 推荐：统一使用 `.claude/scripts/webnovel.py` 作为 CLI 入口，避免 `PYTHONPATH` / `cd` / 参数顺序导致的报错。
