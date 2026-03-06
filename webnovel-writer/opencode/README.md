@@ -1,46 +1,61 @@
-# OpenCode Compatibility Layer
+# OpenCode 兼容层
 
-This folder contains OpenCode-compatible versions of the webnovel-writer skills and agents.
+本文件夹包含 webnovel-writer 的 OpenCode 兼容版本 skills 和 agents。
 
-## Setup
+## 安装配置
 
-### Option 1: Symlink to OpenCode skills directory
+### 方式一：复制到 OpenCode skills 目录
 
 ```bash
 # Linux/macOS
-ln -s "$(pwd)/webnovel-writer/opencode/skills/"* ~/.config/opencode/skills/
-
-# Or copy
 cp -r webnovel-writer/opencode/skills/* ~/.config/opencode/skills/
+
+# 或使用软链接
+ln -s "$(pwd)/webnovel-writer/opencode/skills/"* ~/.config/opencode/skills/
 ```
 
-### Option 2: Set environment variable
+### 方式二：设置环境变量
 
-Add to your shell profile or OpenCode config:
+在 shell 配置文件（`~/.bashrc` 或 `~/.zshrc`）中添加：
 
 ```bash
-export OPENCODE_PLUGIN_ROOT="/path/to/webnovel-writer"
+export OPENCODE_PLUGIN_ROOT="/path/to/webnovel-writer/webnovel-writer/opencode"
 ```
 
-## Key Differences from Claude Code Version
+## Claude Code 与 OpenCode 差异对照
 
-| Aspect | Claude Code | OpenCode |
-|--------|-------------|----------|
-| Plugin root var | `${CLAUDE_PLUGIN_ROOT}` | `${OPENCODE_PLUGIN_ROOT}` |
-| Project dir var | `${CLAUDE_PROJECT_DIR}` | `${OPENCODE_PROJECT_DIR:-$PWD}` |
-| Skills location | `.claude/skills/` | `.opencode/skills/` or `~/.config/opencode/skills/` |
-| Agents location | `agents/*.md` | `agents/*.md` (same) |
+| 项目 | Claude Code | OpenCode |
+|------|-------------|----------|
+| 插件根目录变量 | `${CLAUDE_PLUGIN_ROOT}` | `${OPENCODE_PLUGIN_ROOT}` |
+| 项目目录变量 | `${CLAUDE_PROJECT_DIR}` | `${OPENCODE_PROJECT_DIR:-$PWD}` |
+| Skills 位置 | `.claude/skills/` | `.opencode/skills/` 或 `~/.config/opencode/skills/` |
+| Agents 位置 | `agents/*.md` | `agents/*.md`（相同） |
 
-## What's Converted
+## 已转换内容
 
-- `skills/` — All 8 slash commands with path variables updated
-- `agents/` — All 8 checker agents with path variables updated
+- `skills/` — 全部 8 个 slash commands，路径变量已更新
+- `agents/` — 全部 8 个 checker agents，路径变量已更新
 
-## Python Scripts (Shared)
+## Python 脚本（共享）
 
-The Python CLI (`scripts/webnovel.py`) works unchanged — it uses `--project-root` argument, not environment variables.
+Python CLI（`scripts/webnovel.py`）无需修改 — 使用 `--project-root` 参数而非环境变量。
 
 ```bash
-# Works the same for both Claude Code and OpenCode
+# Claude Code 和 OpenCode 使用方式相同
 python "${OPENCODE_PLUGIN_ROOT}/scripts/webnovel.py" --project-root ./my-novel where
+```
+
+## 使用说明
+
+安装完成后，在 OpenCode 中可以使用以下命令：
+
+```bash
+/webnovel-init      # 初始化小说项目
+/webnovel-plan      # 规划大纲
+/webnovel-write     # 写作章节
+/webnovel-review    # 审查章节
+/webnovel-query     # 查询项目数据
+/webnovel-resume    # 恢复写作进度
+/webnovel-learn     # 学习写作风格
+/webnovel-dashboard # 启动可视化面板
 ```
