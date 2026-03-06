@@ -3,10 +3,11 @@
 [![License](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Compatible-purple.svg)](https://claude.ai/claude-code)
+[![OpenCode](https://img.shields.io/badge/OpenCode-Compatible-green.svg)](https://github.com/sst/opencode)
 
 ## 项目简单介绍
 
-`Webnovel Writer` 是基于 Claude Code 的长篇网文创作系统，目标是降低 AI 写作中的“遗忘”和“幻觉”，支持长周期连载创作。
+`Webnovel Writer` 是基于 Claude Code / OpenCode 的长篇网文创作系统，目标是降低 AI 写作中的"遗忘"和"幻觉"，支持长周期连载创作。
 
 详细文档已拆分到 `docs/`：
 
@@ -19,7 +20,9 @@
 
 ## 快速开始
 
-### 1) 安装插件（官方 Marketplace）
+### 1) 安装插件
+
+#### Claude Code（官方 Marketplace）
 
 ```bash
 claude plugin marketplace add lingfengQAQ/webnovel-writer --scope user
@@ -27,6 +30,21 @@ claude plugin install webnovel-writer@webnovel-writer-marketplace --scope user
 ```
 
 > 仅当前项目生效时，将 `--scope user` 改为 `--scope project`。
+
+#### OpenCode
+
+```bash
+# Clone the repository
+git clone https://github.com/lingfengQAQ/webnovel-writer.git
+
+# Copy skills to OpenCode config directory
+cp -r webnovel-writer/webnovel-writer/opencode/skills/* ~/.config/opencode/skills/
+
+# Set environment variable (add to ~/.bashrc or ~/.zshrc)
+export OPENCODE_PLUGIN_ROOT="/path/to/webnovel-writer/webnovel-writer/opencode"
+```
+
+> 详细说明见 `webnovel-writer/opencode/README.md`。
 
 ### 2) 安装 Python 依赖
 
@@ -38,13 +56,13 @@ python -m pip install -r https://raw.githubusercontent.com/lingfengQAQ/webnovel-
 
 ### 3) 初始化小说项目
 
-在 Claude Code 中执行：
+在 Claude Code 或 OpenCode 中执行：
 
 ```bash
 /webnovel-init
 ```
 
-说明：`/webnovel-init` 会在当前 Workspace 下按书名创建 `PROJECT_ROOT`（子目录），并在 `workspace/.claude/.webnovel-current-project` 写入当前项目指针。
+说明：`/webnovel-init` 会在当前 Workspace 下按书名创建 `PROJECT_ROOT`（子目录），并写入当前项目指针。
 
 ### 4) 配置 RAG 环境（必做）
 
@@ -92,9 +110,12 @@ RERANK_API_KEY=your_rerank_api_key
 model: inherit
 ```
 
-表示子 Agent 继承当前 Claude 会话所用模型。
+表示子 Agent 继承当前会话所用模型。
 
-如果要单独给某个 Agent 指定模型，编辑对应文件（`webnovel-writer/agents/*.md`）的 frontmatter，例如：
+如果要单独给某个 Agent 指定模型，编辑对应文件的 frontmatter：
+
+**Claude Code**: `webnovel-writer/agents/*.md`  
+**OpenCode**: `webnovel-writer/opencode/agents/*.md`
 
 ```yaml
 ---
@@ -105,13 +126,14 @@ model: sonnet
 ---
 ```
 
-常见可选值：`inherit` / `sonnet` / `opus` / `haiku`（以 Claude Code 当前支持为准）。
+常见可选值：`inherit` / `sonnet` / `opus` / `haiku`（以平台当前支持为准）。
 
 ## 更新简介
 
 | 版本 | 说明 |
 |------|------|
-| **v5.5.0 (当前)** | 新增只读可视化 Dashboard Skill（`/webnovel-dashboard`）与实时刷新能力；支持插件目录启动与预构建前端分发 |
+| **v5.5.1 (当前)** | 新增 OpenCode 兼容层，支持 Claude Code / OpenCode 双平台 |
+| **v5.5.0** | 新增只读可视化 Dashboard Skill（`/webnovel-dashboard`）与实时刷新能力；支持插件目录启动与预构建前端分发 |
 | **v5.4.4** | 引入官方 Plugin Marketplace 安装机制；统一修复 Skills/Agents/References 的 CLI 调用（`CLAUDE_PLUGIN_ROOT` 单路径，透传命令统一 `--`） |
 | **v5.4.3** | 增强智能 RAG 上下文辅助（`auto/graph_hybrid` 回退 BM25） |
 | **v5.3** | 引入追读力系统（Hook / Cool-point / 微兑现 / 债务追踪） |
