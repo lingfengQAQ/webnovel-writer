@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { fetchJSON, subscribeSSE } from './api.js'
+import { fetchJSON, subscribeSSE, saveFile, createFile } from './api.js'
 import ForceGraph3D from 'react-force-graph-3d'
 
 // ====================================================================
@@ -78,7 +78,7 @@ const NAV_ITEMS = [
     { id: 'entities', icon: '👤', label: '设定词典' },
     { id: 'graph', icon: '🕸️', label: '关系图谱' },
     { id: 'chapters', icon: '📝', label: '章节一览' },
-    { id: 'files', icon: '📁', label: '文档浏览' },
+    { id: 'files', icon: '📁', label: '文档编辑' },
     { id: 'reading', icon: '🔥', label: '追读力' },
 ]
 
@@ -451,23 +451,39 @@ function ChaptersPage() {
 
 
 // ====================================================================
-// 页面 5：文档浏览
+// 页面 5：文档浏览与编辑
 // ====================================================================
 
 function FilesPage() {
     const [tree, setTree] = useState({})
     const [selectedPath, setSelectedPath] = useState(null)
     const [content, setContent] = useState('')
+    const [editedContent, setEditedContent] = useState('')
+    const [isEditing, setIsEditing] = useState(false)
+    const [isSaving, setIsSaving] = useState(false)
+    const [saveMessage, setSaveMessage] = useState('')
+    const [showCreateModal, setShowCreateModal] = useState(false)
+    const [newFileName, setNewFileName] = useState('')
+    const [newFileFolder, setNewFileFolder] = useState('')
+    const [refreshKey, setRefreshKey] = useState(0)
 
     useEffect(() => {
         fetchJSON('/api/files/tree').then(setTree).catch(() => { })
-    }, [])
+    }, [refreshKey])
 
     useEffect(() => {
         if (selectedPath) {
             fetchJSON('/api/files/read', { path: selectedPath })
-                .then(d => setContent(d.content))
-                .catch(() => setContent('[读取失败]'))
+                .then(d => {
+                    setContent(d.content)
+                    setEditedContent(d.content)
+                    setIsEditing(false)
+                    setSaveMessage('')
+                })
+                .catch(() => {
+                    setContent('[读取失败]')
+                    setEditedContent('')
+                })
         }
     }, [selectedPath])
 
@@ -477,11 +493,80 @@ function FilesPage() {
         if (first) setSelectedPath(first)
     }, [tree, selectedPath])
 
+    const handleSave = async () => {
+        if (!selectedPath) return
+        setIsSaving(true)
+        setSaveMessage('')
+        try {
+            await saveFile(selectedPath, editedContent)
+            setContent(editedContent)
+            setSaveMessage('保存成功！')
+            setIsEditing(false)
+            setTimeout(() => setSaveMessage(''), 2000)
+        } catch (e) {
+            setSaveMessage(`保存失败: ${e.message}`)
+        } finally {
+            setIsSaving(false)
+        }
+    }
+
+    const handleCreateFile = async () => {
+        if (!newFileName || !newFileFolder) return
+        const path = `${newFileFolder}/${newFileName}`
+        try {
+            await createFile(path, `# ${newFileName.replace('.md', '')}\n\n`)
+            setShowCreateModal(false)
+            setNewFileName('')
+            setRefreshKey(k => k + 1)
+            setSelectedPath(path)
+        } catch (e) {
+            alert(`创建失败: ${e.message}`)
+        }
+    }
+
+    const isModified = content !== editedContent
+
     return (
         <>
             <div className="page-header">
-                <h2>📁 文档浏览</h2>
+                <h2>📁 文档浏览与编辑</h2>
+                <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
+                    + 新建文件
+                </button>
             </div>
+
+            {showCreateModal && (
+                <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()}>
+                        <h3>新建文件</h3>
+                        <div className="form-group">
+                            <label>选择目录：</label>
+                            <select value={newFileFolder} onChange={e => setNewFileFolder(e.target.value)}>
+                                <option value="">请选择...</option>
+                                <option value="大纲">大纲</option>
+                                <option value="设定集">设定集</option>
+                                <option value="正文/第1卷">正文/第1卷</option>
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label>文件名：</label>
+                            <input
+                                type="text"
+                                value={newFileName}
+                                onChange={e => setNewFileName(e.target.value)}
+                                placeholder="如：新世界.md"
+                            />
+                        </div>
+                        <div className="modal-actions">
+                            <button className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>取消</button>
+                            <button className="btn btn-primary" onClick={handleCreateFile} disabled={!newFileName || !newFileFolder}>
+                                创建
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="file-layout">
                 <div className="file-tree-pane">
                     {Object.entries(tree).map(([folder, items]) => (
@@ -495,12 +580,55 @@ function FilesPage() {
                 </div>
                 <div className="file-content-pane">
                     {selectedPath ? (
-                        <div>
-                            <div className="selected-path">{selectedPath}</div>
-                            <div className="file-preview">{content}</div>
+                        <div className="editor-container">
+                            <div className="editor-toolbar">
+                                <div className="selected-path">{selectedPath}</div>
+                                <div className="editor-actions">
+                                    {saveMessage && (
+                                        <span className={`save-message ${saveMessage.includes('失败') ? 'error' : 'success'}`}>
+                                            {saveMessage}
+                                        </span>
+                                    )}
+                                    {isModified && <span className="modified-indicator">已修改</span>}
+                                    <button
+                                        className={`btn ${isEditing ? 'btn-secondary' : 'btn-primary'}`}
+                                        onClick={() => {
+                                            if (isEditing) {
+                                                setEditedContent(content)
+                                                setIsEditing(false)
+                                            } else {
+                                                setIsEditing(true)
+                                            }
+                                        }}
+                                    >
+                                        {isEditing ? '取消编辑' : '编辑'}
+                                    </button>
+                                    {isEditing && (
+                                        <button
+                                            className="btn btn-success"
+                                            onClick={handleSave}
+                                            disabled={isSaving || !isModified}
+                                        >
+                                            {isSaving ? '保存中...' : '保存'}
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                            {isEditing ? (
+                                <textarea
+                                    className="editor-textarea"
+                                    value={editedContent}
+                                    onChange={e => setEditedContent(e.target.value)}
+                                    placeholder="在此编辑文件内容..."
+                                />
+                            ) : (
+                                <div className="file-preview">
+                                    <pre>{content}</pre>
+                                </div>
+                            )}
                         </div>
                     ) : (
-                        <div className="empty-state"><div className="empty-icon">📄</div><p>选择左侧文件以预览内容</p></div>
+                        <div className="empty-state"><div className="empty-icon">📄</div><p>选择左侧文件以查看或编辑</p></div>
                     )}
                 </div>
             </div>

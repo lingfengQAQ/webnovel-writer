@@ -15,6 +15,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from .path_guard import safe_resolve
 from .watcher import FileWatcher
@@ -63,7 +64,7 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
-        allow_methods=["GET"],
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["*"],
     )
 
@@ -375,7 +376,59 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
         return {"path": path, "content": content}
 
     # ===========================================================
-    # SSE：实时变更推送
+    # API：文档编辑（保存文件）
+    # ===========================================================
+
+    class SaveFileRequest(BaseModel):
+        path: str
+        content: str
+
+    @app.post("/api/files/save")
+    @app.put("/api/files/save")
+    def file_save(request: SaveFileRequest):
+        """保存文件内容（限 正文/大纲/设定集 目录）。"""
+        root = _get_project_root()
+        resolved = safe_resolve(root, request.path)
+
+        # 二次限制：只允许三大目录
+        allowed_parents = [root / n for n in ("正文", "大纲", "设定集")]
+        if not any(_is_child(resolved, p) for p in allowed_parents):
+            raise HTTPException(403, "仅允许编辑 正文/大纲/设定集 目录下的文件")
+
+        # 确保父目录存在
+        resolved.parent.mkdir(parents=True, exist_ok=True)
+
+        # 写入文件
+        try:
+            resolved.write_text(request.content, encoding="utf-8")
+            return {"success": True, "path": request.path, "message": "文件保存成功"}
+        except Exception as e:
+            raise HTTPException(500, f"保存文件失败: {e}")
+
+    @app.post("/api/files/create")
+    def file_create(request: SaveFileRequest):
+        """创建新文件（限 正文/大纲/设定集 目录）。"""
+        root = _get_project_root()
+        resolved = safe_resolve(root, request.path)
+
+        # 二次限制：只允许三大目录
+        allowed_parents = [root / n for n in ("正文", "大纲", "设定集")]
+        if not any(_is_child(resolved, p) for p in allowed_parents):
+            raise HTTPException(403, "仅允许在 正文/大纲/设定集 目录下创建文件")
+
+        # 如果文件已存在，返回错误
+        if resolved.exists():
+            raise HTTPException(409, "文件已存在")
+
+        # 确保父目录存在
+        resolved.parent.mkdir(parents=True, exist_ok=True)
+
+        # 写入文件
+        try:
+            resolved.write_text(request.content, encoding="utf-8")
+            return {"success": True, "path": request.path, "message": "文件创建成功"}
+        except Exception as e:
+            raise HTTPException(500, f"创建文件失败: {e}")
     # ===========================================================
 
     @app.get("/api/events")

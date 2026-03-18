@@ -15,6 +15,50 @@ export async function fetchJSON(path, params = {}) {
 }
 
 /**
+ * 保存文件内容
+ * @param {string} path - 文件路径
+ * @param {string} content - 文件内容
+ * @returns {Promise<object>} - 保存结果
+ */
+export async function saveFile(path, content) {
+    const url = new URL('/api/files/save', window.location.origin);
+    const res = await fetch(url.toString(), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ path, content }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: '保存失败' }));
+        throw new Error(err.detail || `${res.status} ${res.statusText}`);
+    }
+    return res.json();
+}
+
+/**
+ * 创建新文件
+ * @param {string} path - 文件路径
+ * @param {string} content - 文件内容
+ * @returns {Promise<object>} - 创建结果
+ */
+export async function createFile(path, content = '') {
+    const url = new URL('/api/files/create', window.location.origin);
+    const res = await fetch(url.toString(), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ path, content }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: '创建失败' }));
+        throw new Error(err.detail || `${res.status} ${res.statusText}`);
+    }
+    return res.json();
+}
+
+/**
  * 订阅 SSE 实时事件流
  * @param {function} onMessage  收到 data 时回调
  * @param {{onOpen?: function, onError?: function}} handlers 连接状态回调
