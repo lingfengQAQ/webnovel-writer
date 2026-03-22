@@ -27,7 +27,7 @@ model: inherit
   "project_root": "{PROJECT_ROOT}",
   "storage_path": ".webnovel/",
   "state_file": ".webnovel/state.json",
-  "chapter_file": "正文/第{NNNN}章-{title_safe}.md"
+  "chapter_file": "正文/第{N}卷/第{NNN}章-{title_safe}.md"
 }
 ```
 

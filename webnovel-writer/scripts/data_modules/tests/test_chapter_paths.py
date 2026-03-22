@@ -24,7 +24,8 @@ def test_default_chapter_draft_path_uses_outline_heading_title(tmp_path):
 
     draft_path = module.default_chapter_draft_path(tmp_path, 1)
 
-    assert draft_path.name == "第0001章-测试标题.md"
+    assert draft_path.parent.name == "第1卷"
+    assert draft_path.name == "第001章-测试标题.md"
 
 
 def test_default_chapter_draft_path_falls_back_to_split_outline_filename(tmp_path):
@@ -36,7 +37,8 @@ def test_default_chapter_draft_path_falls_back_to_split_outline_filename(tmp_pat
 
     draft_path = module.default_chapter_draft_path(tmp_path, 2)
 
-    assert draft_path.name == "第0002章-标题_文件.md"
+    assert draft_path.parent.name == "第1卷"
+    assert draft_path.name == "第002章-标题_文件.md"
 
 
 def test_find_chapter_file_supports_titled_flat_filename(tmp_path):

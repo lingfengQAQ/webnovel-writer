@@ -1407,6 +1407,7 @@ def main():
     index_parser.add_argument("--chapter", type=int, required=True)
     index_parser.add_argument("--scenes", required=True, help="JSON 格式的场景列表")
     index_parser.add_argument("--summary", required=False, help="章节摘要文本")
+    index_parser.add_argument("--chapter-file", required=False, help="实际章节文件路径")
 
     # 搜索
     search_parser = subparsers.add_parser("search")
@@ -1509,7 +1510,7 @@ def main():
                     "chunk_type": "scene",
                     "parent_chunk_id": parent_chunk_id,
                     "chunk_id": chunk_id,
-                    "source_file": f"正文/第{args.chapter:04d}章.md#scene_{int(scene_index)}",
+                    "source_file": f"{args.chapter_file}#scene_{int(scene_index)}" if getattr(args, "chapter_file", None) else f"正文/第{args.chapter:04d}章.md#scene_{int(scene_index)}",
                 }
             )
 

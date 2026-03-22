@@ -8,7 +8,7 @@ allowed-tools: Read Write Edit Grep Bash Task
 
 ## 目标
 
-- 以稳定流程产出可发布章节：优先使用 `正文/第{NNNN}章-{title_safe}.md`，无标题时回退 `正文/第{NNNN}章.md`。
+- 以稳定流程产出可发布章节：优先使用 `正文/第{N}卷/第{NNN}章-{title_safe}.md`，无标题时回退 `正文/第{N}卷/第{NNN}章.md`。
 - 默认章节字数目标：2000-2500（用户或大纲明确覆盖时从其约定）。
 - 保证审查、润色、数据回写完整闭环，避免“写完即丢上下文”。
 - 输出直接可被后续章节消费的结构化数据：`review_metrics`、`summaries`、`chapter_meta`。
@@ -28,7 +28,7 @@ allowed-tools: Read Write Edit Grep Bash Task
 - `/webnovel-write --minimal`：Step 1 → 2A → 3（仅3个基础审查）→ 4 → 5 → 6
 
 最小产物（所有模式）：
-- `正文/第{NNNN}章-{title_safe}.md` 或 `正文/第{NNNN}章.md`
+- `正文/第{N}卷/第{NNN}章-{title_safe}.md` 或 `正文/第{N}卷/第{NNN}章.md`
 - `index.db.review_metrics` 新纪录（含 `overall_score`）
 - `.webnovel/summaries/ch{NNNN}.md`
 - `.webnovel/state.json` 的进度与 `chapter_meta` 更新
@@ -177,7 +177,7 @@ cat "${SKILL_ROOT}/../../references/shared/core-constraints.md"
 ```
 
 硬要求：
-- 只输出纯正文到章节正文文件；若详细大纲已有章节名，优先使用 `正文/第{chapter_padded}章-{title_safe}.md`，否则回退为 `正文/第{chapter_padded}章.md`。
+- 只输出纯正文到章节正文文件；路径由 `chapter_paths.py` 的 `default_chapter_draft_path()` 决定，默认卷布局：`正文/第{N}卷/第{NNN}章-{title_safe}.md`，无标题时回退为 `正文/第{N}卷/第{NNN}章.md`。
 - 默认按 2000-2500 字执行；若大纲为关键战斗章/高潮章/卷末章或用户明确指定，则按大纲/用户优先。
 - 禁止占位符正文（如 `[TODO]`、`[待补充]`）。
 - 保留承接关系：若上章有明确钩子，本章必须回应（可部分兑现）。
@@ -278,7 +278,7 @@ cat "${SKILL_ROOT}/references/writing/typesetting.md"
 
 使用 Task 调用 `data-agent`，参数：
 - `chapter`
-- `chapter_file` 必须传入实际章节文件路径；若详细大纲已有章节名，优先传 `正文/第{chapter_padded}章-{title_safe}.md`，否则传 `正文/第{chapter_padded}章.md`
+- `chapter_file` 必须传入实际章节文件路径；路径由 `chapter_paths.py` 决定，默认卷布局：`正文/第{N}卷/第{NNN}章-{title_safe}.md`
 - `review_score=Step 3 overall_score`
 - `project_root`
 - `storage_path=.webnovel/`
@@ -339,7 +339,7 @@ git -c i18n.commitEncoding=UTF-8 commit -m "第{chapter_num}章: {title}"
 
 未满足以下条件前，不得结束流程：
 
-1. 章节正文文件存在且非空：`正文/第{chapter_padded}章-{title_safe}.md` 或 `正文/第{chapter_padded}章.md`
+1. 章节正文文件存在且非空：`正文/第{N}卷/第{NNN}章-{title_safe}.md` 或 `正文/第{N}卷/第{NNN}章.md`
 2. Step 3 已产出 `overall_score` 且 `review_metrics` 成功落库
 3. Step 4 已处理全部 `critical`，`high` 未修项有 deviation 记录
 4. Step 4 的 `anti_ai_force_check=pass`（基于全文检查；fail 时不得进入 Step 5）
@@ -352,7 +352,7 @@ git -c i18n.commitEncoding=UTF-8 commit -m "第{chapter_num}章: {title}"
 
 ```bash
 test -f "${PROJECT_ROOT}/.webnovel/state.json"
-test -f "${PROJECT_ROOT}/正文/第${chapter_padded}章.md"
+test -f "${PROJECT_ROOT}/正文/第${volume_num}卷/第${chapter_padded_3}章.md" || test -f "${PROJECT_ROOT}/正文/第${chapter_padded}章.md"
 test -f "${PROJECT_ROOT}/.webnovel/summaries/ch${chapter_padded}.md"
 python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" index get-recent-review-metrics --limit 1
 tail -n 1 "${PROJECT_ROOT}/.webnovel/observability/data_agent_timing.jsonl" || true

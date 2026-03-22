@@ -135,7 +135,7 @@ def find_chapter_file(project_root: Path, chapter_num: int) -> Optional[Path]:
     return None
 
 
-def default_chapter_draft_path(project_root: Path, chapter_num: int, *, use_volume_layout: bool = False) -> Path:
+def default_chapter_draft_path(project_root: Path, chapter_num: int, *, use_volume_layout: bool = True) -> Path:
     """
     Preferred draft path when creating a new chapter file.
 

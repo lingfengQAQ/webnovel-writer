@@ -23,7 +23,7 @@ purpose: 章节生成后的润色阶段加载，基于审查报告修复问题 +
 
 ```json
 {
-  "chapter_file": "正文/第0123章-章节标题.md",
+  "chapter_file": "正文/第3卷/第123章-章节标题.md",
   "overall_score": 82,
   "issues": [
     {"agent": "consistency-checker", "type": "POWER_CONFLICT", "severity": "critical", "location": "第6段", "suggestion": "境界越权"},
@@ -33,7 +33,7 @@ purpose: 章节生成后的润色阶段加载，基于审查报告修复问题 +
 }
 ```
 
-`chapter_file` 必须是当前章节的实际文件路径；若项目尚未迁移到带标题文件名，也可传 `正文/第0123章.md`。
+`chapter_file` 必须是当前章节的实际文件路径；旧项目平坦布局也可传 `正文/第0123章.md`。
 
 ## 2. 执行顺序（必须按序）
 
