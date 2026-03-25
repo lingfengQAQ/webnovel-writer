@@ -128,6 +128,7 @@ function TreeNodeList({ nodes, selectedPath, onSelect, depth = 0 }) {
 export default function SettingsPage() {
     const { openForEvent } = useContextMenu()
     const [lastAction, setLastAction] = useState('尚未触发')
+    const [errorMessage, setErrorMessage] = useState('')
     const [fileNodes, setFileNodes] = useState([])
     const [dictionaryItems, setDictionaryItems] = useState([])
     const [selectedPath, setSelectedPath] = useState('')
@@ -138,15 +139,24 @@ export default function SettingsPage() {
     const [extracting, setExtracting] = useState(false)
     const [modeTag, setModeTag] = useState('api')
 
+    const setPageError = useCallback(error => {
+        setModeTag('error')
+        setErrorMessage(error?.message || '请求失败，请稍后重试')
+    }, [])
+
     const refreshDictionary = useCallback(async () => {
         setLoadingDictionary(true)
-        const response = await listSettingDictionary({ limit: 200, offset: 0 })
-        setDictionaryItems(Array.isArray(response.items) ? response.items : [])
-        if (isMockResponse(response)) {
-            setModeTag('mock')
+        try {
+            const response = await listSettingDictionary({ limit: 200, offset: 0 })
+            setDictionaryItems(Array.isArray(response.items) ? response.items : [])
+            setErrorMessage('')
+            setModeTag(isMockResponse(response) ? 'mock' : 'api')
+        } catch (error) {
+            setPageError(error)
+        } finally {
+            setLoadingDictionary(false)
         }
-        setLoadingDictionary(false)
-    }, [])
+    }, [setPageError])
 
     const readFile = useCallback(async path => {
         if (!path) {
@@ -155,29 +165,37 @@ export default function SettingsPage() {
         }
 
         setLoadingContent(true)
-        const response = await readSettingsFile({ path })
-        setSelectedPath(path)
-        setSelectedContent(response.content || '')
-        if (isMockResponse(response)) {
-            setModeTag('mock')
+        try {
+            const response = await readSettingsFile({ path })
+            setSelectedPath(path)
+            setSelectedContent(response.content || '')
+            setErrorMessage('')
+            setModeTag(isMockResponse(response) ? 'mock' : 'api')
+        } catch (error) {
+            setPageError(error)
+        } finally {
+            setLoadingContent(false)
         }
-        setLoadingContent(false)
-    }, [])
+    }, [setPageError])
 
     const refreshTree = useCallback(async () => {
         setLoadingTree(true)
-        const response = await fetchSettingsFileTree()
-        const nodes = Array.isArray(response.nodes) ? response.nodes : []
-        setFileNodes(nodes)
-        if (isMockResponse(response)) {
-            setModeTag('mock')
+        try {
+            const response = await fetchSettingsFileTree()
+            const nodes = Array.isArray(response.nodes) ? response.nodes : []
+            setFileNodes(nodes)
+            setErrorMessage('')
+            setModeTag(isMockResponse(response) ? 'mock' : 'api')
+            const initialPath = selectedPath || collectFirstFilePath(nodes)
+            if (initialPath) {
+                await readFile(initialPath)
+            }
+        } catch (error) {
+            setPageError(error)
+        } finally {
+            setLoadingTree(false)
         }
-        const initialPath = selectedPath || collectFirstFilePath(nodes)
-        if (initialPath) {
-            await readFile(initialPath)
-        }
-        setLoadingTree(false)
-    }, [readFile, selectedPath])
+    }, [readFile, selectedPath, setPageError])
 
     useEffect(() => {
         void Promise.all([refreshTree(), refreshDictionary()])
@@ -200,50 +218,52 @@ export default function SettingsPage() {
         const sourceFile = payload.meta?.sourceFile || ''
         const conflictId = payload.meta?.conflictId || ''
 
-        if (actionId === 'view-source') {
-            await readFile(sourceFile)
-            setLastAction(`${actionId} -> ${sourceFile}`)
-            return
-        }
-
-        if (actionId === 'mark-confirmed') {
-            if (conflictId) {
-                const response = await resolveDictionaryConflict({
-                    id: conflictId,
-                    decision: 'confirm',
-                    attrs: {},
-                })
-                if (isMockResponse(response)) {
-                    setModeTag('mock')
-                }
+        try {
+            if (actionId === 'view-source') {
+                await readFile(sourceFile)
+                setLastAction(`${actionId} -> ${sourceFile}`)
+                return
             }
-            applyLocalStatus(entryId, 'confirmed')
-            setLastAction(`${actionId} -> ${entryId}`)
-            return
-        }
 
-        if (actionId === 'resolve-conflict') {
-            if (conflictId) {
+            if (actionId === 'mark-confirmed') {
+                if (conflictId) {
+                    const response = await resolveDictionaryConflict({
+                        id: conflictId,
+                        decision: 'confirm',
+                        attrs: {},
+                    })
+                    setModeTag(isMockResponse(response) ? 'mock' : 'api')
+                    setErrorMessage('')
+                }
+                applyLocalStatus(entryId, 'confirmed')
+                setLastAction(`${actionId} -> ${entryId}`)
+                return
+            }
+
+            if (actionId === 'resolve-conflict') {
+                if (!conflictId) {
+                    const error = new Error('缺少 conflict_id，无法处理冲突')
+                    error.errorCode = 'conflict_id_required'
+                    throw error
+                }
                 const response = await resolveDictionaryConflict({
                     id: conflictId,
                     decision: 'confirm',
                     attrs: {},
                 })
-                if (isMockResponse(response)) {
-                    setModeTag('mock')
-                }
+                setModeTag(isMockResponse(response) ? 'mock' : 'api')
+                setErrorMessage('')
                 await refreshDictionary()
                 setLastAction(`${actionId} -> ${conflictId}`)
                 return
             }
 
-            applyLocalStatus(entryId, 'confirmed')
-            setLastAction(`${actionId} -> no_conflict_id(local_apply)`)
-            return
+            setLastAction(`${actionId} -> ${entryId || 'unknown'}`)
+        } catch (error) {
+            setPageError(error)
+            setLastAction(`${actionId} -> error(${error?.errorCode || 'unknown_error'})`)
         }
-
-        setLastAction(`${actionId} -> ${entryId || 'unknown'}`)
-    }, [applyLocalStatus, readFile, refreshDictionary])
+    }, [applyLocalStatus, readFile, refreshDictionary, setPageError])
 
     const openDictionaryMenu = useCallback((event, item) => {
         const conflictId = getConflictIdFromEntry(item)
@@ -284,14 +304,19 @@ export default function SettingsPage() {
 
     const runExtract = useCallback(async () => {
         setExtracting(true)
-        const response = await extractSettingDictionary({ incremental: true })
-        if (isMockResponse(response)) {
-            setModeTag('mock')
+        try {
+            const response = await extractSettingDictionary({ incremental: true })
+            setErrorMessage('')
+            setModeTag(isMockResponse(response) ? 'mock' : 'api')
+            setLastAction(`dictionary.extract -> +${response.extracted} / conflicts ${response.conflicts}`)
+            await refreshDictionary()
+        } catch (error) {
+            setPageError(error)
+            setLastAction(`dictionary.extract -> error(${error?.errorCode || 'unknown_error'})`)
+        } finally {
+            setExtracting(false)
         }
-        setLastAction(`dictionary.extract -> +${response.extracted} / conflicts ${response.conflicts}`)
-        await refreshDictionary()
-        setExtracting(false)
-    }, [refreshDictionary])
+    }, [refreshDictionary, setPageError])
 
     const dictionaryBadge = useMemo(() => {
         if (loadingDictionary) {
@@ -382,6 +407,7 @@ export default function SettingsPage() {
                     <span className="card-badge badge-blue">sourceId: settings.dictionary.entry</span>
                 </div>
                 <p style={{ margin: 0 }}>最近动作: {lastAction}</p>
+                {errorMessage ? <p style={{ margin: '8px 0 0', color: '#b40000' }}>错误: {errorMessage}</p> : null}
             </div>
         </PageScaffold>
     )
