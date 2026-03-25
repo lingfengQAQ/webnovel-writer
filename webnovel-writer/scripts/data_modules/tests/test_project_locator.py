@@ -24,6 +24,14 @@ def test_resolve_project_root_prefers_cwd_project(tmp_path):
     assert resolved == project_root.resolve()
 
 
+def test_current_project_pointer_rel_prefers_codex():
+    _ensure_scripts_on_path()
+
+    import project_locator as project_locator_module
+
+    assert project_locator_module.CURRENT_PROJECT_POINTER_REL == Path(".codex") / ".webnovel-current-project"
+
+
 def test_resolve_project_root_stops_at_git_root(tmp_path):
     _ensure_scripts_on_path()
 

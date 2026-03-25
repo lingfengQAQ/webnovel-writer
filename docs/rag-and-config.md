@@ -16,7 +16,7 @@
 
 1. 进程环境变量（最高优先级）
 2. 书项目根目录下的 `.env`
-3. 用户级全局：`~/.codex/webnovel-writer/.env`（兼容 `~/.claude/...`）
+3. 用户级全局：`~/.codex/webnovel-writer/.env`
 
 ## `.env` 最小配置
 
@@ -34,3 +34,4 @@ RERANK_API_KEY=your_rerank_api_key
 
 - 未配置 Embedding Key 时，语义检索会回退到 BM25。
 - 推荐每本书单独配置 `${PROJECT_ROOT}/.env`，避免多项目串配置。
+- 历史 `.claude` 下的环境变量文件请手动迁移到 `~/.codex/webnovel-writer/.env`。

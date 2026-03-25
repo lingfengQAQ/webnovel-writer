@@ -24,8 +24,9 @@ from runtime_compat import normalize_windows_path
 DEFAULT_PROJECT_DIR_NAMES: tuple[str, ...] = ("webnovel-project",)
 CURRENT_PROJECT_POINTER_FILE = ".webnovel-current-project"
 POINTER_DIR_NAMES: tuple[str, ...] = (".codex", ".claude")
-# 兼容旧代码中对单一路径常量的引用（优先 .claude 语义）
-CURRENT_PROJECT_POINTER_REL: Path = Path(".claude") / CURRENT_PROJECT_POINTER_FILE
+# 默认收敛到 `.codex`；`.claude` 仍作为兼容读路径保留。
+CURRENT_PROJECT_POINTER_REL: Path = Path(POINTER_DIR_NAMES[0]) / CURRENT_PROJECT_POINTER_FILE
+LEGACY_CURRENT_PROJECT_POINTER_REL: Path = Path(".claude") / CURRENT_PROJECT_POINTER_FILE
 
 # 用户级全局映射（当 skills/agents 安装在 ~/.codex / ~/.claude 时，项目目录可能在任意盘符）
 # 该文件用于在“空上下文 + CWD 不在项目内”的情况下仍能定位到正确 project_root。

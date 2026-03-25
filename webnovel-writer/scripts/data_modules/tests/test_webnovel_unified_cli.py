@@ -92,6 +92,56 @@ def test_extract_context_forwards_with_resolved_project_root(monkeypatch, tmp_pa
     ]
 
 
+def test_migrate_codex_dispatches_to_runtime_migration(monkeypatch, tmp_path, capsys):
+    module = _load_webnovel_module()
+
+    book_root = (tmp_path / "book").resolve()
+    (book_root / ".webnovel").mkdir(parents=True, exist_ok=True)
+    (book_root / ".webnovel" / "state.json").write_text("{}", encoding="utf-8")
+
+    called = {}
+
+    def _fake_resolve(explicit_project_root=None):
+        called["resolve_arg"] = explicit_project_root
+        return book_root
+
+    def _fake_run_codex_migration(*, project_root, dry_run, workspace_hint):
+        called["project_root"] = project_root
+        called["dry_run"] = dry_run
+        called["workspace_hint"] = workspace_hint
+        print("{}")
+        return 0
+
+    workspace_root = (tmp_path / "workspace").resolve()
+    workspace_root.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(module, "_resolve_root", _fake_resolve)
+    monkeypatch.setattr(module, "_run_codex_migration", _fake_run_codex_migration)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "webnovel",
+            "migrate",
+            "codex",
+            "--project-root",
+            str(workspace_root),
+            "--dry-run",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        module.main()
+
+    captured = capsys.readouterr()
+    assert int(exc.value.code or 0) == 0
+    assert captured.out.strip() == "{}"
+    assert called["resolve_arg"] == str(workspace_root)
+    assert called["project_root"] == book_root
+    assert called["dry_run"] is True
+    assert called["workspace_hint"] == workspace_root
+
+
 def test_preflight_succeeds_for_valid_project_root(monkeypatch, tmp_path, capsys):
     module = _load_webnovel_module()
 

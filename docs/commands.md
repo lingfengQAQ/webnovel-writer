@@ -1,105 +1,57 @@
 # 命令详解
 
-> 说明：本文档以 Claude Slash 命令展示流程。在 Codex 中请使用统一 CLI：
->
-> `python -X utf8 webnovel-writer/scripts/webnovel.py <tool> ...`
-
-## `/webnovel-init`
-
-用途：初始化小说项目（目录、设定模板、状态文件）。
-
-产出：
-
-- `.webnovel/state.json`
-- `设定集/`
-- `大纲/总纲.md`
-
-## `/webnovel-plan [卷号]`
-
-用途：生成卷级规划与章节大纲。
-
-示例：
+统一入口：
 
 ```bash
-/webnovel-plan 1
-/webnovel-plan 2-3
+python -X utf8 webnovel-writer/scripts/webnovel.py <tool> ...
 ```
 
-## `/webnovel-write [章号]`
+## 核心命令
 
-用途：执行完整章节创作流程（上下文 → 草稿 → 审查 → 润色 → 数据落盘）。
-
-示例：
+### 项目与工作区
 
 ```bash
-/webnovel-write 1
-/webnovel-write 45
+python -X utf8 webnovel-writer/scripts/webnovel.py init ./webnovel-project "你的书名" "题材"
+python -X utf8 webnovel-writer/scripts/webnovel.py use "<PROJECT_ROOT>" --workspace-root "<WORKSPACE_ROOT>"
+python -X utf8 webnovel-writer/scripts/webnovel.py where
 ```
 
-常见模式：
-
-- 标准模式：全流程
-- 快速模式：`--fast`
-- 极简模式：`--minimal`
-
-## `/webnovel-review [范围]`
-
-用途：对历史章节做多维质量审查。
-
-示例：
+### 预检与迁移
 
 ```bash
-/webnovel-review 1-5
-/webnovel-review 45
+python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<PROJECT_ROOT_OR_WORKSPACE_ROOT>" preflight --format json
+python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<PROJECT_ROOT_OR_WORKSPACE_ROOT>" migrate codex --dry-run
+python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<PROJECT_ROOT_OR_WORKSPACE_ROOT>" migrate codex
 ```
 
-## `/webnovel-query [关键词]`
-
-用途：查询角色、伏笔、节奏、状态等运行时信息。
-
-示例：
+### 内容与状态
 
 ```bash
-/webnovel-query 萧炎
-/webnovel-query 伏笔
-/webnovel-query 紧急
+python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<PROJECT_ROOT>" extract-context --chapter 1 --format text
+python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<PROJECT_ROOT>" status -- --focus all
+python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<PROJECT_ROOT>" index -- stats
+python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<PROJECT_ROOT>" rag -- stats
 ```
 
-## `/webnovel-resume`
+说明：`status/index/rag/workflow` 为透传命令，参数写在 `--` 之后。
 
-用途：任务中断后自动识别断点并恢复。
-
-示例：
+### Dashboard
 
 ```bash
-/webnovel-resume
+python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<PROJECT_ROOT>" dashboard
+python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<PROJECT_ROOT>" dashboard --port 8765 --no-browser
 ```
 
-## `/webnovel-dashboard`
-
-用途：启动只读可视化面板，查看项目状态、实体关系、章节与大纲内容。
-
-示例：
+## 常用帮助命令
 
 ```bash
-/webnovel-dashboard
+python -X utf8 webnovel-writer/scripts/webnovel.py --help
+python -X utf8 webnovel-writer/scripts/webnovel.py preflight --help
+python -X utf8 webnovel-writer/scripts/webnovel.py workflow -- --help
+python -X utf8 webnovel-writer/scripts/webnovel.py init -- --help
 ```
 
-说明：
+## 历史 Slash 迁移提示
 
-- 默认只读，不会修改项目文件
-- 适合排查上下文、实体关系和章节进度
-
-## `/webnovel-learn [内容]`
-
-用途：从当前会话或用户输入中提取可复用写作模式，并写入项目记忆。
-
-示例：
-
-```bash
-/webnovel-learn "本章的危机钩设计很有效，悬念拉满"
-```
-
-产出：
-
-- `.webnovel/project_memory.json`
+- 旧 `/webnovel-*` Slash 命令不再作为主文档入口。
+- 迁移方式：统一改为 `webnovel.py` CLI；历史 `.claude` 指针仅通过 `migrate codex` 一次性迁移处理。

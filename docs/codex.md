@@ -1,6 +1,6 @@
 # Codex 使用说明
 
-本项目已支持在 Codex 中直接使用统一 CLI，不依赖 Claude Marketplace 插件目录。
+本项目在 Codex 中使用统一 CLI 运行，不依赖插件目录。
 
 ## 1) 安装依赖
 
@@ -27,14 +27,13 @@ python -X utf8 webnovel-writer/scripts/webnovel.py use "<PROJECT_ROOT>" --worksp
 ```
 
 说明：
-- 若工作区存在 `.codex/`，写入 `workspace/.codex/.webnovel-current-project`；
-- 若仅存在 `.claude/`，自动回退写入 `.claude` 指针；
-- 同时写入用户级 registry：`~/.codex/webnovel-writer/workspaces.json`（兼容 `~/.claude/...`）。
+- 写入 `workspace/.codex/.webnovel-current-project`；
+- 同时写入用户级 registry：`~/.codex/webnovel-writer/workspaces.json`。
 
 ## 4) 预检
 
 ```bash
-python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<WORKSPACE_ROOT_OR_PROJECT_ROOT>" preflight
+python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<WORKSPACE_ROOT_OR_PROJECT_ROOT>" preflight --format json
 ```
 
 ## 5) 常用命令
@@ -43,7 +42,7 @@ python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<WORKSPACE_RO
 python -X utf8 webnovel-writer/scripts/webnovel.py where
 python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<WORKSPACE_ROOT_OR_PROJECT_ROOT>" extract-context --chapter 1 --format text
 python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<WORKSPACE_ROOT_OR_PROJECT_ROOT>" status -- --focus all
-python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<WORKSPACE_ROOT_OR_PROJECT_ROOT>" index stats
+python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<WORKSPACE_ROOT_OR_PROJECT_ROOT>" index -- stats
 ```
 
 ## 6) Dashboard（可选）
@@ -58,3 +57,14 @@ python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<WORKSPACE_RO
 - 如不希望自动初始化，可追加 `--no-bootstrap-index`。
 
 默认地址：`http://127.0.0.1:8765`
+
+## 7) 历史路径迁移（可选）
+
+若工作区仍保留旧 `.claude` 指针，可执行一次性迁移：
+
+```bash
+python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<WORKSPACE_ROOT_OR_PROJECT_ROOT>" migrate codex --dry-run
+python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<WORKSPACE_ROOT_OR_PROJECT_ROOT>" migrate codex
+```
+
+说明：`.claude` 仅作为迁移输入，不再作为运行时主路径。

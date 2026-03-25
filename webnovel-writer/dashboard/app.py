@@ -1,7 +1,7 @@
 """
 Webnovel Dashboard - FastAPI 主应用
 
-仅提供 GET 接口（严格只读）；所有文件读取经过 path_guard 防穿越校验。
+提供现有只读接口 + OpenSpec 冻结写接口骨架；所有文件读取经过 path_guard 防穿越校验。
 """
 
 import asyncio
@@ -13,10 +13,18 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .path_guard import safe_resolve
+from .routers import (
+    edit_assist_router,
+    outlines_router,
+    runtime_router,
+    settings_dictionary_router,
+    settings_files_router,
+    skills_router,
+)
 from .watcher import FileWatcher
 
 # ---------------------------------------------------------------------------
@@ -63,9 +71,17 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
-        allow_methods=["GET"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )
+
+    # OpenSpec 冻结新增能力路由骨架（T02）
+    app.include_router(runtime_router)
+    app.include_router(skills_router)
+    app.include_router(settings_files_router)
+    app.include_router(settings_dictionary_router)
+    app.include_router(outlines_router)
+    app.include_router(edit_assist_router)
 
     # ===========================================================
     # API：项目元信息

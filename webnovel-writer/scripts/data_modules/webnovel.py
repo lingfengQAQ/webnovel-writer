@@ -219,6 +219,38 @@ def cmd_dashboard(args: argparse.Namespace) -> int:
     return int(proc.returncode or 0)
 
 
+def _parse_migrate_codex_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="webnovel migrate codex",
+        description="迁移历史 .claude 痕迹到 .codex 优先路径",
+    )
+    parser.add_argument("--dry-run", action="store_true", help="仅生成迁移报告，不实际改动文件")
+    return parser.parse_args(argv)
+
+
+def _resolve_workspace_hint(explicit_project_root: Optional[str]) -> Optional[Path]:
+    if not explicit_project_root:
+        return None
+    hint = normalize_windows_path(explicit_project_root).expanduser()
+    if not hint.is_absolute():
+        hint = (Path.cwd().resolve() / hint).resolve()
+    else:
+        hint = hint.resolve()
+    return hint
+
+
+def _run_codex_migration(*, project_root: Path, dry_run: bool, workspace_hint: Optional[Path]) -> int:
+    from migrations.codex_migration import migrate_codex_runtime
+
+    report = migrate_codex_runtime(
+        project_root=project_root,
+        dry_run=dry_run,
+        workspace_hint=workspace_hint,
+    )
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="webnovel unified CLI")
     parser.add_argument("--project-root", help="书项目根目录或工作区根目录（可选，默认自动检测）")
@@ -267,7 +299,7 @@ def main() -> None:
     p_context = sub.add_parser("context", help="转发到 context_manager")
     p_context.add_argument("args", nargs=argparse.REMAINDER)
 
-    p_migrate = sub.add_parser("migrate", help="转发到 migrate_state_to_sqlite")
+    p_migrate = sub.add_parser("migrate", help="迁移工具（支持 `migrate codex` 与旧透传模式）")
     p_migrate.add_argument("args", nargs=argparse.REMAINDER)
 
     # Pass-through to scripts
@@ -332,6 +364,16 @@ def main() -> None:
     if tool == "context":
         raise SystemExit(_run_data_module("context_manager", [*forward_args, *rest]))
     if tool == "migrate":
+        if rest[:1] == ["codex"]:
+            codex_args = _parse_migrate_codex_args(rest[1:])
+            workspace_hint = _resolve_workspace_hint(args.project_root)
+            raise SystemExit(
+                _run_codex_migration(
+                    project_root=project_root,
+                    dry_run=bool(codex_args.dry_run),
+                    workspace_hint=workspace_hint,
+                )
+            )
         raise SystemExit(_run_data_module("migrate_state_to_sqlite", [*forward_args, *rest]))
 
     if tool == "workflow":
