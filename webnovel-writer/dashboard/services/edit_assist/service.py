@@ -14,13 +14,15 @@ import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from time import perf_counter
+from typing import Any, Protocol
 from uuid import uuid4
 
 from filelock import FileLock, Timeout
 from fastapi import HTTPException
 
 from ...models.edit_assist import (
+    EditAssistApplyProposal,
     EditAssistApplyRequest,
     EditAssistApplyResponse,
     EditAssistLogEntry,
@@ -37,6 +39,7 @@ ASSIST_LOG_FILENAME = "assist-log.jsonl"
 PROPOSAL_STORE_FILENAME = "assist-proposals.json"
 WRITE_LOCK_FILENAME = "assist.lock"
 DEFAULT_WORKSPACE_ID = "workspace-default"
+PROPOSAL_SCHEMA_VERSION = 1
 
 
 @dataclass(slots=True)
@@ -58,6 +61,60 @@ class EditAssistPaths:
     lock_path: Path
 
 
+@dataclass(slots=True, frozen=True)
+class EditAssistProviderResult:
+    output_text: str
+    provider: str
+    model: str = ""
+
+
+class EditAssistProvider(Protocol):
+    provider_name: str
+    model_name: str
+
+    def ensure_available(self) -> None: ...
+
+    def rewrite(
+        self,
+        *,
+        project_root: Path,
+        file_path: str,
+        selection_start: int,
+        selection_end: int,
+        selection_text: str,
+        prompt: str,
+    ) -> EditAssistProviderResult: ...
+
+
+class UnavailableEditAssistProvider:
+    provider_name = "unavailable"
+    model_name = ""
+
+    def ensure_available(self) -> None:
+        raise EditAssistServiceError(
+            status_code=501,
+            error_code="EDIT_ASSIST_UNAVAILABLE",
+            message="edit assist provider is unavailable",
+        )
+
+    def rewrite(
+        self,
+        *,
+        project_root: Path,
+        file_path: str,
+        selection_start: int,
+        selection_end: int,
+        selection_text: str,
+        prompt: str,
+    ) -> EditAssistProviderResult:
+        self.ensure_available()
+        return EditAssistProviderResult(
+            output_text=selection_text,
+            provider=self.provider_name,
+            model=self.model_name,
+        )
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -65,6 +122,49 @@ def _utc_now() -> str:
 def _workspace_id_for_root(root: Path) -> str:
     digest = hashlib.sha1(str(root).encode("utf-8")).hexdigest()[:12]
     return f"ws-{digest}"
+
+
+def _elapsed_ms(started_at: float) -> int:
+    return max(0, int((perf_counter() - started_at) * 1000))
+
+
+def _coerce_non_negative_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    if number < 0:
+        return None
+    return number
+
+
+def _normalize_source_payload(source: Any) -> dict[str, str]:
+    if not isinstance(source, dict):
+        source = {}
+    provider = str(source.get("provider", "")).strip()
+    model = str(source.get("model", "")).strip()
+    return {"provider": provider, "model": model}
+
+
+def _source_payload_from_provider(
+    provider: EditAssistProvider,
+    provider_result: EditAssistProviderResult | None = None,
+) -> dict[str, str]:
+    provider_name = ""
+    model_name = ""
+    if provider_result is not None:
+        provider_name = str(provider_result.provider or "").strip()
+        model_name = str(provider_result.model or "").strip()
+    if not provider_name:
+        provider_name = str(getattr(provider, "provider_name", "") or "").strip()
+    if not model_name:
+        model_name = str(getattr(provider, "model_name", "") or "").strip()
+    return {
+        "provider": provider_name or "unknown",
+        "model": model_name,
+    }
 
 
 def _resolve_workspace_root(workspace_id: str | None, project_root: str | None) -> Path:
@@ -204,13 +304,6 @@ def _selection_version(file_path: str, selection_start: int, selection_end: int,
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _render_preview_text(selection_text: str, prompt: str) -> str:
-    normalized_prompt = (prompt or "").strip()
-    if not normalized_prompt:
-        return selection_text
-    return f"{selection_text}\n\n[EditAssist] {normalized_prompt}"
-
-
 def _atomic_write_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_path: Path | None = None
@@ -292,7 +385,10 @@ def _load_proposal_store(path: Path) -> dict[str, Any]:
         )
 
     store = _empty_proposal_store()
-    store["version"] = int(raw.get("version", 1))
+    try:
+        store["version"] = int(raw.get("version", 1))
+    except (TypeError, ValueError):
+        store["version"] = 1
     store["updated_at"] = str(raw.get("updated_at", ""))
     items = raw.get("items", {})
     store["items"] = items if isinstance(items, dict) else {}
@@ -336,6 +432,10 @@ def _build_log_entry(
     applied: bool,
     proposal_id: str,
     created_at: str,
+    provider: str | None = None,
+    model: str | None = None,
+    provider_latency_ms: int | None = None,
+    apply_latency_ms: int | None = None,
     error_code: str | None = None,
     failure_reason: str | None = None,
     expected_version: str | None = None,
@@ -355,6 +455,14 @@ def _build_log_entry(
         "created_at": created_at,
         "proposal_id": proposal_id,
     }
+    if provider is not None:
+        payload["provider"] = provider
+    if model is not None:
+        payload["model"] = model
+    if provider_latency_ms is not None:
+        payload["provider_latency_ms"] = provider_latency_ms
+    if apply_latency_ms is not None:
+        payload["apply_latency_ms"] = apply_latency_ms
     if error_code:
         payload["error_code"] = error_code
     if failure_reason:
@@ -411,8 +519,79 @@ def _assert_apply_matches_proposal(request: EditAssistApplyRequest, proposal: di
         )
 
 
+def _assert_structured_proposal_matches(request_proposal: EditAssistApplyProposal, stored_proposal: dict[str, Any]) -> None:
+    stored_schema_version = int(stored_proposal.get("version", PROPOSAL_SCHEMA_VERSION))
+    if request_proposal.version != stored_schema_version:
+        raise EditAssistServiceError(
+            status_code=409,
+            error_code="EDIT_ASSIST_PROPOSAL_VERSION_MISMATCH",
+            message="apply proposal version does not match preview proposal version",
+            details={
+                "request_proposal_version": request_proposal.version,
+                "stored_proposal_version": stored_schema_version,
+            },
+        )
+
+    stored_selection_version = str(stored_proposal.get("selection_version", "")).strip()
+    if not stored_selection_version:
+        raise EditAssistServiceError(
+            status_code=500,
+            error_code="EDIT_ASSIST_PROPOSAL_INVALID",
+            message="proposal is missing selection version",
+            details={"proposal_id": request_proposal.id},
+        )
+    if request_proposal.selection_version != stored_selection_version:
+        raise EditAssistServiceError(
+            status_code=409,
+            error_code="EDIT_ASSIST_PROPOSAL_VERSION_MISMATCH",
+            message="apply proposal selection_version does not match preview proposal",
+            details={
+                "request_selection_version": request_proposal.selection_version,
+                "stored_selection_version": stored_selection_version,
+            },
+        )
+
+    request_source = _normalize_source_payload(request_proposal.source.model_dump())
+    stored_source = _normalize_source_payload(stored_proposal.get("source", {}))
+    if request_source != stored_source:
+        raise EditAssistServiceError(
+            status_code=409,
+            error_code="EDIT_ASSIST_PROPOSAL_SOURCE_MISMATCH",
+            message="apply proposal source does not match preview proposal source",
+            details={
+                "request_source": request_source,
+                "stored_source": stored_source,
+            },
+        )
+
+
 class EditAssistService:
+    def __init__(self, provider: EditAssistProvider | None = None):
+        self._provider: EditAssistProvider = provider or UnavailableEditAssistProvider()
+
+    def _ensure_provider_available(self) -> None:
+        check = getattr(self._provider, "ensure_available", None)
+        if not callable(check):
+            raise EditAssistServiceError(
+                status_code=501,
+                error_code="EDIT_ASSIST_UNAVAILABLE",
+                message="edit assist provider is unavailable",
+                details={"reason": "provider_missing_healthcheck"},
+            )
+        try:
+            check()
+        except EditAssistServiceError:
+            raise
+        except Exception as exc:
+            raise EditAssistServiceError(
+                status_code=501,
+                error_code="EDIT_ASSIST_UNAVAILABLE",
+                message="edit assist provider is unavailable",
+                details={"error": f"{type(exc).__name__}: {exc}"},
+            ) from exc
+
     def preview(self, request: EditAssistPreviewRequest) -> EditAssistPreviewResponse:
+        self._ensure_provider_available()
         project_root = _resolve_workspace_root(request.workspace.workspace_id, request.workspace.project_root)
         target_path = _resolve_target_file(project_root, request.file_path)
         content = _read_text(target_path)
@@ -422,7 +601,43 @@ class EditAssistService:
             request.selection_end,
             request.selection_text,
         )
-        preview_text = _render_preview_text(before_text, request.prompt)
+
+        provider_started = perf_counter()
+        try:
+            provider_result = self._provider.rewrite(
+                project_root=project_root,
+                file_path=_normalize_file_path(request.file_path),
+                selection_start=request.selection_start,
+                selection_end=request.selection_end,
+                selection_text=before_text,
+                prompt=request.prompt,
+            )
+        except EditAssistServiceError:
+            raise
+        except Exception as exc:
+            raise EditAssistServiceError(
+                status_code=500,
+                error_code="EDIT_ASSIST_PROVIDER_FAILED",
+                message="edit assist provider invocation failed",
+                details={"error": f"{type(exc).__name__}: {exc}"},
+            ) from exc
+        provider_latency_ms = _elapsed_ms(provider_started)
+
+        if not isinstance(provider_result, EditAssistProviderResult):
+            raise EditAssistServiceError(
+                status_code=500,
+                error_code="EDIT_ASSIST_PROVIDER_INVALID_RESPONSE",
+                message="edit assist provider returned invalid payload",
+            )
+        if not isinstance(provider_result.output_text, str):
+            raise EditAssistServiceError(
+                status_code=500,
+                error_code="EDIT_ASSIST_PROVIDER_INVALID_RESPONSE",
+                message="edit assist provider returned non-string output",
+            )
+
+        preview_text = provider_result.output_text
+        source_payload = _source_payload_from_provider(self._provider, provider_result)
         created_at = _utc_now()
         proposal_id = f"proposal-{uuid4().hex[:12]}"
         selection_version = _selection_version(
@@ -434,11 +649,14 @@ class EditAssistService:
 
         proposal_payload = {
             "id": proposal_id,
+            "version": PROPOSAL_SCHEMA_VERSION,
             "workspace_id": (request.workspace.workspace_id or DEFAULT_WORKSPACE_ID).strip() or DEFAULT_WORKSPACE_ID,
             "file_path": _normalize_file_path(request.file_path),
             "selection_start": request.selection_start,
             "selection_end": request.selection_end,
             "selection_version": selection_version,
+            "source": source_payload,
+            "provider_latency_ms": provider_latency_ms,
             "prompt": request.prompt,
             "before_text": before_text,
             "preview": preview_text,
@@ -475,14 +693,29 @@ class EditAssistService:
             status="ok",
             proposal=EditAssistProposal(
                 id=proposal_id,
+                version=PROPOSAL_SCHEMA_VERSION,
+                selection_version=selection_version,
+                source=source_payload,
                 prompt=request.prompt,
                 preview=preview_text,
                 before_text=before_text,
                 after_text=preview_text,
+                provider_latency_ms=provider_latency_ms,
             ),
         )
 
     def apply(self, request: EditAssistApplyRequest) -> EditAssistApplyResponse:
+        self._ensure_provider_available()
+        apply_started = perf_counter()
+
+        proposal_id = (request.proposal.id or "").strip()
+        if not proposal_id:
+            raise EditAssistServiceError(
+                status_code=400,
+                error_code="EDIT_ASSIST_PROPOSAL_ID_REQUIRED",
+                message="proposal.id is required",
+            )
+
         project_root = _resolve_workspace_root(request.workspace.workspace_id, request.workspace.project_root)
         target_path = _resolve_target_file(project_root, request.file_path)
         paths = _paths_for_root(project_root)
@@ -494,28 +727,39 @@ class EditAssistService:
                 if not isinstance(items, dict):
                     items = {}
 
-                raw_proposal = items.get(request.proposal_id)
+                raw_proposal = items.get(proposal_id)
                 if not isinstance(raw_proposal, dict):
                     raise EditAssistServiceError(
                         status_code=404,
                         error_code="EDIT_ASSIST_PROPOSAL_NOT_FOUND",
                         message="preview proposal not found",
-                        details={"proposal_id": request.proposal_id},
+                        details={"proposal_id": proposal_id},
                     )
 
                 _assert_apply_matches_proposal(request, raw_proposal)
+                _assert_structured_proposal_matches(request.proposal, raw_proposal)
+
                 proposal_prompt = str(raw_proposal.get("prompt", ""))
                 proposal_preview = str(raw_proposal.get("preview", ""))
-                proposal_version = str(raw_proposal.get("selection_version", "")).strip()
-                if not proposal_version:
+                proposal_selection_version = str(raw_proposal.get("selection_version", "")).strip()
+                proposal_source = _normalize_source_payload(raw_proposal.get("source", {}))
+                provider_name = proposal_source.get("provider") or None
+                model_name = proposal_source.get("model") or None
+                provider_latency_ms = _coerce_non_negative_int(raw_proposal.get("provider_latency_ms"))
+
+                active_source = _source_payload_from_provider(self._provider)
+                if provider_name and provider_name != active_source["provider"]:
                     raise EditAssistServiceError(
-                        status_code=500,
-                        error_code="EDIT_ASSIST_PROPOSAL_INVALID",
-                        message="proposal is missing selection version",
-                        details={"proposal_id": request.proposal_id},
+                        status_code=409,
+                        error_code="EDIT_ASSIST_PROPOSAL_SOURCE_MISMATCH",
+                        message="proposal provider source does not match current provider",
+                        details={
+                            "proposal_source": proposal_source,
+                            "active_source": active_source,
+                        },
                     )
 
-                if request.expected_version and request.expected_version.strip() and request.expected_version != proposal_version:
+                if request.expected_version and request.expected_version.strip() and request.expected_version != proposal_selection_version:
                     failure_log = _build_log_entry(
                         file_path=request.file_path,
                         selection_start=request.selection_start,
@@ -523,12 +767,16 @@ class EditAssistService:
                         prompt=proposal_prompt,
                         preview=proposal_preview,
                         applied=False,
-                        proposal_id=request.proposal_id,
+                        proposal_id=proposal_id,
                         created_at=_utc_now(),
+                        provider=provider_name,
+                        model=model_name,
+                        provider_latency_ms=provider_latency_ms,
+                        apply_latency_ms=_elapsed_ms(apply_started),
                         error_code="EDIT_ASSIST_EXPECTED_VERSION_MISMATCH",
                         failure_reason="expected_version_mismatch",
                         expected_version=request.expected_version,
-                        selection_version=proposal_version,
+                        selection_version=proposal_selection_version,
                         rollback_performed=False,
                     )
                     _append_jsonl(paths.log_path, failure_log)
@@ -551,7 +799,7 @@ class EditAssistService:
                     request.selection_end,
                     current_selection,
                 )
-                if current_version != proposal_version:
+                if current_version != proposal_selection_version:
                     failure_log = _build_log_entry(
                         file_path=request.file_path,
                         selection_start=request.selection_start,
@@ -559,12 +807,16 @@ class EditAssistService:
                         prompt=proposal_prompt,
                         preview=proposal_preview,
                         applied=False,
-                        proposal_id=request.proposal_id,
+                        proposal_id=proposal_id,
                         created_at=_utc_now(),
+                        provider=provider_name,
+                        model=model_name,
+                        provider_latency_ms=provider_latency_ms,
+                        apply_latency_ms=_elapsed_ms(apply_started),
                         error_code="EDIT_ASSIST_SELECTION_VERSION_CONFLICT",
                         failure_reason="selection_version_conflict",
                         expected_version=request.expected_version,
-                        selection_version=proposal_version,
+                        selection_version=proposal_selection_version,
                         current_version=current_version,
                         rollback_performed=False,
                     )
@@ -573,7 +825,7 @@ class EditAssistService:
                         status_code=409,
                         error_code="EDIT_ASSIST_SELECTION_VERSION_CONFLICT",
                         message="selection has changed since preview",
-                        details={"proposal_id": request.proposal_id},
+                        details={"proposal_id": proposal_id},
                     )
 
                 updated_content = (
@@ -588,10 +840,14 @@ class EditAssistService:
                     prompt=proposal_prompt,
                     preview=proposal_preview,
                     applied=True,
-                    proposal_id=request.proposal_id,
+                    proposal_id=proposal_id,
                     created_at=_utc_now(),
+                    provider=provider_name,
+                    model=model_name,
+                    provider_latency_ms=provider_latency_ms,
+                    apply_latency_ms=_elapsed_ms(apply_started),
                     expected_version=request.expected_version,
-                    selection_version=proposal_version,
+                    selection_version=proposal_selection_version,
                     current_version=current_version,
                     rollback_performed=False,
                 )
@@ -621,12 +877,16 @@ class EditAssistService:
                         prompt=proposal_prompt,
                         preview=proposal_preview,
                         applied=False,
-                        proposal_id=request.proposal_id,
+                        proposal_id=proposal_id,
                         created_at=_utc_now(),
+                        provider=provider_name,
+                        model=model_name,
+                        provider_latency_ms=provider_latency_ms,
+                        apply_latency_ms=_elapsed_ms(apply_started),
                         error_code="EDIT_ASSIST_APPLY_WRITE_FAILED",
                         failure_reason="write_failed",
                         expected_version=request.expected_version,
-                        selection_version=proposal_version,
+                        selection_version=proposal_selection_version,
                         current_version=current_version,
                         rollback_performed=rollback_performed,
                         rollback_error=rollback_error,
@@ -641,14 +901,14 @@ class EditAssistService:
                         error_code="EDIT_ASSIST_APPLY_WRITE_FAILED",
                         message="failed to apply edit assist changes",
                         details={
-                            "proposal_id": request.proposal_id,
+                            "proposal_id": proposal_id,
                             "error": str(exc),
                             "rollback_performed": rollback_performed,
                             "rollback_error": rollback_error,
                         },
                     ) from exc
 
-                items.pop(request.proposal_id, None)
+                items.pop(proposal_id, None)
                 store["items"] = items
                 store["updated_at"] = _utc_now()
                 try:

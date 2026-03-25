@@ -22,6 +22,7 @@ WRITE_ERROR_RESPONSES = {
     404: {"model": ApiErrorResponse, "description": "Resource not found placeholder response."},
     409: {"model": ApiErrorResponse, "description": "Conflict placeholder response."},
     500: {"model": ApiErrorResponse, "description": "Internal error placeholder response."},
+    501: {"model": ApiErrorResponse, "description": "Provider unavailable placeholder response."},
 }
 
 router = APIRouter(prefix="/api/edit-assist", tags=["edit-assist"])
