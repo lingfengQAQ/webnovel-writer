@@ -139,6 +139,105 @@ class StatusReporter:
         # v5.1 引入: 使用 IndexManager 读取实体
         self._index_manager = IndexManager(self.config)
 
+    def _now(self) -> datetime:
+        """返回带本地时区的当前时间。"""
+        return datetime.now().astimezone()
+
+    def _to_iso8601(self, dt: datetime) -> str:
+        """统一时间格式，避免 JSON schema 漂移。"""
+        return dt.isoformat(timespec="seconds")
+
+    def _format_age(self, age_seconds: Optional[int]) -> str:
+        """将秒数转成易读延迟文本。"""
+        if age_seconds is None:
+            return "未知"
+
+        if age_seconds < 60:
+            return f"{age_seconds}s"
+        minutes, seconds = divmod(age_seconds, 60)
+        if minutes < 60:
+            return f"{minutes}m{seconds}s"
+        hours, minutes = divmod(minutes, 60)
+        if hours < 24:
+            return f"{hours}h{minutes}m"
+        days, hours = divmod(hours, 24)
+        return f"{days}d{hours}h"
+
+    def _collect_source_freshness(self, generated_at: Optional[datetime] = None) -> Dict[str, Dict[str, Any]]:
+        """收集 state/index 数据源更新时间与新鲜度。"""
+        now = generated_at or self._now()
+
+        def _file_status(source: str, path: Path) -> Dict[str, Any]:
+            status: Dict[str, Any] = {
+                "source": source,
+                "path": str(path),
+                "exists": path.exists(),
+                "updated_at": None,
+                "age_seconds": None,
+                "delay": "未知",
+                "freshness": "missing",
+            }
+            if not path.exists():
+                return status
+
+            try:
+                mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=now.tzinfo)
+            except OSError:
+                return status
+
+            age_seconds = max(0, int((now - mtime).total_seconds()))
+            stale_after_seconds = max(
+                1,
+                int(getattr(self.config, "status_data_freshness_warn_hours", 24) * 3600),
+            )
+
+            status["updated_at"] = self._to_iso8601(mtime)
+            status["age_seconds"] = age_seconds
+            status["delay"] = self._format_age(age_seconds)
+            status["freshness"] = "fresh" if age_seconds <= stale_after_seconds else "stale"
+            return status
+
+        return {
+            "state": _file_status("state", self.state_file),
+            "index": _file_status("index", self.config.index_db),
+        }
+
+    def _worst_freshness(self, freshness_values: List[str]) -> str:
+        rank = {"fresh": 0, "stale": 1, "missing": 2}
+        worst = "fresh"
+        worst_rank = -1
+        for value in freshness_values:
+            current_rank = rank.get(value, 2)
+            if current_rank > worst_rank:
+                worst_rank = current_rank
+                worst = value
+        return worst
+
+    def _build_metric_sources(self, source_status: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        """输出每类指标的数据来源与整体延迟。"""
+        metric_mapping = {
+            "basic": ["state"],
+            "characters": ["index", "state"],
+            "foreshadowing": ["state"],
+            "urgency": ["state"],
+            "pacing": ["index", "state"],
+            "strand": ["state"],
+            "relationships": ["index", "state"],
+        }
+
+        result: Dict[str, Dict[str, Any]] = {}
+        for metric, dependencies in metric_mapping.items():
+            entries = [source_status[name] for name in dependencies if name in source_status]
+            ages = [entry["age_seconds"] for entry in entries if isinstance(entry.get("age_seconds"), int)]
+            freshness_values = [str(entry.get("freshness", "missing")) for entry in entries]
+            result[metric] = {
+                "depends_on": dependencies,
+                "freshness": self._worst_freshness(freshness_values),
+                "max_age_seconds": max(ages) if ages else None,
+                "entries": entries,
+            }
+        return result
+
     def _extract_stats_field(self, content: str, field_name: str) -> str:
         """
         从“本章统计”区块提取字段值，例如：
@@ -832,17 +931,353 @@ class StatusReporter:
 
         return "\n".join(lines)
 
-    def generate_report(self, focus: str = "all") -> str:
+    def _collect_basic_stats_payload(self) -> Dict[str, Any]:
+        if not self.state:
+            return {}
+
+        progress = self.state.get("progress", {})
+        current_chapter = int(progress.get("current_chapter", 0) or 0)
+        total_words = int(progress.get("total_words", 0) or 0)
+        target_words = int(self.state.get("project_info", {}).get("target_words", 2000000) or 2000000)
+
+        avg_words = (total_words / current_chapter) if current_chapter > 0 else 0.0
+        completion = (total_words / target_words * 100) if target_words > 0 else 0.0
+
+        return {
+            "total_chapters": current_chapter,
+            "total_words": total_words,
+            "avg_words_per_chapter": round(avg_words, 2),
+            "target_words": target_words,
+            "completion_pct": round(completion, 2),
+        }
+
+    def _count_state_relationship_edges(self) -> int:
+        if not self.state:
+            return 0
+        relationships = self.state.get("relationships", {})
+        if not isinstance(relationships, dict):
+            return 0
+
+        allies = relationships.get("allies", [])
+        enemies = relationships.get("enemies", [])
+        count = 0
+
+        if isinstance(allies, list):
+            count += sum(1 for item in allies if isinstance(item, dict) and str(item.get("name") or "").strip())
+        if isinstance(enemies, list):
+            count += sum(1 for item in enemies if isinstance(item, dict) and str(item.get("name") or "").strip())
+        if count > 0:
+            return count
+
+        for rel_data in relationships.values():
+            if not isinstance(rel_data, dict):
+                continue
+            affection = self._to_positive_int(rel_data.get("affection")) or 0
+            hatred = self._to_positive_int(rel_data.get("hatred")) or 0
+            if affection > 0:
+                count += 1
+            if hatred > 0:
+                count += 1
+        return count
+
+    def _summarize_relationship_data(self) -> Dict[str, Any]:
+        has_index_data = False
+        index_error = ""
+
+        if bool(getattr(self.config, "relationship_graph_from_index_enabled", True)):
+            try:
+                has_index_data = bool(self._generate_relationship_graph_from_index())
+            except Exception as exc:
+                index_error = exc.__class__.__name__
+
+        state_edge_count = self._count_state_relationship_edges()
+        has_state_data = state_edge_count > 0
+
+        source = "none"
+        if has_index_data:
+            source = "index"
+        elif has_state_data:
+            source = "state"
+
+        return {
+            "has_data": bool(has_index_data or has_state_data),
+            "source": source,
+            "index_graph_available": has_index_data,
+            "state_edge_count": state_edge_count,
+            "index_error": index_error,
+        }
+
+    def _detect_chapter_gaps(self) -> Dict[str, Any]:
+        chapter_numbers = sorted(
+            {
+                chapter
+                for item in self.chapters_data
+                if (chapter := self._to_positive_int(item.get("chapter"))) is not None
+            }
+        )
+
+        if not chapter_numbers:
+            return {
+                "has_data": False,
+                "has_gap": False,
+                "first_chapter": None,
+                "last_chapter": None,
+                "missing_chapters": 0,
+                "gaps": [],
+            }
+
+        gaps: List[Dict[str, Any]] = []
+        missing_chapters = 0
+        for prev, current in zip(chapter_numbers, chapter_numbers[1:]):
+            if current <= prev + 1:
+                continue
+            start = prev + 1
+            end = current - 1
+            count = end - start + 1
+            missing_chapters += count
+            gaps.append({"start": start, "end": end, "count": count})
+
+        return {
+            "has_data": True,
+            "has_gap": missing_chapters > 0,
+            "first_chapter": chapter_numbers[0],
+            "last_chapter": chapter_numbers[-1],
+            "missing_chapters": missing_chapters,
+            "gaps": gaps,
+        }
+
+    def evaluate_health_gate(
+        self,
+        focus: str = "all",
+        *,
+        source_status: Optional[Dict[str, Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        enabled = bool(getattr(self.config, "status_gate_enabled", True))
+        if not enabled:
+            return {
+                "enabled": False,
+                "passed": True,
+                "error_count": 0,
+                "warning_count": 0,
+                "anomalies": [],
+            }
+
+        anomalies: List[Dict[str, Any]] = []
+
+        chapter_gap = self._detect_chapter_gaps()
+        allowed_missing = int(getattr(self.config, "status_gate_chapter_gap_max_missing", 0))
+        if chapter_gap["missing_chapters"] > allowed_missing:
+            preview = chapter_gap["gaps"][:3]
+            anomalies.append(
+                {
+                    "code": "chapter_gap_detected",
+                    "severity": "error",
+                    "message": (
+                        f"章节存在断档，缺失 {chapter_gap['missing_chapters']} 章，"
+                        f"超过允许阈值 {allowed_missing} 章"
+                    ),
+                    "detail": {"allowed_missing": allowed_missing, "gaps_preview": preview},
+                }
+            )
+
+        if focus in {"all", "relationships"} and bool(getattr(self.config, "status_gate_relationship_required", True)):
+            relation_summary = self._summarize_relationship_data()
+            if not relation_summary["has_data"]:
+                anomalies.append(
+                    {
+                        "code": "relationship_missing",
+                        "severity": "error",
+                        "message": "关系数据为空，无法评估人物关系健康度",
+                        "detail": relation_summary,
+                    }
+                )
+
+        if source_status is None:
+            source_status = self._collect_source_freshness()
+
+        if bool(getattr(self.config, "status_gate_fail_on_stale_data", False)):
+            for source_name, source in source_status.items():
+                freshness = str(source.get("freshness") or "missing")
+                if freshness not in {"stale", "missing"}:
+                    continue
+                anomalies.append(
+                    {
+                        "code": "stale_source",
+                        "severity": "error",
+                        "message": f"{source_name} 数据源已过旧或缺失",
+                        "detail": {"source": source_name, "freshness": freshness},
+                    }
+                )
+
+        errors = [item for item in anomalies if item.get("severity") == "error"]
+        warnings = [item for item in anomalies if item.get("severity") == "warning"]
+        return {
+            "enabled": True,
+            "passed": len(errors) == 0,
+            "error_count": len(errors),
+            "warning_count": len(warnings),
+            "anomalies": anomalies,
+            "chapter_gaps": chapter_gap,
+        }
+
+    def generate_json_report(
+        self,
+        focus: str = "all",
+        *,
+        generated_at: Optional[datetime] = None,
+    ) -> Dict[str, Any]:
+        generated_time = generated_at or self._now()
+        source_status = self._collect_source_freshness(generated_time)
+        metric_sources = self._build_metric_sources(source_status)
+
+        focus_enabled = {
+            "basic": focus in {"all", "basic"},
+            "characters": focus in {"all", "characters"},
+            "foreshadowing": focus in {"all", "foreshadowing"},
+            "urgency": focus in {"all", "foreshadowing", "urgency"},
+            "pacing": focus in {"all", "pacing"},
+            "strand": focus in {"all", "strand", "pacing"},
+            "relationships": focus in {"all", "relationships"},
+        }
+
+        sections: Dict[str, Any] = {}
+
+        if focus_enabled["basic"]:
+            sections["basic"] = self._collect_basic_stats_payload()
+
+        if focus_enabled["characters"]:
+            activity = self.analyze_characters()
+            dropped = [
+                {"name": name, **data}
+                for name, data in activity.items()
+                if "掉线" in str(data.get("status", ""))
+            ]
+            dropped = sorted(dropped, key=lambda item: int(item.get("absence", 0)), reverse=True)
+            sections["characters"] = {
+                "total": len(activity),
+                "dropped_count": len(dropped),
+                "dropped": dropped,
+            }
+
+        if focus_enabled["foreshadowing"]:
+            foreshadowing = self.analyze_foreshadowing()
+            overdue = [item for item in foreshadowing if "超时" in item["status"] or "超期" in item["status"]]
+            unknown = [item for item in foreshadowing if item["status"] == "⚪ 数据不足"]
+            sections["foreshadowing"] = {
+                "total": len(foreshadowing),
+                "overdue_count": len(overdue),
+                "unknown_count": len(unknown),
+                "items": foreshadowing,
+            }
+
+        if focus_enabled["urgency"]:
+            urgency = self.analyze_foreshadowing_urgency()
+            urgent = [
+                item
+                for item in urgency
+                if (item["urgency"] is not None and item["urgency"] >= 1.0) or item["status"] == "🔴 已超期"
+            ]
+            sections["urgency"] = {
+                "total": len(urgency),
+                "urgent_count": len(urgent),
+                "items": urgency,
+            }
+
+        if focus_enabled["pacing"]:
+            sections["pacing"] = {
+                "segment_size": int(getattr(self.config, "pacing_segment_size", 100)),
+                "segments": self.analyze_pacing(),
+            }
+
+        if focus_enabled["strand"]:
+            sections["strand"] = self.analyze_strand_weave()
+
+        if focus_enabled["relationships"]:
+            sections["relationships"] = self._summarize_relationship_data()
+
+        gate_result = self.evaluate_health_gate(focus, source_status=source_status)
+
+        return {
+            "schema_version": int(getattr(self.config, "status_report_schema_version", 1)),
+            "generated_at": self._to_iso8601(generated_time),
+            "project_root": str(self.project_root),
+            "focus": focus,
+            "sources": source_status,
+            "metric_sources": {key: metric_sources[key] for key in sections.keys() if key in metric_sources},
+            "sections": sections,
+            "health_gate": gate_result,
+        }
+
+    def _generate_source_freshness_section(self, source_status: Dict[str, Dict[str, Any]]) -> List[str]:
+        lines = [
+            "## 🧭 数据来源与新鲜度",
+            "",
+            "| 来源 | 文件 | 更新时间 | 延迟 | 新鲜度 |",
+            "|------|------|----------|------|--------|",
+        ]
+
+        freshness_label = {"fresh": "🟢 fresh", "stale": "🟡 stale", "missing": "🔴 missing"}
+        for key in ("state", "index"):
+            item = source_status.get(key, {})
+            path = str(item.get("path") or "")
+            updated_at = str(item.get("updated_at") or "N/A")
+            delay = str(item.get("delay") or "未知")
+            freshness = freshness_label.get(str(item.get("freshness") or "missing"), "🔴 missing")
+            lines.append(f"| {key} | {path} | {updated_at} | {delay} | {freshness} |")
+
+        lines.extend(["", "---", ""])
+        return lines
+
+    def _generate_health_gate_section(self, gate_result: Dict[str, Any]) -> List[str]:
+        lines = ["## 🚦 健康门禁结果", ""]
+
+        if gate_result.get("passed"):
+            lines.append("✅ 门禁通过")
+        else:
+            lines.append(f"❌ 门禁失败（error={gate_result.get('error_count', 0)}）")
+
+        chapter_gap = gate_result.get("chapter_gaps", {})
+        if isinstance(chapter_gap, dict) and chapter_gap.get("has_data"):
+            lines.append(
+                f"- 章节断档: 缺失 {chapter_gap.get('missing_chapters', 0)} 章"
+            )
+
+        anomalies = gate_result.get("anomalies", [])
+        if anomalies:
+            lines.append("")
+            lines.append("| 严重级别 | 代码 | 说明 |")
+            lines.append("|----------|------|------|")
+            for item in anomalies:
+                lines.append(
+                    f"| {item.get('severity', '')} | {item.get('code', '')} | {item.get('message', '')} |"
+                )
+
+        lines.extend(["", "---", ""])
+        return lines
+
+    def generate_report(
+        self,
+        focus: str = "all",
+        *,
+        generated_at: Optional[datetime] = None,
+        source_status: Optional[Dict[str, Dict[str, Any]]] = None,
+        gate_result: Optional[Dict[str, Any]] = None,
+    ) -> str:
         """生成健康报告（Markdown 格式）"""
+        generated_time = generated_at or self._now()
+        effective_source_status = source_status or self._collect_source_freshness(generated_time)
+        effective_gate_result = gate_result or self.evaluate_health_gate(focus, source_status=effective_source_status)
 
         report_lines = [
             "# 全书健康报告",
             "",
-            f"> **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"> **生成时间**: {generated_time.strftime('%Y-%m-%d %H:%M:%S')}",
             "",
             "---",
             ""
         ]
+
+        report_lines.extend(self._generate_source_freshness_section(effective_source_status))
 
         # 基本数据
         if focus in ["all", "basic"]:
@@ -872,28 +1307,23 @@ class StatusReporter:
         if focus in ["all", "relationships"]:
             report_lines.extend(self._generate_relationship_section())
 
+        report_lines.extend(self._generate_health_gate_section(effective_gate_result))
+
         return "\n".join(report_lines)
 
     def _generate_basic_stats(self) -> List[str]:
         """生成基本统计"""
-        if not self.state:
+        stats = self._collect_basic_stats_payload()
+        if not stats:
             return []
-
-        progress = self.state.get("progress", {})
-        current_chapter = progress.get("current_chapter", 0)
-        total_words = progress.get("total_words", 0)
-        target_words = self.state.get("project_info", {}).get("target_words", 2000000)
-
-        avg_words = total_words / current_chapter if current_chapter > 0 else 0
-        completion = (total_words / target_words * 100) if target_words > 0 else 0
 
         return [
             "## 📊 基本数据",
             "",
-            f"- **总章节数**: {current_chapter} 章",
-            f"- **总字数**: {total_words:,} 字",
-            f"- **平均章节字数**: {avg_words:,.0f} 字",
-            f"- **创作进度**: {completion:.1f}%（目标 {target_words:,} 字）",
+            f"- **总章节数**: {stats['total_chapters']} 章",
+            f"- **总字数**: {stats['total_words']:,} 字",
+            f"- **平均章节字数**: {stats['avg_words_per_chapter']:,.0f} 字",
+            f"- **创作进度**: {stats['completion_pct']:.1f}%（目标 {stats['target_words']:,} 字）",
             "",
             "---",
             ""
@@ -1133,7 +1563,7 @@ class StatusReporter:
 
         return lines
 
-def main():
+def main(argv: Optional[List[str]] = None) -> int:
     import argparse
 
     _enable_windows_utf8_stdio()
@@ -1154,60 +1584,89 @@ def main():
 
   # 仅分析爽点节奏
   python status_reporter.py --focus pacing
+
+  # 输出 JSON（用于 CI / Dashboard）
+  python status_reporter.py --format json
         """
     )
 
     parser.add_argument('--output', default='.webnovel/health_report.md',
                        help='输出文件路径')
+    parser.add_argument('--format', choices=['text', 'json'], default='text',
+                       help='输出格式（text=Markdown, json=结构化报告）')
     parser.add_argument('--focus', choices=['all', 'basic', 'characters',
                                             'foreshadowing', 'urgency', 'pacing',
                                             'strand', 'relationships'],
                        default='all', help='分析焦点（新增 urgency, strand）')
     parser.add_argument('--project-root', default='.', help='项目根目录')
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # 解析项目根目录（允许传入“工作区根目录”，统一解析到真正的 book project_root）
     try:
         project_root = str(resolve_project_root(args.project_root))
     except FileNotFoundError as exc:
         print(f"❌ 无法定位项目根目录（需要包含 .webnovel/state.json）: {exc}", file=sys.stderr)
-        sys.exit(1)
+        return 1
 
     # 创建报告生成器
     reporter = StatusReporter(project_root)
 
     # 加载状态
     if not reporter.load_state():
-        sys.exit(1)
+        return 1
 
-    print("📖 正在扫描章节文件...")
+    if args.format == "text":
+        print("📖 正在扫描章节文件...")
     reporter.scan_chapters()
 
-    print(f"✅ 已扫描 {len(reporter.chapters_data)} 个章节")
+    if args.format == "text":
+        print(f"✅ 已扫描 {len(reporter.chapters_data)} 个章节")
+        print("\n📊 正在分析...")
 
-    print("\n📊 正在分析...")
+    generated_at = reporter._now()
+    source_status = reporter._collect_source_freshness(generated_at)
+    gate_result = reporter.evaluate_health_gate(args.focus, source_status=source_status)
 
-    # 生成报告
-    report = reporter.generate_report(args.focus)
+    if args.format == "json":
+        payload = reporter.generate_json_report(args.focus, generated_at=generated_at)
+        payload["health_gate"] = gate_result
+        output_text = json.dumps(payload, ensure_ascii=False, indent=2)
+    else:
+        output_text = reporter.generate_report(
+            args.focus,
+            generated_at=generated_at,
+            source_status=source_status,
+            gate_result=gate_result,
+        )
 
     # 保存报告
     output_file = Path(args.output)
-    if args.output == '.webnovel/health_report.md' and project_root != '.':
-        output_file = Path(project_root) / '.webnovel' / 'health_report.md'
+    if args.output == '.webnovel/health_report.md':
+        suffix = "json" if args.format == "json" else "md"
+        output_file = Path(project_root) / '.webnovel' / f'health_report.{suffix}'
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(report)
+        f.write(output_text)
 
-    print(f"\n✅ 健康报告已生成: {output_file}")
+    if args.format == "json":
+        print(output_text)
+    else:
+        print(f"\n✅ 健康报告已生成: {output_file}")
 
-    # 预览报告（前 30 行）
-    print("\n" + "="*60)
-    print("📄 报告预览：\n")
-    print("\n".join(report.split("\n")[:30]))
-    print("\n...")
-    print("="*60)
+        # 预览报告（前 30 行）
+        print("\n" + "="*60)
+        print("📄 报告预览：\n")
+        print("\n".join(output_text.split("\n")[:30]))
+        print("\n...")
+        print("="*60)
+
+    if not gate_result.get("passed", True):
+        if args.format == "text":
+            print("\n❌ 健康门禁未通过，请处理异常后重试。", file=sys.stderr)
+        return int(getattr(reporter.config, "status_gate_exit_code", 2))
+    return 0
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

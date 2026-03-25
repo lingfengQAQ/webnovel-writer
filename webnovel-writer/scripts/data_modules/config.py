@@ -330,6 +330,15 @@ class DataModulesConfig:
     pacing_words_per_point_good: int = 1500
     pacing_words_per_point_acceptable: int = 2000
 
+    # ================= Status 报告 =================
+    status_report_schema_version: int = 1
+    status_data_freshness_warn_hours: int = 24
+    status_gate_enabled: bool = True
+    status_gate_relationship_required: bool = True
+    status_gate_chapter_gap_max_missing: int = 0
+    status_gate_fail_on_stale_data: bool = False
+    status_gate_exit_code: int = 2
+
     # ================= RAG 存储 =================
     @property
     def rag_db(self) -> Path:

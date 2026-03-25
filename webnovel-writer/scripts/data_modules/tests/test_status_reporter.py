@@ -12,7 +12,7 @@ from data_modules.index_manager import (
     RelationshipMeta,
     RelationshipEventMeta,
 )
-from status_reporter import StatusReporter
+from status_reporter import StatusReporter, main
 
 
 def _write_state(project_root, state: dict):
@@ -22,6 +22,13 @@ def _write_state(project_root, state: dict):
         json.dumps(state, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+def _write_chapter(project_root, chapter: int, text: str = "测试章节正文"):
+    chapters_dir = project_root / "正文"
+    chapters_dir.mkdir(parents=True, exist_ok=True)
+    chapter_file = chapters_dir / f"第{chapter:04d}章.md"
+    chapter_file.write_text(f"# 第{chapter}章\n\n{text}\n", encoding="utf-8")
 
 
 def test_foreshadowing_analysis_uses_real_chapters_and_handles_missing_data():
@@ -233,3 +240,117 @@ def test_relationship_graph_prefers_index_db_data():
         assert "mermaid" in graph
         assert "药老" in graph
         assert "师徒" in graph
+
+
+def test_json_report_schema_snapshot_and_metric_sources():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config = DataModulesConfig.from_project_root(tmpdir)
+        config.ensure_dirs()
+        project_root = config.project_root
+
+        state = {
+            "progress": {"current_chapter": 2, "total_words": 4000},
+            "project_info": {"target_words": 10000},
+            "protagonist_state": {"name": "林夜"},
+            "relationships": {"allies": [{"name": "苏青", "relation": "盟友"}], "enemies": []},
+            "plot_threads": {"foreshadowing": []},
+        }
+        _write_state(project_root, state)
+        _write_chapter(project_root, 1)
+        _write_chapter(project_root, 2)
+
+        reporter = StatusReporter(str(project_root))
+        assert reporter.load_state() is True
+        reporter.scan_chapters()
+
+        payload = reporter.generate_json_report("all")
+        assert payload["schema_version"] == 1
+        assert payload["focus"] == "all"
+        assert "generated_at" in payload
+        assert set(payload["sources"].keys()) == {"state", "index"}
+        assert set(payload["sections"].keys()) == {
+            "basic",
+            "characters",
+            "foreshadowing",
+            "urgency",
+            "pacing",
+            "strand",
+            "relationships",
+        }
+
+        snapshot = {
+            "schema_version": payload["schema_version"],
+            "sections": sorted(payload["sections"].keys()),
+            "metric_sources": {
+                key: payload["metric_sources"][key]["depends_on"]
+                for key in sorted(payload["metric_sources"].keys())
+            },
+            "health_gate_passed": payload["health_gate"]["passed"],
+        }
+        assert snapshot == {
+            "schema_version": 1,
+            "sections": [
+                "basic",
+                "characters",
+                "foreshadowing",
+                "pacing",
+                "relationships",
+                "strand",
+                "urgency",
+            ],
+            "metric_sources": {
+                "basic": ["state"],
+                "characters": ["index", "state"],
+                "foreshadowing": ["state"],
+                "pacing": ["index", "state"],
+                "relationships": ["index", "state"],
+                "strand": ["state"],
+                "urgency": ["state"],
+            },
+            "health_gate_passed": True,
+        }
+
+        markdown = reporter.generate_report("all")
+        assert "## 🧭 数据来源与新鲜度" in markdown
+        assert "## 🚦 健康门禁结果" in markdown
+
+
+def test_health_gate_detects_relationship_missing_and_chapter_gap():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config = DataModulesConfig.from_project_root(tmpdir)
+        config.ensure_dirs()
+        project_root = config.project_root
+
+        state = {
+            "progress": {"current_chapter": 3, "total_words": 9000},
+            "protagonist_state": {"name": "主角"},
+            "relationships": {"allies": [], "enemies": []},
+        }
+        _write_state(project_root, state)
+        _write_chapter(project_root, 1)
+        _write_chapter(project_root, 3)
+
+        reporter = StatusReporter(str(project_root))
+        assert reporter.load_state() is True
+        reporter.scan_chapters()
+
+        gate = reporter.evaluate_health_gate("all")
+        assert gate["passed"] is False
+        codes = {item["code"] for item in gate["anomalies"]}
+        assert "chapter_gap_detected" in codes
+        assert "relationship_missing" in codes
+
+        output_path = project_root / ".webnovel" / "status_report.json"
+        exit_code = main(
+            [
+                "--project-root",
+                str(project_root),
+                "--format",
+                "json",
+                "--output",
+                str(output_path),
+            ]
+        )
+        assert exit_code == 2
+        payload = json.loads(output_path.read_text(encoding="utf-8"))
+        assert payload["health_gate"]["passed"] is False
