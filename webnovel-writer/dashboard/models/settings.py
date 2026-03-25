@@ -49,6 +49,7 @@ class DictionaryEntry(BaseModel):
     source_span: str = Field(default="0-0")
     status: str = Field(default="pending")
     fingerprint: str = Field(default="placeholder")
+    conflict_id: str | None = Field(default=None)
 
 
 class DictionaryConflictEntry(BaseModel):
@@ -83,6 +84,22 @@ class DictionaryListQuery(BaseModel):
 class DictionaryListResponse(BaseModel):
     status: str = Field(default="placeholder")
     items: list[DictionaryEntry] = Field(default_factory=list)
+    total: int = Field(default=0)
+
+
+class DictionaryConflictListQuery(BaseModel):
+    workspace_id: str = Field(default="workspace-default")
+    project_root: str = Field(default="")
+    term: str | None = Field(default=None)
+    type: str | None = Field(default=None)
+    status: str | None = Field(default=None)
+    limit: int = Field(default=100, ge=1, le=1000)
+    offset: int = Field(default=0, ge=0)
+
+
+class DictionaryConflictListResponse(BaseModel):
+    status: str = Field(default="placeholder")
+    items: list[DictionaryConflictEntry] = Field(default_factory=list)
     total: int = Field(default=0)
 
 

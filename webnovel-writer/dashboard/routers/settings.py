@@ -8,6 +8,8 @@ from fastapi.responses import JSONResponse
 from ..models.common import ApiErrorResponse
 from ..models.settings import (
     DictionaryConflictEntry,
+    DictionaryConflictListQuery,
+    DictionaryConflictListResponse,
     DictionaryConflictResolveRequest,
     DictionaryConflictResolveResponse,
     DictionaryEntry,
@@ -29,6 +31,7 @@ from ..services.dictionary import (
     read_settings_file as read_settings_file_service,
     resolve_conflict as resolve_conflict_service,
 )
+from ..services.dictionary.service import list_dictionary_conflicts as list_dictionary_conflicts_service
 
 WRITE_ERROR_RESPONSES = {
     400: {"model": ApiErrorResponse, "description": "Bad request placeholder response."},
@@ -95,6 +98,27 @@ def list_dictionary_route(query: DictionaryListQuery = Depends()):
         return DictionaryListResponse(
             status="ok",
             items=[DictionaryEntry.model_validate(item) for item in items],
+            total=total,
+        )
+    except DictionaryServiceError as exc:
+        return _error_response(exc)
+
+
+@dictionary_router.get("/conflicts", response_model=DictionaryConflictListResponse, responses=WRITE_ERROR_RESPONSES)
+def list_dictionary_conflicts_route(query: DictionaryConflictListQuery = Depends()):
+    try:
+        items, total = list_dictionary_conflicts_service(
+            workspace_id=query.workspace_id,
+            project_root=query.project_root,
+            term=query.term,
+            entry_type=query.type,
+            status=query.status,
+            limit=query.limit,
+            offset=query.offset,
+        )
+        return DictionaryConflictListResponse(
+            status="ok",
+            items=[DictionaryConflictEntry.model_validate(item) for item in items],
             total=total,
         )
     except DictionaryServiceError as exc:

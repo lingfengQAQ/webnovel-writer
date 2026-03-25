@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,6 +18,12 @@ from ...path_guard import safe_resolve
 
 _TEXT_FILE_EXTENSIONS = {".md", ".markdown", ".txt", ".yml", ".yaml", ".json"}
 _DEFAULT_WORKSPACE_ID = "workspace-default"
+_MARKDOWN_LIST_PREFIX_RE = re.compile(r"^(?:[-*+]|\d+[.)])\s+")
+_MARKDOWN_TASK_PREFIX_RE = re.compile(r"^\[(?: |x|X)\]\s+")
+_MARKDOWN_QUOTE_PREFIX_RE = re.compile(r"^>\s*")
+_TERM_CONTENT_RE = re.compile(r"[A-Za-z0-9\u4e00-\u9fff]")
+_TERM_NOISE_RE = re.compile(r"^([`~>#\-\*\+\[\]])|https?://|\[[^\]]+\]\([^)]+\)|\|")
+_MIN_TERM_QUALITY_SCORE = 2
 
 
 class DictionaryServiceError(Exception):
@@ -158,6 +165,41 @@ def list_dictionary(
     root = _resolve_workspace_root(workspace_id=workspace_id, project_root=project_root)
     store = _load_store(root)
     items = [_normalize_entry(entry) for entry in store["entries"]]
+    conflicts = [_normalize_conflict(conflict) for conflict in store["conflicts"]]
+    conflict_by_fingerprint = _active_conflict_fingerprint_map(conflicts)
+    for item in items:
+        if item.get("status") != "conflict":
+            continue
+        conflict_id = conflict_by_fingerprint.get(item.get("fingerprint", ""))
+        if conflict_id:
+            item["conflict_id"] = conflict_id
+
+    if term:
+        needle = term.strip().lower()
+        items = [item for item in items if needle in item["term"].lower()]
+    if entry_type:
+        items = [item for item in items if item["type"] == entry_type]
+    if status:
+        items = [item for item in items if item["status"] == status]
+
+    total = len(items)
+    paged = items[offset : offset + limit]
+    return paged, total
+
+
+def list_dictionary_conflicts(
+    *,
+    workspace_id: str | None,
+    project_root: str | None,
+    term: str | None,
+    entry_type: str | None,
+    status: str | None,
+    limit: int,
+    offset: int,
+) -> tuple[list[dict[str, Any]], int]:
+    root = _resolve_workspace_root(workspace_id=workspace_id, project_root=project_root)
+    store = _load_store(root)
+    items = [_normalize_conflict(conflict) for conflict in store["conflicts"]]
 
     if term:
         needle = term.strip().lower()
@@ -331,7 +373,7 @@ def _extract_entries_from_file(path: Path, root: Path) -> list[dict[str, Any]]:
 
     offset = 0
     for raw_line in content.splitlines(keepends=True):
-        line = raw_line.strip()
+        line = _strip_markdown_list_prefix(raw_line.strip())
         line_end = offset + len(raw_line.rstrip("\r\n"))
         offset_next = offset + len(raw_line)
 
@@ -346,6 +388,9 @@ def _extract_entries_from_file(path: Path, root: Path) -> list[dict[str, Any]]:
 
         term, entry_type, attrs = parsed
         normalized_attrs = _normalize_attrs(attrs)
+        if not _passes_entry_quality_threshold(term, normalized_attrs):
+            offset = offset_next
+            continue
         fingerprint = _build_fingerprint(term, entry_type, normalized_attrs)
         entry = {
             "id": _build_entry_id(fingerprint),
@@ -379,20 +424,61 @@ def _parse_dictionary_line(line: str) -> tuple[str, str, dict[str, Any]] | None:
     return term, entry_type, attrs
 
 
+def _strip_markdown_list_prefix(line: str) -> str:
+    normalized = line.strip()
+    while normalized:
+        updated = normalized
+        updated = _MARKDOWN_QUOTE_PREFIX_RE.sub("", updated, count=1)
+        updated = _MARKDOWN_LIST_PREFIX_RE.sub("", updated, count=1)
+        updated = _MARKDOWN_TASK_PREFIX_RE.sub("", updated, count=1)
+        updated = updated.strip()
+        if updated == normalized:
+            break
+        normalized = updated
+    return normalized
+
+
+def _clean_term(raw: str) -> str:
+    term = raw.strip()
+    wrappers = (("**", "**"), ("__", "__"), ("`", "`"), ("*", "*"), ("_", "_"), ("~~", "~~"))
+    for _ in range(2):
+        for prefix, suffix in wrappers:
+            if term.startswith(prefix) and term.endswith(suffix) and len(term) > len(prefix) + len(suffix):
+                term = term[len(prefix) : len(term) - len(suffix)].strip()
+    return term
+
+
 def _parse_term_and_type(left: str) -> tuple[str, str]:
     if left.endswith(")") and "(" in left:
         term, entry_type = left.rsplit("(", 1)
-        return term.strip(), entry_type[:-1].strip() or "concept"
+        return _clean_term(term), entry_type[:-1].strip() or "concept"
     if left.endswith("）") and "（" in left:
         term, entry_type = left.rsplit("（", 1)
-        return term.strip(), entry_type[:-1].strip() or "concept"
+        return _clean_term(term), entry_type[:-1].strip() or "concept"
     if "/" in left:
         maybe_type, maybe_term = left.split("/", 1)
         maybe_type = maybe_type.strip()
-        maybe_term = maybe_term.strip()
+        maybe_term = _clean_term(maybe_term)
         if maybe_type and maybe_term and len(maybe_type) <= 16:
             return maybe_term, maybe_type
-    return left.strip(), "concept"
+    return _clean_term(left), "concept"
+
+
+def _passes_entry_quality_threshold(term: str, attrs: dict[str, Any]) -> bool:
+    normalized_term = _clean_term(term)
+    if not normalized_term:
+        return False
+    if _TERM_NOISE_RE.search(normalized_term):
+        return False
+
+    quality_score = 0
+    if 1 <= len(normalized_term) <= 64:
+        quality_score += 1
+    if _TERM_CONTENT_RE.search(normalized_term):
+        quality_score += 1
+    if isinstance(attrs, dict) and attrs:
+        quality_score += 1
+    return quality_score >= _MIN_TERM_QUALITY_SCORE
 
 
 def _parse_attrs(raw: str) -> dict[str, Any]:
@@ -466,6 +552,21 @@ def _normalize_attrs(attrs: dict[str, Any]) -> dict[str, Any]:
     for key, value in attrs.items():
         normalized[str(key)] = value
     return normalized
+
+
+def _active_conflict_fingerprint_map(conflicts: list[dict[str, Any]]) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for conflict in conflicts:
+        if conflict.get("status") != "conflict":
+            continue
+        conflict_id = str(conflict.get("id", "")).strip()
+        if not conflict_id:
+            continue
+        for candidate in conflict.get("candidates", []):
+            fingerprint = str(candidate.get("fingerprint", "")).strip()
+            if fingerprint:
+                mapping.setdefault(fingerprint, conflict_id)
+    return mapping
 
 
 def _merge_conflict_candidates(conflict: dict[str, Any], candidates: list[dict[str, Any]]) -> None:
@@ -599,6 +700,9 @@ def _normalize_conflict(conflict: dict[str, Any]) -> dict[str, Any]:
     entry_type = str(value.get("type", "concept")).strip() or "concept"
     conflict_id = str(value.get("id") or _build_conflict_id(term or "unknown", entry_type))
     status = str(value.get("status", "conflict"))
+    for candidate in candidates:
+        if candidate.get("status") == "conflict":
+            candidate["conflict_id"] = conflict_id
     return {
         "id": conflict_id,
         "term": term,
