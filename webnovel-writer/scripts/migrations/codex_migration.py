@@ -307,6 +307,7 @@ def migrate_codex_runtime(
     project_root: Path,
     dry_run: bool = False,
     workspace_hint: Optional[Path] = None,
+    persist_report: bool = True,
 ) -> dict:
     root = _normalize_path(project_root)
     if not _is_project_root(root):
@@ -329,6 +330,9 @@ def migrate_codex_runtime(
     _migrate_project_references(root, report=report, dry_run=dry_run)
     _maybe_remove_empty_dir(root / LEGACY_CONTEXT_DIR, report=report, dry_run=dry_run)
 
-    report_path = _write_report(root, report)
-    report["report_path"] = str(report_path)
+    if persist_report:
+        report_path = _write_report(root, report)
+        report["report_path"] = str(report_path)
+    else:
+        report["report_path"] = ""
     return report
