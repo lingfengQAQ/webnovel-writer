@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
-import sys
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
@@ -50,15 +49,10 @@ router = APIRouter(prefix="/api/skills", tags=["skills"])
 
 
 def _runtime_project_root(request: Request) -> Path:
-    from_app_state = getattr(request.app.state, "project_root", None)
-    if from_app_state:
-        return Path(from_app_state).resolve()
-
-    app_module = sys.modules.get("dashboard.app")
-    if app_module is not None:
-        root = getattr(app_module, "_project_root", None)
-        if root:
-            return Path(root).resolve()
+    """P0-B 修复：从 app.state 读取 project_root，消除 sys.modules 反射脆弱实现。"""
+    root = getattr(request.app.state, "project_root", None)
+    if root is not None:
+        return Path(root).resolve()
 
     raise SkillServiceError(
         status_code=500,

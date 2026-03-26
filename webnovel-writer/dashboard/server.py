@@ -67,7 +67,12 @@ def _bootstrap_index_if_needed(project_root: Path) -> None:
         "index",
         "stats",
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    # P0-D 修复：添加 timeout=30 防止子进程挂起导致 Dashboard 启动永久阻塞
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        print("WARNING: 自动初始化 index.db 超时（>30s），已跳过", file=sys.stderr)
+        return
     if proc.returncode == 0 and index_db.is_file():
         print("检测到缺失 index.db，已自动初始化。")
         return
@@ -89,10 +94,35 @@ def main():
         action="store_true",
         help="不自动初始化缺失的 .webnovel/index.db",
     )
+    # P0-A 修复：允许通过 CLI 指定 CORS 来源，避免全开放安全漏洞
+    parser.add_argument(
+        "--cors-origin",
+        action="append",
+        dest="cors_origins",
+        metavar="ORIGIN",
+        help="允许的 CORS 来源（可多次指定），默认仅 http://localhost:{port} 和 http://127.0.0.1:{port}",
+    )
+    # P2-C 修复：日志级别和格式参数
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="日志级别，默认 INFO",
+    )
+    parser.add_argument(
+        "--log-json",
+        action="store_true",
+        help="输出 JSON 格式日志（生产环境推荐）",
+    )
     args = parser.parse_args()
 
+    # P2-C 修复：尽早初始化结构化日志
+    from .logging_config import get_logger, setup_logging
+    setup_logging(level=args.log_level, json_output=args.log_json)
+    logger = get_logger("dashboard.server")
+
     project_root = _resolve_project_root(args.project_root)
-    print(f"项目路径: {project_root}")
+    logger.info("项目路径已加载", extra={"project_root": str(project_root)})
     if not args.no_bootstrap_index:
         _bootstrap_index_if_needed(project_root)
 
@@ -100,16 +130,26 @@ def main():
     import uvicorn
     from .app import create_app
 
-    app = create_app(project_root)
+    # P0-A 修复：构建最终 CORS 来源列表
+    if args.cors_origins:
+        allowed_origins = args.cors_origins
+    else:
+        allowed_origins = [
+            f"http://localhost:{args.port}",
+            f"http://127.0.0.1:{args.port}",
+        ]
+
+    app = create_app(project_root, allowed_origins=allowed_origins)
 
     url = f"http://{args.host}:{args.port}"
+    logger.info("Dashboard 已启动", extra={"url": url, "cors": allowed_origins})
     print(f"Dashboard 启动: {url}")
-    print(f"API 文档: {url}/docs")
 
     if not args.no_browser:
         webbrowser.open(url)
 
-    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+    # P2-C 修复：uvicorn 日志级别与 CLI 参数保持一致
+    uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level.lower())
 
 
 if __name__ == "__main__":

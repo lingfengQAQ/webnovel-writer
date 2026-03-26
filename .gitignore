@@ -49,3 +49,42 @@ piptemp/
 _codex_push_tmp_*/
 webnovel-project/
 webnovel-project-codex-fix/
+
+# ----------------------------
+# Tooling / local temp dirs
+# ----------------------------
+/.work/
+/.worktrees/
+.worktrees/
+/.audit-tmp/
+/.codex-tmp/
+/.codex-security/
+/.claude-plugin/
+/.tmp-test/
+/.npm-cache/
+/tmp/
+tmp-*/
+/pytest-cache-files-*/
+/pytesttmp*/
+/_ptmp_root*/
+/_tmp_pytest/
+/.venv-run/
+/.venv2/
+/.pytest-local*/
+
+# Probes / debug artifacts (created during runs)
+/probe-dir-*/
+probe-ps-dir/
+probe-py-dir/
+/.probe-dir-*/
+
+/_root_probe_write.txt
+
+# Pytest temp roots (created by harness)
+/zztmp_pytest_root*/
+zztmp_pytest_root*/
+
+# Ignore ad-hoc probe file inside codex security
+/.codex-security/_probe_write.txt
+/.codex-security/acl-repair/
+

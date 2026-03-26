@@ -6,7 +6,6 @@ import hashlib
 import os
 import re
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
@@ -18,12 +17,24 @@ _WIN_POSIX_DRIVE_RE = re.compile(r"^/(?P<drive>[a-zA-Z])/(?P<rest>.*)$")
 _WIN_WSL_MNT_DRIVE_RE = re.compile(r"^/mnt/(?P<drive>[a-zA-Z])/(?P<rest>.*)$")
 
 
-@dataclass(slots=True)
 class RuntimeServiceError(Exception):
-    status_code: int
-    error_code: str
-    message: str
-    details: dict[str, Any] | None = None
+    """P0-3 修复：改为标准异常类定义，避免 @dataclass(slots=True) 与 Exception.__slots__ 在
+    Python 3.10+ 中的布局冲突（TypeError: multiple bases have instance lay-out conflict）。
+    """
+
+    def __init__(
+        self,
+        *,
+        status_code: int,
+        error_code: str,
+        message: str,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.error_code = error_code
+        self.message = message
+        self.details = details
 
     def __str__(self) -> str:
         return self.message

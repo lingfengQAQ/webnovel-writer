@@ -741,3 +741,103 @@ body {
     min-height: 280px;
   }
 }
+
+/* ===========================================================
+ * P1-G 修复：ErrorBoundary 错误边界组件样式
+ * =========================================================== */
+
+.error-boundary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  padding: 40px 24px;
+  text-align: center;
+  border: 3px solid var(--accent-red);
+  background: #ffe0e5;
+  box-shadow: var(--shadow-main);
+}
+
+.error-boundary__icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.error-boundary__title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent-red);
+  margin-bottom: 8px;
+}
+
+.error-boundary__message {
+  font-size: 14px;
+  color: var(--text-sub);
+  max-width: 480px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.error-boundary__details {
+  width: 100%;
+  max-width: 600px;
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.error-boundary__details summary {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-mute);
+  cursor: pointer;
+  margin-bottom: 6px;
+}
+
+.error-boundary__details pre {
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: #fff;
+  border: 2px solid var(--border-soft);
+  padding: 10px;
+  overflow: auto;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.error-boundary__actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.error-boundary__btn {
+  border: 2px solid var(--border-main);
+  background: #fff;
+  color: var(--text-main);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+  padding: 8px 18px;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+  transition: transform 0.08s ease;
+}
+
+.error-boundary__btn:hover {
+  transform: translate(-1px, -1px);
+  background: #e6f7ff;
+  border-color: var(--accent-blue);
+}
+
+.error-boundary__btn--secondary {
+  background: #ffe0e5;
+  border-color: var(--accent-red);
+}
+
+.error-boundary__btn--secondary:hover {
+  background: #ffc8cf;
+  border-color: var(--accent-red);
+}

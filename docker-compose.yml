@@ -1,0 +1,51 @@
+# P2-A 修复：Webnovel Dashboard - Docker Compose 配置
+# 
+# 用法：
+#   docker compose up -d
+#   docker compose logs -f
+#   docker compose down
+
+version: "3.9"
+
+services:
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: webnovel-dashboard:latest
+    container_name: webnovel-dashboard
+    restart: unless-stopped
+
+    ports:
+      - "8765:8765"
+
+    volumes:
+      # 挂载你的小说项目目录（只读推荐）
+      - ${NOVEL_PROJECT_PATH:-./novel-project}:/project:ro
+
+    environment:
+      # 可覆盖的环境变量
+      - WEBNOVEL_LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+    # 覆盖默认 CMD，添加 CORS 和 JSON 日志参数
+    command:
+      - --log-json
+      - --cors-origin
+      - ${CORS_ORIGIN:-http://localhost:8765}
+
+    healthcheck:
+      test: ["CMD", "python", "-c",
+        "import urllib.request; urllib.request.urlopen('http://localhost:8765/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+    # 资源限制（可根据项目大小调整）
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
+        reservations:
+          memory: 128m

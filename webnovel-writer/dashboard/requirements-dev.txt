@@ -1,0 +1,12 @@
+# Dashboard - 开发 / 测试专用依赖
+# 安装命令：pip install -r requirements-dev.txt
+# （生产环境只需安装 requirements.txt）
+
+# 测试框架
+pytest>=7.0.0
+pytest-cov>=4.1.0
+pytest-asyncio>=0.23.0
+pytest-timeout>=2.3.0
+
+# HTTP 测试客户端
+httpx>=0.27.0

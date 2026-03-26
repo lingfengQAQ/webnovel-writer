@@ -291,7 +291,7 @@ def _render_state_snapshot(state_snapshot: Dict[str, Any]) -> str:
         for row in history:
             if not isinstance(row, dict):
                 continue
-            items.append(f"Ch{row.get('chapter', '?')}:{_safe_text(row.get('strand'), 'unknown')}")
+            items.append(f"Ch{row.get('chapter', '?')}:{_safe_text(row.get('strand') or row.get('dominant'), 'unknown')}")
         if items:
             summary_parts.append(f"**近5章Strand**: {', '.join(items)}")
 
@@ -475,18 +475,14 @@ def _empty_rag_payload(reason: str) -> Dict[str, Any]:
     return {"enabled": False, "invoked": False, "reason": reason, "query": "", "hits": []}
 
 
-def _ensure_target_chapter_exists(project_root: Path, chapter_num: int) -> None:
-    chapter_file = find_chapter_file(project_root, chapter_num)
-    if chapter_file and chapter_file.exists():
-        return
+def _ensure_target_chapter_exists(project_root: Path, chapter_num: int) -> bool:
+    """检查目标章节文件是否存在。
 
-    chapters_dir = project_root / "正文"
-    raise FileNotFoundError(
-        "章节不存在: "
-        f"chapter={chapter_num}, "
-        f"chapters_dir={chapters_dir}, "
-        f"pattern=第{chapter_num:03d}章*.md|第{chapter_num:04d}章*.md"
-    )
+    返回 True 表示文件存在，False 表示不存在（写作新章节时的正常状态）。
+    不再抛出异常，由调用方决定如何处理。
+    """
+    chapter_file = find_chapter_file(project_root, chapter_num)
+    return bool(chapter_file and chapter_file.exists())
 
 
 def build_chapter_context_payload(project_root: Path, chapter_num: int) -> Dict[str, Any]:
@@ -725,8 +721,15 @@ def main():
             if args.project_root
             else find_project_root()
         )
-        _ensure_target_chapter_exists(project_root, args.chapter)
+        # P0-1 修复：章节文件不存在是写作新章节时的正常状态，不崩溃，只记录警告
+        chapter_exists = _ensure_target_chapter_exists(project_root, args.chapter)
         payload = build_chapter_context_payload(project_root, args.chapter)
+        if not chapter_exists:
+            chapters_dir = project_root / "正文"
+            payload.setdefault("warnings", []).append(
+                f"⚠️ 第{args.chapter}章文件尚未创建（{chapters_dir}），"
+                "写作完成后 Data Agent 将更新状态。"
+            )
 
         if args.format == "json":
             print(json.dumps(payload, ensure_ascii=False, indent=2))
