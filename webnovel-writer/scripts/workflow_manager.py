@@ -81,6 +81,26 @@ def get_call_trace_path() -> Path:
     return project_root / ".webnovel" / "observability" / "call_trace.jsonl"
 
 
+def get_cli_stats_path() -> Path:
+    project_root = _get_active_project_root()
+    return project_root / ".webnovel" / "observability" / "cli_stats.jsonl"
+
+
+def log_cli_call(call_type: str, duration_ms: int = 0):
+    """记录CLI调用统计"""
+    stats_path = get_cli_stats_path()
+    create_secure_directory(str(stats_path.parent))
+
+    row = {
+        "timestamp": now_iso(),
+        "call_type": call_type,
+        "duration_ms": duration_ms,
+    }
+
+    with open(stats_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
 def append_call_trace(event: str, payload: Optional[Dict[str, Any]] = None):
     """Append workflow call trace event (best effort)."""
     payload = payload or {}
@@ -264,6 +284,7 @@ def start_step(step_id, step_name, progress_note=None):
             "expected_owner": owner,
         },
     )
+    log_cli_call(f"step_{step_id}_start")
     print(f"▶️ {step_id} 开始: {step_name}")
 
 
@@ -312,6 +333,7 @@ def complete_step(step_id, artifacts_json=None):
             "chapter": task.get("args", {}).get("chapter_num"),
         },
     )
+    log_cli_call(f"step_{step_id}_complete")
     print(f"✅ {step_id} 完成")
 
 
