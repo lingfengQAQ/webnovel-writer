@@ -629,6 +629,46 @@ class IndexManager(IndexChapterMixin, IndexEntityMixin, IndexDebtMixin, IndexRea
         finally:
             conn.close()
 
+
+    # ==================== 批量查询接口 ====================
+    
+    def batch_query(self, queries: List[Dict]) -> Dict:
+        """批量查询接口
+
+        queries格式:
+        [
+            {"type": "get-recent-reading-power", "limit": 5},
+            {"type": "get-pattern-usage-stats", "last_n": 20},
+            {"type": "get-hook-type-stats", "last_n": 20},
+            {"type": "get-debt-summary"},
+            {"type": "get-core-entities"},
+            {"type": "recent-appearances", "limit": 20}
+        ]
+
+        返回格式:
+        {
+            "get-recent-reading-power": [...],
+            "get-pattern-usage-stats": [...],
+            ...
+        }
+        """
+        results = {}
+        for q in queries:
+            qtype = q.get("type")
+            if qtype == "get-recent-reading-power":
+                results[qtype] = self.get_recent_reading_power(limit=q.get("limit", 5))
+            elif qtype == "get-pattern-usage-stats":
+                results[qtype] = self.get_pattern_usage_stats(last_n=q.get("last_n", 20))
+            elif qtype == "get-hook-type-stats":
+                results[qtype] = self.get_hook_type_stats(last_n=q.get("last_n", 20))
+            elif qtype == "get-debt-summary":
+                results[qtype] = self.get_debt_summary()
+            elif qtype == "get-core-entities":
+                results[qtype] = self.get_core_entities()
+            elif qtype == "recent-appearances":
+                results[qtype] = self.get_recent_appearances(limit=q.get("limit", 20))
+        return results
+
     # ==================== 章节操作 ====================
 
 # ==================== CLI 接口 ====================

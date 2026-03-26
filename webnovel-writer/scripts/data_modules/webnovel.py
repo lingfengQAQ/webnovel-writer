@@ -106,6 +106,26 @@ def cmd_where(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_batch_query(args: argparse.Namespace) -> int:
+    import json
+    from .index_manager import IndexManager
+    from .config import DataModulesConfig
+    from project_locator import resolve_project_root
+    
+    project_root = _resolve_root(args.project_root)
+    config = DataModulesConfig.from_project_root(project_root)
+    manager = IndexManager(config)
+    
+    try:
+        queries = json.loads(args.queries)
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid JSON format: {e}", file=sys.stderr)
+        return 1
+    
+    results = manager.batch_query(queries)
+    print(json.dumps(results, ensure_ascii=False, indent=2))
+    return 0
+
 def _build_preflight_report(explicit_project_root: Optional[str]) -> dict:
     scripts_dir = _scripts_dir().resolve()
     plugin_root = scripts_dir.parent
@@ -206,6 +226,11 @@ def main() -> None:
 
     # Pass-through to data modules
     p_index = sub.add_parser("index", help="转发到 index_manager")
+
+    p_batch_query = sub.add_parser("batch-query", help="批量查询接口")
+    p_batch_query.add_argument("--queries", required=True, help="JSON 格式的查询列表")
+    p_batch_query.set_defaults(func=cmd_batch_query)
+
     p_index.add_argument("args", nargs=argparse.REMAINDER)
 
     p_state = sub.add_parser("state", help="转发到 state_manager")
@@ -276,6 +301,9 @@ def main() -> None:
     forward_args = ["--project-root", str(project_root)]
 
     if tool == "index":
+    if tool == "batch-query":
+        raise SystemExit(cmd_batch_query(args))
+        
         raise SystemExit(_run_data_module("index_manager", [*forward_args, *rest]))
     if tool == "state":
         raise SystemExit(_run_data_module("state_manager", [*forward_args, *rest]))
