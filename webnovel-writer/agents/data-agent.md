@@ -297,3 +297,44 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" styl
 6. ✅ 章节摘要文件生成成功
 7. ✅ chapter_meta 写入 state.json
 8. ✅ 输出格式为有效 JSON
+
+---
+
+## 新增：独立输出模式
+
+当传入 `--output-file` 参数时，Data Agent 将结果写入指定JSON文件。
+
+### 输入参数（新增）
+- `output_file`: 输出JSON文件路径，如 `.webnovel/tmp/agent_outputs/data_ch0100.json`
+
+### 输出格式
+```json
+{
+  "version": "1.0",
+  "chapter": 100,
+  "timestamp": "2026-03-26T10:00:00Z",
+  "entities_updated": 5,
+  "state_changes": [
+    {"entity_id": "xiaoyan", "field": "realm", "old": "斗者", "new": "斗师", "reason": "突破"}
+  ],
+  "summary_written": true,
+  "scenes_chunked": 4,
+  "warnings": []
+}
+```
+
+### CLI调用方式
+```bash
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
+  data-agent \
+  --chapter ${chapter_num} \
+  --chapter-file "正文/第${chapter_padded}章.md" \
+  --review-score ${review_score} \
+  --output-file "${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/data_ch${chapter_padded}.json"
+```
+
+### 执行流程
+1. 解析参数，获取 output_file
+2. 执行原有的Data Agent逻辑（A-I步骤）
+3. 将执行结果转换为精简JSON格式，写入 output_file
+4. stdout仅输出简洁状态摘要
