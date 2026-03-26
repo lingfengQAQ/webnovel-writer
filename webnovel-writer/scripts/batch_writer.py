@@ -156,23 +156,51 @@ class BatchWriter:
         print(f"失败章节: {len(self.failed_chapters)}")
         print(f"总调用次数: {self.total_calls}")
 
+    def resume(self):
+        """从中断点恢复批量写作"""
+        self.load_progress()
+
+        if not self.batch_file.exists():
+            print("没有找到批量写作进度文件")
+            return
+
+        print(f"恢复批量写作")
+        print(f"从第 {self.current_chapter} 章继续")
+        print(f"已完成: {len(self.completed_chapters)} 章")
+        print(f"失败: {len(self.failed_chapters)} 章")
+
+        # 继续执行
+        self.run()
+
 
 if __name__ == "__main__":
-    # 测试入口
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--project-root", required=True)
-    parser.add_argument("--from", dest="from_chapter", type=int, required=True)
-    parser.add_argument("--to", dest="to_chapter", type=int, required=True)
-    parser.add_argument("--night-mode", action="store_true")
-    parser.add_argument("--max-calls", type=int, default=1400)
+    subparsers = parser.add_subparsers(dest="command", help="子命令")
+
+    # run子命令
+    p_run = subparsers.add_parser("run", help="运行批量写作")
+    p_run.add_argument("--project-root", required=True)
+    p_run.add_argument("--from", dest="from_chapter", type=int, required=True)
+    p_run.add_argument("--to", dest="to_chapter", type=int, required=True)
+    p_run.add_argument("--night-mode", action="store_true")
+    p_run.add_argument("--max-calls", type=int, default=1400)
+
+    # resume子命令
+    p_resume = subparsers.add_parser("resume", help="恢复批量写作")
+    p_resume.add_argument("--project-root", required=True)
+
     args = parser.parse_args()
 
-    writer = BatchWriter(
-        Path(args.project_root),
-        args.from_chapter,
-        args.to_chapter,
-        args.night_mode,
-        args.max_calls
-    )
-    writer.run()
+    if args.command == "resume":
+        writer = BatchWriter(Path(args.project_root), 0, 0)
+        writer.resume()
+    elif args.command == "run":
+        writer = BatchWriter(
+            Path(args.project_root),
+            args.from_chapter,
+            args.to_chapter,
+            args.night_mode,
+            args.max_calls
+        )
+        writer.run()
