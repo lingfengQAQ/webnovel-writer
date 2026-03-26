@@ -167,7 +167,22 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" wor
 - 合同与任务书出现冲突时，以“大纲与设定约束更严格者”为准。
 
 输出：
-- 单一“创作执行包”（任务书 + Context Contract + 直写提示词），供 Step 2A 直接消费，不再拆分独立 Step 1.5。
+- 单一"创作执行包"（任务书 + Context Contract + 直写提示词），供 Step 2A 直接消费，不再拆分独立 Step 1.5。
+
+### Step 1.5：主Agent精简上下文加载（改造后）
+
+# 调用Context Agent独立输出模式，结果写入文件
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
+  context \
+  --chapter ${chapter_num} \
+  --output-file "${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/ctx_ch${chapter_padded}.json"
+
+# 主Agent仅加载精简后的上下文（不加载完整state/index）
+export CONTEXT_TASK_SUMMARY="$(python -X utf8 -c "import json; print(json.load(open('${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/ctx_ch${chapter_padded}.json'))['task_summary'])")"
+export CONTEXT_CONSTRAINTS="$(python -X utf8 -c "import json; print(','.join(json.load(open('${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/ctx_ch${chapter_padded}.json'))['constraints']))")"
+export CONTEXT_STYLE="$(python -X utf8 -c "import json; print(json.load(open('${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/ctx_ch${chapter_padded}.json'))['style_guide'])")"
+
+# 主Agent使用精简上下文执行后续步骤
 
 ### Step 2A：正文起草
 
