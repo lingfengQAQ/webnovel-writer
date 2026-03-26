@@ -291,6 +291,22 @@ review_metrics 字段约束（当前工作流约定只传以下字段）：
 - `--minimal` 也必须产出 `overall_score`。
 - 未落库 `review_metrics` 不得进入 Step 5。
 
+### 合并审查结果（组1+组2）
+
+> 若组2（条件审查器）被执行，需要合并两个审查组的输出，再执行后续落库。
+
+```bash
+# 合并审查结果
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
+  review merge \
+  --group1 "${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/rev1_ch${chapter_padded}.json" \
+  --group2 "${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/rev2_ch${chapter_padded}.json" \
+  --output "${PROJECT_ROOT}/.webnovel/tmp/merged/review_merged_ch${chapter_padded}.json"
+```
+
+合并后，使用 `review_merged_ch${chapter_padded}.json` 中的 `overall_score`、`severity_counts`、`dimension_scores` 进行后续落库。
+
+
 ### Step 4：润色（问题修复优先）
 
 执行前必须加载：

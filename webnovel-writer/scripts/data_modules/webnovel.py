@@ -100,6 +100,76 @@ def _run_script(script_name: str, argv: list[str]) -> int:
     return int(proc.returncode or 0)
 
 
+
+def cmd_review_merge(args: argparse.Namespace) -> int:
+    """合并两组审查结果"""
+    import json
+    from datetime import datetime
+    
+    group1_path = Path(args.group1)
+    group2_path = Path(args.group2)
+    output_path = Path(args.output)
+    
+    # 读取两个审查组的结果
+    with open(group1_path) as f:
+        group1 = json.load(f)
+    with open(group2_path) as f:
+        group2 = json.load(f)
+    
+    # 合并issues
+    merged_issues = []
+    merged_issues.extend(group1.get("issues", []))
+    merged_issues.extend(group2.get("issues", []))
+    
+    # 合并severity_counts
+    merged_severity = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    for g in [group1, group2]:
+        for k in merged_severity:
+            merged_severity[k] += g.get("severity_counts", {}).get(k, 0)
+    
+    # 合并dimension_scores
+    merged_dimensions = {}
+    for g in [group1, group2]:
+        merged_dimensions.update(g.get("dimension_scores", {}))
+    
+    # 计算加权overall_score
+    total_issues = sum(merged_severity.values())
+    group1_score = group1.get("overall_score", 0)
+    group2_score = group2.get("overall_score", 0)
+    
+    if total_issues > 0:
+        # 基于问题严重程度调整分数
+        penalty = (merged_severity["critical"] * 10 + 
+                   merged_severity["high"] * 5 + 
+                   merged_severity["medium"] * 2)
+        overall_score = max(0, (group1_score + group2_score) / 2 - penalty / 10)
+    else:
+        overall_score = (group1_score + group2_score) / 2
+    
+    merged = {
+        "version": "1.0",
+        "chapter": group1.get("chapter", 0),
+        "timestamp": datetime.now().isoformat(),
+        "issues": merged_issues,
+        "severity_counts": merged_severity,
+        "overall_score": round(overall_score, 1),
+        "dimension_scores": merged_dimensions,
+        "source": {
+            "group1": str(group1_path),
+            "group2": str(group2_path)
+        }
+    }
+    
+    # 写入输出文件
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(merged, f, ensure_ascii=False, indent=2)
+    
+    print(f"Merged review saved to: {output_path}")
+    print(f"Total issues: {total_issues} (critical={merged_severity['critical']}, high={merged_severity['high']}, medium={merged_severity['medium']}, low={merged_severity['low']})")
+    print(f"Overall score: {overall_score:.1f}")
+    return 0
+
 def cmd_where(args: argparse.Namespace) -> int:
     root = _resolve_root(args.project_root)
     print(str(root))
@@ -289,6 +359,15 @@ def main() -> None:
     p_backup.add_argument("args", nargs=argparse.REMAINDER)
 
     p_archive = sub.add_parser("archive", help="转发到 archive_manager.py")
+
+    p_review = sub.add_parser("review", help="审查相关工具")
+    p_review.set_defaults(func=lambda args: 0)  # placeholder, handled below
+
+    p_review_merge = sub.add_parser("merge", parents=[p_review], add_help=False)
+    p_review_merge.add_argument("--group1", type=str, required=True, help="第一组审查结果JSON路径")
+    p_review_merge.add_argument("--group2", type=str, required=True, help="第二组审查结果JSON路径")
+    p_review_merge.add_argument("--output", type=str, required=True, help="合并输出JSON路径")
+    p_review_merge.set_defaults(func=cmd_review_merge)
     p_archive.add_argument("args", nargs=argparse.REMAINDER)
 
     p_init = sub.add_parser("init", help="转发到 init_project.py（初始化项目）")
@@ -360,6 +439,11 @@ def main() -> None:
     if tool == "extract-context":
         return_args = [*forward_args, "--chapter", str(args.chapter), "--format", str(args.format)]
         raise SystemExit(_run_script("extract_chapter_context.py", return_args))
+    if tool == "review":
+        if len(rest) > 0 and rest[0] == "merge":
+            raise SystemExit(cmd_review_merge(args))
+        raise SystemExit(2)
+
 
     raise SystemExit(2)
 
