@@ -301,10 +301,11 @@ def main() -> None:
     forward_args = ["--project-root", str(project_root)]
 
     if tool == "index":
-    if tool == "batch-query":
-        raise SystemExit(cmd_batch_query(args))
-        
+        if len(rest) > 0 and rest[0] == "batch-query":
+            raise SystemExit(cmd_batch_query(args))
         raise SystemExit(_run_data_module("index_manager", [*forward_args, *rest]))
+    elif tool == "batch-query":
+        raise SystemExit(cmd_batch_query(args))
     if tool == "state":
         raise SystemExit(_run_data_module("state_manager", [*forward_args, *rest]))
     if tool == "rag":
