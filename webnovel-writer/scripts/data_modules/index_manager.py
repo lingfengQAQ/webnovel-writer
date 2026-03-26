@@ -669,6 +669,71 @@ class IndexManager(IndexChapterMixin, IndexEntityMixin, IndexDebtMixin, IndexRea
                 results[qtype] = self.get_recent_appearances(limit=q.get("limit", 20))
         return results
 
+    def batch_write(self, writes: List[Dict]) -> Dict:
+        """批量写入接口
+
+        writes格式:
+        [
+            {"type": "upsert-entity", "data": {...}},
+            {"type": "register-alias", "alias": "...", "entity": "...", "entity_type": "..."},
+            {"type": "record-state-change", "data": {...}},
+            {"type": "upsert-relationship", "data": {...}}
+        ]
+
+        返回格式:
+        {
+            "success": [{"type": "...", "result": ...}],
+            "failed": [{"type": "...", "error": "..."}]
+        }
+        """
+        results = {"success": [], "failed": []}
+        for w in writes:
+            wtype = w.get("type")
+            try:
+                if wtype == "upsert-entity":
+                    data = json.loads(w.get("data", "{}"))
+                    entity = EntityMeta(
+                        id=data["id"],
+                        type=data["type"],
+                        canonical_name=data["canonical_name"],
+                        tier=data.get("tier", "装饰"),
+                        desc=data.get("desc", ""),
+                        current=data.get("current", {}),
+                        first_appearance=data.get("first_appearance", 0),
+                        last_appearance=data.get("last_appearance", 0),
+                        is_protagonist=data.get("is_protagonist", False),
+                        is_archived=data.get("is_archived", False),
+                    )
+                    results["success"].append({"type": wtype, "result": self.upsert_entity(entity)})
+                elif wtype == "register-alias":
+                    results["success"].append({"type": wtype, "result": self.register_alias(w.get("alias"), w.get("entity"), w.get("entity_type"))})
+                elif wtype == "record-state-change":
+                    data = json.loads(w.get("data", "{}"))
+                    change = StateChangeMeta(
+                        entity_id=data["entity_id"],
+                        field=data["field"],
+                        old_value=data.get("old_value", ""),
+                        new_value=data["new_value"],
+                        reason=data.get("reason", ""),
+                        chapter=data["chapter"],
+                    )
+                    results["success"].append({"type": wtype, "result": self.record_state_change(change)})
+                elif wtype == "upsert-relationship":
+                    data = json.loads(w.get("data", "{}"))
+                    rel = RelationshipMeta(
+                        from_entity=data["from_entity"],
+                        to_entity=data["to_entity"],
+                        type=data["type"],
+                        description=data.get("description", ""),
+                        chapter=data["chapter"],
+                    )
+                    results["success"].append({"type": wtype, "result": self.upsert_relationship(rel)})
+                else:
+                    results["failed"].append({"type": wtype, "error": f"Unknown type: {wtype}"})
+            except Exception as e:
+                results["failed"].append({"type": wtype, "error": str(e)})
+        return results
+
     # ==================== 章节操作 ====================
 
 # ==================== CLI 接口 ====================

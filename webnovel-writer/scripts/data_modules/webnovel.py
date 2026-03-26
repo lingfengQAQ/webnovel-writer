@@ -126,6 +126,26 @@ def cmd_batch_query(args: argparse.Namespace) -> int:
     print(json.dumps(results, ensure_ascii=False, indent=2))
     return 0
 
+def cmd_batch_write(args: argparse.Namespace) -> int:
+    import json
+    from .index_manager import IndexManager
+    from .config import DataModulesConfig
+    from project_locator import resolve_project_root
+
+    project_root = _resolve_root(args.project_root)
+    config = DataModulesConfig.from_project_root(project_root)
+    manager = IndexManager(config)
+
+    try:
+        writes = json.loads(args.writes)
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid JSON format: {e}", file=sys.stderr)
+        return 1
+
+    results = manager.batch_write(writes)
+    print(json.dumps(results, ensure_ascii=False, indent=2))
+    return 0
+
 def _build_preflight_report(explicit_project_root: Optional[str]) -> dict:
     scripts_dir = _scripts_dir().resolve()
     plugin_root = scripts_dir.parent
@@ -231,6 +251,10 @@ def main() -> None:
     p_batch_query.add_argument("--queries", required=True, help="JSON 格式的查询列表")
     p_batch_query.set_defaults(func=cmd_batch_query)
 
+    p_batch_write = sub.add_parser("batch-write", help="批量写入接口")
+    p_batch_write.add_argument("--writes", required=True, help="JSON 格式的写入列表")
+    p_batch_write.set_defaults(func=cmd_batch_write)
+
     p_index.add_argument("args", nargs=argparse.REMAINDER)
 
     p_state = sub.add_parser("state", help="转发到 state_manager")
@@ -303,9 +327,13 @@ def main() -> None:
     if tool == "index":
         if len(rest) > 0 and rest[0] == "batch-query":
             raise SystemExit(cmd_batch_query(args))
+        if len(rest) > 0 and rest[0] == "batch-write":
+            raise SystemExit(cmd_batch_write(args))
         raise SystemExit(_run_data_module("index_manager", [*forward_args, *rest]))
     elif tool == "batch-query":
         raise SystemExit(cmd_batch_query(args))
+    elif tool == "batch-write":
+        raise SystemExit(cmd_batch_write(args))
     if tool == "state":
         raise SystemExit(_run_data_module("state_manager", [*forward_args, *rest]))
     if tool == "rag":
