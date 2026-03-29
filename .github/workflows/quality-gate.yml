@@ -1,0 +1,49 @@
+name: Quality Gate
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'webnovel-writer/**/*.py'
+      - '.github/workflows/quality-gate.yml'
+      - 'ruff.toml'
+  pull_request:
+    paths:
+      - 'webnovel-writer/**/*.py'
+      - '.github/workflows/quality-gate.yml'
+      - 'ruff.toml'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install ruff
+      - run: ruff check webnovel-writer/
+
+  scripts-pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r webnovel-writer/scripts/requirements.txt -r webnovel-writer/scripts/requirements-dev.txt
+      - run: cd webnovel-writer && python -X utf8 -m pytest scripts/data_modules/tests/ -q --cov=scripts/data_modules --cov-report=term-missing --cov-fail-under=90
+        env:
+          PYTHONPATH: scripts
+
+  dashboard-pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r webnovel-writer/dashboard/requirements.txt -r webnovel-writer/dashboard/requirements-dev.txt
+      - run: cd webnovel-writer && python -X utf8 -m pytest dashboard/tests/ -q
+        env:
+          PYTHONPATH: dashboard

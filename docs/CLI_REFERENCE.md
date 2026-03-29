@@ -24,7 +24,7 @@ webnovel codex session start --profile battle --project-root /path/to/project
 ```
 
 **参数说明**：
-- `--profile` (必需)：Skill profile，可选值：`battle`、`description`、`consistency`
+- `--profile` (必需)：Skill profile，可选值见下方"可用 Profiles"章节
 - `--project-root` (可选)：项目根目录，如不指定则自动查找
 
 ### 2. 停止写作会话
@@ -149,7 +149,7 @@ webnovel codex rag verify --project-root /path/to/project --report json
 
 ```bash
 webnovel codex session start \
-  --profile <battle|description|consistency> \
+  --profile <profile> \
   [--project-root <path>]
 ```
 
@@ -158,9 +158,22 @@ webnovel codex session start \
 - 失败：返回错误 JSON，exit code 1
 
 **Skill Profile 说明**：
-- `battle`：战斗场景相关 Skill
-- `description`：描写场景相关 Skill
-- `consistency`：一致性检查相关 Skill
+
+Profiles 通过目录自动发现。当前可用的 profiles：
+
+| Profile | 中文名 | 适用场景 | Checker 权重 |
+|---------|--------|----------|-------------|
+| `battle` | 战斗 | 战斗场景、动作描写 | 爽点 1.5× / 节奏 1.3× |
+| `description` | 描写 | 环境描写、人物刻画 | 节奏 0.8× / 爽点 0.7× |
+| `consistency` | 一致性 | 一致性检查、设定维护 | 一致性 1.5× |
+| `xianxia` | 修仙/玄幻 | 境界突破、功法修炼 | 爽点 1.3× / 节奏阈值 4 |
+| `urban` | 都市异能 | 身份隐藏、现实交织 | 爽点 1.3× / combo间隔 3 |
+| `mystery` | 悬疑推理 | 伏笔铺设、线索管理 | 爽点密度 low / combo间隔 10 |
+| `apocalypse` | 末世 | 生存压力、资源管理 | 爽点 1.3× / 钩子 1.4× |
+| `romance` | 言情/甜宠 | 感情线推进、心动场景 | 感情线断档容忍 5 |
+
+> **提示**：Profiles 从 `webnovel-writer/scripts/codex_skill_profiles/` 目录自动发现。
+> 自定义 profile 只需在该目录下创建新子目录即可。
 
 ### webnovel codex session stop
 
@@ -185,6 +198,25 @@ webnovel codex index status [--project-root <path>]
 **返回值**：
 - 成功：返回 JSON，包含索引统计信息，exit code 0
 - 失败：返回错误 JSON，exit code 1
+
+### webnovel codex index watch
+
+监听正文目录的文件变更，自动触发增量索引。
+
+```bash
+webnovel codex index watch [--project-root <path>]
+```
+
+**参数说明**：
+- `--project-root` (可选)：项目根目录，如不指定则自动查找
+
+**返回值**：
+- 启动成功：返回 JSON，持续监听直到 Ctrl+C 停止
+- watchdog 未安装：返回错误 JSON（exit code 1）
+
+**注意**：此命令需要安装 `watchdog` 包（`pip install watchdog`）。如果未安装，命令会提示安装方法。
+
+**依赖**：`watchdog>=5.0.0`（可选依赖，不影响其他命令）
 
 ### webnovel codex rag verify
 
@@ -320,13 +352,21 @@ A: 可以。每个会话都有独立的 ID 和 Skill 目录，互不影响。
 
 ### Q: Skill profile 可以自定义吗？
 
-A: 当前支持三个预定义的 profile：`battle`、`description`、`consistency`。后续版本可能支持自定义 profile。
+A: Profiles 从 `webnovel-writer/scripts/codex_skill_profiles/` 自动发现。当前内置 8 个 profiles（battle、description、consistency、xianxia、urban、mystery、apocalypse、romance）。自定义 profile 只需在 `codex_skill_profiles/` 下创建新的子目录，包含 `README.md`、`rules.md` 和 `check-weights.yaml` 即可。
 
 ### Q: RAG 验证失败怎么办？
 
 A: 先检查 `.webnovel/vectors.db` 和 `.webnovel/index.db` 是否存在且可读。如果问题持续，请重新运行索引，并注意当前正确性 / 性能指标仍需结合真实基准解释。
 
 ## 更新日志
+
+### v0.2.0 (2026-03-29)
+
+- 新增 5 个 genre profiles（xianxia/urban/mystery/apocalypse/romance）
+- 充实 3 个现有 profiles（battle/description/consistency）
+- 新增 `codex index watch` 命令（文件监听自动索引）
+- Profile 自动发现机制
+- CI 质量门禁（ruff lint + pytest）
 
 ### v0.1.0 (2026-03-28)
 
