@@ -17,13 +17,12 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from chapter_paths import default_chapter_draft_path, find_chapter_file
 from project_locator import resolve_project_root
 from runtime_compat import enable_windows_utf8_stdio, normalize_windows_path
 from security_utils import atomic_write_json, create_secure_directory
-
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +46,7 @@ def now_iso() -> str:
     return datetime.now().isoformat()
 
 
-def find_project_root(override: Optional[Path] = None) -> Path:
+def find_project_root(override: Path | None = None) -> Path:
     """Resolve project root (containing .webnovel/state.json).
 
     Args:
@@ -60,7 +59,7 @@ def find_project_root(override: Optional[Path] = None) -> Path:
 
 
 # Global variable to hold CLI-provided project root
-_cli_project_root: Optional[Path] = None
+_cli_project_root: Path | None = None
 
 
 def _get_active_project_root() -> Path:
@@ -81,7 +80,7 @@ def get_call_trace_path() -> Path:
     return project_root / ".webnovel" / "observability" / "call_trace.jsonl"
 
 
-def append_call_trace(event: str, payload: Optional[Dict[str, Any]] = None):
+def append_call_trace(event: str, payload: dict[str, Any] | None = None):
     """Append workflow call trace event (best effort)."""
     payload = payload or {}
     trace_path = get_call_trace_path()
@@ -95,7 +94,7 @@ def append_call_trace(event: str, payload: Optional[Dict[str, Any]] = None):
         f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
-def safe_append_call_trace(event: str, payload: Optional[Dict[str, Any]] = None):
+def safe_append_call_trace(event: str, payload: dict[str, Any] | None = None):
     try:
         append_call_trace(event, payload)
     except Exception as exc:
@@ -127,7 +126,7 @@ def expected_step_owner(command: str, step_id: str) -> str:
     return "unknown"
 
 
-def step_allowed_before(command: str, step_id: str, completed_steps: list[Dict[str, Any]]) -> bool:
+def step_allowed_before(command: str, step_id: str, completed_steps: list[dict[str, Any]]) -> bool:
     """Check simple ordering constraints by pending sequence."""
     sequence = get_pending_steps(command)
     if step_id not in sequence:
@@ -139,7 +138,7 @@ def step_allowed_before(command: str, step_id: str, completed_steps: list[Dict[s
     return all(prev in completed_ids for prev in required_before)
 
 
-def _new_task(command: str, args: Dict[str, Any]) -> Dict[str, Any]:
+def _new_task(command: str, args: dict[str, Any]) -> dict[str, Any]:
     started_at = now_iso()
     return {
         "command": command,
@@ -162,7 +161,7 @@ def _new_task(command: str, args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _finalize_current_step_as_failed(task: Dict[str, Any], reason: str):
+def _finalize_current_step_as_failed(task: dict[str, Any], reason: str):
     current_step = task.get("current_step")
     if not current_step:
         return
@@ -177,7 +176,7 @@ def _finalize_current_step_as_failed(task: Dict[str, Any], reason: str):
     task["current_step"] = None
 
 
-def _mark_task_failed(state: Dict[str, Any], reason: str):
+def _mark_task_failed(state: dict[str, Any], reason: str):
     task = state.get("current_task")
     if not task:
         return
@@ -692,7 +691,7 @@ def load_state():
     state_file = get_workflow_state_path()
     if not state_file.exists():
         return {"current_task": None, "last_stable_state": None, "history": []}
-    with open(state_file, "r", encoding="utf-8") as f:
+    with open(state_file, encoding="utf-8") as f:
         state = json.load(f)
 
     state.setdefault("current_task", None)

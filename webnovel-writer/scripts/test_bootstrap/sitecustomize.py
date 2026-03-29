@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Test-only bootstrap for sandboxed Windows environments.
 

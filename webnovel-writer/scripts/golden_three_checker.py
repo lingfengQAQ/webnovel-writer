@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 黄金三章检查工具 v2.0 (LLM-Driven)
 
@@ -20,19 +19,19 @@ python golden_three_checker.py --auto --mode llm         # LLM 深度评估（�
 python golden_three_checker.py --auto --generate-prompt  # 仅生成评估 Prompt
 """
 
-import sys
+import argparse
+import json
 import os
 import re
-import json
-import argparse
+import sys
 from pathlib import Path
+from typing import Any
 
-from runtime_compat import enable_windows_utf8_stdio
-from typing import Dict, List, Optional, Any
+from chapter_paths import find_chapter_file
 
 # 导入项目定位和章节路径模块
 from project_locator import resolve_project_root
-from chapter_paths import find_chapter_file
+from runtime_compat import enable_windows_utf8_stdio
 
 # Windows UTF-8 输出修复
 if sys.platform == "win32":
@@ -152,7 +151,7 @@ LLM_EVALUATION_PROMPT = """你是一位网文编辑，专门负责评估小说�
 class GoldenThreeChecker:
     """黄金三章检查器 v2.0"""
 
-    def __init__(self, chapter_files: List[str], mode: str = "keyword"):
+    def __init__(self, chapter_files: list[str], mode: str = "keyword"):
         """
         初始化检查器
 
@@ -165,8 +164,8 @@ class GoldenThreeChecker:
 
         self.chapter_files = chapter_files
         self.mode = mode
-        self.chapters: List[Dict[str, Any]] = []
-        self.results: Dict[str, Any] = {
+        self.chapters: list[dict[str, Any]] = []
+        self.results: dict[str, Any] = {
             "mode": mode,
             "ch1": {"主角300字内出场": False, "金手指线索": False, "强冲突开局": False, "详细": {}},
             "ch2": {"金手指展示": False, "初次小胜": False, "即时爽点": False, "详细": {}},
@@ -179,7 +178,7 @@ class GoldenThreeChecker:
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"文件不存在: {file_path}")
 
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, encoding='utf-8') as f:
                 content = f.read()
                 self.chapters.append({
                     "number": i + 1,
@@ -281,9 +280,9 @@ class GoldenThreeChecker:
         )
         return prompt
 
-    def parse_llm_response(self, xml_response: str) -> Dict[str, Any]:
+    def parse_llm_response(self, xml_response: str) -> dict[str, Any]:
         """解析 LLM 返回的 XML 评估结果"""
-        results: Dict[str, Any] = {
+        results: dict[str, Any] = {
             "mode": "llm",
             "ch1": {"详细": {}},
             "ch2": {"详细": {}},
@@ -518,7 +517,7 @@ def main():
             print(f"❌ 文件不存在: {args.parse_response}")
             sys.exit(1)
 
-        with open(args.parse_response, 'r', encoding='utf-8') as f:
+        with open(args.parse_response, encoding='utf-8') as f:
             xml_content = f.read()
 
         checker = GoldenThreeChecker(["dummy"] * 3, mode="llm")

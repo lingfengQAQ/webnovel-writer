@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 SQLStateManager tests
 """
@@ -10,8 +9,8 @@ import sys
 import pytest
 
 import data_modules.sql_state_manager as sql_state_manager_module
-from data_modules.sql_state_manager import SQLStateManager, EntityData
 from data_modules.index_manager import EntityMeta
+from data_modules.sql_state_manager import EntityData, SQLStateManager
 
 
 @pytest.fixture

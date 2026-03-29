@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 quality_trend_report.py - 生成章节质量趋势报告（离线）
 
@@ -13,7 +12,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from runtime_compat import enable_windows_utf8_stdio
 
@@ -48,11 +47,11 @@ def _percent(value: float) -> str:
     return f"{value * 100:.1f}%"
 
 
-def _build_review_rows(records: List[Dict[str, Any]]) -> List[str]:
+def _build_review_rows(records: list[dict[str, Any]]) -> list[str]:
     if not records:
         return ["| - | - | - | - | - | - |", "| - | - | - | - | - | - |"]
 
-    rows: List[str] = []
+    rows: list[str] = []
     sorted_records = sorted(
         records,
         key=lambda x: (_to_int(x.get("end_chapter")), _to_int(x.get("start_chapter"))),
@@ -71,11 +70,11 @@ def _build_review_rows(records: List[Dict[str, Any]]) -> List[str]:
     return rows
 
 
-def _build_checklist_rows(records: List[Dict[str, Any]]) -> List[str]:
+def _build_checklist_rows(records: list[dict[str, Any]]) -> list[str]:
     if not records:
         return ["| - | - | - | - |"]
 
-    rows: List[str] = []
+    rows: list[str] = []
     sorted_records = sorted(records, key=lambda x: _to_int(x.get("chapter")))
     for row in sorted_records:
         chapter = _to_int(row.get("chapter"))
@@ -83,10 +82,7 @@ def _build_checklist_rows(records: List[Dict[str, Any]]) -> List[str]:
         completion = _to_float(row.get("completion_rate"))
         required_items = _to_int(row.get("required_items"))
         completed_required = _to_int(row.get("completed_required"))
-        if required_items > 0:
-            required_rate = completed_required / required_items
-        else:
-            required_rate = 1.0
+        required_rate = completed_required / required_items if required_items > 0 else 1.0
         rows.append(
             f"| {chapter} | {score:.1f} | {_percent(completion)} | {_percent(required_rate)} |"
         )
@@ -94,10 +90,10 @@ def _build_checklist_rows(records: List[Dict[str, Any]]) -> List[str]:
 
 
 def _build_risk_flags(
-    review_trend: Dict[str, Any],
-    checklist_trend: Dict[str, Any],
-) -> List[str]:
-    flags: List[str] = []
+    review_trend: dict[str, Any],
+    checklist_trend: dict[str, Any],
+) -> list[str]:
+    flags: list[str] = []
 
     overall_avg = _to_float(review_trend.get("overall_avg"))
     if overall_avg < 75 and review_trend.get("count", 0) > 0:
@@ -147,7 +143,7 @@ def build_quality_report(
     severity_totals = review_trend.get("severity_totals") or {}
     risk_flags = _build_risk_flags(review_trend, checklist_trend)
 
-    lines: List[str] = []
+    lines: list[str] = []
     lines.append("# 质量趋势报告")
     lines.append("")
     lines.append(f"- 生成时间: {now_text}")
@@ -212,11 +208,7 @@ def main() -> None:
     parser.add_argument("--output", type=str, help="输出文件路径（默认 .webnovel/reports/quality-trend.md）")
     args = parser.parse_args()
 
-    if args.project_root:
-        # 允许传入“工作区根目录”，统一解析到真正的 book project_root
-        project_root = resolve_project_root(args.project_root)
-    else:
-        project_root = resolve_project_root()
+    project_root = resolve_project_root(args.project_root) if args.project_root else resolve_project_root()
 
     cfg = DataModulesConfig.from_project_root(project_root)
     manager = IndexManager(cfg)

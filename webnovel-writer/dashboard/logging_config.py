@@ -20,10 +20,8 @@ from __future__ import annotations
 import json
 import logging
 import sys
-import time
 from datetime import datetime, timezone
 from typing import Any
-
 
 # ---------------------------------------------------------------------------
 # JSON 格式化器

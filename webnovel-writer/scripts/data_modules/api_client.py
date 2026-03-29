@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Data Modules - API 客户端 (v5.4，v5.0 OpenAI 兼容接口沿用)
 
@@ -22,10 +21,11 @@ Data Modules - API 客户端 (v5.4，v5.0 OpenAI 兼容接口沿用)
 """
 
 import asyncio
-import aiohttp
 import time
-from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
+from typing import Any
+
+import aiohttp
 
 from .config import get_config
 
@@ -50,8 +50,8 @@ class EmbeddingAPIClient:
         self.sem = asyncio.Semaphore(self.config.embed_concurrency)
         self.stats = APIStats()
         self._warmed_up = False
-        self._session: Optional[aiohttp.ClientSession] = None
-        self.last_error_status: Optional[int] = None
+        self._session: aiohttp.ClientSession | None = None
+        self.last_error_status: int | None = None
         self.last_error_message: str = ""
 
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -64,7 +64,7 @@ class EmbeddingAPIClient:
         if self._session and not self._session.closed:
             await self._session.close()
 
-    def _build_headers(self) -> Dict[str, str]:
+    def _build_headers(self) -> dict[str, str]:
         """构建请求头"""
         headers = {"Content-Type": "application/json"}
         if self.config.embed_api_key:
@@ -85,7 +85,7 @@ class EmbeddingAPIClient:
             # Modal 自定义接口: 直接使用配置的 URL
             return base_url
 
-    def _build_payload(self, texts: List[str]) -> Dict[str, Any]:
+    def _build_payload(self, texts: list[str]) -> dict[str, Any]:
         """构建请求体"""
         if self.config.embed_api_type == "openai":
             return {
@@ -100,7 +100,7 @@ class EmbeddingAPIClient:
                 "model": self.config.embed_model
             }
 
-    def _parse_response(self, data: Dict[str, Any]) -> Optional[List[List[float]]]:
+    def _parse_response(self, data: dict[str, Any]) -> list[list[float]] | None:
         """解析响应"""
         if self.config.embed_api_type == "openai":
             # OpenAI 格式: {"data": [{"embedding": [...], "index": 0}, ...]}
@@ -115,7 +115,7 @@ class EmbeddingAPIClient:
                 return [item["embedding"] for item in data["data"]]
             return None
 
-    async def embed(self, texts: List[str]) -> Optional[List[List[float]]]:
+    async def embed(self, texts: list[str]) -> list[list[float]] | None:
         """调用 Embedding 服务（带重试机制）"""
         if not texts:
             return []
@@ -195,8 +195,8 @@ class EmbeddingAPIClient:
             return None
 
     async def embed_batch(
-        self, texts: List[str], *, skip_failures: bool = True
-    ) -> List[Optional[List[float]]]:
+        self, texts: list[str], *, skip_failures: bool = True
+    ) -> list[list[float] | None]:
         """
         分批 Embedding
 
@@ -210,7 +210,7 @@ class EmbeddingAPIClient:
         if not texts:
             return []
 
-        all_embeddings: List[Optional[List[float]]] = []
+        all_embeddings: list[list[float] | None] = []
         batch_size = self.config.embed_batch_size
 
         batches = [texts[i:i + batch_size] for i in range(0, len(texts), batch_size)]
@@ -248,7 +248,7 @@ class RerankAPIClient:
         self.sem = asyncio.Semaphore(self.config.rerank_concurrency)
         self.stats = APIStats()
         self._warmed_up = False
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -260,7 +260,7 @@ class RerankAPIClient:
         if self._session and not self._session.closed:
             await self._session.close()
 
-    def _build_headers(self) -> Dict[str, str]:
+    def _build_headers(self) -> dict[str, str]:
         """构建请求头"""
         headers = {"Content-Type": "application/json"}
         if self.config.rerank_api_key:
@@ -281,11 +281,11 @@ class RerankAPIClient:
             # Modal 自定义接口
             return base_url
 
-    def _build_payload(self, query: str, documents: List[str], top_n: Optional[int]) -> Dict[str, Any]:
+    def _build_payload(self, query: str, documents: list[str], top_n: int | None) -> dict[str, Any]:
         """构建请求体"""
         if self.config.rerank_api_type == "openai":
             # Jina/Cohere 格式
-            payload: Dict[str, Any] = {
+            payload: dict[str, Any] = {
                 "query": query,
                 "documents": documents,
                 "model": self.config.rerank_model
@@ -300,7 +300,7 @@ class RerankAPIClient:
                 payload["top_n"] = top_n
             return payload
 
-    def _parse_response(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _parse_response(self, data: dict[str, Any]) -> list[dict[str, Any]]:
         """解析响应"""
         if self.config.rerank_api_type == "openai":
             # Jina/Cohere 格式: {"results": [{"index": 0, "relevance_score": 0.9}, ...]}
@@ -312,9 +312,9 @@ class RerankAPIClient:
     async def rerank(
         self,
         query: str,
-        documents: List[str],
-        top_n: Optional[int] = None
-    ) -> Optional[List[Dict[str, Any]]]:
+        documents: list[str],
+        top_n: int | None = None
+    ) -> list[dict[str, Any]] | None:
         """调用 Rerank 服务（带重试机制）"""
         if not documents:
             return []
@@ -405,10 +405,10 @@ class ModalAPIClient:
         self.sem_rerank = self._rerank_client.sem
 
         self._warmed_up = {"embed": False, "rerank": False}
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
 
     @property
-    def stats(self) -> Dict[str, APIStats]:
+    def stats(self) -> dict[str, APIStats]:
         return {
             "embed": self._embed_client.stats,
             "rerank": self._rerank_client.stats
@@ -432,7 +432,7 @@ class ModalAPIClient:
         tasks = [self._warmup_embed(), self._warmup_rerank()]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for name, result in zip(["Embed", "Rerank"], results):
+        for name, result in zip(["Embed", "Rerank"], results, strict=False):
             if isinstance(result, Exception):
                 print(f"  [FAIL] {name}: {result}")
             else:
@@ -450,13 +450,13 @@ class ModalAPIClient:
 
     # ==================== Embedding API ====================
 
-    async def embed(self, texts: List[str]) -> Optional[List[List[float]]]:
+    async def embed(self, texts: list[str]) -> list[list[float]] | None:
         """调用 Embedding 服务"""
         return await self._embed_client.embed(texts)
 
     async def embed_batch(
-        self, texts: List[str], *, skip_failures: bool = True
-    ) -> List[Optional[List[float]]]:
+        self, texts: list[str], *, skip_failures: bool = True
+    ) -> list[list[float] | None]:
         """分批 Embedding"""
         return await self._embed_client.embed_batch(texts, skip_failures=skip_failures)
 
@@ -465,9 +465,9 @@ class ModalAPIClient:
     async def rerank(
         self,
         query: str,
-        documents: List[str],
-        top_n: Optional[int] = None
-    ) -> Optional[List[Dict[str, Any]]]:
+        documents: list[str],
+        top_n: int | None = None
+    ) -> list[dict[str, Any]] | None:
         """调用 Rerank 服务"""
         return await self._rerank_client.rerank(query, documents, top_n)
 
@@ -485,7 +485,7 @@ class ModalAPIClient:
 
 
 # 全局客户端
-_client: Optional[ModalAPIClient] = None
+_client: ModalAPIClient | None = None
 
 
 def get_client(config=None) -> ModalAPIClient:

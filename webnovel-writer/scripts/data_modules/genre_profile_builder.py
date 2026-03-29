@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Genre profile parsing helpers for ContextManager.
 """
@@ -7,7 +6,6 @@ Genre profile parsing helpers for ContextManager.
 from __future__ import annotations
 
 import re
-from typing import List
 
 from .genre_aliases import normalize_genre_token
 
@@ -17,7 +15,7 @@ def parse_genre_tokens(
     *,
     support_composite: bool,
     separators: tuple[str, ...],
-) -> List[str]:
+) -> list[str]:
     text = str(genre_raw or "").strip()
     if not text:
         return []
@@ -32,7 +30,7 @@ def parse_genre_tokens(
         return [normalized_single] if normalized_single else [text]
 
     tokens = [chunk.strip() for chunk in re.split(pattern, text) if chunk and chunk.strip()]
-    deduped: List[str] = []
+    deduped: list[str] = []
     seen = set()
     for token in tokens:
         normalized_token = normalize_genre_token(token)
@@ -54,7 +52,7 @@ def extract_genre_section(text: str, genre: str) -> str:
     if not text:
         return ""
     lines = text.splitlines()
-    capture: List[str] = []
+    capture: list[str] = []
     active = False
     target = genre.strip().lower()
 
@@ -76,10 +74,10 @@ def extract_genre_section(text: str, genre: str) -> str:
     return "\n".join(lines[:80]).strip()
 
 
-def extract_markdown_refs(text: str, max_items: int = 8) -> List[str]:
+def extract_markdown_refs(text: str, max_items: int = 8) -> list[str]:
     if not text:
         return []
-    refs: List[str] = []
+    refs: list[str] = []
     for line in text.splitlines():
         row = line.strip().lstrip("-*").strip()
         if not row or row.startswith("#"):
@@ -90,13 +88,13 @@ def extract_markdown_refs(text: str, max_items: int = 8) -> List[str]:
     return refs
 
 
-def build_composite_genre_hints(genres: List[str], refs: List[str]) -> List[str]:
+def build_composite_genre_hints(genres: list[str], refs: list[str]) -> list[str]:
     if len(genres) <= 1:
         return []
 
     primary = genres[0]
     secondaries = genres[1:]
-    hints: List[str] = []
+    hints: list[str] = []
     hints.append(
         f"以“{primary}”作为主引擎推进主线，每章至少保留1处“{'/'.join(secondaries)}”特征表达。"
     )

@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import json
 import tempfile
 
+from status_reporter import StatusReporter, main
+
 from data_modules.config import DataModulesConfig
 from data_modules.index_manager import (
-    IndexManager,
     ChapterReadingPowerMeta,
     EntityMeta,
-    RelationshipMeta,
+    IndexManager,
     RelationshipEventMeta,
+    RelationshipMeta,
 )
-from status_reporter import StatusReporter, main
 
 
 def _write_state(project_root, state: dict):

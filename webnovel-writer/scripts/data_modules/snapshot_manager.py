@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Context snapshot manager.
 """
@@ -8,9 +7,10 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from filelock import FileLock
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
+
+from filelock import FileLock
 
 from .config import get_config
 
@@ -51,8 +51,8 @@ class SnapshotManager:
     def _snapshot_lock_path(self, chapter: int) -> Path:
         return self._snapshot_path(chapter).with_suffix(".json.lock")
 
-    def save_snapshot(self, chapter: int, payload: Dict[str, Any], meta: Optional[Dict[str, Any]] = None) -> Path:
-        data: Dict[str, Any] = {
+    def save_snapshot(self, chapter: int, payload: dict[str, Any], meta: dict[str, Any] | None = None) -> Path:
+        data: dict[str, Any] = {
             "version": self.version,
             "chapter": chapter,
             "saved_at": datetime.now(timezone.utc).isoformat(),
@@ -67,7 +67,7 @@ class SnapshotManager:
             atomic_write_json(path, data, use_lock=False, backup=False)
         return path
 
-    def load_snapshot(self, chapter: int) -> Optional[Dict[str, Any]]:
+    def load_snapshot(self, chapter: int) -> dict[str, Any] | None:
         path = self._snapshot_path(chapter)
         lock = FileLock(str(self._snapshot_lock_path(chapter)), timeout=10)
         with lock:

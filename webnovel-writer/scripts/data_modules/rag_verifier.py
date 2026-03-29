@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 RAG 验证工具。
 
@@ -16,7 +15,6 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-
 
 CORRECTNESS_THRESHOLDS = {
     "hit_at_5": 0.90,

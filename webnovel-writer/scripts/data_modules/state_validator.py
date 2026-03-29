@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Runtime validators/normalizers for state.json sections.
 """
@@ -7,8 +6,8 @@ Runtime validators/normalizers for state.json sections.
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Mapping, Optional, Sequence
-
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 FORESHADOWING_STATUS_PENDING = "未回收"
 FORESHADOWING_STATUS_RESOLVED = "已回收"
@@ -51,7 +50,7 @@ _PATTERN_FIELDS = [
 _PATTERN_SPLIT_RE = re.compile(r"[、,，/|+；;。]+")
 
 
-def to_positive_int(value: Any) -> Optional[int]:
+def to_positive_int(value: Any) -> int | None:
     if value is None or isinstance(value, bool):
         return None
 
@@ -67,7 +66,7 @@ def to_positive_int(value: Any) -> Optional[int]:
     return None
 
 
-def resolve_chapter_field(item: Mapping[str, Any], keys: Sequence[str]) -> Optional[int]:
+def resolve_chapter_field(item: Mapping[str, Any], keys: Sequence[str]) -> int | None:
     for key in keys:
         if key in item:
             chapter = to_positive_int(item.get(key))
@@ -118,11 +117,11 @@ def normalize_foreshadowing_tier(
     return default
 
 
-def split_patterns(raw_value: Any) -> List[str]:
+def split_patterns(raw_value: Any) -> list[str]:
     if raw_value is None:
         return []
 
-    tokens: List[str] = []
+    tokens: list[str] = []
     if isinstance(raw_value, list):
         for item in raw_value:
             text = str(item).strip()
@@ -137,7 +136,7 @@ def split_patterns(raw_value: Any) -> List[str]:
     else:
         return []
 
-    deduped: List[str] = []
+    deduped: list[str] = []
     seen = set()
     for token in tokens:
         if token not in seen:
@@ -146,14 +145,14 @@ def split_patterns(raw_value: Any) -> List[str]:
     return deduped
 
 
-def count_patterns(raw_value: Any) -> Optional[int]:
+def count_patterns(raw_value: Any) -> int | None:
     patterns = split_patterns(raw_value)
     if not patterns:
         return None
     return len(patterns)
 
 
-def normalize_foreshadowing_item(item: Mapping[str, Any]) -> Dict[str, Any]:
+def normalize_foreshadowing_item(item: Mapping[str, Any]) -> dict[str, Any]:
     normalized = dict(item)
 
     normalized["status"] = normalize_foreshadowing_status(item.get("status"))
@@ -178,21 +177,21 @@ def normalize_foreshadowing_item(item: Mapping[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
-def normalize_foreshadowing_list(raw_items: Any) -> List[Dict[str, Any]]:
+def normalize_foreshadowing_list(raw_items: Any) -> list[dict[str, Any]]:
     if not isinstance(raw_items, list):
         return []
 
-    normalized: List[Dict[str, Any]] = []
+    normalized: list[dict[str, Any]] = []
     for raw_item in raw_items:
         if isinstance(raw_item, Mapping):
             normalized.append(normalize_foreshadowing_item(raw_item))
     return normalized
 
 
-def normalize_chapter_meta_entry(entry: Mapping[str, Any]) -> Dict[str, Any]:
+def normalize_chapter_meta_entry(entry: Mapping[str, Any]) -> dict[str, Any]:
     normalized = dict(entry)
 
-    merged_patterns: List[str] = []
+    merged_patterns: list[str] = []
     seen = set()
     for field_name in _PATTERN_FIELDS:
         for pattern in split_patterns(entry.get(field_name)):
@@ -206,18 +205,18 @@ def normalize_chapter_meta_entry(entry: Mapping[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
-def normalize_chapter_meta(raw_chapter_meta: Any) -> Dict[str, Dict[str, Any]]:
+def normalize_chapter_meta(raw_chapter_meta: Any) -> dict[str, dict[str, Any]]:
     if not isinstance(raw_chapter_meta, Mapping):
         return {}
 
-    normalized: Dict[str, Dict[str, Any]] = {}
+    normalized: dict[str, dict[str, Any]] = {}
     for chapter_key, chapter_entry in raw_chapter_meta.items():
         if isinstance(chapter_entry, Mapping):
             normalized[str(chapter_key)] = normalize_chapter_meta_entry(chapter_entry)
     return normalized
 
 
-def get_chapter_meta_entry(state: Mapping[str, Any], chapter: int) -> Dict[str, Any]:
+def get_chapter_meta_entry(state: Mapping[str, Any], chapter: int) -> dict[str, Any]:
     chapter_meta = state.get("chapter_meta", {})
     if not isinstance(chapter_meta, Mapping):
         return {}
@@ -234,7 +233,7 @@ def get_chapter_meta_entry(state: Mapping[str, Any], chapter: int) -> Dict[str, 
     return {}
 
 
-def normalize_state_runtime_sections(state: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_state_runtime_sections(state: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(state, dict):
         return {}
 

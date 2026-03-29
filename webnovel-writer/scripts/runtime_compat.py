@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Runtime compatibility helpers.
 """
@@ -10,7 +9,6 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Union
 
 
 def enable_windows_utf8_stdio(*, skip_in_pytest: bool = False) -> bool:
@@ -45,7 +43,7 @@ _WIN_POSIX_DRIVE_RE = re.compile(r"^/(?P<drive>[a-zA-Z])/(?P<rest>.*)$")
 _WIN_WSL_MNT_DRIVE_RE = re.compile(r"^/mnt/(?P<drive>[a-zA-Z])/(?P<rest>.*)$")
 
 
-def normalize_windows_path(value: Union[str, Path]) -> Path:
+def normalize_windows_path(value: str | Path) -> Path:
     """
     将 Windows 上常见的 POSIX 风格路径规范化为 Windows 盘符路径。
 

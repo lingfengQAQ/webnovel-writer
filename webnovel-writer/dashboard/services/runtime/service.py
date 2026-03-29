@@ -6,8 +6,9 @@ import hashlib
 import os
 import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 DEFAULT_WORKSPACE_ID = "workspace-default"
 TARGET_CONTEXT_DIR = ".codex"

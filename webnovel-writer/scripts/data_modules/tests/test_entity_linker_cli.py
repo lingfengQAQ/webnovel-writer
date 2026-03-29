@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 EntityLinker extra tests + CLI
 """
@@ -8,8 +7,9 @@ import sys
 
 import pytest
 
-from data_modules.entity_linker import EntityLinker, main as linker_main
-from data_modules.index_manager import IndexManager, EntityMeta
+from data_modules.entity_linker import EntityLinker
+from data_modules.entity_linker import main as linker_main
+from data_modules.index_manager import EntityMeta, IndexManager
 
 
 @pytest.fixture

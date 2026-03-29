@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 CLI 参数兼容工具。
 
@@ -21,10 +20,9 @@ import json
 import sys
 from pathlib import Path
 from typing import Any
-from typing import List, Optional, Tuple
 
 
-def _extract_flag_value(argv: List[str], flag: str) -> Tuple[Optional[str], List[str]]:
+def _extract_flag_value(argv: list[str], flag: str) -> tuple[str | None, list[str]]:
     """
     Extract a flag value from argv.
 
@@ -37,8 +35,8 @@ def _extract_flag_value(argv: List[str], flag: str) -> Tuple[Optional[str], List
     - value uses the *last* occurrence when repeated.
     - if a dangling `--flag` has no value, it is kept in remaining_argv for argparse to raise.
     """
-    value: Optional[str] = None
-    rest: List[str] = []
+    value: str | None = None
+    rest: list[str] = []
     i = 0
     while i < len(argv):
         token = argv[i]
@@ -60,7 +58,7 @@ def _extract_flag_value(argv: List[str], flag: str) -> Tuple[Optional[str], List
     return value, rest
 
 
-def normalize_global_project_root(argv: List[str], *, flag: str = "--project-root") -> List[str]:
+def normalize_global_project_root(argv: list[str], *, flag: str = "--project-root") -> list[str]:
     """
     Normalize argv so a global `--project-root` (when present) is moved before subcommands.
 
@@ -88,9 +86,6 @@ def load_json_arg(raw: str) -> Any:
         target = text[1:].strip()
         if not target:
             raise ValueError("invalid json arg: '@' without path")
-        if target == "-":
-            content = sys.stdin.read()
-        else:
-            content = Path(target).read_text(encoding="utf-8")
+        content = sys.stdin.read() if target == "-" else Path(target).read_text(encoding="utf-8")
         return json.loads(content)
     return json.loads(text)

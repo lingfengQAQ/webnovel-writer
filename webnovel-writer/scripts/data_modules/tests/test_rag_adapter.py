@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 RAGAdapter tests
 """
 
-import sys
-import json
 import asyncio
+import json
 import logging
 import sqlite3
+import sys
 from contextlib import closing
 
 import pytest
 
 import data_modules.rag_adapter as rag_module
-from data_modules.rag_adapter import RAGAdapter
 from data_modules.config import DataModulesConfig
 from data_modules.index_manager import EntityMeta, RelationshipMeta
+from data_modules.rag_adapter import RAGAdapter
 
 
 class StubClient:

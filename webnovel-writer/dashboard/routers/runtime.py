@@ -12,7 +12,8 @@ from ..models.runtime import (
     RuntimeProfileQuery,
     RuntimeProfileResponse,
 )
-from ..services.runtime import RuntimeServiceError, get_runtime_profile as get_runtime_profile_service
+from ..services.runtime import RuntimeServiceError
+from ..services.runtime import get_runtime_profile as get_runtime_profile_service
 
 READ_ERROR_RESPONSES = {
     404: {"model": ApiErrorResponse, "description": "Resource not found."},
@@ -21,9 +22,11 @@ READ_ERROR_RESPONSES = {
 
 router = APIRouter(prefix="/api/runtime", tags=["runtime"])
 
+_DEPENDS_QUERY = Depends()
+
 
 @router.get("/profile", response_model=RuntimeProfileResponse, responses=READ_ERROR_RESPONSES)
-def get_runtime_profile(query: RuntimeProfileQuery = Depends()):
+def get_runtime_profile(query: RuntimeProfileQuery = _DEPENDS_QUERY):
     """获取运行时配置信息（只读）。"""
     try:
         profile = get_runtime_profile_service(

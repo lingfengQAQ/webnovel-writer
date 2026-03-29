@@ -8,15 +8,16 @@
 修复方案: 集中管理所有安全相关的输入清理函数
 """
 
+import contextlib
 import json
 import os
 import re
 import sys
 import tempfile
 from pathlib import Path
+from typing import Any
 
 from runtime_compat import enable_windows_utf8_stdio
-from typing import Any, Dict, Optional, Union
 
 # 尝试导入 filelock（可选依赖）
 try:
@@ -218,9 +219,9 @@ def validate_integer_input(value: str, field_name: str) -> int:
     """
     try:
         return int(value)
-    except ValueError:
+    except ValueError as exc:
         print(f"❌ 错误：{field_name} 必须是整数，收到: {value}", file=sys.stderr)
-        raise ValueError(f"Invalid integer input for {field_name}: {value}")
+        raise ValueError(f"Invalid integer input for {field_name}: {value}") from exc
 
 
 # ============================================================================
@@ -228,7 +229,7 @@ def validate_integer_input(value: str, field_name: str) -> int:
 # ============================================================================
 
 # 缓存 Git 可用性检测结果
-_git_available: Optional[bool] = None
+_git_available: bool | None = None
 
 
 def is_git_available() -> bool:
@@ -263,7 +264,7 @@ def is_git_available() -> bool:
     return _git_available
 
 
-def is_git_repo(path: Union[str, Path]) -> bool:
+def is_git_repo(path: str | Path) -> bool:
     """
     检测指定目录是否是 Git 仓库
 
@@ -283,7 +284,7 @@ def is_git_repo(path: Union[str, Path]) -> bool:
 
 def git_graceful_operation(
     args: list,
-    cwd: Union[str, Path],
+    cwd: str | Path,
     *,
     fallback_msg: str = "Git 不可用，跳过版本控制操作"
 ) -> tuple:
@@ -343,8 +344,8 @@ class AtomicWriteError(Exception):
 
 
 def atomic_write_json(
-    file_path: Union[str, Path],
-    data: Dict[str, Any],
+    file_path: str | Path,
+    data: dict[str, Any],
     *,
     use_lock: bool = True,
     backup: bool = True,
@@ -388,7 +389,7 @@ def atomic_write_json(
     try:
         json_content = json.dumps(data, ensure_ascii=False, indent=indent)
     except (TypeError, ValueError) as e:
-        raise AtomicWriteError(f"JSON 序列化失败: {e}")
+        raise AtomicWriteError(f"JSON 序列化失败: {e}") from e
 
     # 锁文件路径
     lock_path = file_path.with_suffix(file_path.suffix + '.lock')
@@ -432,21 +433,19 @@ def atomic_write_json(
                 lock.release()
 
     except Exception as e:
-        raise AtomicWriteError(f"原子写入失败: {e}")
+        raise AtomicWriteError(f"原子写入失败: {e}") from e
 
     finally:
         # 清理：删除临时文件（如果仍存在说明写入失败）
         if temp_path is not None:
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(temp_path)
-            except OSError:
-                pass
 
 
 def read_json_safe(
-    file_path: Union[str, Path],
-    default: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+    file_path: str | Path,
+    default: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """
     安全读取 JSON 文件（带默认值和错误处理）
 
@@ -468,14 +467,14 @@ def read_json_safe(
         return default
 
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding='utf-8') as f:
             return json.load(f)
     except (json.JSONDecodeError, OSError) as e:
         print(f"⚠️ 读取 JSON 失败 ({file_path}): {e}", file=sys.stderr)
         return default
 
 
-def restore_from_backup(file_path: Union[str, Path]) -> bool:
+def restore_from_backup(file_path: str | Path) -> bool:
     """
     从备份恢复文件
 
@@ -537,7 +536,7 @@ def _run_self_tests():
     assert validate_integer_input("123", "test") == 123, "整数验证测试失败"
     try:
         validate_integer_input("abc", "test")
-        assert False, "应该抛出ValueError"
+        raise AssertionError("应该抛出ValueError")
     except ValueError:
         pass
     print("  ✅ validate_integer_input: 所有测试通过")
@@ -553,7 +552,7 @@ def _run_self_tests():
     assert test_file.exists(), "原子写入未创建文件"
 
     # 读取验证
-    with open(test_file, 'r', encoding='utf-8') as f:
+    with open(test_file, encoding='utf-8') as f:
         loaded = json.load(f)
     assert loaded == test_data, "原子写入数据不匹配"
 
@@ -564,7 +563,7 @@ def _run_self_tests():
 
     # 恢复测试
     restore_from_backup(test_file)
-    with open(test_file, 'r', encoding='utf-8') as f:
+    with open(test_file, encoding='utf-8') as f:
         restored = json.load(f)
     assert restored == test_data, "恢复数据不匹配"
 

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 from data_modules.state_validator import (
     FORESHADOWING_STATUS_PENDING,

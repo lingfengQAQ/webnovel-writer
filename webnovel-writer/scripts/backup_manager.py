@@ -46,22 +46,19 @@ Git 提交规范：
   ✅ 原子性操作，要么全部成功，要么全部失败
 """
 
-import subprocess
-import json
-import os
-import sys
 import shutil
+import subprocess
+import sys
+from datetime import datetime
 from pathlib import Path
 
+from project_locator import resolve_project_root
 from runtime_compat import enable_windows_utf8_stdio
-from datetime import datetime
-from typing import Optional, List, Tuple
 
 # ============================================================================
 # 安全修复：导入安全工具函数（P1 MEDIUM）
 # ============================================================================
-from security_utils import sanitize_commit_message, is_git_available, is_git_repo, git_graceful_operation
-from project_locator import resolve_project_root
+from security_utils import is_git_available, sanitize_commit_message
 
 # Windows 编码兼容性修复
 if sys.platform == "win32":
@@ -142,7 +139,7 @@ __pycache__/
             print(f"❌ Git 初始化失败: {e}")
             return False
 
-    def _run_git_command(self, args: List[str], check: bool = True) -> Tuple[bool, str]:
+    def _run_git_command(self, args: list[str], check: bool = True) -> tuple[bool, str]:
         """执行 Git 命令（支持优雅降级）"""
         if not self.git_available:
             return False, "Git 不可用"
@@ -258,7 +255,7 @@ __pycache__/
         tag_name = f"ch{chapter_num:04d}"
 
         print(f"🔄 正在回滚到第 {chapter_num} 章...")
-        print(f"⚠️  警告：这将丢弃所有未提交的变更！")
+        print("⚠️  警告：这将丢弃所有未提交的变更！")
 
         # 检查是否有未提交的变更
         success, status_output = self._run_git_command(["status", "--porcelain"])
@@ -297,9 +294,9 @@ __pycache__/
             return False
 
         print(f"✅ 已回滚到第 {chapter_num} 章！")
-        print(f"\n💡 提示:")
-        print(f"  - 所有文件（state.json + 正文/*.md）已同步回滚")
-        print(f"  - 如需恢复，运行: git checkout master")
+        print("\n💡 提示:")
+        print("  - 所有文件（state.json + 正文/*.md）已同步回滚")
+        print("  - 如需恢复，运行: git checkout master")
 
         return True
 
@@ -349,7 +346,7 @@ __pycache__/
 
         for tag in tags:
             # 提取章节号
-            chapter_num = int(tag[2:])
+            int(tag[2:])
 
             # 获取该 tag 的提交信息
             success, commit_info = self._run_git_command(
@@ -392,7 +389,7 @@ __pycache__/
             return False
 
         print(f"✅ 分支已创建: {branch_name}")
-        print(f"\n💡 切换到分支:")
+        print("\n💡 切换到分支:")
         print(f"  git checkout {branch_name}")
 
         return True

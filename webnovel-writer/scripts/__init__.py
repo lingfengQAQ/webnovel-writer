@@ -8,9 +8,7 @@ __version__ = "5.5.4"
 __author__ = "lcy"
 
 # Expose main modules
-from . import security_utils
-from . import project_locator
-from . import chapter_paths
+from . import chapter_paths, project_locator, security_utils
 
 __all__ = [
     "security_utils",

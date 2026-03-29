@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Centralized context template weights.
 """
 
 from __future__ import annotations
-
 
 DEFAULT_TEMPLATE = "plot"
 

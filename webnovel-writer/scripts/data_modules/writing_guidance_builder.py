@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Writing guidance and checklist builders.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from .genre_aliases import to_profile_key
-
 
 GENRE_GUIDANCE_TEXT: dict[str, str] = {
     "xianxia": "题材加权：强化升级/对抗结果的可见反馈，术语解释后置。",
@@ -81,10 +79,10 @@ GENRE_METHOD_ANCHORS: dict[str, dict[str, str]] = {
 def build_methodology_strategy_card(
     *,
     chapter: int,
-    reader_signal: Dict[str, Any],
-    genre_profile: Dict[str, Any],
+    reader_signal: dict[str, Any],
+    genre_profile: dict[str, Any],
     label: str = "digital-serial-v1",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     genre = str(genre_profile.get("genre") or "").strip()
     profile_key = to_profile_key(genre) or "general"
 
@@ -110,7 +108,7 @@ def build_methodology_strategy_card(
     anchor_effectiveness = 68.0 + (6.0 if dominant_hook else 0.0) + (4.0 if overall_avg >= 75 else -4.0)
     rhythm_naturalness = 65.0 + min(10.0, float(hook_variety + pattern_variety) * 2.0)
 
-    risk_flags: List[str] = []
+    risk_flags: list[str] = []
     if has_low_range:
         risk_flags.append("low_score_recency")
     if dominant_pattern:
@@ -167,7 +165,7 @@ def build_methodology_strategy_card(
     }
 
 
-def build_methodology_guidance_items(strategy_card: Dict[str, Any]) -> List[str]:
+def build_methodology_guidance_items(strategy_card: dict[str, Any]) -> list[str]:
     if not isinstance(strategy_card, dict) or not strategy_card.get("enabled"):
         return []
 
@@ -206,12 +204,12 @@ def build_methodology_guidance_items(strategy_card: Dict[str, Any]) -> List[str]
 def build_guidance_items(
     *,
     chapter: int,
-    reader_signal: Dict[str, Any],
-    genre_profile: Dict[str, Any],
+    reader_signal: dict[str, Any],
+    genre_profile: dict[str, Any],
     low_score_threshold: float,
     hook_diversify_enabled: bool,
-) -> Dict[str, Any]:
-    guidance: List[str] = []
+) -> dict[str, Any]:
+    guidance: list[str] = []
 
     low_ranges = reader_signal.get("low_score_ranges") or []
     if low_ranges:
@@ -277,15 +275,15 @@ def build_guidance_items(
 
 def build_writing_checklist(
     *,
-    guidance_items: List[str],
-    reader_signal: Dict[str, Any],
-    genre_profile: Dict[str, Any],
-    strategy_card: Dict[str, Any] | None = None,
+    guidance_items: list[str],
+    reader_signal: dict[str, Any],
+    genre_profile: dict[str, Any],
+    strategy_card: dict[str, Any] | None = None,
     min_items: int,
     max_items: int,
     default_weight: float,
-) -> List[Dict[str, Any]]:
-    items: List[Dict[str, Any]] = []
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
 
     def _add_item(
         item_id: str,
@@ -449,7 +447,7 @@ def build_writing_checklist(
     return items[:max_items]
 
 
-def is_checklist_item_completed(item: Dict[str, Any], reader_signal: Dict[str, Any]) -> bool:
+def is_checklist_item_completed(item: dict[str, Any], reader_signal: dict[str, Any]) -> bool:
     item_id = str(item.get("id") or "")
     if item_id in {"fix_low_score_range", "readability_loop"}:
         review_trend = reader_signal.get("review_trend") or {}
@@ -468,11 +466,4 @@ def is_checklist_item_completed(item: Dict[str, Any], reader_signal: Dict[str, A
         return True
 
     source = str(item.get("source") or "")
-    if source.startswith("fallback"):
-        return True
-
-    if source.startswith("methodology."):
-        # 方法论条目当前作为软提示，仅做观察与引导，不参与扣分。
-        return True
-
-    return False
+    return source.startswith(("fallback", "methodology."))

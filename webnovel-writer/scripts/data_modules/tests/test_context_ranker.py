@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 from data_modules.config import DataModulesConfig
 from data_modules.context_ranker import ContextRanker

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 IndexDebtMixin extracted from IndexManager.
 """
 
 from __future__ import annotations
 
-import json
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from index_manager import ChaseDebtMeta, OverrideContractMeta
 
 
 class IndexDebtMixin:
@@ -96,7 +96,7 @@ class IndexDebtMixin:
             conn.commit()
             return contract_id
 
-    def get_pending_overrides(self, before_chapter: int = None) -> List[Dict]:
+    def get_pending_overrides(self, before_chapter: int = None) -> list[dict]:
         """获取待偿还的Override Contracts"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -117,7 +117,7 @@ class IndexDebtMixin:
                 """)
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_overdue_overrides(self, current_chapter: int) -> List[Dict]:
+    def get_overdue_overrides(self, current_chapter: int) -> list[dict]:
         """获取已逾期的Override Contracts"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -147,7 +147,7 @@ class IndexDebtMixin:
             conn.commit()
             return cursor.rowcount > 0
 
-    def get_chapter_overrides(self, chapter: int) -> List[Dict]:
+    def get_chapter_overrides(self, chapter: int) -> list[dict]:
         """获取某章创建的Override Contracts"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -202,7 +202,7 @@ class IndexDebtMixin:
             conn.commit()
             return debt_id
 
-    def get_active_debts(self) -> List[Dict]:
+    def get_active_debts(self) -> list[dict]:
         """获取所有活跃债务"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -213,7 +213,7 @@ class IndexDebtMixin:
             """)
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_overdue_debts(self, current_chapter: int) -> List[Dict]:
+    def get_overdue_debts(self, current_chapter: int) -> list[dict]:
         """获取已逾期的债务（包括 active 但已过期的，以及已标记为 overdue 的）"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -238,7 +238,7 @@ class IndexDebtMixin:
             """)
             return cursor.fetchone()[0]
 
-    def accrue_interest(self, current_chapter: int) -> Dict[str, Any]:
+    def accrue_interest(self, current_chapter: int) -> dict[str, Any]:
         """
         计算利息（每章调用一次）
 
@@ -335,7 +335,7 @@ class IndexDebtMixin:
 
         return result
 
-    def pay_debt(self, debt_id: int, amount: float, chapter: int) -> Dict[str, Any]:
+    def pay_debt(self, debt_id: int, amount: float, chapter: int) -> dict[str, Any]:
         """
         偿还债务
 
@@ -450,7 +450,7 @@ class IndexDebtMixin:
             (debt_id, event_type, amount, chapter, note),
         )
 
-    def get_debt_history(self, debt_id: int) -> List[Dict]:
+    def get_debt_history(self, debt_id: int) -> list[dict]:
         """获取债务的事件历史"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -466,7 +466,7 @@ class IndexDebtMixin:
 
     # ==================== v5.3 章节追读力元数据操作 ====================
 
-    def get_debt_summary(self) -> Dict[str, Any]:
+    def get_debt_summary(self) -> dict[str, Any]:
         """获取债务汇总信息"""
         with self._get_conn() as conn:
             cursor = conn.cursor()

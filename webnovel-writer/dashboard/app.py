@@ -5,14 +5,14 @@ Webnovel Dashboard - FastAPI 主应用
 """
 
 import asyncio
-import binascii
 import base64
+import binascii
 import json
 import secrets
 import sqlite3
-from contextlib import asynccontextmanager, closing
+from contextlib import asynccontextmanager, closing, suppress
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -197,10 +197,8 @@ def _resolve_project_root_from_pointer() -> Path | None:
         target = Path(target_str).expanduser()
         if not target.is_absolute():
             target = cwd / target
-        try:
+        with suppress(OSError):
             target = target.resolve()
-        except OSError:
-            pass
         if target.is_dir() and (target / ".webnovel" / "state.json").is_file():
             return target
     return None
@@ -463,7 +461,7 @@ def create_app(
 
     @app.get("/api/entities")
     def list_entities(
-        entity_type: Optional[str] = Query(None, alias="type"),
+        entity_type: str | None = Query(None, alias="type"),
         include_archived: bool = False,
     ):
         """列出所有实体（可按类型过滤）。"""
@@ -496,7 +494,7 @@ def create_app(
             return dict(row)
 
     @app.get("/api/relationships")
-    def list_relationships(entity: Optional[str] = None, limit: int = 200):
+    def list_relationships(entity: str | None = None, limit: int = 200):
         with closing(_get_db()) as conn:
             if entity:
                 rows = conn.execute(
@@ -512,9 +510,9 @@ def create_app(
 
     @app.get("/api/relationship-events")
     def list_relationship_events(
-        entity: Optional[str] = None,
-        from_chapter: Optional[int] = None,
-        to_chapter: Optional[int] = None,
+        entity: str | None = None,
+        from_chapter: int | None = None,
+        to_chapter: int | None = None,
         limit: int = 200,
     ):
         with closing(_get_db()) as conn:
@@ -544,7 +542,7 @@ def create_app(
             return [dict(r) for r in rows]
 
     @app.get("/api/scenes")
-    def list_scenes(chapter: Optional[int] = None, limit: int = 500):
+    def list_scenes(chapter: int | None = None, limit: int = 500):
         with closing(_get_db()) as conn:
             if chapter is not None:
                 rows = conn.execute(
@@ -573,7 +571,7 @@ def create_app(
             return [dict(r) for r in rows]
 
     @app.get("/api/state-changes")
-    def list_state_changes(entity: Optional[str] = None, limit: int = 100):
+    def list_state_changes(entity: str | None = None, limit: int = 100):
         with closing(_get_db()) as conn:
             if entity:
                 rows = conn.execute(
@@ -587,7 +585,7 @@ def create_app(
             return [dict(r) for r in rows]
 
     @app.get("/api/aliases")
-    def list_aliases(entity: Optional[str] = None):
+    def list_aliases(entity: str | None = None):
         with closing(_get_db()) as conn:
             if entity:
                 rows = conn.execute(
@@ -767,7 +765,7 @@ def create_app(
     # ===========================================================
 
     @app.get("/api/overrides")
-    def list_overrides(status: Optional[str] = None, limit: int = 100):
+    def list_overrides(status: str | None = None, limit: int = 100):
         with closing(_get_db()) as conn:
             if status:
                 return _fetchall_safe(
@@ -782,7 +780,7 @@ def create_app(
             )
 
     @app.get("/api/debts")
-    def list_debts(status: Optional[str] = None, limit: int = 100):
+    def list_debts(status: str | None = None, limit: int = 100):
         with closing(_get_db()) as conn:
             if status:
                 return _fetchall_safe(
@@ -797,7 +795,7 @@ def create_app(
             )
 
     @app.get("/api/debt-events")
-    def list_debt_events(debt_id: Optional[int] = None, limit: int = 200):
+    def list_debt_events(debt_id: int | None = None, limit: int = 200):
         with closing(_get_db()) as conn:
             if debt_id is not None:
                 return _fetchall_safe(
@@ -812,7 +810,7 @@ def create_app(
             )
 
     @app.get("/api/invalid-facts")
-    def list_invalid_facts(status: Optional[str] = None, limit: int = 100):
+    def list_invalid_facts(status: str | None = None, limit: int = 100):
         with closing(_get_db()) as conn:
             if status:
                 return _fetchall_safe(
@@ -827,7 +825,7 @@ def create_app(
             )
 
     @app.get("/api/rag-queries")
-    def list_rag_queries(query_type: Optional[str] = None, limit: int = 100):
+    def list_rag_queries(query_type: str | None = None, limit: int = 100):
         with closing(_get_db()) as conn:
             if query_type:
                 return _fetchall_safe(
@@ -842,7 +840,7 @@ def create_app(
             )
 
     @app.get("/api/tool-stats")
-    def list_tool_stats(tool_name: Optional[str] = None, limit: int = 200):
+    def list_tool_stats(tool_name: str | None = None, limit: int = 200):
         with closing(_get_db()) as conn:
             if tool_name:
                 return _fetchall_safe(

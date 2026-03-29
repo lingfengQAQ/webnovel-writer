@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 migrate_state_to_sqlite.py - 数据迁移脚本 (v5.4)
 
@@ -26,14 +25,13 @@ migrate_state_to_sqlite.py - 数据迁移脚本 (v5.4)
     python -m data_modules.migrate_state_to_sqlite --project-root "." --backup
 """
 
+import contextlib
 import json
 import shutil
-from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, List
 
-from .config import get_config, DataModulesConfig
-from .sql_state_manager import SQLStateManager, EntityData
+from .config import DataModulesConfig
+from .sql_state_manager import EntityData, SQLStateManager
 
 
 def migrate_state_to_sqlite(
@@ -41,7 +39,7 @@ def migrate_state_to_sqlite(
     dry_run: bool = False,
     backup: bool = True,
     verbose: bool = True
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """
     执行迁移
 
@@ -69,7 +67,7 @@ def migrate_state_to_sqlite(
             print(f"❌ state.json 不存在: {state_file}")
         return stats
 
-    with open(state_file, 'r', encoding='utf-8') as f:
+    with open(state_file, encoding='utf-8') as f:
         state = json.load(f)
 
     if verbose:
@@ -89,7 +87,7 @@ def migrate_state_to_sqlite(
     # 1. 迁移 entities_v3
     entities_v3 = state.get("entities_v3", {})
     if verbose:
-        print(f"\n🔄 迁移 entities_v3...")
+        print("\n🔄 迁移 entities_v3...")
 
     for entity_type, entities in entities_v3.items():
         if not isinstance(entities, dict):
@@ -132,7 +130,7 @@ def migrate_state_to_sqlite(
     # 2. 迁移 alias_index
     alias_index = state.get("alias_index", {})
     if verbose:
-        print(f"\n🔄 迁移 alias_index...")
+        print("\n🔄 迁移 alias_index...")
 
     for alias, entries in alias_index.items():
         if not isinstance(entries, list):
@@ -165,7 +163,7 @@ def migrate_state_to_sqlite(
     # 3. 迁移 state_changes
     state_changes = state.get("state_changes", [])
     if verbose:
-        print(f"\n🔄 迁移 state_changes...")
+        print("\n🔄 迁移 state_changes...")
 
     for change in state_changes:
         if not isinstance(change, dict):
@@ -200,7 +198,7 @@ def migrate_state_to_sqlite(
     # 4. 迁移 structured_relationships
     relationships = state.get("structured_relationships", [])
     if verbose:
-        print(f"\n🔄 迁移 structured_relationships...")
+        print("\n🔄 迁移 structured_relationships...")
 
     for rel in relationships:
         if not isinstance(rel, dict):
@@ -235,7 +233,7 @@ def migrate_state_to_sqlite(
     # 5. 精简 state.json（移除已迁移字段）
     if not dry_run:
         if verbose:
-            print(f"\n🔄 精简 state.json...")
+            print("\n🔄 精简 state.json...")
 
         # 保留字段
         slim_state = {
@@ -263,8 +261,8 @@ def migrate_state_to_sqlite(
 
     # 打印统计
     if verbose:
-        print(f"\n" + "=" * 50)
-        print(f"📊 迁移统计:")
+        print("\n" + "=" * 50)
+        print("📊 迁移统计:")
         print(f"  实体: {stats['entities']}")
         print(f"  别名: {stats['aliases']}")
         print(f"  状态变化: {stats['state_changes']}")
@@ -272,12 +270,12 @@ def migrate_state_to_sqlite(
         print(f"  跳过: {stats['skipped']}")
         print(f"  错误: {stats['errors']}")
         if dry_run:
-            print(f"\n⚠️ 这是 dry-run 模式，实际未写入任何数据")
+            print("\n⚠️ 这是 dry-run 模式，实际未写入任何数据")
 
     return stats
 
 
-def _slim_world_settings(world_settings: Dict) -> Dict:
+def _slim_world_settings(world_settings: dict) -> dict:
     """精简 world_settings，只保留骨架"""
     if not isinstance(world_settings, dict):
         return {}
@@ -312,7 +310,7 @@ def _slim_world_settings(world_settings: Dict) -> Dict:
     return slim
 
 
-def _slim_relationships(relationships: Dict) -> Dict:
+def _slim_relationships(relationships: dict) -> dict:
     """精简 relationships，只保留核心关系"""
     if not isinstance(relationships, dict):
         return {}
@@ -324,7 +322,8 @@ def _slim_relationships(relationships: Dict) -> Dict:
 
 def main():
     import argparse
-    from .cli_output import print_success, print_error
+
+    from .cli_output import print_error, print_success
     from .index_manager import IndexManager
 
     parser = argparse.ArgumentParser(description="迁移 state.json 到 SQLite (v5.4)")
@@ -351,25 +350,19 @@ def main():
         )
     except Exception as exc:
         print_error("MIGRATE_FAILED", str(exc), suggestion="检查 state.json 与 index.db 权限")
-        try:
+        with contextlib.suppress(Exception):
             logger.log_tool_call(tool_name, False, error_code="MIGRATE_FAILED", error_message=str(exc))
-        except Exception:
-            pass
-        raise SystemExit(1)
+        raise SystemExit(1) from exc
 
     if stats.get("errors", 0) > 0:
         print_error("MIGRATE_ERRORS", "迁移出现错误", details=stats)
-        try:
+        with contextlib.suppress(Exception):
             logger.log_tool_call(tool_name, False, error_code="MIGRATE_ERRORS", error_message="迁移出现错误")
-        except Exception:
-            pass
         raise SystemExit(1)
 
     print_success({"project": str(config.project_root), **stats}, message="migrated")
-    try:
+    with contextlib.suppress(Exception):
         logger.log_tool_call(tool_name, True)
-    except Exception:
-        pass
 
 
 if __name__ == "__main__":

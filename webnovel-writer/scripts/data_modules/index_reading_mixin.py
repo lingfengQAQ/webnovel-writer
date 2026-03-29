@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 IndexReadingMixin extracted from IndexManager.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sys
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from index_manager import ChapterReadingPowerMeta, ReviewMetrics, WritingChecklistScoreMeta
 
 
 class IndexReadingMixin:
@@ -40,7 +42,7 @@ class IndexReadingMixin:
             )
             conn.commit()
 
-    def get_chapter_reading_power(self, chapter: int) -> Optional[Dict]:
+    def get_chapter_reading_power(self, chapter: int) -> dict | None:
         """获取章节追读力元数据"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -60,7 +62,7 @@ class IndexReadingMixin:
                 )
             return None
 
-    def get_recent_reading_power(self, limit: int = 10) -> List[Dict]:
+    def get_recent_reading_power(self, limit: int = 10) -> list[dict]:
         """获取最近章节的追读力元数据"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -85,7 +87,7 @@ class IndexReadingMixin:
                 for row in cursor.fetchall()
             ]
 
-    def get_pattern_usage_stats(self, last_n_chapters: int = 20) -> Dict[str, int]:
+    def get_pattern_usage_stats(self, last_n_chapters: int = 20) -> dict[str, int]:
         """获取最近N章的爽点模式使用统计"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -112,7 +114,7 @@ class IndexReadingMixin:
                         )
             return stats
 
-    def get_hook_type_stats(self, last_n_chapters: int = 20) -> Dict[str, int]:
+    def get_hook_type_stats(self, last_n_chapters: int = 20) -> dict[str, int]:
         """获取最近N章的钩子类型使用统计"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -167,7 +169,7 @@ class IndexReadingMixin:
             )
             conn.commit()
 
-    def get_recent_review_metrics(self, limit: int = 5) -> List[Dict]:
+    def get_recent_review_metrics(self, limit: int = 5) -> list[dict]:
         """获取最近审查记录"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -187,7 +189,7 @@ class IndexReadingMixin:
                 for row in cursor.fetchall()
             ]
 
-    def get_review_trend_stats(self, last_n: int = 5) -> Dict[str, Any]:
+    def get_review_trend_stats(self, last_n: int = 5) -> dict[str, Any]:
         """获取审查趋势统计"""
         records = self.get_recent_review_metrics(last_n)
         if not records:
@@ -199,18 +201,16 @@ class IndexReadingMixin:
                 "recent_ranges": [],
             }
 
-        overall_scores: List[float] = []
-        dimension_totals: Dict[str, float] = {}
-        dimension_counts: Dict[str, int] = {}
-        severity_totals: Dict[str, int] = {}
+        overall_scores: list[float] = []
+        dimension_totals: dict[str, float] = {}
+        dimension_counts: dict[str, int] = {}
+        severity_totals: dict[str, int] = {}
 
         for record in records:
             score = record.get("overall_score")
             if score is not None:
-                try:
+                with contextlib.suppress(TypeError, ValueError):
                     overall_scores.append(float(score))
-                except (TypeError, ValueError):
-                    pass
 
             dimensions = record.get("dimension_scores") or {}
             if isinstance(dimensions, dict):
@@ -303,7 +303,7 @@ class IndexReadingMixin:
             )
             conn.commit()
 
-    def get_writing_checklist_score(self, chapter: int) -> Optional[Dict[str, Any]]:
+    def get_writing_checklist_score(self, chapter: int) -> dict[str, Any] | None:
         """获取指定章节的写作清单评分。"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -316,7 +316,7 @@ class IndexReadingMixin:
                 return None
             return self._row_to_dict(row, parse_json=["score_breakdown", "pending_items"])
 
-    def get_recent_writing_checklist_scores(self, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_recent_writing_checklist_scores(self, limit: int = 10) -> list[dict[str, Any]]:
         """获取最近章节写作清单评分。"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -333,7 +333,7 @@ class IndexReadingMixin:
                 for row in cursor.fetchall()
             ]
 
-    def get_writing_checklist_score_trend(self, last_n: int = 10) -> Dict[str, Any]:
+    def get_writing_checklist_score_trend(self, last_n: int = 10) -> dict[str, Any]:
         """获取写作清单评分趋势统计。"""
         records = self.get_recent_writing_checklist_scores(limit=max(1, int(last_n)))
         if not records:
@@ -345,18 +345,14 @@ class IndexReadingMixin:
                 "recent": [],
             }
 
-        scores: List[float] = []
-        completion_rates: List[float] = []
-        required_rates: List[float] = []
+        scores: list[float] = []
+        completion_rates: list[float] = []
+        required_rates: list[float] = []
         for row in records:
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 scores.append(float(row.get("score", 0.0)))
-            except (TypeError, ValueError):
-                pass
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 completion_rates.append(float(row.get("completion_rate", 0.0)))
-            except (TypeError, ValueError):
-                pass
 
             required_items = int(row.get("required_items") or 0)
             completed_required = int(row.get("completed_required") or 0)

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 ContextManager and SnapshotManager tests
 """
@@ -10,15 +9,15 @@ import logging
 import pytest
 
 from data_modules.config import DataModulesConfig
+from data_modules.context_manager import ContextManager
 from data_modules.index_manager import (
-    IndexManager,
-    EntityMeta,
     ChapterReadingPowerMeta,
+    EntityMeta,
+    IndexManager,
     ReviewMetrics,
 )
-from data_modules.context_manager import ContextManager
-from data_modules.snapshot_manager import SnapshotManager, SnapshotVersionMismatch
 from data_modules.query_router import QueryRouter
+from data_modules.snapshot_manager import SnapshotManager, SnapshotVersionMismatch
 
 
 @pytest.fixture

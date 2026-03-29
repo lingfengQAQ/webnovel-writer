@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 RAG Adapter - RAG 检索适配模块
 
@@ -11,29 +10,28 @@ RAG Adapter - RAG 检索适配模块
 """
 
 import asyncio
-import sqlite3
+import itertools
 import json
-import math
 import logging
+import math
+import re
 import shutil
+import sqlite3
+import time
+from collections import Counter
+from contextlib import contextmanager, suppress
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from runtime_compat import enable_windows_utf8_stdio
-from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass
-from collections import Counter
-import re
-from contextlib import contextmanager
-import itertools
-import time
-from datetime import datetime
 
-from .config import get_config
 from .api_client import get_client
+from .config import get_config
 from .index_manager import IndexManager
-from .query_router import QueryRouter
 from .observability import safe_append_perf_timing, safe_log_tool_call
-
+from .query_router import QueryRouter
 
 logger = logging.getLogger(__name__)
 
@@ -74,11 +72,11 @@ class RAGAdapter:
         self.api_client = get_client(config)
         self.index_manager = IndexManager(self.config)
         self.query_router = QueryRouter()
-        self._degraded_mode_reason: Optional[str] = None
+        self._degraded_mode_reason: str | None = None
         self._init_db()
 
     @property
-    def degraded_mode_reason(self) -> Optional[str]:
+    def degraded_mode_reason(self) -> str | None:
         return self._degraded_mode_reason
 
     def _update_degraded_mode(self) -> None:
@@ -224,8 +222,8 @@ class RAGAdapter:
             (key, str(value)),
         )
 
-    def get_consistency_meta(self) -> Dict[str, Any]:
-        meta: Dict[str, Any] = {
+    def get_consistency_meta(self) -> dict[str, Any]:
+        meta: dict[str, Any] = {
             "schema_version": "",
             "consistency_version": CONSISTENCY_META_VERSION,
             "consistency_updated_at": "",
@@ -250,7 +248,7 @@ class RAGAdapter:
         *,
         source: str = "rag_adapter",
         version: str = CONSISTENCY_META_VERSION,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -321,7 +319,7 @@ class RAGAdapter:
         limit: int,
         chunk_type: str | None = None,
         chapter: int | None = None,
-    ) -> List[str]:
+    ) -> list[str]:
         if limit <= 0:
             return []
         with self._get_conn() as conn:
@@ -366,12 +364,12 @@ class RAGAdapter:
                 )
             return [str(r[0]) for r in cursor.fetchall() if r and r[0]]
 
-    def _fetch_vectors_by_chunk_ids(self, chunk_ids: List[str]) -> List[Tuple]:
+    def _fetch_vectors_by_chunk_ids(self, chunk_ids: list[str]) -> list[tuple]:
         if not chunk_ids:
             return []
 
         # SQLite 参数数量限制（默认 999），这里做分片查询
-        def _chunks(xs: List[str], size: int = 500):
+        def _chunks(xs: list[str], size: int = 500):
             it = iter(xs)
             while True:
                 batch = list(itertools.islice(it, size))
@@ -379,7 +377,7 @@ class RAGAdapter:
                     break
                 yield batch
 
-        rows: List[Tuple] = []
+        rows: list[tuple] = []
         with self._get_conn() as conn:
             cursor = conn.cursor()
             for batch in _chunks(chunk_ids):
@@ -393,12 +391,12 @@ class RAGAdapter:
 
     def _vector_search_rows(
         self,
-        query_embedding: List[float],
-        rows: List[Tuple],
+        query_embedding: list[float],
+        rows: list[tuple],
         *,
         top_k: int,
-    ) -> List[SearchResult]:
-        results: List[SearchResult] = []
+    ) -> list[SearchResult]:
+        results: list[SearchResult] = []
         for row in rows:
             (
                 chunk_id,
@@ -433,7 +431,7 @@ class RAGAdapter:
 
     # ==================== 向量存储 ====================
 
-    async def store_chunks(self, chunks: List[Dict]) -> int:
+    async def store_chunks(self, chunks: list[dict]) -> int:
         """
         存储场景切片的向量
 
@@ -470,7 +468,7 @@ class RAGAdapter:
         with self._get_conn() as conn:
             cursor = conn.cursor()
 
-            for chunk, embedding in zip(chunks, embeddings):
+            for chunk, embedding in zip(chunks, embeddings, strict=False):
                 if embedding is None:
                     # 嵌入失败，跳过该 chunk（仅存储 BM25 索引供关键词检索）
                     skipped += 1
@@ -540,12 +538,12 @@ class RAGAdapter:
 
         return stored
 
-    def _serialize_embedding(self, embedding: List[float]) -> bytes:
+    def _serialize_embedding(self, embedding: list[float]) -> bytes:
         """序列化向量"""
         import struct
         return struct.pack(f"{len(embedding)}f", *embedding)
 
-    def _deserialize_embedding(self, data: bytes) -> List[float]:
+    def _deserialize_embedding(self, data: bytes) -> list[float]:
         """反序列化向量"""
         import struct
         count = len(data) // 4
@@ -555,7 +553,7 @@ class RAGAdapter:
         self,
         query: str,
         query_type: str,
-        results: List[SearchResult],
+        results: list[SearchResult],
         latency_ms: int,
         chapter: int | None = None,
     ) -> None:
@@ -574,7 +572,7 @@ class RAGAdapter:
 
     # ==================== BM25 索引 ====================
 
-    def _tokenize(self, text: str) -> List[str]:
+    def _tokenize(self, text: str) -> list[str]:
         """简单分词（中文按字符，英文按单词）"""
         # 中文字符
         chinese = re.findall(r'[\u4e00-\u9fff]+', text)
@@ -621,7 +619,7 @@ class RAGAdapter:
         chunk_type: str | None = None,
         log_query: bool = True,
         chapter: int | None = None,
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         """向量相似度搜索"""
         top_k = top_k or self.config.vector_top_k
         start_time = time.perf_counter()
@@ -706,9 +704,9 @@ class RAGAdapter:
             self._log_query(query, "vector", results, latency_ms, chapter=chapter)
         return results
 
-    def _cosine_similarity(self, a: List[float], b: List[float]) -> float:
+    def _cosine_similarity(self, a: list[float], b: list[float]) -> float:
         """计算余弦相似度"""
-        dot_product = sum(x * y for x, y in zip(a, b))
+        dot_product = sum(x * y for x, y in zip(a, b, strict=False))
         norm_a = math.sqrt(sum(x * x for x in a))
         norm_b = math.sqrt(sum(x * x for x in b))
         if norm_a == 0 or norm_b == 0:
@@ -726,7 +724,7 @@ class RAGAdapter:
         chunk_type: str | None = None,
         log_query: bool = True,
         chapter: int | None = None,
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         """BM25 关键词搜索"""
         top_k = top_k or self.config.bm25_top_k
         start_time = time.perf_counter()
@@ -833,10 +831,10 @@ class RAGAdapter:
             self._log_query(query, "bm25", results, latency_ms, chapter=chapter)
         return results
 
-    def _extract_query_seed_entities(self, query: str) -> List[str]:
+    def _extract_query_seed_entities(self, query: str) -> list[str]:
         """从查询中提取种子实体（通过别名和实体 ID 匹配）。"""
         tokens = set(re.findall(r"[\u4e00-\u9fff]{2,8}|[A-Za-z][A-Za-z0-9_]{1,24}", query))
-        entity_ids: List[str] = []
+        entity_ids: list[str] = []
         for token in tokens:
             if len(entity_ids) >= int(self.config.graph_rag_max_expanded_entities):
                 break
@@ -860,9 +858,9 @@ class RAGAdapter:
 
         return entity_ids[: int(self.config.graph_rag_max_expanded_entities)]
 
-    def _normalize_entity_ids(self, candidates: List[str]) -> List[str]:
+    def _normalize_entity_ids(self, candidates: list[str]) -> list[str]:
         """将输入实体候选（名称/别名/ID）规范化为实体 ID 列表。"""
-        ids: List[str] = []
+        ids: list[str] = []
         for token in candidates:
             candidate = str(token or "").strip()
             if not candidate:
@@ -880,11 +878,11 @@ class RAGAdapter:
                     ids.append(entity_id)
         return ids[: int(self.config.graph_rag_max_expanded_entities)]
 
-    def _expand_related_entities(self, seed_entities: List[str], hops: int | None = None) -> List[str]:
+    def _expand_related_entities(self, seed_entities: list[str], hops: int | None = None) -> list[str]:
         """基于关系图扩展相关实体。"""
         max_entities = int(self.config.graph_rag_max_expanded_entities)
         hops = max(1, int(hops or self.config.graph_rag_expand_hops))
-        expanded: List[str] = []
+        expanded: list[str] = []
         for seed in seed_entities:
             if seed not in expanded:
                 expanded.append(seed)
@@ -907,17 +905,17 @@ class RAGAdapter:
 
     def _collect_graph_candidate_chunk_ids(
         self,
-        entity_ids: List[str],
+        entity_ids: list[str],
         *,
         chapter: int | None = None,
         limit: int | None = None,
-    ) -> List[str]:
+    ) -> list[str]:
         """根据实体名称/别名在向量库正文中筛选候选 chunk。"""
         if not entity_ids:
             return []
 
         limit = int(limit or self.config.graph_rag_candidate_limit)
-        entity_terms: Dict[str, set[str]] = {}
+        entity_terms: dict[str, set[str]] = {}
         for entity_id in entity_ids:
             terms: set[str] = set()
             entity = self.index_manager.get_entity(entity_id)
@@ -953,7 +951,7 @@ class RAGAdapter:
                 )
             rows = cursor.fetchall()
 
-        scored: List[Tuple[str, int, int]] = []
+        scored: list[tuple[str, int, int]] = []
         for chunk_id, chapter_no, content in rows:
             text = str(content or "")
             if not text:
@@ -970,11 +968,11 @@ class RAGAdapter:
     async def _vector_search_by_chunk_ids(
         self,
         query: str,
-        chunk_ids: List[str],
+        chunk_ids: list[str],
         *,
         top_k: int,
         chunk_type: str | None = None,
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         """在指定候选 chunk 范围内执行向量检索。"""
         if not chunk_ids:
             return []
@@ -1027,9 +1025,9 @@ class RAGAdapter:
         *,
         chunk_type: str | None = None,
         chapter: int | None = None,
-        center_entities: Optional[List[str]] = None,
+        center_entities: list[str] | None = None,
         log_query: bool = True,
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         """
         图谱增强混合检索：
         1) 先走现有 hybrid 作为基础召回；
@@ -1099,12 +1097,10 @@ class RAGAdapter:
         except Exception:
             max_chapter = 0
         if chapter is not None:
-            try:
+            with suppress(TypeError, ValueError):
                 max_chapter = int(chapter)
-            except (TypeError, ValueError):
-                pass
 
-        merged: Dict[str, SearchResult] = {}
+        merged: dict[str, SearchResult] = {}
         for result in base_results:
             result.source = "graph_hybrid"
             merged[result.chunk_id] = result
@@ -1134,7 +1130,7 @@ class RAGAdapter:
         rerank_input = [c.content for c in candidates]
         rerank_results = await self.api_client.rerank(query, rerank_input, top_n=rerank_top_n)
 
-        final_results: List[SearchResult] = []
+        final_results: list[SearchResult] = []
         if rerank_results:
             for item in rerank_results:
                 idx = int(item.get("index", 0))
@@ -1161,9 +1157,9 @@ class RAGAdapter:
         strategy: str = "auto",
         chunk_type: str | None = None,
         chapter: int | None = None,
-        center_entities: Optional[List[str]] = None,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> List[SearchResult]:
+        center_entities: list[str] | None = None,
+        filters: dict[str, Any] | None = None,
+    ) -> list[SearchResult]:
         """统一检索入口。"""
         strategy = str(strategy or "auto").lower()
         if filters and chapter is None:
@@ -1219,7 +1215,7 @@ class RAGAdapter:
         chunk_type: str | None = None,
         chapter: int | None = None,
         log_query: bool = True,
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         """
         混合检索：向量 + BM25 + RRF 融合 + Rerank
 
@@ -1325,7 +1321,7 @@ class RAGAdapter:
         candidates = [item["result"] for item in sorted_results[:rerank_top_n * 2]]
 
         if not candidates:
-            final_results: List[SearchResult] = []
+            final_results: list[SearchResult] = []
             latency_ms = int((time.perf_counter() - start_time) * 1000)
             if log_query:
                 self._log_query(query, "hybrid", final_results, latency_ms, chapter=chapter)
@@ -1358,9 +1354,9 @@ class RAGAdapter:
             self._log_query(query, "hybrid", final_results, latency_ms, chapter=chapter)
         return final_results
 
-    def _get_chunks_by_ids(self, chunk_ids: List[str]) -> List[SearchResult]:
+    def _get_chunks_by_ids(self, chunk_ids: list[str]) -> list[SearchResult]:
         rows = self._fetch_vectors_by_chunk_ids(chunk_ids)
-        results: List[SearchResult] = []
+        results: list[SearchResult] = []
         for row in rows:
             (
                 chunk_id,
@@ -1389,11 +1385,11 @@ class RAGAdapter:
 
     def _merge_results(
         self,
-        parents: List[SearchResult],
-        children: List[SearchResult],
-    ) -> List[SearchResult]:
+        parents: list[SearchResult],
+        children: list[SearchResult],
+    ) -> list[SearchResult]:
         parent_map = {p.chunk_id: p for p in parents}
-        merged: List[SearchResult] = []
+        merged: list[SearchResult] = []
         seen = set()
         for child in children:
             parent_id = child.parent_chunk_id
@@ -1403,7 +1399,7 @@ class RAGAdapter:
             merged.append(child)
         return merged
 
-    async def search_with_backtrack(self, query: str, top_k: int = 5) -> List[SearchResult]:
+    async def search_with_backtrack(self, query: str, top_k: int = 5) -> list[SearchResult]:
         start_time = time.perf_counter()
         child_results = await self.hybrid_search(
             query,
@@ -1422,7 +1418,7 @@ class RAGAdapter:
 
     # ==================== 统计 ====================
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """获取 RAG 统计"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -1449,8 +1445,9 @@ class RAGAdapter:
 def main():
     import argparse
     import sys
-    from .cli_output import print_success, print_error
-    from .cli_args import normalize_global_project_root, load_json_arg
+
+    from .cli_args import load_json_arg, normalize_global_project_root
+    from .cli_output import print_error, print_success
 
     parser = argparse.ArgumentParser(description="RAG Adapter CLI")
     parser.add_argument("--project-root", type=str, help="项目根目录")
@@ -1591,7 +1588,7 @@ def main():
             emit_success(result, message="indexed", chapter=args.chapter)
 
     elif args.command == "search":
-        center_entities: List[str] | None = None
+        center_entities: list[str] | None = None
         if getattr(args, "center_entities", None):
             raw = str(args.center_entities).strip()
             if raw:

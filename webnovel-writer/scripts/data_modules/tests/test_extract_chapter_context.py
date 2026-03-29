@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import json
 import sys
@@ -148,8 +147,9 @@ def test_build_chapter_context_payload_includes_contract_sections(tmp_path):
     _ensure_scripts_path()
 
     from extract_chapter_context import build_chapter_context_payload
+
     from data_modules.config import DataModulesConfig
-    from data_modules.index_manager import IndexManager, ChapterReadingPowerMeta, ReviewMetrics
+    from data_modules.index_manager import ChapterReadingPowerMeta, IndexManager, ReviewMetrics
 
     cfg = DataModulesConfig.from_project_root(tmp_path)
     cfg.ensure_dirs()

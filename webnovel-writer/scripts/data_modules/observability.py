@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Shared observability helpers for data modules.
 """
@@ -10,8 +9,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
-
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +20,9 @@ def safe_log_tool_call(
     tool_name: str,
     success: bool,
     retry_count: int = 0,
-    error_code: Optional[str] = None,
-    error_message: Optional[str] = None,
-    chapter: Optional[int] = None,
+    error_code: str | None = None,
+    error_message: str | None = None,
+    chapter: int | None = None,
 ) -> None:
     try:
         tool_logger.log_tool_call(
@@ -49,10 +47,10 @@ def safe_append_perf_timing(
     tool_name: str,
     success: bool,
     elapsed_ms: int,
-    chapter: Optional[int] = None,
-    error_code: Optional[str] = None,
-    error_message: Optional[str] = None,
-    meta: Optional[Dict[str, Any]] = None,
+    chapter: int | None = None,
+    error_code: str | None = None,
+    error_message: str | None = None,
+    meta: dict[str, Any] | None = None,
 ) -> None:
     """
     Append timing trace for profiling long-running data-agent pipeline steps.
@@ -66,7 +64,7 @@ def safe_append_perf_timing(
         obs_dir.mkdir(parents=True, exist_ok=True)
         log_path = obs_dir / "data_agent_timing.jsonl"
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "timestamp": datetime.now().isoformat(),
             "tool_name": tool_name,
             "success": bool(success),

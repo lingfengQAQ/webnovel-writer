@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Data Modules - 配置文件
 
@@ -9,9 +8,8 @@ API 配置通过环境变量读取（支持 .env 文件）：
 """
 
 import os
-from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional
+from pathlib import Path
 
 from runtime_compat import normalize_windows_path
 
@@ -54,7 +52,7 @@ def _load_dotenv_file(env_path: Path, *, override: bool = False) -> bool:
     if not env_path.exists():
         return False
     try:
-        with open(env_path, "r", encoding="utf-8") as f:
+        with open(env_path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith("#") and "=" in line:
@@ -356,10 +354,10 @@ class DataModulesConfig:
         return cls(project_root=root)
 
 
-_default_config: Optional[DataModulesConfig] = None
+_default_config: DataModulesConfig | None = None
 
 
-def get_config(project_root: Optional[Path] = None) -> DataModulesConfig:
+def get_config(project_root: Path | None = None) -> DataModulesConfig:
     global _default_config
     if project_root is not None:
         return DataModulesConfig.from_project_root(project_root)

@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """Query router for RAG requests."""
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List
+from typing import Any
 
 
 class QueryRouter:
@@ -23,7 +22,7 @@ class QueryRouter:
             "plot": list(self.intent_patterns["plot"]),
         }
 
-    def _extract_entities(self, query: str) -> List[str]:
+    def _extract_entities(self, query: str) -> list[str]:
         # 轻量启发式提取：提取长度 2-6 的中文短语，过滤常见查询词
         candidates = re.findall(r"[\u4e00-\u9fff]{2,6}", query)
         stopwords = {
@@ -40,7 +39,7 @@ class QueryRouter:
             "地点",
             "场景",
         }
-        entities: List[str] = []
+        entities: list[str] = []
         for c in candidates:
             if c in stopwords:
                 continue
@@ -48,7 +47,7 @@ class QueryRouter:
                 entities.append(c)
         return entities[:4]
 
-    def _extract_time_scope(self, query: str) -> Dict[str, Any]:
+    def _extract_time_scope(self, query: str) -> dict[str, Any]:
         m_range = re.search(r"第?\s*(\d+)\s*[-~到]\s*(\d+)\s*章", query)
         if m_range:
             start = int(m_range.group(1))
@@ -64,7 +63,7 @@ class QueryRouter:
 
         return {}
 
-    def route_intent(self, query: str) -> Dict[str, Any]:
+    def route_intent(self, query: str) -> dict[str, Any]:
         query = str(query or "")
         intent = "plot"
         for intent_name, patterns in self.intent_patterns.items():
@@ -83,13 +82,13 @@ class QueryRouter:
             "raw_query": query,
         }
 
-    def plan_subqueries(self, intent_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def plan_subqueries(self, intent_payload: dict[str, Any]) -> list[dict[str, Any]]:
         intent = str((intent_payload or {}).get("intent") or "plot")
         entities = list((intent_payload or {}).get("entities") or [])
         time_scope = dict((intent_payload or {}).get("time_scope") or {})
         needs_graph = bool((intent_payload or {}).get("needs_graph"))
 
-        steps: List[Dict[str, Any]] = []
+        steps: list[dict[str, Any]] = []
         if intent == "relationship":
             steps.append(
                 {
@@ -139,6 +138,6 @@ class QueryRouter:
     def route(self, query: str) -> str:
         return str(self.route_intent(query).get("intent") or "plot")
 
-    def split(self, query: str) -> List[str]:
+    def split(self, query: str) -> list[str]:
         parts = re.split(r"[，,；;以及和]\s*", query)
         return [p.strip() for p in parts if p.strip()]

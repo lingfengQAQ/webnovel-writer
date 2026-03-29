@@ -235,7 +235,7 @@ def main() -> None:
             "details": exc.details,
         }
         _print_json(payload)
-        raise SystemExit(1)
+        raise SystemExit(1) from exc
 
     if args.format == "json":
         _print_json(result)

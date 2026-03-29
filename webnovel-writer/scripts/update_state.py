@@ -43,22 +43,24 @@
   - Dry-run 模式（--dry-run）
 """
 
+import argparse
+import contextlib
 import json
 import os
-import sys
-import argparse
 import shutil
-from pathlib import Path
-
-from runtime_compat import enable_windows_utf8_stdio
+import sys
 from datetime import datetime
-from typing import Dict, Any, Optional
+from pathlib import Path
+from typing import Any
+
+from project_locator import resolve_state_file
+from runtime_compat import enable_windows_utf8_stdio
 
 # ============================================================================
 # 安全修复：导入安全工具函数（P1 MEDIUM）
 # ============================================================================
-from security_utils import create_secure_directory, atomic_write_json, restore_from_backup
-from project_locator import resolve_state_file
+from security_utils import atomic_write_json, create_secure_directory, restore_from_backup
+
 from data_modules.state_validator import (
     normalize_foreshadowing_status,
     normalize_state_runtime_sections,
@@ -79,7 +81,7 @@ class StateUpdater:
         self.backup_file = None
         self.state = None
 
-    def _validate_schema(self, state: Dict) -> bool:
+    def _validate_schema(self, state: dict) -> bool:
         """验证 state.json 的基本结构（v5.0 引入，v5.4 沿用）"""
         required_keys = [
             "project_info",
@@ -102,14 +104,14 @@ class StateUpdater:
         has_nested_power = "power" in ps and isinstance(ps.get("power"), dict)
         has_flat_power = "realm" in ps
         if not (has_nested_power or has_flat_power):
-            print(f"❌ 缺少 protagonist_state.power 或 protagonist_state.realm 字段")
+            print("❌ 缺少 protagonist_state.power 或 protagonist_state.realm 字段")
             return False
 
         # location 字段：支持 location.current 或直接 location
         has_nested_location = isinstance(ps.get("location"), dict) and "current" in ps.get("location", {})
         has_flat_location = isinstance(ps.get("location"), str)
         if not (has_nested_location or has_flat_location):
-            print(f"❌ 缺少 protagonist_state.location 字段")
+            print("❌ 缺少 protagonist_state.location 字段")
             return False
 
         # 验证并补全 strand_tracker 结构（兼容旧 state.json）
@@ -145,7 +147,7 @@ class StateUpdater:
             return False
 
         try:
-            with open(self.state_file, 'r', encoding='utf-8') as f:
+            with open(self.state_file, encoding='utf-8') as f:
                 self.state = json.load(f)
 
             if not self._validate_schema(self.state):
@@ -197,7 +199,7 @@ class StateUpdater:
             print(f"❌ 保存失败: {e}")
             # 尝试从备份恢复
             if restore_from_backup(self.state_file):
-                print(f"✅ 已从备份恢复")
+                print("✅ 已从备份恢复")
             return False
 
     def update_protagonist_power(self, realm: str, layer: int, bottleneck: str):
@@ -290,7 +292,7 @@ class StateUpdater:
     def resolve_foreshadowing(self, content: str, chapter: int):
         """回收伏笔"""
         if "foreshadowing" not in self.state["plot_threads"]:
-            print(f"❌ 未找到伏笔列表")
+            print("❌ 未找到伏笔列表")
             return
 
         for item in self.state["plot_threads"]["foreshadowing"]:
@@ -409,7 +411,7 @@ class StateUpdater:
         if len(tracker["history"]) > 50:
             tracker["history"] = tracker["history"][-50:]
 
-        print(f"✅ strand_tracker 已更新")
+        print("✅ strand_tracker 已更新")
         print(f"   - 第{chapter}章主导情节线: {strand}")
         print(f"   - 该情节线已连续{tracker['chapters_since_switch']}章")
 
@@ -579,9 +581,8 @@ def main():
         sys.exit(1)
 
     # 备份（除非是 dry-run）
-    if not args.dry_run:
-        if not updater.backup():
-            sys.exit(1)
+    if not args.dry_run and not updater.backup():
+        sys.exit(1)
 
     print("\n📝 开始更新...")
 
@@ -602,10 +603,8 @@ def main():
         if args.relationship:
             for char_name, key, value in args.relationship:
                 # 尝试转换为数字
-                try:
+                with contextlib.suppress(ValueError):
                     value = int(value)
-                except ValueError:
-                    pass
                 updater.update_relationship(char_name, key, value)
 
         if args.add_foreshadowing:
@@ -644,16 +643,16 @@ def main():
         print("\n✅ 更新完成！")
 
         if not args.dry_run:
-            print(f"\n💡 提示:")
+            print("\n💡 提示:")
             print(f"  - 原文件已备份: {updater.backup_file}")
             print(f"  - 如需回滚，可复制备份文件到 {updater.state_file}")
 
     except Exception as e:
         print(f"\n❌ 更新失败: {e}")
         if updater.backup_file and os.path.exists(updater.backup_file):
-            print(f"🔄 正在回滚...")
+            print("🔄 正在回滚...")
             shutil.copy2(updater.backup_file, updater.state_file)
-            print(f"✅ 已回滚到备份版本")
+            print("✅ 已回滚到备份版本")
         sys.exit(1)
 
 if __name__ == "__main__":

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Index Manager - 索引管理模块 (v5.4)
 
@@ -32,25 +31,23 @@ v5.1 变更:
 - 新增 relationships 表替代 state.json 中的 structured_relationships
 """
 
-import sqlite3
 import json
+import sqlite3
 import time
-from pathlib import Path
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any
 
 from runtime_compat import enable_windows_utf8_stdio
-from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass, field
-from contextlib import contextmanager
-from datetime import datetime
 
 from .config import get_config
 from .index_chapter_mixin import IndexChapterMixin
-from .index_entity_mixin import IndexEntityMixin
 from .index_debt_mixin import IndexDebtMixin
-from .index_reading_mixin import IndexReadingMixin
+from .index_entity_mixin import IndexEntityMixin
 from .index_observability_mixin import IndexObservabilityMixin
+from .index_reading_mixin import IndexReadingMixin
 from .observability import safe_append_perf_timing, safe_log_tool_call
-
 
 CONSISTENCY_META_VERSION = "f03-v1"
 CONSISTENCY_META_KEYS = {
@@ -69,7 +66,7 @@ class ChapterMeta:
     title: str
     location: str
     word_count: int
-    characters: List[str]
+    characters: list[str]
     summary: str = ""
 
 
@@ -83,7 +80,7 @@ class SceneMeta:
     end_line: int
     location: str
     summary: str
-    characters: List[str]
+    characters: list[str]
 
 
 @dataclass
@@ -95,7 +92,7 @@ class EntityMeta:
     canonical_name: str
     tier: str = "装饰"  # 核心/重要/次要/装饰
     desc: str = ""
-    current: Dict = field(default_factory=dict)  # 当前状态 (realm/location/items等)
+    current: dict = field(default_factory=dict)  # 当前状态 (realm/location/items等)
     first_appearance: int = 0
     last_appearance: int = 0
     is_protagonist: bool = False
@@ -191,10 +188,10 @@ class ChapterReadingPowerMeta:
     chapter: int
     hook_type: str = ""  # 章末钩子类型
     hook_strength: str = "medium"  # strong / medium / weak
-    coolpoint_patterns: List[str] = field(default_factory=list)  # 使用的爽点模式
-    micropayoffs: List[str] = field(default_factory=list)  # 微兑现列表
-    hard_violations: List[str] = field(default_factory=list)  # 硬约束违规
-    soft_suggestions: List[str] = field(default_factory=list)  # 软建议
+    coolpoint_patterns: list[str] = field(default_factory=list)  # 使用的爽点模式
+    micropayoffs: list[str] = field(default_factory=list)  # 微兑现列表
+    hard_violations: list[str] = field(default_factory=list)  # 硬约束违规
+    soft_suggestions: list[str] = field(default_factory=list)  # 软建议
     is_transition: bool = False  # 是否为过渡章
     override_count: int = 0  # Override Contract数量
     debt_balance: float = 0.0  # 当前债务余额
@@ -207,9 +204,9 @@ class ReviewMetrics:
     start_chapter: int
     end_chapter: int
     overall_score: float = 0.0
-    dimension_scores: Dict[str, float] = field(default_factory=dict)
-    severity_counts: Dict[str, int] = field(default_factory=dict)
-    critical_issues: List[str] = field(default_factory=list)
+    dimension_scores: dict[str, float] = field(default_factory=dict)
+    severity_counts: dict[str, int] = field(default_factory=dict)
+    critical_issues: list[str] = field(default_factory=list)
     report_file: str = ""
     notes: str = ""
 
@@ -228,8 +225,8 @@ class WritingChecklistScoreMeta:
     completed_weight: float = 0.0
     completion_rate: float = 0.0
     score: float = 0.0
-    score_breakdown: Dict[str, Any] = field(default_factory=dict)
-    pending_items: List[str] = field(default_factory=list)
+    score_breakdown: dict[str, Any] = field(default_factory=dict)
+    pending_items: list[str] = field(default_factory=list)
     source: str = "context_manager"
     notes: str = ""
 
@@ -679,11 +676,11 @@ class IndexManager(IndexChapterMixin, IndexEntityMixin, IndexDebtMixin, IndexRea
     def touch_consistency_meta(
         self,
         *,
-        state_chapter: Optional[int] = None,
+        state_chapter: int | None = None,
         state_last_updated: str = "",
         source: str = "index_manager",
         version: str = CONSISTENCY_META_VERSION,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         payload = {
             "state_current_chapter": str(int(state_chapter or 0)),
@@ -703,8 +700,8 @@ class IndexManager(IndexChapterMixin, IndexEntityMixin, IndexDebtMixin, IndexRea
             conn.commit()
         return self.get_consistency_meta()
 
-    def get_consistency_meta(self) -> Dict[str, Any]:
-        result: Dict[str, Any] = {
+    def get_consistency_meta(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
             "version": CONSISTENCY_META_VERSION,
             "updated_at": "",
             "state_current_chapter": 0,
@@ -746,8 +743,9 @@ class IndexManager(IndexChapterMixin, IndexEntityMixin, IndexDebtMixin, IndexRea
 def main():
     import argparse
     import sys
-    from .cli_output import print_success, print_error
-    from .cli_args import normalize_global_project_root, load_json_arg
+
+    from .cli_args import load_json_arg, normalize_global_project_root
+    from .cli_output import print_error, print_success
 
     parser = argparse.ArgumentParser(description="Index Manager CLI (v5.4)")
     parser.add_argument("--project-root", type=str, help="项目根目录")
@@ -1000,9 +998,9 @@ def main():
     def _append_timing(
         success: bool,
         *,
-        error_code: Optional[str] = None,
-        error_message: Optional[str] = None,
-        chapter: Optional[int] = None,
+        error_code: str | None = None,
+        error_message: str | None = None,
+        chapter: int | None = None,
     ):
         elapsed_ms = int((time.perf_counter() - command_started_at) * 1000)
         safe_append_perf_timing(
@@ -1015,12 +1013,12 @@ def main():
             error_message=error_message,
         )
 
-    def emit_success(data=None, message: str = "ok", chapter: Optional[int] = None):
+    def emit_success(data=None, message: str = "ok", chapter: int | None = None):
         print_success(data, message=message)
         safe_log_tool_call(manager, tool_name=tool_name, success=True, chapter=chapter)
         _append_timing(True, chapter=chapter)
 
-    def emit_error(code: str, message: str, suggestion: Optional[str] = None, chapter: Optional[int] = None):
+    def emit_error(code: str, message: str, suggestion: str | None = None, chapter: int | None = None):
         print_error(code, message, suggestion=suggestion)
         safe_log_tool_call(
             manager,

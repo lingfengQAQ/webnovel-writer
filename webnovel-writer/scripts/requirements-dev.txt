@@ -7,3 +7,6 @@ pytest>=7.0.0
 pytest-cov>=4.1.0
 pytest-asyncio>=0.23.0
 pytest-timeout>=2.3.0
+
+# Linter
+ruff>=0.8.0

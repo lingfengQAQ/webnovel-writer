@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 IndexEntityMixin extracted from IndexManager.
 """
@@ -11,8 +10,10 @@ import logging
 import re
 import sqlite3
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
+if TYPE_CHECKING:
+    from index_manager import EntityMeta, RelationshipEventMeta, RelationshipMeta, StateChangeMeta
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +122,7 @@ class IndexEntityMixin:
                 conn.commit()
                 return True
 
-    def get_entity(self, entity_id: str) -> Optional[Dict]:
+    def get_entity(self, entity_id: str) -> dict | None:
         """获取单个实体"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -133,7 +134,7 @@ class IndexEntityMixin:
 
     def get_entities_by_type(
         self, entity_type: str, include_archived: bool = False
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """按类型获取实体"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -158,7 +159,7 @@ class IndexEntityMixin:
                 for row in cursor.fetchall()
             ]
 
-    def get_entities_by_tier(self, tier: str) -> List[Dict]:
+    def get_entities_by_tier(self, tier: str) -> list[dict]:
         """按重要度获取实体 (核心/重要/次要/装饰)"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -174,7 +175,7 @@ class IndexEntityMixin:
                 for row in cursor.fetchall()
             ]
 
-    def get_core_entities(self) -> List[Dict]:
+    def get_core_entities(self) -> list[dict]:
         """获取所有核心实体 (用于 Context Agent 全量加载)"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -188,7 +189,7 @@ class IndexEntityMixin:
                 for row in cursor.fetchall()
             ]
 
-    def get_protagonist(self) -> Optional[Dict]:
+    def get_protagonist(self) -> dict | None:
         """获取主角实体"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -198,7 +199,7 @@ class IndexEntityMixin:
                 return self._row_to_dict(row, parse_json=["current_json"])
             return None
 
-    def update_entity_current(self, entity_id: str, updates: Dict) -> bool:
+    def update_entity_current(self, entity_id: str, updates: dict) -> bool:
         """
         增量更新实体的 current 字段 (不覆盖其他字段)
 
@@ -275,7 +276,7 @@ class IndexEntityMixin:
             except sqlite3.IntegrityError:
                 return False
 
-    def get_entities_by_alias(self, alias: str) -> List[Dict]:
+    def get_entities_by_alias(self, alias: str) -> list[dict]:
         """
         根据别名查找实体 (一对多)
 
@@ -297,7 +298,7 @@ class IndexEntityMixin:
                 for row in cursor.fetchall()
             ]
 
-    def get_entity_aliases(self, entity_id: str) -> List[str]:
+    def get_entity_aliases(self, entity_id: str) -> list[str]:
         """获取实体的所有别名"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -345,7 +346,7 @@ class IndexEntityMixin:
             conn.commit()
             return cursor.lastrowid
 
-    def get_entity_state_changes(self, entity_id: str, limit: int = 20) -> List[Dict]:
+    def get_entity_state_changes(self, entity_id: str, limit: int = 20) -> list[dict]:
         """获取实体的状态变化历史"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -360,7 +361,7 @@ class IndexEntityMixin:
             )
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_recent_state_changes(self, limit: int = 50) -> List[Dict]:
+    def get_recent_state_changes(self, limit: int = 50) -> list[dict]:
         """获取最近的状态变化"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -374,7 +375,7 @@ class IndexEntityMixin:
             )
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_chapter_state_changes(self, chapter: int) -> List[Dict]:
+    def get_chapter_state_changes(self, chapter: int) -> list[dict]:
         """获取某章的所有状态变化"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -442,7 +443,7 @@ class IndexEntityMixin:
 
     def get_entity_relationships(
         self, entity_id: str, direction: str = "both"
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         获取实体的关系
 
@@ -479,7 +480,7 @@ class IndexEntityMixin:
 
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_relationship_between(self, entity1: str, entity2: str) -> List[Dict]:
+    def get_relationship_between(self, entity1: str, entity2: str) -> list[dict]:
         """获取两个实体之间的所有关系"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -494,7 +495,7 @@ class IndexEntityMixin:
             )
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_recent_relationships(self, limit: int = 30) -> List[Dict]:
+    def get_recent_relationships(self, limit: int = 30) -> list[dict]:
         """获取最近建立的关系"""
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -601,14 +602,14 @@ class IndexEntityMixin:
         self,
         entity_id: str,
         direction: str = "both",
-        from_chapter: Optional[int] = None,
-        to_chapter: Optional[int] = None,
+        from_chapter: int | None = None,
+        to_chapter: int | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """按实体查询关系事件。"""
         direction = str(direction or "both").lower()
-        clauses: List[str] = []
-        params: List[Any] = []
+        clauses: list[str] = []
+        params: list[Any] = []
 
         if direction == "from":
             clauses.append("from_entity = ?")
@@ -645,15 +646,15 @@ class IndexEntityMixin:
         self,
         entity1: str,
         entity2: str,
-        from_chapter: Optional[int] = None,
-        to_chapter: Optional[int] = None,
+        from_chapter: int | None = None,
+        to_chapter: int | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """查询两个实体之间的关系时间线。"""
         clauses = [
             "((from_entity = ? AND to_entity = ?) OR (from_entity = ? AND to_entity = ?))"
         ]
-        params: List[Any] = [entity1, entity2, entity2, entity1]
+        params: list[Any] = [entity1, entity2, entity2, entity1]
 
         if from_chapter is not None:
             clauses.append("chapter >= ?")
@@ -678,9 +679,9 @@ class IndexEntityMixin:
 
     def _load_effective_relationship_edges(
         self,
-        chapter: Optional[int] = None,
-        relation_types: Optional[List[str]] = None,
-    ) -> List[Dict[str, Any]]:
+        chapter: int | None = None,
+        relation_types: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         """加载指定章节截面的有效关系边。"""
         relation_types = [str(t) for t in (relation_types or []) if str(t).strip()]
 
@@ -688,7 +689,7 @@ class IndexEntityMixin:
             cursor = conn.cursor()
             if chapter is None:
                 clauses = []
-                params: List[Any] = []
+                params: list[Any] = []
                 if relation_types:
                     placeholders = ",".join("?" for _ in relation_types)
                     clauses.append(f"type IN ({placeholders})")
@@ -741,7 +742,7 @@ class IndexEntityMixin:
 
             # 兼容旧数据：若事件流不完整，回退 relationships 快照补边
             snapshot_clauses = ["chapter <= ?"]
-            snapshot_params: List[Any] = [int(chapter)]
+            snapshot_params: list[Any] = [int(chapter)]
             if relation_types:
                 placeholders = ",".join("?" for _ in relation_types)
                 snapshot_clauses.append(f"type IN ({placeholders})")
@@ -758,7 +759,7 @@ class IndexEntityMixin:
             snapshot_rows = cursor.fetchall()
 
         # 章节截面：相同关系只保留“最近一次事件”，remove 视为已失效。
-        effective: List[Dict[str, Any]] = []
+        effective: list[dict[str, Any]] = []
         seen: set[tuple[str, str, str]] = set()
         for row in event_rows:
             key = (
@@ -816,10 +817,10 @@ class IndexEntityMixin:
         self,
         center_entity: str,
         depth: int = 2,
-        chapter: Optional[int] = None,
+        chapter: int | None = None,
         top_edges: int = 50,
-        relation_types: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        relation_types: list[str] | None = None,
+    ) -> dict[str, Any]:
         """按中心实体构建关系子图。"""
         center_entity = str(center_entity or "").strip()
         depth = max(1, int(depth or 1))
@@ -831,7 +832,7 @@ class IndexEntityMixin:
         )
         edges_all.sort(key=lambda x: int(x.get("chapter", 0)), reverse=True)
 
-        selected_edges: List[Dict[str, Any]] = []
+        selected_edges: list[dict[str, Any]] = []
         selected_keys: set[tuple[str, str, str]] = set()
         visited_nodes: set[str] = {center_entity} if center_entity else set()
         frontier: set[str] = {center_entity} if center_entity else set()
@@ -871,7 +872,7 @@ class IndexEntityMixin:
             visited_nodes.add(center_entity)
 
         # 查询节点详情
-        entity_map: Dict[str, Dict[str, Any]] = {}
+        entity_map: dict[str, dict[str, Any]] = {}
         if visited_nodes:
             with self._get_conn() as conn:
                 cursor = conn.cursor()
@@ -893,7 +894,7 @@ class IndexEntityMixin:
                         "last_appearance": int(row["last_appearance"] or 0),
                     }
 
-        nodes: List[Dict[str, Any]] = []
+        nodes: list[dict[str, Any]] = []
         for entity_id in sorted(
             visited_nodes,
             key=lambda eid: (
@@ -932,7 +933,7 @@ class IndexEntityMixin:
             safe = f"n_{safe}"
         return safe
 
-    def render_relationship_subgraph_mermaid(self, graph: Dict[str, Any]) -> str:
+    def render_relationship_subgraph_mermaid(self, graph: dict[str, Any]) -> str:
         """将关系子图渲染为 Mermaid。"""
         lines = ["```mermaid", "graph LR"]
         nodes = graph.get("nodes") or []
@@ -943,7 +944,7 @@ class IndexEntityMixin:
             lines.append("```")
             return "\n".join(lines)
 
-        node_alias: Dict[str, str] = {}
+        node_alias: dict[str, str] = {}
         for node in nodes:
             entity_id = str(node.get("id") or "")
             if not entity_id:
@@ -966,10 +967,7 @@ class IndexEntityMixin:
                 polarity = int(edge.get("polarity", 0) or 0)
             except (TypeError, ValueError):
                 polarity = 0
-            if polarity < 0:
-                connector = "-.->"
-            else:
-                connector = "-->"
+            connector = "-.->" if polarity < 0 else "-->"
             lines.append(
                 f"    {node_alias[from_entity]} {connector}|{label}| {node_alias[to_entity]}"
             )

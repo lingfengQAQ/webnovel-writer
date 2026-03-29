@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Entity Linker - 实体消歧辅助模块 (v5.4)
 
@@ -14,7 +13,6 @@ v5.1 变更（v5.4 沿用）:
 - 移除对 state.json 的直接操作
 """
 
-from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 
 from .config import get_config
@@ -26,11 +24,11 @@ from .observability import safe_log_tool_call
 class DisambiguationResult:
     """消歧结果"""
     mention: str
-    entity_id: Optional[str]
+    entity_id: str | None
     confidence: float
-    candidates: List[str] = field(default_factory=list)
+    candidates: list[str] = field(default_factory=list)
     adopted: bool = False
-    warning: Optional[str] = None
+    warning: str | None = None
 
 
 class EntityLinker:
@@ -48,7 +46,7 @@ class EntityLinker:
             return False
         return self._index_manager.register_alias(alias, entity_id, entity_type)
 
-    def lookup_alias(self, mention: str, entity_type: str = None) -> Optional[str]:
+    def lookup_alias(self, mention: str, entity_type: str = None) -> str | None:
         """查找别名对应的实体ID（返回第一个匹配，可选按类型过滤）"""
         entries = self._index_manager.get_entities_by_alias(mention)
         if not entries:
@@ -62,18 +60,18 @@ class EntityLinker:
         else:
             return entries[0].get("id") if entries else None
 
-    def lookup_alias_all(self, mention: str) -> List[Dict]:
+    def lookup_alias_all(self, mention: str) -> list[dict]:
         """查找别名对应的所有实体（一对多）"""
         entries = self._index_manager.get_entities_by_alias(mention)
         return [{"type": e.get("type"), "id": e.get("id")} for e in entries]
 
-    def get_all_aliases(self, entity_id: str, entity_type: str = None) -> List[str]:
+    def get_all_aliases(self, entity_id: str, entity_type: str = None) -> list[str]:
         """获取实体的所有别名"""
         return self._index_manager.get_entity_aliases(entity_id)
 
     # ==================== 置信度判断 ====================
 
-    def evaluate_confidence(self, confidence: float) -> Tuple[str, bool, Optional[str]]:
+    def evaluate_confidence(self, confidence: float) -> tuple[str, bool, str | None]:
         """
         评估置信度，返回 (action, adopt, warning)
 
@@ -91,7 +89,7 @@ class EntityLinker:
     def process_uncertain(
         self,
         mention: str,
-        candidates: List[str],
+        candidates: list[str],
         suggested: str,
         confidence: float,
         context: str = ""
@@ -118,8 +116,8 @@ class EntityLinker:
 
     def process_extraction_result(
         self,
-        uncertain_items: List[Dict]
-    ) -> Tuple[List[DisambiguationResult], List[str]]:
+        uncertain_items: list[dict]
+    ) -> tuple[list[DisambiguationResult], list[str]]:
         """
         处理 AI 提取结果中的 uncertain 项
 
@@ -145,8 +143,8 @@ class EntityLinker:
 
     def register_new_entities(
         self,
-        new_entities: List[Dict]
-    ) -> List[str]:
+        new_entities: list[dict]
+    ) -> list[str]:
         """
         注册新实体的别名 (v5.1 引入，v5.4 沿用)
 
@@ -181,8 +179,9 @@ class EntityLinker:
 def main():
     import argparse
     import sys
-    from .cli_output import print_success, print_error
+
     from .cli_args import normalize_global_project_root
+    from .cli_output import print_error, print_success
     from .index_manager import IndexManager
 
     parser = argparse.ArgumentParser(description="Entity Linker CLI (v5.4 SQLite)")

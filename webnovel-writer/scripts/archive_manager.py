@@ -32,28 +32,27 @@ state.json 数据归档管理脚本
   python archive_manager.py --auto-check --dry-run
 """
 
-import json
-import os
-import sys
 import argparse
+import json
+import sys
 from datetime import datetime
 from pathlib import Path
 
+from project_locator import resolve_project_root
 from runtime_compat import enable_windows_utf8_stdio
 
 # ============================================================================
 # 安全修复：导入安全工具函数（P1 MEDIUM）
 # ============================================================================
-from security_utils import create_secure_directory, atomic_write_json
-from project_locator import resolve_project_root
+from security_utils import atomic_write_json, create_secure_directory
 
 # v5.1 引入: 使用 IndexManager 读取实体
 try:
-    from data_modules.index_manager import IndexManager
     from data_modules.config import get_config
+    from data_modules.index_manager import IndexManager
 except ImportError:
-    from scripts.data_modules.index_manager import IndexManager
     from scripts.data_modules.config import get_config
+    from scripts.data_modules.index_manager import IndexManager
 
 # Windows UTF-8 编码修复
 if sys.platform == "win32":
@@ -64,11 +63,7 @@ class ArchiveManager:
     """state.json 数据归档管理器"""
 
     def __init__(self, project_root=None):
-        if project_root is None:
-            # 默认使用当前目录
-            project_root = Path.cwd()
-        else:
-            project_root = Path(project_root)
+        project_root = Path.cwd() if project_root is None else Path(project_root)
 
         self.project_root = project_root
         self.state_file = project_root / ".webnovel" / "state.json"
@@ -105,21 +100,21 @@ class ArchiveManager:
             print(f"❌ state.json 不存在: {self.state_file}")
             sys.exit(1)
 
-        with open(self.state_file, 'r', encoding='utf-8') as f:
+        with open(self.state_file, encoding='utf-8') as f:
             return json.load(f)
 
     def save_state(self, state):
         """保存 state.json（原子化写入）"""
         # 使用集中式原子写入（自动备份）
         atomic_write_json(self.state_file, state, use_lock=True, backup=True)
-        print(f"✅ state.json 已原子化更新")
+        print("✅ state.json 已原子化更新")
 
     def load_archive(self, archive_file):
         """加载归档文件"""
         if not archive_file.exists():
             return []
 
-        with open(archive_file, 'r', encoding='utf-8') as f:
+        with open(archive_file, encoding='utf-8') as f:
             return json.load(f)
 
     def save_archive(self, archive_file, data):
@@ -429,7 +424,7 @@ class ArchiveManager:
         old_reviews = self.identify_old_reviews(state)
 
         # 输出统计
-        print(f"\n📊 归档统计:")
+        print("\n📊 归档统计:")
         print(f"   不活跃角色: {len(inactive_chars)}")
         print(f"   已回收伏笔: {len(resolved_threads)}")
         print(f"   旧审查报告: {len(old_reviews)}")
@@ -466,7 +461,7 @@ class ArchiveManager:
         self.save_state(state)
 
         # 最终统计
-        print(f"\n✅ 归档完成:")
+        print("\n✅ 归档完成:")
         print(f"   角色归档: {chars_archived} → {self.characters_archive.name}")
         print(f"   伏笔归档: {threads_archived} → {self.plot_threads_archive.name}")
         print(f"   报告归档: {reviews_archived} → {self.reviews_archive.name}")

@@ -10,3 +10,6 @@ pytest-timeout>=2.3.0
 
 # HTTP 测试客户端
 httpx>=0.27.0
+
+# Linter
+ruff>=0.8.0

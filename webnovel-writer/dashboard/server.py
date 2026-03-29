@@ -144,16 +144,11 @@ def main():
 
     # 延迟导入，以便先处理路径
     import uvicorn
+
     from .app import create_app
 
     # P0-A 修复：构建最终 CORS 来源列表
-    if args.cors_origins:
-        allowed_origins = args.cors_origins
-    else:
-        allowed_origins = [
-            f"http://localhost:{args.port}",
-            f"http://127.0.0.1:{args.port}",
-        ]
+    allowed_origins = args.cors_origins or [f"http://localhost:{args.port}", f"http://127.0.0.1:{args.port}"]
 
     basic_auth = _resolve_basic_auth(args.basic_auth or os.environ.get("WEBNOVEL_DASHBOARD_BASIC_AUTH"))
 

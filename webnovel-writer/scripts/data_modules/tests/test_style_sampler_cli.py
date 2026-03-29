@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 StyleSampler extra tests + CLI
 """
 
-import sys
 import json
+import sys
 
 import pytest
 
 import data_modules.style_sampler as sampler_module
-from data_modules.style_sampler import StyleSampler, StyleSample, SceneType
 from data_modules.config import DataModulesConfig
+from data_modules.style_sampler import SceneType, StyleSample, StyleSampler
 
 
 @pytest.fixture

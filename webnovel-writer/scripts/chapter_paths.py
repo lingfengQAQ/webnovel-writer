@@ -13,8 +13,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Optional
-
 
 _CHAPTER_NUM_RE = re.compile(r"第(?P<num>\d+)章")
 _OUTLINE_HEADING_RE = re.compile(r"^#{1,6}\s*第\s*(?P<num>\d+)\s*章[：:]\s*(?P<title>.+?)\s*$", re.MULTILINE)
@@ -27,7 +25,7 @@ def volume_num_for_chapter(chapter_num: int, *, chapters_per_volume: int = 50) -
     return (chapter_num - 1) // chapters_per_volume + 1
 
 
-def extract_chapter_num_from_filename(filename: str) -> Optional[int]:
+def extract_chapter_num_from_filename(filename: str) -> int | None:
     m = _CHAPTER_NUM_RE.search(filename)
     if not m:
         return None
@@ -106,7 +104,7 @@ def _build_chapter_filename(project_root: Path, chapter_num: int, *, use_volume_
     return f"第{padded}章.md"
 
 
-def find_chapter_file(project_root: Path, chapter_num: int) -> Optional[Path]:
+def find_chapter_file(project_root: Path, chapter_num: int) -> Path | None:
     """
     Find an existing chapter file for chapter_num under project_root/正文.
     Returns the first match (stable sorted order) or None if not found.

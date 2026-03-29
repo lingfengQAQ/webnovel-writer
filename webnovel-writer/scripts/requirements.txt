@@ -9,3 +9,6 @@ filelock>=3.0.0
 
 # Schema 校验
 pydantic>=2.0.0
+
+# 文件监听（可选，用于 codex index watch 命令）
+watchdog>=5.0.0

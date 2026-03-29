@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import sys
 from pathlib import Path
@@ -31,7 +30,7 @@ def test_current_project_pointer_rel_prefers_codex():
 
     import project_locator as project_locator_module
 
-    assert project_locator_module.CURRENT_PROJECT_POINTER_REL == Path(".codex") / ".webnovel-current-project"
+    assert Path(".codex") / ".webnovel-current-project" == project_locator_module.CURRENT_PROJECT_POINTER_REL
 
 
 def test_resolve_project_root_stops_at_git_root(tmp_path):
@@ -51,7 +50,7 @@ def test_resolve_project_root_stops_at_git_root(tmp_path):
 
     try:
         resolve_project_root(cwd=nested)
-        assert False, "Expected FileNotFoundError when only parent outside git root has project"
+        raise AssertionError("Expected FileNotFoundError when only parent outside git root has project")
     except FileNotFoundError:
         pass
 

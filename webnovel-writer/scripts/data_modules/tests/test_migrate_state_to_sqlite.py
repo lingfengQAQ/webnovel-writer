@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 migrate_state_to_sqlite tests
 """
@@ -9,13 +8,13 @@ import json
 import pytest
 
 import data_modules.migrate_state_to_sqlite as migrate_module
-from data_modules.migrate_state_to_sqlite import (
-    migrate_state_to_sqlite,
-    _slim_world_settings,
-    _slim_relationships,
-)
 from data_modules.config import DataModulesConfig
 from data_modules.index_manager import IndexManager
+from data_modules.migrate_state_to_sqlite import (
+    _slim_relationships,
+    _slim_world_settings,
+    migrate_state_to_sqlite,
+)
 
 
 @pytest.fixture

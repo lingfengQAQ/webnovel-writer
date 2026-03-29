@@ -6,13 +6,13 @@ Watchdog 文件变更监听器 + SSE 推送
 """
 
 import asyncio
+import contextlib
 import json
 import time
 from pathlib import Path
-from typing import AsyncGenerator
 
+from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileModifiedEvent, FileCreatedEvent
 
 
 class _WebnovelFileHandler(FileSystemEventHandler):
@@ -64,10 +64,8 @@ class FileWatcher:
         return q
 
     def unsubscribe(self, q: asyncio.Queue):
-        try:
+        with contextlib.suppress(ValueError):
             self._subscribers.remove(q)
-        except ValueError:
-            pass
 
     # --- 推送 ---
 

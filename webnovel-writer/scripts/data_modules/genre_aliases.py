@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Genre alias normalization and profile key mapping.
 """
 
 from __future__ import annotations
-
 
 GENRE_INPUT_ALIASES: dict[str, str] = {
     "修仙/玄幻": "修仙",

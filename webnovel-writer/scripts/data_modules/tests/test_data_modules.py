@@ -1,37 +1,37 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Data Modules 单元测试
 """
 
-import pytest
 import asyncio
 import json
-import tempfile
 import sys
+import tempfile
 from pathlib import Path
 
+import pytest
+
+import data_modules.index_manager as index_manager_module
 from data_modules import (
+    ChapterMeta,
     DataModulesConfig,
     EntityLinker,
-    StateManager,
+    EntityState,
     IndexManager,
     RAGAdapter,
-    StyleSampler,
-    EntityState,
-    ChapterMeta,
     SceneMeta,
+    StateManager,
     StyleSample,
+    StyleSampler,
 )
-import data_modules.index_manager as index_manager_module
 from data_modules.index_manager import (
-    EntityMeta,
-    StateChangeMeta,
-    RelationshipMeta,
-    OverrideContractMeta,
-    ChaseDebtMeta,
     ChapterReadingPowerMeta,
+    ChaseDebtMeta,
+    EntityMeta,
+    OverrideContractMeta,
+    RelationshipMeta,
     ReviewMetrics,
+    StateChangeMeta,
     WritingChecklistScoreMeta,
 )
 
@@ -248,7 +248,7 @@ class TestStateManager:
         # 先添加萧炎
         manager.add_entity(EntityState(id="xiaoyan", name="萧炎", type="角色"))
 
-        warnings = manager.process_chapter_result(100, result)
+        manager.process_chapter_result(100, result)
 
         # 验证新实体被添加
         assert manager.get_entity("hongyi_girl") is not None

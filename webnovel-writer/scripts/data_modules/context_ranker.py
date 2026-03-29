@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Context ranker for Context Contract v2.
 
@@ -12,7 +11,7 @@ Goals:
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .config import get_config
 
@@ -25,7 +24,7 @@ class ContextRanker:
     def __init__(self, config=None):
         self.config = config or get_config()
 
-    def rank_pack(self, pack: Dict[str, Any], chapter: int) -> Dict[str, Any]:
+    def rank_pack(self, pack: dict[str, Any], chapter: int) -> dict[str, Any]:
         ranked = dict(pack)
 
         core = dict(ranked.get("core") or {})
@@ -55,7 +54,7 @@ class ContextRanker:
         ranked["meta"] = meta
         return ranked
 
-    def rank_recent_summaries(self, items: List[Dict[str, Any]], current_chapter: int) -> List[Dict[str, Any]]:
+    def rank_recent_summaries(self, items: list[dict[str, Any]], current_chapter: int) -> list[dict[str, Any]]:
         scored = []
         for raw in items:
             item = dict(raw)
@@ -71,7 +70,7 @@ class ContextRanker:
         scored.sort(key=lambda row: row[0], reverse=True)
         return [row[1] for row in scored]
 
-    def rank_recent_meta(self, items: List[Dict[str, Any]], current_chapter: int) -> List[Dict[str, Any]]:
+    def rank_recent_meta(self, items: list[dict[str, Any]], current_chapter: int) -> list[dict[str, Any]]:
         scored = []
         for raw in items:
             item = dict(raw)
@@ -86,7 +85,7 @@ class ContextRanker:
         scored.sort(key=lambda row: row[0], reverse=True)
         return [row[1] for row in scored]
 
-    def rank_appearances(self, items: List[Dict[str, Any]], current_chapter: int) -> List[Dict[str, Any]]:
+    def rank_appearances(self, items: list[dict[str, Any]], current_chapter: int) -> list[dict[str, Any]]:
         scored = []
         for raw in items:
             item = dict(raw)
@@ -102,7 +101,7 @@ class ContextRanker:
         scored.sort(key=lambda row: row[0], reverse=True)
         return [row[1] for row in scored]
 
-    def rank_story_skeleton(self, items: List[Dict[str, Any]], current_chapter: int) -> List[Dict[str, Any]]:
+    def rank_story_skeleton(self, items: list[dict[str, Any]], current_chapter: int) -> list[dict[str, Any]]:
         scored = []
         for raw in items:
             item = dict(raw)
@@ -116,7 +115,7 @@ class ContextRanker:
         scored.sort(key=lambda row: row[0], reverse=True)
         return [row[1] for row in scored]
 
-    def rank_alerts(self, alerts: List[Any], current_chapter: int) -> List[Any]:
+    def rank_alerts(self, alerts: list[Any], current_chapter: int) -> list[Any]:
         scored = []
         keywords = tuple(self.config.context_ranker_alert_critical_keywords)
 
@@ -152,7 +151,7 @@ class ContextRanker:
             + bonus
         )
 
-    def _recency_score(self, source_chapter: Optional[int], current_chapter: int) -> float:
+    def _recency_score(self, source_chapter: int | None, current_chapter: int) -> float:
         if source_chapter is None:
             return 0.0
         gap = max(0, int(current_chapter) - int(source_chapter))
@@ -174,7 +173,7 @@ class ContextRanker:
     def _has_hook_hint(self, text: str) -> bool:
         return any(token in text for token in self.SUMMARY_HOOK_HINTS)
 
-    def _as_int(self, value: Any) -> Optional[int]:
+    def _as_int(self, value: Any) -> int | None:
         if value is None:
             return None
         try:
@@ -184,12 +183,12 @@ class ContextRanker:
 
     def _with_debug_score(
         self,
-        item: Dict[str, Any],
+        item: dict[str, Any],
         score: float,
         recency: float,
         frequency: float,
         bonus: float,
-    ) -> tuple[float, Dict[str, Any]]:
+    ) -> tuple[float, dict[str, Any]]:
         if getattr(self.config, "context_ranker_debug", False):
             item["_context_score"] = round(score, 6)
             item["_context_score_detail"] = {

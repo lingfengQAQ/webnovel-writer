@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 API Client tests
 """
 
 import asyncio
 import json
+
 import pytest
 
-from data_modules.config import DataModulesConfig
 from data_modules.api_client import (
     EmbeddingAPIClient,
-    RerankAPIClient,
     ModalAPIClient,
+    RerankAPIClient,
     get_client,
 )
+from data_modules.config import DataModulesConfig
 
 
 class FakeResponse:

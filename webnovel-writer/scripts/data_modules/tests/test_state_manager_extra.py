@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 StateManager extra tests
 """
@@ -11,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from data_modules.state_manager import StateManager, EntityState
-from data_modules.index_manager import IndexManager, EntityMeta
+from data_modules.index_manager import EntityMeta, IndexManager
+from data_modules.state_manager import EntityState, StateManager
 
 
 @pytest.fixture
@@ -548,6 +547,7 @@ def test_state_manager_cli_commands(temp_project, monkeypatch, capsys):
 
 def test_save_state_timeout(monkeypatch, temp_project):
     import filelock
+
     from data_modules import state_manager as sm
 
     manager = StateManager(temp_project, enable_sqlite_sync=False)

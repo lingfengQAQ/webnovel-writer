@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Pydantic schemas for data_modules outputs.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from pydantic import BaseModel, Field, ValidationError, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 
 class EntityAppeared(BaseModel):
@@ -15,7 +14,7 @@ class EntityAppeared(BaseModel):
 
     id: str
     type: str
-    mentions: List[str] = Field(default_factory=list)
+    mentions: list[str] = Field(default_factory=list)
     confidence: float = 1.0
 
 
@@ -33,9 +32,9 @@ class StateChange(BaseModel):
 
     entity_id: str
     field: str
-    old: Optional[str] = None
+    old: str | None = None
     new: str
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class RelationshipNew(BaseModel):
@@ -44,8 +43,8 @@ class RelationshipNew(BaseModel):
     from_entity: str = Field(alias="from")
     to_entity: str = Field(alias="to")
     type: str
-    description: Optional[str] = None
-    chapter: Optional[int] = None
+    description: str | None = None
+    chapter: int | None = None
 
 
 class UncertainCandidate(BaseModel):
@@ -59,21 +58,21 @@ class UncertainMention(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     mention: str
-    candidates: List[UncertainCandidate] = Field(default_factory=list)
+    candidates: list[UncertainCandidate] = Field(default_factory=list)
     confidence: float = 0.0
-    adopted: Optional[str] = None
+    adopted: str | None = None
 
 
 class DataAgentOutput(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    entities_appeared: List[EntityAppeared] = Field(default_factory=list)
-    entities_new: List[EntityNew] = Field(default_factory=list)
-    state_changes: List[StateChange] = Field(default_factory=list)
-    relationships_new: List[RelationshipNew] = Field(default_factory=list)
+    entities_appeared: list[EntityAppeared] = Field(default_factory=list)
+    entities_new: list[EntityNew] = Field(default_factory=list)
+    state_changes: list[StateChange] = Field(default_factory=list)
+    relationships_new: list[RelationshipNew] = Field(default_factory=list)
     scenes_chunked: int = 0
-    uncertain: List[UncertainMention] = Field(default_factory=list)
-    warnings: List[str] = Field(default_factory=list)
+    uncertain: list[UncertainMention] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class ErrorSchema(BaseModel):
@@ -81,15 +80,15 @@ class ErrorSchema(BaseModel):
 
     code: str
     message: str
-    suggestion: Optional[str] = None
-    details: Optional[Dict[str, Any]] = None
+    suggestion: str | None = None
+    details: dict[str, Any] | None = None
 
 
-def validate_data_agent_output(payload: Dict[str, Any]) -> DataAgentOutput:
+def validate_data_agent_output(payload: dict[str, Any]) -> DataAgentOutput:
     return DataAgentOutput.model_validate(payload)
 
 
-def format_validation_error(exc: ValidationError) -> Dict[str, Any]:
+def format_validation_error(exc: ValidationError) -> dict[str, Any]:
     return {
         "code": "SCHEMA_VALIDATION_FAILED",
         "message": "数据结构校验失败",
@@ -98,7 +97,7 @@ def format_validation_error(exc: ValidationError) -> Dict[str, Any]:
     }
 
 
-def normalize_data_agent_output(payload: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_data_agent_output(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return {}
 

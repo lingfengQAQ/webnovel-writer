@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 SQL State Manager - SQLite 状态管理模块 (v5.4)
 
@@ -12,19 +11,17 @@ SQL State Manager - SQLite 状态管理模块 (v5.4)
 - 支持增量写入和按需查询
 """
 
-import json
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
-from datetime import datetime
+from typing import Any
 
-from .index_manager import (
-    IndexManager,
-    EntityMeta,
-    StateChangeMeta,
-    RelationshipMeta,
-    RelationshipEventMeta,
-)
 from .config import get_config
+from .index_manager import (
+    EntityMeta,
+    IndexManager,
+    RelationshipEventMeta,
+    RelationshipMeta,
+    StateChangeMeta,
+)
 from .observability import safe_log_tool_call
 
 
@@ -36,8 +33,8 @@ class EntityData:
     name: str
     tier: str = "装饰"
     desc: str = ""
-    current: Dict[str, Any] = field(default_factory=dict)
-    aliases: List[str] = field(default_factory=list)
+    current: dict[str, Any] = field(default_factory=dict)
+    aliases: list[str] = field(default_factory=list)
     first_appearance: int = 0
     last_appearance: int = 0
     is_protagonist: bool = False
@@ -138,7 +135,7 @@ class SQLStateManager:
 
         return is_new
 
-    def get_entity(self, entity_id: str) -> Optional[Dict]:
+    def get_entity(self, entity_id: str) -> dict | None:
         """获取实体详情"""
         entity = self._index_manager.get_entity(entity_id)
         if entity:
@@ -146,14 +143,14 @@ class SQLStateManager:
             entity["aliases"] = self._index_manager.get_entity_aliases(entity_id)
         return entity
 
-    def get_entities_by_type(self, entity_type: str, include_archived: bool = False) -> List[Dict]:
+    def get_entities_by_type(self, entity_type: str, include_archived: bool = False) -> list[dict]:
         """按类型获取实体"""
         entities = self._index_manager.get_entities_by_type(entity_type, include_archived)
         for e in entities:
             e["aliases"] = self._index_manager.get_entity_aliases(e["id"])
         return entities
 
-    def get_core_entities(self) -> List[Dict]:
+    def get_core_entities(self) -> list[dict]:
         """
         获取核心实体（用于 Context Agent 全量加载）
 
@@ -165,18 +162,18 @@ class SQLStateManager:
             e["aliases"] = self._index_manager.get_entity_aliases(e["id"])
         return entities
 
-    def get_protagonist(self) -> Optional[Dict]:
+    def get_protagonist(self) -> dict | None:
         """获取主角实体"""
         protagonist = self._index_manager.get_protagonist()
         if protagonist:
             protagonist["aliases"] = self._index_manager.get_entity_aliases(protagonist["id"])
         return protagonist
 
-    def update_entity_current(self, entity_id: str, updates: Dict) -> bool:
+    def update_entity_current(self, entity_id: str, updates: dict) -> bool:
         """增量更新实体的 current 字段"""
         return self._index_manager.update_entity_current(entity_id, updates)
 
-    def resolve_alias(self, alias: str) -> List[Dict]:
+    def resolve_alias(self, alias: str) -> list[dict]:
         """
         根据别名解析实体（一对多）
 
@@ -214,15 +211,15 @@ class SQLStateManager:
         )
         return self._index_manager.record_state_change(change)
 
-    def get_entity_state_changes(self, entity_id: str, limit: int = 20) -> List[Dict]:
+    def get_entity_state_changes(self, entity_id: str, limit: int = 20) -> list[dict]:
         """获取实体的状态变化历史"""
         return self._index_manager.get_entity_state_changes(entity_id, limit)
 
-    def get_recent_state_changes(self, limit: int = 50) -> List[Dict]:
+    def get_recent_state_changes(self, limit: int = 50) -> list[dict]:
         """获取最近的状态变化"""
         return self._index_manager.get_recent_state_changes(limit)
 
-    def get_chapter_state_changes(self, chapter: int) -> List[Dict]:
+    def get_chapter_state_changes(self, chapter: int) -> list[dict]:
         """获取某章的所有状态变化"""
         return self._index_manager.get_chapter_state_changes(chapter)
 
@@ -250,15 +247,15 @@ class SQLStateManager:
         )
         return self._index_manager.upsert_relationship(rel)
 
-    def get_entity_relationships(self, entity_id: str, direction: str = "both") -> List[Dict]:
+    def get_entity_relationships(self, entity_id: str, direction: str = "both") -> list[dict]:
         """获取实体的关系"""
         return self._index_manager.get_entity_relationships(entity_id, direction)
 
-    def get_relationship_between(self, entity1: str, entity2: str) -> List[Dict]:
+    def get_relationship_between(self, entity1: str, entity2: str) -> list[dict]:
         """获取两个实体之间的所有关系"""
         return self._index_manager.get_relationship_between(entity1, entity2)
 
-    def get_recent_relationships(self, limit: int = 30) -> List[Dict]:
+    def get_recent_relationships(self, limit: int = 30) -> list[dict]:
         """获取最近建立的关系"""
         return self._index_manager.get_recent_relationships(limit)
 
@@ -267,11 +264,11 @@ class SQLStateManager:
     def process_chapter_entities(
         self,
         chapter: int,
-        entities_appeared: List[Dict],
-        entities_new: List[Dict],
-        state_changes: List[Dict],
-        relationships_new: List[Dict]
-    ) -> Dict[str, int]:
+        entities_appeared: list[dict],
+        entities_new: list[dict],
+        state_changes: list[dict],
+        relationships_new: list[dict]
+    ) -> dict[str, int]:
         """
         处理章节的实体数据（Data Agent 主入口）
 
@@ -430,13 +427,13 @@ class SQLStateManager:
 
     # ==================== 统计 ====================
 
-    def get_stats(self) -> Dict[str, int]:
+    def get_stats(self) -> dict[str, int]:
         """获取统计信息"""
         return self._index_manager.get_stats()
 
     # ==================== 格式转换（兼容性） ====================
 
-    def export_to_entities_v3_format(self) -> Dict[str, Dict[str, Dict]]:
+    def export_to_entities_v3_format(self) -> dict[str, dict[str, dict]]:
         """
         导出为 entities_v3 格式（用于兼容性）
 
@@ -464,7 +461,7 @@ class SQLStateManager:
 
         return result
 
-    def export_to_alias_index_format(self) -> Dict[str, List[Dict[str, str]]]:
+    def export_to_alias_index_format(self) -> dict[str, list[dict[str, str]]]:
         """
         导出为 alias_index 格式（用于兼容性）
 
@@ -492,8 +489,9 @@ class SQLStateManager:
 def main():
     import argparse
     import sys
-    from .cli_output import print_success, print_error
-    from .cli_args import normalize_global_project_root, load_json_arg
+
+    from .cli_args import load_json_arg, normalize_global_project_root
+    from .cli_output import print_error, print_success
     from .index_manager import IndexManager
 
     parser = argparse.ArgumentParser(description="SQL State Manager CLI (v5.4)")

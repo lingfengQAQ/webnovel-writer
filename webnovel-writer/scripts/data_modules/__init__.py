@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Data Modules - 数据链模块包。
 
@@ -16,7 +15,6 @@ from __future__ import annotations
 
 from importlib import import_module
 from typing import Any
-
 
 __all__ = [
     # Config

@@ -12,14 +12,14 @@ These helpers provide a single, consistent way to locate the active project root
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, Optional
 
 from runtime_compat import normalize_windows_path
-
 
 DEFAULT_PROJECT_DIR_NAMES: tuple[str, ...] = ("webnovel-project",)
 CURRENT_PROJECT_POINTER_FILE = ".webnovel-current-project"
@@ -37,7 +37,7 @@ ENV_WEBNOVEL_HOME = "WEBNOVEL_HOME"
 ENV_WEBNOVEL_CODEX_HOME = "WEBNOVEL_CODEX_HOME"
 
 
-def _find_git_root(cwd: Path) -> Optional[Path]:
+def _find_git_root(cwd: Path) -> Path | None:
     """Return nearest git root for cwd, if any."""
     for candidate in (cwd, *cwd.parents):
         if (candidate / ".git").exists():
@@ -182,9 +182,9 @@ def _save_global_registry(path: Path, data: dict) -> None:
 def _resolve_project_root_from_global_registry(
     base: Path,
     *,
-    workspace_hint: Optional[Path] = None,
+    workspace_hint: Path | None = None,
     allow_last_used_fallback: bool = False,
-) -> Optional[Path]:
+) -> Path | None:
     """
     从用户级 registry 中解析 project_root。
 
@@ -222,14 +222,13 @@ def _resolve_project_root_from_global_registry(
         # 2) 前缀匹配（从 workspace 子目录运行时）
         for hint in hints:
             hint_key = _normcase_path_key(hint)
-            best_key: Optional[str] = None
+            best_key: str | None = None
             best_len = -1
-            for ws_key in workspaces.keys():
+            for ws_key in workspaces:
                 if not isinstance(ws_key, str) or not ws_key:
                     continue
                 ws_key_norm = os.path.normcase(ws_key)
-                if hint_key == ws_key_norm or hint_key.startswith(ws_key_norm.rstrip("\\") + "\\"):
-                    if len(ws_key_norm) > best_len:
+                if (hint_key == ws_key_norm or hint_key.startswith(ws_key_norm.rstrip("\\") + "\\")) and len(ws_key_norm) > best_len:
                         best_key = ws_key
                         best_len = len(ws_key_norm)
             if best_key:
@@ -255,9 +254,9 @@ def _resolve_project_root_from_global_registry(
 
 def update_global_registry_current_project(
     *,
-    workspace_root: Optional[Path],
+    workspace_root: Path | None,
     project_root: Path,
-) -> Optional[Path]:
+) -> Path | None:
     """
     更新用户级 registry：workspace -> current_project_root 映射。
 
@@ -301,7 +300,7 @@ def update_global_registry_current_project(
     return reg_path
 
 
-def _candidate_roots(cwd: Path, *, stop_at: Optional[Path] = None) -> Iterable[Path]:
+def _candidate_roots(cwd: Path, *, stop_at: Path | None = None) -> Iterable[Path]:
     yield cwd
     for name in DEFAULT_PROJECT_DIR_NAMES:
         yield cwd / name
@@ -322,7 +321,7 @@ def _pointer_rel_candidates() -> tuple[Path, ...]:
     return tuple(Path(dirname) / CURRENT_PROJECT_POINTER_FILE for dirname in POINTER_DIR_NAMES)
 
 
-def _pointer_candidates(cwd: Path, *, stop_at: Optional[Path] = None) -> Iterable[Path]:
+def _pointer_candidates(cwd: Path, *, stop_at: Path | None = None) -> Iterable[Path]:
     """Yield candidate pointer files from cwd up to parents (bounded by stop_at when provided)."""
     for candidate in (cwd, *cwd.parents):
         for rel in _pointer_rel_candidates():
@@ -331,7 +330,7 @@ def _pointer_candidates(cwd: Path, *, stop_at: Optional[Path] = None) -> Iterabl
             break
 
 
-def _resolve_project_root_from_pointer(cwd: Path, *, stop_at: Optional[Path] = None) -> Optional[Path]:
+def _resolve_project_root_from_pointer(cwd: Path, *, stop_at: Path | None = None) -> Path | None:
     """
     Resolve project root from workspace pointer file.
 
@@ -353,7 +352,7 @@ def _resolve_project_root_from_pointer(cwd: Path, *, stop_at: Optional[Path] = N
     return None
 
 
-def _find_workspace_root_with_context_dir(start: Path) -> Optional[Path]:
+def _find_workspace_root_with_context_dir(start: Path) -> Path | None:
     """Find nearest ancestor containing `.codex/`."""
     for candidate in (start, *start.parents):
         for dirname in POINTER_DIR_NAMES:
@@ -362,7 +361,7 @@ def _find_workspace_root_with_context_dir(start: Path) -> Optional[Path]:
     return None
 
 
-def write_current_project_pointer(project_root: Path, *, workspace_root: Optional[Path] = None) -> Optional[Path]:
+def write_current_project_pointer(project_root: Path, *, workspace_root: Path | None = None) -> Path | None:
     """
     Write workspace-level current project pointer and return pointer file path.
 
@@ -386,10 +385,10 @@ def write_current_project_pointer(project_root: Path, *, workspace_root: Optiona
     # 注意：ws_root 可能为 None（例如全局安装的 skills/agents，工作区内没有 context 目录）。
     # 这类情况仍然需要写入用户级 registry，以支持后续“空上下文”定位。
 
-    pointer_file: Optional[Path] = None
+    pointer_file: Path | None = None
     if ws_root is not None:
         # 仅当工作区内已经存在 `.codex/` 时才写入指针，避免在任意目录下凭空创建。
-        pointer_dir: Optional[Path] = None
+        pointer_dir: Path | None = None
         for dirname in POINTER_DIR_NAMES:
             candidate = ws_root / dirname
             if candidate.is_dir():
@@ -403,15 +402,13 @@ def write_current_project_pointer(project_root: Path, *, workspace_root: Optiona
                 pointer_file = None
 
     # best-effort 更新用户级 registry（不阻断）
-    try:
+    with contextlib.suppress(Exception):
         update_global_registry_current_project(workspace_root=ws_root, project_root=root)
-    except Exception:
-        pass
 
     return pointer_file
 
 
-def resolve_project_root(explicit_project_root: Optional[str] = None, *, cwd: Optional[Path] = None) -> Path:
+def resolve_project_root(explicit_project_root: str | None = None, *, cwd: Path | None = None) -> Path:
     """
     Resolve the webnovel project root directory (the directory containing `.webnovel/state.json`).
 
@@ -494,10 +491,10 @@ def resolve_project_root(explicit_project_root: Optional[str] = None, *, cwd: Op
 
 
 def resolve_state_file(
-    explicit_state_file: Optional[str] = None,
+    explicit_state_file: str | None = None,
     *,
-    explicit_project_root: Optional[str] = None,
-    cwd: Optional[Path] = None,
+    explicit_project_root: str | None = None,
+    cwd: Path | None = None,
 ) -> Path:
     """
     Resolve `.webnovel/state.json` path.

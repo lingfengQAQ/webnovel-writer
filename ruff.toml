@@ -1,0 +1,13 @@
+target-version = "py310"
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[lint.isort]
+known-first-party = ["data_modules", "dashboard"]
+
+[lint.per-file-ignores]
+"**/tests/**" = ["F401", "F811", "E402"]
+"**/manager.py" = ["E402"]

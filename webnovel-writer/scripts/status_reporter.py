@@ -79,20 +79,19 @@
 """
 
 import json
-import os
 import re
 import sys
-from pathlib import Path
-from typing import Dict, List, Any, Tuple, Optional
 from datetime import datetime
-from collections import defaultdict
-from project_locator import resolve_project_root
+from pathlib import Path
+from typing import Any
+
 from chapter_paths import extract_chapter_num_from_filename
+from project_locator import resolve_project_root
 from runtime_compat import enable_windows_utf8_stdio
 
 # 导入配置
 try:
-    from data_modules.config import get_config, DataModulesConfig
+    from data_modules.config import get_config
     from data_modules.index_manager import IndexManager
     from data_modules.state_validator import (
         get_chapter_meta_entry,
@@ -103,7 +102,7 @@ try:
         to_positive_int,
     )
 except ImportError:
-    from scripts.data_modules.config import get_config, DataModulesConfig
+    from scripts.data_modules.config import get_config
     from scripts.data_modules.index_manager import IndexManager
     from scripts.data_modules.state_validator import (
         get_chapter_meta_entry,
@@ -134,7 +133,7 @@ class StatusReporter:
 
         self.state = None
         self.chapters_data = []
-        self._reading_power_cache: Dict[int, Optional[Dict[str, Any]]] = {}
+        self._reading_power_cache: dict[int, dict[str, Any] | None] = {}
 
         # v5.1 引入: 使用 IndexManager 读取实体
         self._index_manager = IndexManager(self.config)
@@ -147,7 +146,7 @@ class StatusReporter:
         """统一时间格式，避免 JSON schema 漂移。"""
         return dt.isoformat(timespec="seconds")
 
-    def _format_age(self, age_seconds: Optional[int]) -> str:
+    def _format_age(self, age_seconds: int | None) -> str:
         """将秒数转成易读延迟文本。"""
         if age_seconds is None:
             return "未知"
@@ -163,12 +162,12 @@ class StatusReporter:
         days, hours = divmod(hours, 24)
         return f"{days}d{hours}h"
 
-    def _collect_source_freshness(self, generated_at: Optional[datetime] = None) -> Dict[str, Dict[str, Any]]:
+    def _collect_source_freshness(self, generated_at: datetime | None = None) -> dict[str, dict[str, Any]]:
         """收集 state/index 数据源更新时间与新鲜度。"""
         now = generated_at or self._now()
 
-        def _file_status(source: str, path: Path) -> Dict[str, Any]:
-            status: Dict[str, Any] = {
+        def _file_status(source: str, path: Path) -> dict[str, Any]:
+            status: dict[str, Any] = {
                 "source": source,
                 "path": str(path),
                 "exists": path.exists(),
@@ -202,7 +201,7 @@ class StatusReporter:
             "index": _file_status("index", self.config.index_db),
         }
 
-    def _worst_freshness(self, freshness_values: List[str]) -> str:
+    def _worst_freshness(self, freshness_values: list[str]) -> str:
         rank = {"fresh": 0, "stale": 1, "missing": 2}
         worst = "fresh"
         worst_rank = -1
@@ -213,7 +212,7 @@ class StatusReporter:
                 worst = value
         return worst
 
-    def _build_metric_sources(self, source_status: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    def _build_metric_sources(self, source_status: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
         """输出每类指标的数据来源与整体延迟。"""
         metric_mapping = {
             "basic": ["state"],
@@ -225,7 +224,7 @@ class StatusReporter:
             "relationships": ["index", "state"],
         }
 
-        result: Dict[str, Dict[str, Any]] = {}
+        result: dict[str, dict[str, Any]] = {}
         for metric, dependencies in metric_mapping.items():
             entries = [source_status[name] for name in dependencies if name in source_status]
             ages = [entry["age_seconds"] for entry in entries if isinstance(entry.get("age_seconds"), int)]
@@ -256,7 +255,7 @@ class StatusReporter:
             print(f"❌ 状态文件不存在: {self.state_file}")
             return False
 
-        with open(self.state_file, 'r', encoding='utf-8') as f:
+        with open(self.state_file, encoding='utf-8') as f:
             self.state = json.load(f)
 
         if isinstance(self.state, dict):
@@ -264,11 +263,11 @@ class StatusReporter:
 
         return True
 
-    def _to_positive_int(self, value: Any) -> Optional[int]:
+    def _to_positive_int(self, value: Any) -> int | None:
         """将输入解析为正整数；解析失败返回 None。"""
         return to_positive_int(value)
 
-    def _normalize_foreshadowing_tier(self, raw_tier: Any) -> Tuple[str, float]:
+    def _normalize_foreshadowing_tier(self, raw_tier: Any) -> tuple[str, float]:
         """标准化伏笔层级并返回对应权重。"""
         tier = normalize_foreshadowing_tier(raw_tier)
 
@@ -278,11 +277,11 @@ class StatusReporter:
             return "装饰", self.config.foreshadowing_tier_weight_decor
         return "支线", self.config.foreshadowing_tier_weight_sub
 
-    def _resolve_chapter_field(self, item: Dict[str, Any], keys: List[str]) -> Optional[int]:
+    def _resolve_chapter_field(self, item: dict[str, Any], keys: list[str]) -> int | None:
         """按候选键顺序读取章节号。"""
         return resolve_chapter_field(item, keys)
 
-    def _collect_foreshadowing_records(self) -> List[Dict[str, Any]]:
+    def _collect_foreshadowing_records(self) -> list[dict[str, Any]]:
         """收集未回收伏笔，并基于真实字段构建分析记录。"""
         if not self.state:
             return []
@@ -293,7 +292,7 @@ class StatusReporter:
         if not isinstance(foreshadowing, list):
             return []
 
-        records: List[Dict[str, Any]] = []
+        records: list[dict[str, Any]] = []
         for item in foreshadowing:
             if not isinstance(item, dict):
                 continue
@@ -339,7 +338,7 @@ class StatusReporter:
             else:
                 overtime_status = self._get_foreshadowing_status(elapsed)
 
-            urgency: Optional[float] = None
+            urgency: float | None = None
             if (
                 planted_chapter is not None
                 and target_chapter is not None
@@ -379,13 +378,13 @@ class StatusReporter:
 
         return records
 
-    def _get_chapter_meta(self, chapter: int) -> Dict[str, Any]:
+    def _get_chapter_meta(self, chapter: int) -> dict[str, Any]:
         """读取指定章节的 chapter_meta（支持 0001/1 两种键）。"""
         if not self.state:
             return {}
         return get_chapter_meta_entry(self.state, chapter)
 
-    def _parse_pattern_count(self, raw_value: Any) -> Optional[int]:
+    def _parse_pattern_count(self, raw_value: Any) -> int | None:
         """解析爽点模式数量，解析失败返回 None。"""
         if raw_value is None:
             return None
@@ -405,7 +404,7 @@ class StatusReporter:
 
         return None
 
-    def _get_chapter_reading_power_cached(self, chapter: int) -> Optional[Dict[str, Any]]:
+    def _get_chapter_reading_power_cached(self, chapter: int) -> dict[str, Any] | None:
         """读取并缓存 chapter_reading_power。"""
         if chapter in self._reading_power_cache:
             return self._reading_power_cache[chapter]
@@ -418,7 +417,7 @@ class StatusReporter:
         self._reading_power_cache[chapter] = record
         return record
 
-    def _get_chapter_cool_points(self, chapter: int, chapter_data: Dict[str, Any]) -> Tuple[Optional[int], str]:
+    def _get_chapter_cool_points(self, chapter: int, chapter_data: dict[str, Any]) -> tuple[int | None, str]:
         """获取单章爽点数量（真实元数据优先）。"""
         reading_power = self._get_chapter_reading_power_cached(chapter)
         if isinstance(reading_power, dict):
@@ -450,7 +449,7 @@ class StatusReporter:
         chapter_files = sorted(self.chapters_dir.rglob("第*.md"))
 
         # v5.1 引入: 从 SQLite 获取已知角色名
-        known_character_names: List[str] = []
+        known_character_names: list[str] = []
         protagonist_name = ""
         if self.state:
             protagonist_name = self.state.get("protagonist_state", {}).get("name", "") or ""
@@ -472,7 +471,7 @@ class StatusReporter:
                 continue
 
             # 读取章节内容
-            with open(chapter_file, 'r', encoding='utf-8') as f:
+            with open(chapter_file, encoding='utf-8') as f:
                 content = f.read()
 
             # 统计字数（去除 Markdown 标记）
@@ -486,7 +485,7 @@ class StatusReporter:
             cool_point_type = self._extract_stats_field(content, "爽点")
 
             # v5.1 引入: 角色提取从 SQLite chapters 表读取
-            characters: List[str] = []
+            characters: list[str] = []
             try:
                 chapter_info = self._index_manager.get_chapter(chapter_num)
                 if chapter_info and chapter_info.get("characters"):
@@ -529,7 +528,7 @@ class StatusReporter:
                 "cool_point": cool_point_type,
             })
 
-    def analyze_characters(self) -> Dict:
+    def analyze_characters(self) -> dict:
         """分析角色活跃度（v5.1 引入，v5.4 沿用）"""
         if not self.state:
             return {}
@@ -579,7 +578,7 @@ class StatusReporter:
         else:
             return "🔴 严重掉线"
 
-    def analyze_foreshadowing(self) -> List[Dict]:
+    def analyze_foreshadowing(self) -> list[dict]:
         """分析伏笔深度"""
         records = self._collect_foreshadowing_records()
         return [
@@ -603,7 +602,7 @@ class StatusReporter:
         else:
             return "🔴 严重超时"
 
-    def analyze_foreshadowing_urgency(self) -> List[Dict]:
+    def analyze_foreshadowing_urgency(self) -> list[dict]:
         """
         分析伏笔紧急度（基于三层级系统）
 
@@ -648,7 +647,7 @@ class StatusReporter:
         else:
             return "🟢 正常"
 
-    def analyze_strand_weave(self) -> Dict:
+    def analyze_strand_weave(self) -> dict:
         """
         分析 Strand Weave 节奏分布
 
@@ -771,7 +770,7 @@ class StatusReporter:
             "health": "✅ 健康" if not violations else f"⚠️ {len(violations)} 个问题"
         }
 
-    def analyze_pacing(self) -> List[Dict]:
+    def analyze_pacing(self) -> list[dict]:
         """分析爽点节奏分布（每 N 章为一段）"""
         segment_size = self.config.pacing_segment_size
         segments = []
@@ -788,7 +787,7 @@ class StatusReporter:
 
             cool_points = 0
             chapters_with_data = 0
-            source_counter: Dict[str, int] = {}
+            source_counter: dict[str, int] = {}
 
             for chapter_data in segment_chapters:
                 chapter = chapter_data["chapter"]
@@ -823,7 +822,7 @@ class StatusReporter:
 
         return segments
 
-    def _get_pacing_rating(self, words_per_point: Optional[float]) -> str:
+    def _get_pacing_rating(self, words_per_point: float | None) -> str:
         """判断节奏评级"""
         if words_per_point is None:
             return "数据不足"
@@ -836,7 +835,7 @@ class StatusReporter:
         else:
             return "偏低⚠️"
 
-    def _resolve_protagonist_entity_id(self) -> Optional[str]:
+    def _resolve_protagonist_entity_id(self) -> str | None:
         """解析主角实体 ID（优先 index.db）。"""
         protagonist = self._index_manager.get_protagonist()
         if protagonist and protagonist.get("id"):
@@ -931,7 +930,7 @@ class StatusReporter:
 
         return "\n".join(lines)
 
-    def _collect_basic_stats_payload(self) -> Dict[str, Any]:
+    def _collect_basic_stats_payload(self) -> dict[str, Any]:
         if not self.state:
             return {}
 
@@ -980,7 +979,7 @@ class StatusReporter:
                 count += 1
         return count
 
-    def _summarize_relationship_data(self) -> Dict[str, Any]:
+    def _summarize_relationship_data(self) -> dict[str, Any]:
         has_index_data = False
         index_error = ""
 
@@ -1007,7 +1006,7 @@ class StatusReporter:
             "index_error": index_error,
         }
 
-    def _detect_chapter_gaps(self) -> Dict[str, Any]:
+    def _detect_chapter_gaps(self) -> dict[str, Any]:
         chapter_numbers = sorted(
             {
                 chapter
@@ -1026,9 +1025,9 @@ class StatusReporter:
                 "gaps": [],
             }
 
-        gaps: List[Dict[str, Any]] = []
+        gaps: list[dict[str, Any]] = []
         missing_chapters = 0
-        for prev, current in zip(chapter_numbers, chapter_numbers[1:]):
+        for prev, current in zip(chapter_numbers, chapter_numbers[1:], strict=False):
             if current <= prev + 1:
                 continue
             start = prev + 1
@@ -1050,8 +1049,8 @@ class StatusReporter:
         self,
         focus: str = "all",
         *,
-        source_status: Optional[Dict[str, Dict[str, Any]]] = None,
-    ) -> Dict[str, Any]:
+        source_status: dict[str, dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         enabled = bool(getattr(self.config, "status_gate_enabled", True))
         if not enabled:
             return {
@@ -1062,7 +1061,7 @@ class StatusReporter:
                 "anomalies": [],
             }
 
-        anomalies: List[Dict[str, Any]] = []
+        anomalies: list[dict[str, Any]] = []
 
         chapter_gap = self._detect_chapter_gaps()
         allowed_missing = int(getattr(self.config, "status_gate_chapter_gap_max_missing", 0))
@@ -1124,8 +1123,8 @@ class StatusReporter:
         self,
         focus: str = "all",
         *,
-        generated_at: Optional[datetime] = None,
-    ) -> Dict[str, Any]:
+        generated_at: datetime | None = None,
+    ) -> dict[str, Any]:
         generated_time = generated_at or self._now()
         source_status = self._collect_source_freshness(generated_time)
         metric_sources = self._build_metric_sources(source_status)
@@ -1140,7 +1139,7 @@ class StatusReporter:
             "relationships": focus in {"all", "relationships"},
         }
 
-        sections: Dict[str, Any] = {}
+        sections: dict[str, Any] = {}
 
         if focus_enabled["basic"]:
             sections["basic"] = self._collect_basic_stats_payload()
@@ -1203,12 +1202,12 @@ class StatusReporter:
             "project_root": str(self.project_root),
             "focus": focus,
             "sources": source_status,
-            "metric_sources": {key: metric_sources[key] for key in sections.keys() if key in metric_sources},
+            "metric_sources": {key: metric_sources[key] for key in sections if key in metric_sources},
             "sections": sections,
             "health_gate": gate_result,
         }
 
-    def _generate_source_freshness_section(self, source_status: Dict[str, Dict[str, Any]]) -> List[str]:
+    def _generate_source_freshness_section(self, source_status: dict[str, dict[str, Any]]) -> list[str]:
         lines = [
             "## 🧭 数据来源与新鲜度",
             "",
@@ -1228,7 +1227,7 @@ class StatusReporter:
         lines.extend(["", "---", ""])
         return lines
 
-    def _generate_health_gate_section(self, gate_result: Dict[str, Any]) -> List[str]:
+    def _generate_health_gate_section(self, gate_result: dict[str, Any]) -> list[str]:
         lines = ["## 🚦 健康门禁结果", ""]
 
         if gate_result.get("passed"):
@@ -1259,9 +1258,9 @@ class StatusReporter:
         self,
         focus: str = "all",
         *,
-        generated_at: Optional[datetime] = None,
-        source_status: Optional[Dict[str, Dict[str, Any]]] = None,
-        gate_result: Optional[Dict[str, Any]] = None,
+        generated_at: datetime | None = None,
+        source_status: dict[str, dict[str, Any]] | None = None,
+        gate_result: dict[str, Any] | None = None,
     ) -> str:
         """生成健康报告（Markdown 格式）"""
         generated_time = generated_at or self._now()
@@ -1311,7 +1310,7 @@ class StatusReporter:
 
         return "\n".join(report_lines)
 
-    def _generate_basic_stats(self) -> List[str]:
+    def _generate_basic_stats(self) -> list[str]:
         """生成基本统计"""
         stats = self._collect_basic_stats_payload()
         if not stats:
@@ -1329,7 +1328,7 @@ class StatusReporter:
             ""
         ]
 
-    def _generate_character_section(self) -> List[str]:
+    def _generate_character_section(self) -> list[str]:
         """生成角色分析章节"""
         activity = self.analyze_characters()
 
@@ -1365,7 +1364,7 @@ class StatusReporter:
 
         return lines
 
-    def _generate_foreshadowing_section(self) -> List[str]:
+    def _generate_foreshadowing_section(self) -> list[str]:
         """生成伏笔分析章节"""
         overdue = self.analyze_foreshadowing()
 
@@ -1404,7 +1403,7 @@ class StatusReporter:
 
         return lines
 
-    def _generate_urgency_section(self) -> List[str]:
+    def _generate_urgency_section(self) -> list[str]:
         """生成伏笔紧急度章节（基于三层级系统）"""
         urgency_list = self.analyze_foreshadowing_urgency()
 
@@ -1450,7 +1449,7 @@ class StatusReporter:
 
         return lines
 
-    def _generate_strand_section(self) -> List[str]:
+    def _generate_strand_section(self) -> list[str]:
         """生成 Strand Weave 节奏章节"""
         strand_data = self.analyze_strand_weave()
 
@@ -1512,7 +1511,7 @@ class StatusReporter:
 
         return lines
 
-    def _generate_pacing_section(self) -> List[str]:
+    def _generate_pacing_section(self) -> list[str]:
         """生成节奏分析章节"""
         segments = self.analyze_pacing()
 
@@ -1548,7 +1547,7 @@ class StatusReporter:
 
         return lines
 
-    def _generate_relationship_section(self) -> List[str]:
+    def _generate_relationship_section(self) -> list[str]:
         """生成人际关系章节"""
         graph = self.generate_relationship_graph()
 
@@ -1563,7 +1562,7 @@ class StatusReporter:
 
         return lines
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     import argparse
 
     _enable_windows_utf8_stdio()

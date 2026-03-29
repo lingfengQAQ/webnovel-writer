@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 webnovel 统一入口脚本（无须 `cd`）
 

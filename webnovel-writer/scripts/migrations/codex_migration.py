@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 """
 Codex runtime migration.
@@ -13,12 +12,10 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from project_locator import CURRENT_PROJECT_POINTER_FILE
 from runtime_compat import normalize_windows_path
 from security_utils import atomic_write_json
-
 
 LEGACY_CONTEXT_DIR = ".claude"
 TARGET_CONTEXT_DIR = ".codex"
@@ -81,7 +78,7 @@ def _warn(report: dict, message: str) -> None:
     report["warnings"].append(message)
 
 
-def _workspace_candidates(project_root: Path, workspace_hint: Optional[Path]) -> list[Path]:
+def _workspace_candidates(project_root: Path, workspace_hint: Path | None) -> list[Path]:
     candidates: list[Path] = []
     if workspace_hint is not None:
         candidates.append(_normalize_path(workspace_hint))
@@ -306,7 +303,7 @@ def migrate_codex_runtime(
     *,
     project_root: Path,
     dry_run: bool = False,
-    workspace_hint: Optional[Path] = None,
+    workspace_hint: Path | None = None,
     persist_report: bool = True,
 ) -> dict:
     root = _normalize_path(project_root)
