@@ -109,3 +109,9 @@ zztmp_pytest_root*/
 
 # Harness runtime session artifacts
 /running/sessions/
+
+# Nexus map (generated, includes binaries)
+.nexus-map/
+
+# Codex smoke test directories
+codex-smoke-*/

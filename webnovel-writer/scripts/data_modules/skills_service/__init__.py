@@ -2,8 +2,8 @@
 Skill service exports.
 """
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 from .manager import (
     SkillServiceError,
@@ -43,13 +43,13 @@ def _patch_cli_project_resolver() -> None:
                 state_path.write_text("{}", encoding="utf-8")
         return resolver(explicit_project_root, *args, **kwargs)
 
-    setattr(_wrapped_resolver, "_skills_state_bootstrap_patch", True)
-    setattr(project_locator, "resolve_project_root", _wrapped_resolver)
+    _wrapped_resolver._skills_state_bootstrap_patch = True
+    project_locator.resolve_project_root = _wrapped_resolver
 
     # If the CLI module is already loaded, repoint its bound import as well.
     module = sys.modules.get("data_modules.skill_manager")
     if module is not None:
-        setattr(module, "resolve_project_root", _wrapped_resolver)
+        module.resolve_project_root = _wrapped_resolver
 
 
 _patch_cli_project_resolver()

@@ -242,9 +242,8 @@ def _append_audit(paths: SkillPaths, entry: dict[str, Any]) -> None:
     payload = json.dumps(entry, ensure_ascii=False)
     lock_path = str(paths.audit_path) + ".lock"
     if FileLock is not None:
-        with FileLock(lock_path, timeout=10):
-            with paths.audit_path.open("a", encoding="utf-8") as handle:
-                handle.write(payload + "\n")
+        with FileLock(lock_path, timeout=10), paths.audit_path.open("a", encoding="utf-8") as handle:
+            handle.write(payload + "\n")
         return
 
     with paths.audit_path.open("a", encoding="utf-8") as handle:

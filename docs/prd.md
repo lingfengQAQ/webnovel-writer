@@ -1,5 +1,7 @@
-将前端彻底变为纯展示页面
-标准化codex的使用该项目的过程：
-1。帮助codex快速索引章节，总纲，细纲
-2.建立skill库，并且只在会话区加载
-3.测试是否rag库是否能够正常使用
+# Product Requirements
+
+This document has been superseded by the frozen specification.
+
+See: **[docs/prd-refined.md](prd-refined.md)**
+
+For architecture and milestone status, see: **[docs/ARCHITECTURE.md](ARCHITECTURE.md)**
