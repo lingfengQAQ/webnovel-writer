@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { discoverWorkspaceTree, TreeNode } from './discovery';
+import { PipelineViewProvider } from './product/pipelineView';
 
 class BrowserTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     private readonly changeEmitter = new vscode.EventEmitter<TreeNode | undefined | void>();
@@ -102,6 +103,7 @@ class BrowserTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
 export function activate(context: vscode.ExtensionContext): void {
     const provider = new BrowserTreeProvider();
+    const pipelineProvider = new PipelineViewProvider(context);
     const view = vscode.window.createTreeView('webnovelTextBrowser', {
         treeDataProvider: provider,
         showCollapseAll: true,
@@ -109,9 +111,20 @@ export function activate(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(view);
     context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(PipelineViewProvider.viewType, pipelineProvider),
+    );
+    context.subscriptions.push(
         vscode.commands.registerCommand('webnovelTextBrowser.refresh', async () => {
             await provider.refresh();
             void vscode.window.setStatusBarMessage('Webnovel Writer browser refreshed.', 2500);
+        }),
+    );
+    context.subscriptions.push(
+        vscode.commands.registerCommand('webnovelPipeline.refresh', async () => {
+            await pipelineProvider.refresh();
+        }),
+        vscode.commands.registerCommand('webnovelPipeline.startRun', async () => {
+            await pipelineProvider.startRun();
         }),
     );
 }
