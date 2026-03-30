@@ -7,8 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node ./test/skills-page.component.test.cjs",
-    "test:vitest": "vitest run --environment jsdom"
+    "test": "node --test ./src/api/dashboardPages.test.js",
+    "test:vitest": "vitest run --environment jsdom ./src/components/ErrorBoundary.test.jsx"
   },
   "dependencies": {
     "react": "^19.0.0",
