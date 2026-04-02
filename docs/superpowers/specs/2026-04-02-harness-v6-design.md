@@ -1,7 +1,7 @@
 # Webnovel-Writer Harness v6 设计文档
 
-> 日期：2026-04-02
-> 状态：草案
+> 日期：2026-04-02（更新：2026-04-03）
+> 状态：草案 v2
 > 基于：用户反馈 + issue#5 token 分析 + 23 条问题清单
 
 ---
@@ -114,22 +114,66 @@ Step 0.5 预检
 ### 4.4 审查（新模式）
 
 - 1 个 agent，一次灌入正文 + 记忆中的角色状态/世界规则
-- 输出格式为 code review 风格的问题清单：
+- 输出格式为结构化问题清单（code review 风格）：
 
+**最小 schema：**
+
+```json
+{
+  "issues": [
+    {
+      "severity": "critical | high | medium | low",
+      "category": "continuity | setting | character | timeline | ai_flavor | logic",
+      "location": "第3段",
+      "description": "主角使用了第15章已失去的能力'xxx'",
+      "evidence": "原文：'萧炎催动xxx斗技' vs 记忆：第15章已失去该能力",
+      "fix_hint": "改为使用当前已有的yyy能力",
+      "blocking": true
+    }
+  ],
+  "blocking_count": 1,
+  "summary": "发现1个阻断问题，2个高优问题"
+}
 ```
-[critical] 第3段：主角使用了第15章已失去的能力"xxx"
-[high] 第7段：时间线矛盾——上章深夜，本章突然中午
-[medium] 第12段：角色"张三"语气与已建立性格不符
+
+**阻断规则：**
+- `blocking=true` 的问题替代原 `timeline_gate` 语义——存在任何 blocking issue 时，不得进入 Step 4
+- `severity=critical` 默认 `blocking=true`；其余 severity 由审查 agent 判断
+
+**指标沉淀（轻量）：**
+- 每次审查结果写入 `index.db.review_metrics`，字段：`chapter, issues_count, blocking_count, categories, timestamp`
+- 用于趋势观测（连续 N 章某类问题反复出现 → 提示系统性问题）
+- 不再保存 `overall_score`
+
+**anti-AI 职责划分：**
+- **Step 3 负责发现** anti-AI 问题（category="ai_flavor"），列入问题清单
+- **Step 4 负责修复**并做最终 anti-AI gate——修复所有问题后复检，确认无 blocking issue 残留
+
+### 4.5 记忆模块（分两阶段交付）
+
+**阶段 A：接口契约（先定，不依赖存储实现）**
+
+上层消费者（context-agent、data-agent、审查 agent）只依赖以下契约：
+
+```python
+# 合并接口
+memory.commit_chapter(chapter: int, result: dict) -> CommitResult
+memory.load_context(chapter: int, budget_tokens: int) -> ContextPack
+
+# 独立接口（context-agent research 模式按需调用）
+memory.query_entity(entity_id: str) -> EntitySnapshot
+memory.query_rules(domain: str) -> list[Rule]
+memory.read_summary(chapter: int) -> str
+memory.get_open_loops(status: str = "active") -> list[OpenLoop]
+memory.get_timeline(from_ch: int, to_ch: int) -> list[TimelineEvent]
 ```
 
-- 不评分，不输出总分
-- anti-AI 检查作为审查的一部分，不单独成步
+契约定义返回类型的字段，但不规定底层用 SQLite/JSON/向量库中的哪个。
+context-agent 和 data-agent 重构只依赖这层契约。
 
-### 4.5 记忆模块（待设计）
+**阶段 B：存储实现（后做）**
 
 已确认方向：
-- 合并接口：`commit_chapter()`（写入） / `load_context()`（读取）
-- 独立接口：`query_entity()` / `query_rules()` / `read_summary()` 等按需补查
 - 按时效分层：近期（详细）→ 中期（摘要）→ 远期（活跃事实）
 - 时间线作为索引轴
 - 记忆类型：角色状态（可变）、世界规则（稳定）、伏笔（有生命周期）
@@ -209,8 +253,12 @@ Step 0.5 预检
 | 阶段 | 内容 | 依赖 |
 |------|------|------|
 | Phase 1 | 废弃 workflow/resume + 审查合并 + Step 2B 合并 | 无 |
-| Phase 2 | Skill/Agent prompt 统一模板 + 参考资料清理 | 真实小说片段收集 |
-| Phase 3 | Context-agent research 模式重构 | 记忆模块设计 |
-| Phase 4 | 记忆模块统一设计与实现 | 用户设计确认 |
-| Phase 5 | Plan 章纲约束重构 | Phase 3+4 |
-| Phase 6 | anti-AI 加强 + 写作 prompt 优化 | Phase 2+3 |
+| Phase 2A | Skill/Agent prompt 统一模板 + 参考资料清理（删冗余） | 无 |
+| Phase 2B | 参考资料范例补强（真实小说片段） | 用户收集素材 |
+| Phase 3 | 记忆模块接口契约设计 | 无 |
+| Phase 4 | Context-agent research 模式重构 | Phase 3（契约） |
+| Phase 5 | 记忆模块存储实现 | Phase 3（契约）+ 用户设计确认 |
+| Phase 6 | Plan 章纲约束重构 | Phase 4+5 |
+| Phase 7 | anti-AI 加强 + 写作 prompt 优化 | Phase 2A+4 |
+
+注：Phase 1/2A/3 无互相依赖，可并行推进。
