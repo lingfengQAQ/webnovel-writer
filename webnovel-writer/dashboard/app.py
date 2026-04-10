@@ -6,6 +6,7 @@ Webnovel Dashboard - FastAPI 主应用
 
 import asyncio
 import json
+import os
 import sqlite3
 from contextlib import asynccontextmanager, closing
 from pathlib import Path
@@ -78,6 +79,64 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
         if not state_path.is_file():
             raise HTTPException(404, "state.json 不存在")
         return json.loads(state_path.read_text(encoding="utf-8"))
+
+    @app.get("/api/env-status")
+    def env_status():
+        """检测 RAG / Rerank 环境配置状态（仅读取本地配置与文件，不发起网络请求）。"""
+        # 读取项目级 .env（best-effort，不覆盖进程已有环境变量）
+        project_env: dict[str, str] = {}
+        env_file = _get_project_root() / ".env"
+        if env_file.is_file():
+            for raw in env_file.read_text(encoding="utf-8").splitlines():
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, _, v = line.partition("=")
+                k = k.strip()
+                v = v.strip().strip('"').strip("'")
+                if k:
+                    project_env[k] = v
+
+        def _get(name: str, default: str = "") -> str:
+            return os.getenv(name) or project_env.get(name) or default
+
+        embed_key = _get("EMBED_API_KEY")
+        rerank_key = _get("RERANK_API_KEY")
+        embed_url = _get("EMBED_BASE_URL", "https://api-inference.modelscope.cn/v1")
+        rerank_url = _get("RERANK_BASE_URL", "https://api.jina.ai/v1")
+        embed_model = _get("EMBED_MODEL", "Qwen/Qwen3-Embedding-8B")
+        rerank_model = _get("RERANK_MODEL", "jina-reranker-v3")
+
+        vectors_db = _webnovel_dir() / "vectors.db"
+        vector_db_exists = vectors_db.is_file() and vectors_db.stat().st_size > 0
+
+        # 推导 RAG 运行模式（对应 rag_adapter.py 三级降级逻辑）
+        if not embed_key:
+            rag_mode = "disabled"
+        elif not vector_db_exists:
+            rag_mode = "bm25_fallback"
+        elif not rerank_key:
+            rag_mode = "vector_only"
+        else:
+            rag_mode = "vector+rerank"
+
+        return {
+            "embed": {
+                "key_configured": bool(embed_key),
+                "base_url": embed_url,
+                "model": embed_model,
+            },
+            "rerank": {
+                "key_configured": bool(rerank_key),
+                "base_url": rerank_url,
+                "model": rerank_model,
+            },
+            "vector_db": {
+                "exists": vector_db_exists,
+                "size_kb": round(vectors_db.stat().st_size / 1024, 1) if vector_db_exists else 0,
+            },
+            "rag_mode": rag_mode,
+        }
 
     # ===========================================================
     # API：实体数据库（index.db 只读查询）

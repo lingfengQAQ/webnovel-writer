@@ -206,6 +206,43 @@ body {
 .badge-purple { background: #ece3ff; color: #4a2ea8; }
 .badge-cyan { background: #dcfafe; color: #155e75; }
 
+/* RAG 环境状态卡片 */
+.rag-status-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.25rem 0;
+}
+.rag-status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 6px;
+  background: var(--bg-card-2);
+}
+.rag-status-icon { font-size: 1rem; flex-shrink: 0; }
+.rag-status-label {
+  font-weight: 600;
+  font-size: 0.84rem;
+  color: var(--text-main);
+  min-width: 72px;
+}
+.rag-status-detail {
+  font-size: 0.82rem;
+  color: var(--text-sub);
+  flex: 1;
+}
+.rag-status-url {
+  font-size: 0.74rem;
+  color: var(--text-mute);
+  font-family: monospace;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

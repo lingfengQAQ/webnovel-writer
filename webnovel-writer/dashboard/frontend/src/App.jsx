@@ -221,10 +221,84 @@ function DashboardPage({ data }) {
             ) : null}
 
             <MergedDataView />
+            <RagStatusCard />
         </>
     )
 }
 
+
+// ====================================================================
+// RAG 环境状态卡片
+// ====================================================================
+
+const RAG_MODE_LABEL = {
+    'vector+rerank': '向量检索 + Rerank',
+    'vector_only':   '向量检索（无 Rerank）',
+    'bm25_fallback': 'BM25 降级',
+    'disabled':      '未启用',
+}
+const RAG_MODE_BADGE = {
+    'vector+rerank': 'badge-green',
+    'vector_only':   'badge-blue',
+    'bm25_fallback': 'badge-amber',
+    'disabled':      'badge-red',
+}
+
+function RagStatusCard() {
+    const [status, setStatus] = useState(null)
+    const [error, setError] = useState(false)
+
+    useEffect(() => {
+        fetchJSON('/api/env-status')
+            .then(d => { setStatus(d); setError(false) })
+            .catch(() => setError(true))
+    }, [])
+
+    if (error) return null
+    if (!status) return null
+
+    const rows = [
+        {
+            label: 'Embedding',
+            ok: status.embed.key_configured,
+            detail: status.embed.key_configured ? status.embed.model : '未配置 EMBED_API_KEY',
+            hint: status.embed.base_url,
+        },
+        {
+            label: 'Rerank',
+            ok: status.rerank.key_configured,
+            detail: status.rerank.key_configured ? status.rerank.model : '未配置 RERANK_API_KEY',
+            hint: status.rerank.base_url,
+        },
+        {
+            label: '向量库',
+            ok: status.vector_db.exists,
+            detail: status.vector_db.exists ? `vectors.db · ${status.vector_db.size_kb} KB` : '未建立 (vectors.db)',
+            hint: null,
+        },
+    ]
+
+    return (
+        <div className="card dashboard-section-card">
+            <div className="card-header">
+                <span className="card-title">🔍 RAG 环境状态</span>
+                <span className={`card-badge ${RAG_MODE_BADGE[status.rag_mode] || 'badge-amber'}`}>
+                    {RAG_MODE_LABEL[status.rag_mode] || status.rag_mode}
+                </span>
+            </div>
+            <div className="rag-status-grid">
+                {rows.map(row => (
+                    <div key={row.label} className="rag-status-row">
+                        <span className="rag-status-icon">{row.ok ? '✅' : '❌'}</span>
+                        <span className="rag-status-label">{row.label}</span>
+                        <span className="rag-status-detail">{row.detail}</span>
+                        {row.hint && <span className="rag-status-url">{row.hint}</span>}
+                    </div>
+                ))}
+            </div>
+        </div>
+    )
+}
 
 // ====================================================================
 // 页面 2：设定词典
