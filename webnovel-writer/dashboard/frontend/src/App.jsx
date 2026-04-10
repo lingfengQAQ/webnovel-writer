@@ -245,36 +245,66 @@ const RAG_MODE_BADGE = {
 }
 
 function RagStatusCard() {
-    const [status, setStatus] = useState(null)
-    const [error, setError] = useState(false)
+    const [config, setConfig] = useState(null)    // 配置状态（快速加载）
+    const [probe, setProbe] = useState(null)       // 探测结果（点按钮后）
+    const [probing, setProbing] = useState(false)  // 探测进行中
 
     useEffect(() => {
         fetchJSON('/api/env-status')
-            .then(d => { setStatus(d); setError(false) })
-            .catch(() => setError(true))
+            .then(setConfig)
+            .catch(() => {})
     }, [])
 
-    if (error) return null
-    if (!status) return null
+    const runProbe = () => {
+        setProbing(true)
+        setProbe(null)
+        fetchJSON('/api/env-status/probe')
+            .then(d => { setProbe(d); setProbing(false) })
+            .catch(() => setProbing(false))
+    }
+
+    if (!config) return null
+
+    // 探测结果优先，否则用配置状态
+    const status = probe || config
+    const isProbeResult = !!probe
 
     const rows = [
         {
             label: 'Embedding',
-            ok: status.embed.key_configured,
-            detail: status.embed.key_configured ? status.embed.model : '未配置 EMBED_API_KEY',
+            // 探测结果看 ok 字段；配置状态看 key_configured
+            ok: isProbeResult ? status.embed.ok : status.embed.key_configured,
+            detail: (() => {
+                if (isProbeResult) {
+                    if (status.embed.ok) return `${status.embed.model} · ${status.embed.latency_ms}ms`
+                    return status.embed.error || '连接失败'
+                }
+                return status.embed.key_configured ? status.embed.model : '未配置 EMBED_API_KEY'
+            })(),
             hint: status.embed.base_url,
+            warn: isProbeResult && !status.embed.ok && status.embed.key_configured,
         },
         {
             label: 'Rerank',
-            ok: status.rerank.key_configured,
-            detail: status.rerank.key_configured ? status.rerank.model : '未配置 RERANK_API_KEY',
+            ok: isProbeResult ? status.rerank.ok : status.rerank.key_configured,
+            detail: (() => {
+                if (isProbeResult) {
+                    if (status.rerank.ok) return `${status.rerank.model} · ${status.rerank.latency_ms}ms`
+                    return status.rerank.error || '连接失败'
+                }
+                return status.rerank.key_configured ? status.rerank.model : '未配置 RERANK_API_KEY'
+            })(),
             hint: status.rerank.base_url,
+            warn: isProbeResult && !status.rerank.ok && status.rerank.key_configured,
         },
         {
             label: '向量库',
             ok: status.vector_db.exists,
-            detail: status.vector_db.exists ? `vectors.db · ${status.vector_db.size_kb} KB` : '未建立 (vectors.db)',
+            detail: status.vector_db.exists
+                ? `vectors.db · ${status.vector_db.size_kb} KB`
+                : '未建立 (vectors.db)',
             hint: null,
+            warn: false,
         },
     ]
 
@@ -282,20 +312,36 @@ function RagStatusCard() {
         <div className="card dashboard-section-card">
             <div className="card-header">
                 <span className="card-title">🔍 RAG 环境状态</span>
-                <span className={`card-badge ${RAG_MODE_BADGE[status.rag_mode] || 'badge-amber'}`}>
-                    {RAG_MODE_LABEL[status.rag_mode] || status.rag_mode}
-                </span>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    {isProbeResult && (
+                        <span className={`card-badge ${RAG_MODE_BADGE[status.rag_mode] || 'badge-amber'}`}>
+                            {RAG_MODE_LABEL[status.rag_mode] || status.rag_mode}
+                        </span>
+                    )}
+                    <button
+                        className={`rag-probe-btn ${probing ? 'probing' : ''}`}
+                        onClick={runProbe}
+                        disabled={probing}
+                    >
+                        {probing ? '检测中…' : '检测连通性'}
+                    </button>
+                </div>
             </div>
             <div className="rag-status-grid">
                 {rows.map(row => (
-                    <div key={row.label} className="rag-status-row">
-                        <span className="rag-status-icon">{row.ok ? '✅' : '❌'}</span>
+                    <div key={row.label} className={`rag-status-row${row.warn ? ' warn' : ''}`}>
+                        <span className="rag-status-icon">
+                            {probing ? '⏳' : row.ok ? '✅' : '❌'}
+                        </span>
                         <span className="rag-status-label">{row.label}</span>
                         <span className="rag-status-detail">{row.detail}</span>
                         {row.hint && <span className="rag-status-url">{row.hint}</span>}
                     </div>
                 ))}
             </div>
+            {!isProbeResult && (
+                <p className="rag-status-hint">以上为本地配置读取结果，点击"检测连通性"进行真实服务探测</p>
+            )}
         </div>
     )
 }

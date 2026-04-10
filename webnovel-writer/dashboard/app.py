@@ -8,6 +8,7 @@ import asyncio
 import json
 import os
 import sqlite3
+import time
 from contextlib import asynccontextmanager, closing
 from pathlib import Path
 from typing import Optional
@@ -130,6 +131,115 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
                 "key_configured": bool(rerank_key),
                 "base_url": rerank_url,
                 "model": rerank_model,
+            },
+            "vector_db": {
+                "exists": vector_db_exists,
+                "size_kb": round(vectors_db.stat().st_size / 1024, 1) if vector_db_exists else 0,
+            },
+            "rag_mode": rag_mode,
+        }
+
+    @app.get("/api/env-status/probe")
+    async def env_status_probe():
+        """主动探测 Embedding / Rerank 服务连通性（发起真实 HTTP 请求，超时 8s）。"""
+        import aiohttp
+
+        # 复用 env_status 的配置读取逻辑
+        project_env: dict[str, str] = {}
+        env_file = _get_project_root() / ".env"
+        if env_file.is_file():
+            for raw in env_file.read_text(encoding="utf-8").splitlines():
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, _, v = line.partition("=")
+                k = k.strip()
+                v = v.strip().strip('"').strip("'")
+                if k:
+                    project_env[k] = v
+
+        def _get(name: str, default: str = "") -> str:
+            return os.getenv(name) or project_env.get(name) or default
+
+        embed_key   = _get("EMBED_API_KEY")
+        rerank_key  = _get("RERANK_API_KEY")
+        embed_url   = _get("EMBED_BASE_URL", "https://api-inference.modelscope.cn/v1")
+        rerank_url  = _get("RERANK_BASE_URL", "https://api.jina.ai/v1")
+        embed_model = _get("EMBED_MODEL", "Qwen/Qwen3-Embedding-8B")
+        rerank_model = _get("RERANK_MODEL", "jina-reranker-v3")
+
+        TIMEOUT = aiohttp.ClientTimeout(total=8)
+
+        async def _probe_embed() -> dict:
+            if not embed_key:
+                return {"ok": False, "latency_ms": None, "error": "未配置 EMBED_API_KEY"}
+            url = embed_url.rstrip("/") + "/embeddings"
+            headers = {"Authorization": f"Bearer {embed_key}", "Content-Type": "application/json"}
+            payload = {"model": embed_model, "input": ["test"]}
+            t0 = time.monotonic()
+            try:
+                async with aiohttp.ClientSession(timeout=TIMEOUT) as s:
+                    async with s.post(url, json=payload, headers=headers) as r:
+                        latency = round((time.monotonic() - t0) * 1000)
+                        if r.status == 200:
+                            return {"ok": True, "latency_ms": latency, "error": None}
+                        text = (await r.text())[:120]
+                        return {"ok": False, "latency_ms": latency, "error": f"HTTP {r.status}: {text}"}
+            except asyncio.TimeoutError:
+                return {"ok": False, "latency_ms": None, "error": "请求超时（>8s）"}
+            except Exception as e:
+                return {"ok": False, "latency_ms": None, "error": str(e)[:120]}
+
+        async def _probe_rerank() -> dict:
+            if not rerank_key:
+                return {"ok": False, "latency_ms": None, "error": "未配置 RERANK_API_KEY"}
+            url = rerank_url.rstrip("/") + "/rerank"
+            headers = {"Authorization": f"Bearer {rerank_key}", "Content-Type": "application/json"}
+            payload = {"model": rerank_model, "query": "test", "documents": ["a", "b"]}
+            t0 = time.monotonic()
+            try:
+                async with aiohttp.ClientSession(timeout=TIMEOUT) as s:
+                    async with s.post(url, json=payload, headers=headers) as r:
+                        latency = round((time.monotonic() - t0) * 1000)
+                        if r.status == 200:
+                            return {"ok": True, "latency_ms": latency, "error": None}
+                        text = (await r.text())[:120]
+                        return {"ok": False, "latency_ms": latency, "error": f"HTTP {r.status}: {text}"}
+            except asyncio.TimeoutError:
+                return {"ok": False, "latency_ms": None, "error": "请求超时（>8s）"}
+            except Exception as e:
+                return {"ok": False, "latency_ms": None, "error": str(e)[:120]}
+
+        embed_result, rerank_result = await asyncio.gather(
+            _probe_embed(), _probe_rerank()
+        )
+
+        vectors_db = _webnovel_dir() / "vectors.db"
+        vector_db_exists = vectors_db.is_file() and vectors_db.stat().st_size > 0
+
+        if not embed_key:
+            rag_mode = "disabled"
+        elif not vector_db_exists:
+            rag_mode = "bm25_fallback"
+        elif not embed_result["ok"]:
+            rag_mode = "bm25_fallback"
+        elif not rerank_key or not rerank_result["ok"]:
+            rag_mode = "vector_only"
+        else:
+            rag_mode = "vector+rerank"
+
+        return {
+            "embed": {
+                "key_configured": bool(embed_key),
+                "base_url": embed_url,
+                "model": embed_model,
+                **embed_result,
+            },
+            "rerank": {
+                "key_configured": bool(rerank_key),
+                "base_url": rerank_url,
+                "model": rerank_model,
+                **rerank_result,
             },
             "vector_db": {
                 "exists": vector_db_exists,

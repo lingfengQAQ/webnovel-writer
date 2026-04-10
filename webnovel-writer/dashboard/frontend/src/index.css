@@ -221,6 +221,9 @@ body {
   border-radius: 6px;
   background: var(--bg-card-2);
 }
+.rag-status-row.warn {
+  background: #fff1cd;
+}
 .rag-status-icon { font-size: 1rem; flex-shrink: 0; }
 .rag-status-label {
   font-weight: 600;
@@ -241,6 +244,32 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.rag-status-hint {
+  font-size: 0.76rem;
+  color: var(--text-mute);
+  margin: 0.5rem 0.25rem 0;
+}
+.rag-probe-btn {
+  font-size: 0.78rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 5px;
+  border: 1.5px solid var(--border-soft);
+  background: var(--bg-card);
+  color: var(--text-sub);
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s;
+}
+.rag-probe-btn:hover:not(:disabled) {
+  background: var(--accent-blue);
+  color: #fff;
+  border-color: var(--accent-blue);
+}
+.rag-probe-btn.probing,
+.rag-probe-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .dashboard-grid {
