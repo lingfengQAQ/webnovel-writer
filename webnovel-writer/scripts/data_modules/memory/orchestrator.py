@@ -128,7 +128,9 @@ class MemoryOrchestrator:
             return {}
         try:
             return json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as exc:
+            import sys
+            print(f"⚠️ state.json 读取失败: {exc}", file=sys.stderr)
             return {}
 
     def _load_recent_summaries(self, chapter: int, window: int) -> List[Dict[str, Any]]:

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterator, List
 
 from .story_contracts import StoryContractPaths, read_json_if_exists, write_json
 from .story_event_schema import StoryEvent
@@ -15,6 +17,19 @@ class EventLogStore:
     def __init__(self, project_root: Path):
         self.project_root = Path(project_root).expanduser().resolve()
         self.paths = StoryContractPaths.from_project_root(self.project_root)
+
+    @contextmanager
+    def _connect(self, *, row_factory: bool = False) -> Iterator[sqlite3.Connection]:
+        """统一 SQLite 连接管理，确保连接始终关闭。"""
+        db_path = self.project_root / ".webnovel" / "index.db"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(db_path))
+        if row_factory:
+            conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def write_events(self, chapter: int, events: List[dict]) -> Path:
         normalized = self._normalize_events(chapter, events)
@@ -30,34 +45,31 @@ class EventLogStore:
         db_path = self.project_root / ".webnovel" / "index.db"
         if not db_path.is_file():
             return []
-        conn = sqlite3.connect(str(db_path))
-        conn.row_factory = sqlite3.Row
-        try:
-            if chapter is not None:
-                rows = conn.execute(
-                    """
-                    SELECT event_id, chapter, event_type, subject, payload_json
-                    FROM story_events
-                    WHERE chapter = ?
-                    ORDER BY id DESC
-                    LIMIT ?
-                    """,
-                    (chapter, limit),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    """
-                    SELECT event_id, chapter, event_type, subject, payload_json
-                    FROM story_events
-                    ORDER BY chapter DESC, id DESC
-                    LIMIT ?
-                    """,
-                    (limit,),
-                ).fetchall()
-        except sqlite3.OperationalError:
-            return []
-        finally:
-            conn.close()
+        with self._connect(row_factory=True) as conn:
+            try:
+                if chapter is not None:
+                    rows = conn.execute(
+                        """
+                        SELECT event_id, chapter, event_type, subject, payload_json
+                        FROM story_events
+                        WHERE chapter = ?
+                        ORDER BY id DESC
+                        LIMIT ?
+                        """,
+                        (chapter, limit),
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        """
+                        SELECT event_id, chapter, event_type, subject, payload_json
+                        FROM story_events
+                        ORDER BY chapter DESC, id DESC
+                        LIMIT ?
+                        """,
+                        (limit,),
+                    ).fetchall()
+            except sqlite3.OperationalError:
+                return []
 
         result: List[Dict[str, Any]] = []
         for row in rows:
@@ -82,16 +94,13 @@ class EventLogStore:
         file_count = len(list(self.paths.events_dir.glob("chapter_*.events.json")))
         sqlite_rows = 0
         if db_path.is_file():
-            conn = sqlite3.connect(str(db_path))
-            try:
+            with self._connect() as conn:
                 try:
                     sqlite_rows = int(
                         conn.execute("SELECT COUNT(*) FROM story_events").fetchone()[0]
                     )
                 except sqlite3.OperationalError:
                     sqlite_rows = 0
-            finally:
-                conn.close()
         return {"ok": True, "sqlite_rows": sqlite_rows, "event_files": file_count}
 
     def _normalize_events(self, chapter: int, events: List[dict]) -> List[Dict[str, Any]]:
@@ -105,10 +114,7 @@ class EventLogStore:
         return normalized
 
     def _write_sqlite_mirror(self, events: List[Dict[str, Any]]) -> None:
-        db_path = self.project_root / ".webnovel" / "index.db"
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(db_path))
-        try:
+        with self._connect() as conn:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS story_events (
@@ -145,5 +151,3 @@ class EventLogStore:
                 ],
             )
             conn.commit()
-        finally:
-            conn.close()

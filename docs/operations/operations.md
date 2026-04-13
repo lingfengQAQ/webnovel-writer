@@ -1,74 +1,86 @@
 # 项目结构与运维
 
-## 目录层级（真实运行）
+## 目录层级
 
-在 Claude Code + Marketplace 安装下，至少有 4 层概念：
+系统涉及 4 层目录，使用前需要了解它们的区别：
 
-1. `WORKSPACE_ROOT`（Claude 工作区根，通常是 `${CLAUDE_PROJECT_DIR}`）
-2. `WORKSPACE_ROOT/.claude/`（工作区级指针与配置）
-3. `PROJECT_ROOT`（真实小说项目根，`/webnovel-init` 按书名创建）
-4. `CLAUDE_PLUGIN_ROOT`（插件缓存目录，不在项目内）
+| 层级 | 说明 | 示例 |
+|------|------|------|
+| `WORKSPACE_ROOT` | Claude Code 工作区根目录 | `D:\wk\novels` |
+| `.claude/` | 工作区级配置与项目指针 | `D:\wk\novels\.claude\` |
+| `PROJECT_ROOT` | 某本书的项目根目录（由 `/webnovel-init` 创建） | `D:\wk\novels\凡人资本论` |
+| `CLAUDE_PLUGIN_ROOT` | 插件缓存目录（不在项目内，由 Marketplace 安装管理） | 自动管理 |
 
-### A) Workspace 目录（含 `.claude`）
+### 工作区目录
 
 ```text
 workspace-root/
 ├── .claude/
-│   ├── .webnovel-current-project   # 指向当前小说项目根
+│   ├── .webnovel-current-project   # 指向当前书项目根
 │   └── settings.json
-├── 小说A/
+├── 小说A/                          # PROJECT_ROOT
 ├── 小说B/
 └── ...
 ```
 
-### B) 小说项目目录（`PROJECT_ROOT`）
+一个工作区可以包含多本书，通过 `.webnovel-current-project` 指针切换当前操作的书。
+
+### 书项目目录（PROJECT_ROOT）
 
 ```text
 project-root/
-├── .webnovel/            # 运行时数据（state/index/vectors/summaries）
+├── .webnovel/            # 运行时数据
+│   ├── state.json        # 项目状态
+│   ├── index.db          # SQLite 索引（实体/关系/章节数据）
+│   ├── vectors.db        # 向量索引
+│   ├── summaries/        # 章节摘要
+│   ├── backups/          # 自动备份
+│   └── archive/          # 归档
+├── .story-system/        # Story System 数据
+│   ├── MASTER_SETTING.json
+│   ├── chapters/
+│   ├── volumes/
+│   ├── reviews/
+│   ├── commits/
+│   └── events/
 ├── 正文/                  # 正文章节
 ├── 大纲/                  # 总纲与卷纲
-└── 设定集/                # 世界观、角色、力量体系
+├── 设定集/                # 世界观、角色、力量体系
+└── 审查报告/              # 审查输出
 ```
 
-## 插件目录（Marketplace 安装）
+### 插件目录
 
-插件不在小说项目目录内，而在 Claude 插件缓存目录。运行时统一用 `CLAUDE_PLUGIN_ROOT` 引用：
+插件安装在 Claude 插件缓存目录，不在书项目内。运行时通过 `CLAUDE_PLUGIN_ROOT` 引用：
 
 ```text
 ${CLAUDE_PLUGIN_ROOT}/
-├── skills/
-├── agents/
-├── scripts/
-└── references/
+├── skills/       # 7 个 Skill 命令定义
+├── agents/       # 3 个 Agent 定义
+├── scripts/      # Python 脚本与数据模块
+├── references/   # 参考文档（题材画像、追读力分类法等）
+├── templates/    # 初始化模板
+├── genres/       # 精调题材配置
+└── dashboard/    # 可视化面板前端
 ```
 
-### C) 用户级全局映射（兜底）
+### 用户级全局映射
 
-当工作区没有可用指针时，会使用用户级 registry 做 `workspace -> current_project_root` 映射：
+当工作区指针不可用时，系统会从用户级 registry 查找 workspace → project 映射：
 
 ```text
 ${CLAUDE_HOME:-~/.claude}/webnovel-writer/workspaces.json
 ```
 
-## 模拟目录实测（2026-03-03）
-
-基于 `D:\wk\novel skill\plugin-sim-20260303-012048` 的实际结果：
-
-- `WORKSPACE_ROOT`：`D:\wk\novel skill\plugin-sim-20260303-012048`
-- 指针文件：`D:\wk\novel skill\plugin-sim-20260303-012048\.claude\.webnovel-current-project`
-- 指针内容：`D:\wk\novel skill\plugin-sim-20260303-012048\凡人资本论-二测`
-- 已创建项目示例：`凡人资本论/`、`凡人资本论-二测/`
-
 ## 常用运维命令
 
-统一前置（手动 CLI 场景）：
+### 环境预检
 
 ```bash
-export WORKSPACE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
-export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"
-export PROJECT_ROOT="$(python "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
+python -X utf8 "${CLAUDE_PLUGIN_ROOT}/scripts/webnovel.py" --project-root "${WORKSPACE_ROOT}" preflight
 ```
+
+检查项：插件脚本路径 / 项目根是否可解析 / Skill 目录是否存在。
 
 ### 索引重建
 
@@ -91,7 +103,7 @@ python "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" rag index-c
 python "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" rag stats
 ```
 
-### 测试入口
+### 测试
 
 ```bash
 pwsh "${CLAUDE_PLUGIN_ROOT}/scripts/run_tests.ps1" -Mode smoke
@@ -100,40 +112,25 @@ pwsh "${CLAUDE_PLUGIN_ROOT}/scripts/run_tests.ps1" -Mode full
 
 ## Story System 运维
 
-### preflight
-
-检查统一入口与事件链目录是否可用：
+### 健康检查
 
 ```bash
-python -X utf8 "${CLAUDE_PLUGIN_ROOT}/scripts/webnovel.py" --project-root "${PROJECT_ROOT}" preflight
 python -X utf8 "${CLAUDE_PLUGIN_ROOT}/scripts/webnovel.py" --project-root "${PROJECT_ROOT}" story-events --health
 ```
 
-重点看三项：
+返回字段：`sqlite_rows` / `event_files` / `ok`
+
+重点关注：
 
 - `.story-system/events/` 是否可读
-- `.webnovel/index.db` 中 `story_events` 是否可查
+- `index.db` 中 `story_events` 表是否可查
 - `override_contracts` 是否能统计 `amend_proposal`
 
-### health
+### 备份
 
-最小健康检查命令：
+做 Story System 相关备份时，至少同时备份以下内容：
 
-```bash
-python -X utf8 "${CLAUDE_PLUGIN_ROOT}/scripts/webnovel.py" --project-root "${PROJECT_ROOT}" story-events --health
-```
-
-返回字段：
-
-- `sqlite_rows`
-- `event_files`
-- `ok`
-
-### backup
-
-做 Story System 相关备份时，至少同时备这两块：
-
-```bash
+```text
 .story-system/
 .webnovel/index.db
 ```

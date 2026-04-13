@@ -23,6 +23,7 @@ Data Modules - API 客户端 (v5.4，v5.0 OpenAI 兼容接口沿用)
 
 import asyncio
 import aiohttp
+import json
 import time
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
@@ -145,8 +146,7 @@ class EmbeddingAPIClient:
                     ) as resp:
                         if resp.status == 200:
                             text = await resp.text()
-                            import json as json_module
-                            data = json_module.loads(text)
+                            data = json.loads(text)
                             embeddings = self._parse_response(data)
 
                             if embeddings:

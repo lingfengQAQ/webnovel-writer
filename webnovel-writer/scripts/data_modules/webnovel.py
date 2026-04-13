@@ -158,7 +158,9 @@ def cmd_use(args: argparse.Namespace) -> int:
     project_root = normalize_windows_path(args.project_root).expanduser()
     try:
         project_root = project_root.resolve()
-    except Exception:
+    except Exception as exc:
+        import sys
+        print(f"⚠️ path.resolve() 失败 ({project_root}): {exc}", file=sys.stderr)
         project_root = project_root
 
     workspace_root: Optional[Path] = None
@@ -166,7 +168,9 @@ def cmd_use(args: argparse.Namespace) -> int:
         workspace_root = normalize_windows_path(args.workspace_root).expanduser()
         try:
             workspace_root = workspace_root.resolve()
-        except Exception:
+        except Exception as exc:
+            import sys
+            print(f"⚠️ path.resolve() 失败 ({workspace_root}): {exc}", file=sys.stderr)
             workspace_root = workspace_root
 
     # 1) 写入工作区指针（若工作区内存在 `.claude/`）
