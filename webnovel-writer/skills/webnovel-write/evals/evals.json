@@ -4,7 +4,7 @@
     {
       "id": 1,
       "prompt": "使用 /webnovel-write 写第4章。项目在 agents/evals/files/test-project/。",
-      "expected_output": "完成 Step 0.5 到 Step 6 的完整流程，生成第4章正文文件、审查结果、摘要文件和状态更新",
+      "expected_output": "完成 Step 1 到 Step 6 的完整流程，由 context-agent 先生成写作任务书，再起草第4章正文，最终生成审查结果、摘要文件和状态更新",
       "files": [
         "agents/evals/files/test-project/.webnovel/state.json",
         "agents/evals/files/test-project/大纲/总纲.md",
@@ -21,7 +21,8 @@
         "正文中没有出现 [TODO] 或 [待补充] 占位符",
         "正文字数在 1500-3000 之间",
         "Step 3 调用了 reviewer agent 进行审查",
-        "Step 4 加载了 anti-ai-guide.md",
+        "Step 1 由 context-agent 生成了写作任务书",
+        "Step 2 只根据写作任务书起草正文",
         "Step 5 调用了 data-agent 回写数据",
         "章末保留了未闭合问题或悬念（不是安全着陆）"
       ]

@@ -284,6 +284,15 @@ def test_context_agent_prefers_contract_and_latest_commit_mainline():
     assert "memory-contract load-context" in text
 
 
+def test_context_agent_loads_fixed_guides_and_outputs_writer_brief():
+    text = (AGENTS_DIR / "context-agent.md").read_text(encoding="utf-8")
+    assert "core-constraints.md" in text
+    assert "anti-ai-guide.md" in text
+    assert "写作任务书" in text
+    assert "Step 2 直写提示词" not in text
+    assert "Context Contract" not in text
+
+
 def test_data_agent_is_described_as_extraction_only_not_direct_write_mainline():
     text = (AGENTS_DIR / "data-agent.md").read_text(encoding="utf-8")
     assert "chapter-commit" in text
@@ -296,3 +305,23 @@ def test_dashboard_and_plan_skills_surface_story_runtime_mainline():
     plan_text = (SKILLS_DIR / "webnovel-plan" / "SKILL.md").read_text(encoding="utf-8")
     assert "story-runtime/health" in dashboard_text
     assert ".story-system/" in plan_text
+
+
+def test_webnovel_write_skill_routes_step2_through_writing_brief():
+    text = (SKILLS_DIR / "webnovel-write" / "SKILL.md").read_text(encoding="utf-8")
+    assert "写作任务书" in text
+    assert "context-agent" in text
+    assert "Step 0.5" not in text
+    assert 'cat "${SKILL_ROOT}/../../references/shared/core-constraints.md"' not in text
+    assert 'cat "${SKILL_ROOT}/references/anti-ai-guide.md"' not in text
+
+
+def test_context_agent_and_write_skill_form_isolated_write_chain():
+    context_text = (AGENTS_DIR / "context-agent.md").read_text(encoding="utf-8")
+    skill_text = (SKILLS_DIR / "webnovel-write" / "SKILL.md").read_text(encoding="utf-8")
+
+    assert "写作任务书" in context_text
+    assert "写作任务书" in skill_text
+    assert "context-agent" in skill_text
+    assert "Context Contract" not in context_text
+    assert "Step 2 直写提示词" not in context_text

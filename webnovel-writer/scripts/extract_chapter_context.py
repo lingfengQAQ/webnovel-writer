@@ -320,6 +320,8 @@ def _load_contract_context(project_root: Path, chapter_num: int) -> Dict[str, An
         "writing_guidance": (sections.get("writing_guidance") or {}).get("content", {}),
         "plot_structure": (sections.get("plot_structure") or {}).get("content", {}),
         "long_term_memory": (sections.get("long_term_memory") or {}).get("content", {}),
+        "scene": (sections.get("scene") or {}).get("content", {}),
+        "core": (sections.get("core") or {}).get("content", {}),
     }
 
 
@@ -353,6 +355,8 @@ def build_chapter_context_payload(project_root: Path, chapter_num: int) -> Dict[
         "writing_guidance": contract_context.get("writing_guidance", {}),
         "plot_structure": plot_structure,
         "long_term_memory": contract_context.get("long_term_memory", {}),
+        "scene": contract_context.get("scene", {}),
+        "core": contract_context.get("core", {}),
         "rag_assist": rag_assist,
     }
 

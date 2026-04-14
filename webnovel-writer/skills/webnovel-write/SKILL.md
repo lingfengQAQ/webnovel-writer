@@ -44,7 +44,7 @@ allowed-tools: Read Write Edit Grep Bash Task
 
 ## 决策树入口
 
-在进入 Step 0.5 之前，先判断：
+在进入 Step 1 之前，先判断：
 
 - 若 `preflight` 失败或项目根不合法 → **阻断**，先修环境
 - 若当前章缺少章纲或章纲关键字段缺失 → **阻断**，请求用户补全
@@ -55,9 +55,9 @@ allowed-tools: Read Write Edit Grep Bash Task
 
 ## 模式定义
 
-- `/webnovel-write`：Step 0.5 → Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6
-- `/webnovel-write --fast`：Step 0.5 → Step 1 → Step 2 → Step 3（轻量） → Step 4 → Step 5 → Step 6
-- `/webnovel-write --minimal`：Step 0.5 → Step 1 → Step 2 → Step 4（仅排版） → Step 5 → Step 6
+- `/webnovel-write`：Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6
+- `/webnovel-write --fast`：Step 1 → Step 2 → Step 3（轻量） → Step 4 → Step 5 → Step 6
+- `/webnovel-write --minimal`：Step 1 → Step 2 → Step 4（仅排版） → Step 5 → Step 6
 
 最小产物：
 - 章节正文文件
@@ -90,8 +90,6 @@ allowed-tools: Read Write Edit Grep Bash Task
 | Step 1 | always | 追读力分类 | `${SKILL_ROOT}/../../references/reading-power-taxonomy.md` |
 | Step 1 | always | 题材配置 | `${SKILL_ROOT}/../../references/genre-profiles.md` |
 | Step 1 | always | 风格差异化 | `${SKILL_ROOT}/references/style-variants.md` |
-| Step 2 | always | 核心约束 | `${SKILL_ROOT}/../../references/shared/core-constraints.md` |
-| Step 2 | always | Anti-AI 预防 | `${SKILL_ROOT}/references/anti-ai-guide.md` |
 | Step 3 | always | 审查 schema | `${SKILL_ROOT}/../../references/review-schema.md`（reviewer 内部使用） |
 | Step 4 | always | 润色指南 | `${SKILL_ROOT}/references/polish-guide.md` |
 | Step 4 | always | 排版规则 | `${SKILL_ROOT}/references/writing/typesetting.md` |
@@ -137,7 +135,7 @@ export PROJECT_ROOT="$(python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-roo
 
 ### 准备阶段：刷新写前合同树
 
-在进入 Step 0.5 之前，必须先生成并刷新本章的写前合同（类比网文作者开写前先过一遍大纲、设定、禁区）：
+在进入 Step 1 之前，必须先生成并刷新本章的写前合同（类比网文作者开写前先过一遍大纲、设定、禁区）：
 
 ```bash
 python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" \
@@ -153,47 +151,27 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" \
 - 合同缺失或生成失败 → 直接阻断，不进入正文起草
 - 类比：作者没过完大纲就开写，容易写崩
 
-### Step 0.5：轻量节点预检
-
-目的：在不阻断流程的前提下，对章纲中的结构化节点做轻量一致性提醒。
-
-规则：
-- 只在当前章详细大纲存在 `CBN/CEN` 时执行。
-- 只检查主角或 POV 角色相关节点。
-- 第一版仅检查：
-  - `CBN` 中地点是否与 `protagonist_state.location` 明显冲突
-  - `CBN/CEN` 中主角境界或能力要求是否与 `protagonist_state.power` 明显冲突
-- 检查结果仅作为警告注入给 `context-agent`，不得阻断流程。
-- 若无节点字段，直接跳过。
-
-警告示例：
-- `[NODE_WARNING] CBN 地点与当前状态不一致: 章纲=迦南学院入口, 实际=乌坦城`
-- `[NODE_WARNING] CBN 强度要求与当前境界不一致: 章纲=斗师级压制, 实际=斗者三星`
-
-### Step 1：调用 Context Agent 生成执行包
+### Step 1：调用 Context Agent 生成写作任务书
 
 使用 Task 调用 `context-agent`，输入：
 - `chapter`
 - `project_root`
 - `storage_path=.webnovel/`
 - `state_file=.webnovel/state.json`
-- 若存在 `NODE_WARNING`，一并传入
 
 硬要求：
-- 输出必须包含任务书、Context Contract、Step 2 直写提示词。
-- 执行包中必须纳入长期记忆约束与时间约束。
-- 若章纲提供结构化节点，执行包中必须包含"情节结构"板块与节拍映射。
+- `context-agent` 必须先完成 research，再输出最终的写作任务书。
+- Step 1 的最终产物只保留一份写作任务书。
+- 写作任务书必须能单独支撑 Step 2 起草正文。
+- 若章纲提供结构化节点，任务书中仍必须体现对应的节拍方向与收束位置。
 
 ### Step 2：起草正文
 
-执行前必须加载：
-
-```bash
-cat "${SKILL_ROOT}/../../references/shared/core-constraints.md"
-cat "${SKILL_ROOT}/references/anti-ai-guide.md"
-```
-
 硬要求：
+- Step 2 只根据 Step 1 生成的写作任务书起草正文。
+- Step 2 不再直接加载 `core-constraints.md`。
+- Step 2 不再直接加载 `anti-ai-guide.md`。
+- Step 2 不再自己拼中间块、旧版直写块或其他写前材料。
 - 只输出纯正文到章节文件。
 - 不得出现 `[TODO]`、`[待补充]` 等占位符。
 - 若上章存在明确钩子，本章必须回应。

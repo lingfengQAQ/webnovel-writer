@@ -24,7 +24,7 @@
 
 ### `/webnovel-write [章号]`
 
-执行完整章节创作流程（上下文构建 → 草稿 → 审查 → 润色 → 数据落盘）。
+执行完整章节创作流程（`context-agent` 先 research 并生成写作任务书 → 按任务书起草正文 → 审查 → 润色 → 数据落盘）。
 
 ```bash
 /webnovel-write 1
