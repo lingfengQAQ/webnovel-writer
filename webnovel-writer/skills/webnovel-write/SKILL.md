@@ -213,10 +213,8 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" rev
   --chapter {chapter_num} \
   --review-results "${PROJECT_ROOT}/.webnovel/tmp/review_results.json" \
   --metrics-out "${PROJECT_ROOT}/.webnovel/tmp/review_metrics.json" \
-  --report-file "审查报告/第{chapter_num}章审查报告.md"
-
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" index save-review-metrics \
-  --data "@${PROJECT_ROOT}/.webnovel/tmp/review_metrics.json"
+  --report-file "审查报告/第{chapter_num}章审查报告.md" \
+  --save-metrics
 ```
 
 阻断规则：

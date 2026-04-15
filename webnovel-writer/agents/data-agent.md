@@ -75,7 +75,7 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" chap
 
 ### 阶段 A：校验与加载
 
-1. `preflight` + `where` 校验
+1. `project_root` 由调用方（webnovel-write Step 5）传入，已经过 preflight 校验，不需要重跑 `preflight` + `where`
 2. 使用 `Read` 读取章节正文
 3. 查询已有实体和最近出场记录
 

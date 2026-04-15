@@ -94,39 +94,58 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" know
 ```
 
 参考资料（按需加载）：
-- `${CLAUDE_PLUGIN_ROOT}/references/reading-power-taxonomy.md`（追读力分类）
-- `${CLAUDE_PLUGIN_ROOT}/references/genre-profiles.md`（题材画像）
 - `${CLAUDE_PLUGIN_ROOT}/references/shared/`（共享事实源，遇到 `<!-- DEPRECATED:` 的文件跳过）
-- `${CLAUDE_PLUGIN_ROOT}/references/shared/core-constraints.md`（固定守则，内部吸收，不原样输出）
-- `${CLAUDE_PLUGIN_ROOT}/skills/webnovel-write/references/anti-ai-guide.md`（固定守则，内部吸收，不原样输出）
+
+**不再单独 Read 的文件**（数据已在 load-context 或 prompt 中内化）：
+- ~~reading-power-taxonomy.md~~：追读力数据已在 load-context 的 memory_pack 中返回
+- ~~genre-profiles.md~~：题材画像已在 load-context 的 story_contracts.master_setting 中包含
+- ~~core-constraints.md~~：核心守则已内化到下方"写作铁律"段落
+- ~~anti-ai-guide.md~~：Anti-AI 要点已内化到下方"写作铁律"段落
+
+**不再单独 Read 的 .story-system/ 文件**：
+- load-context 的 `story_contracts` 字段已包含 MASTER_SETTING / volume / chapter / review 合同内容
+- 只有当 load-context 返回空 contracts 时才直接 Read .story-system/*.json
+
+### 写作铁律（已内化，不需要加载外部文件）
+
+**三大定律**：大纲即法律（不擅自发挥）、设定即物理（能力/物品≤已有记录）、新实体由 data-agent 自动提取。
+
+**章节硬约束**：每章必须有清晰推进（目标/代价/关系变化至少一项）；上章有钩子本章必须回应；禁止占位正文。
+
+**Anti-AI 对抗**（你最容易犯的错，必须在任务书第 4 段提醒）：
+- 删掉段末感悟句，留未解决的余味——你倾向把每段写成闭环
+- 删掉万能副词（缓缓/淡淡/微微），用具体动作替代
+- 情绪通过生理反应+微动作展示，禁止"他感到X"式标签
+- 对话带潜台词和意图冲突，不是信息传递；有抢话、沉默、答非所问
+- 刻意制造节奏疏密对比，有的段落只有一句话
+- 章末禁止安全着陆，必须留至少一个未解决的问题
+- 展示后不解释——"她把门摔上"后不再写"她显然很生气"
 
 ## 3. 思维链（ReAct 循环）
 
 ```
-阶段 A：基础包
-  → load-context 获取轻量起点
-  → Read 读取章纲原文
+阶段 A：基础包（1 次 Bash + 1 次 Read）
+  → load-context 获取轻量起点（已包含 contracts、summaries、protagonist、rules、loops）
+  → Read 读取章纲原文（load-context 的 outline 可能被截断）
 
-阶段 B：按需深查（循环）
+阶段 B：按需深查（仅查 load-context 不足的部分）
   → 思考：基础包 + 章纲告诉我这章需要什么？
-  → 缺角色细节？→ query-entity
-  → 缺世界规则？→ query-rules
-  → 缺上章衔接？→ read-summary
-  → 伏笔不够详细？→ get-open-loops
+  → 缺角色细节？→ query-entity（load-context 只有主角快照，配角需按需查）
+  → 缺世界规则？→ query-rules --domain（load-context 只返回前 5 条）
   → 需要时间线？→ get-timeline
+  → 注意：recent_summaries 和 urgent_loops 已在 load-context 中，不要重复查
   → 信息充分？→ 进入阶段 C
-  → 不充分？→ 继续查询
 
-阶段 C：补充（可选）
-  → 追读力、模式、实体出场
+阶段 C：补充（可选，仅需差异化建议时）
+  → 追读力数据已在 load-context 的 memory_pack 中
+  → 仅当需要精确的模式统计时才调 index get-reader-signals
 
 阶段 D：组装 + 校验
-  → 先拼内部底稿
-  → 再翻成写作任务书
-  → 红线校验
+  → 从 load-context 的 story_contracts 读取 reasoning 字段
+  → 拼内部底稿 → 翻成写作任务书 → 红线校验
 ```
 
-每次查询后问自己：**这条信息改变了我对本章的理解吗？还需要什么？**
+每次查询后问自己：**这条信息 load-context 已经给了吗？如果给了就不要重复查。**
 
 ## 4. 输入
 
@@ -152,26 +171,18 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" know
 
 ### 阶段 B：按需深查（ReAct 循环）
 
-根据基础包和章纲内容，判断需要补充哪些信息：
+根据基础包和章纲内容，判断需要补充哪些信息。
 
-**角色深查**——章纲提到的关键角色，在基础包中信息不足时：
+**注意**：load-context 已经返回了 `recent_summaries`、`urgent_loops`、`active_rules`、`protagonist`、`story_contracts`。下面只列出 load-context **未包含或不够详细** 时才需要的查询：
+
+**角色深查**——章纲提到的关键配角，基础包只有主角快照时：
 ```bash
 python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" memory-contract query-entity --id "{entity_id}"
 ```
 
-**世界规则深查**——本章涉及特定力量体系或规则时：
+**世界规则深查**——本章涉及特定力量体系或规则，load-context 的 active_rules（前 5 条）不够时：
 ```bash
 python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" memory-contract query-rules --domain "{domain}"
-```
-
-**上章衔接深查**——基础包的 recent_summaries 不够详细时：
-```bash
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" memory-contract read-summary --chapter {N-1}
-```
-
-**伏笔深查**——urgent_loops 概要不足时：
-```bash
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" memory-contract get-open-loops
 ```
 
 **时间线深查**——需要确认时间跨度时：
@@ -179,7 +190,12 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" memo
 python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" memory-contract get-timeline --from {start} --to {end}
 ```
 
-也可使用 `Read` 直接读取时间线文件：`cat "{project_root}/大纲/第{volume_id}卷-时间线.md"`
+也可使用 `Read` 直接读取时间线文件：`大纲/第{volume_id}卷-时间线.md`
+
+**不要重复查询的数据**：
+- `recent_summaries`：load-context 已返回最近 2 章摘要，不再调 `read-summary`
+- `urgent_loops`：load-context 已返回前 3 条紧急伏笔，不再调 `get-open-loops`
+- `story_contracts`：load-context 已包含 MASTER_SETTING/volume/chapter/review 合同，不再单独 Read .story-system/ 文件
 
 时间约束规则：
 - `跨夜`/`跨日` 必须标注"需补写时间过渡"
@@ -196,16 +212,16 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" memo
 
 ### 阶段 C：追读力与差异化（可选）
 
-查询追读力、债务、模式数据（仅用于差异化建议，不覆盖大纲主任务）：
+追读力和模式数据已在 load-context 的 `memory_pack` 中包含基础版本。
+仅当需要精确统计（如发现近几章低分需分析原因）时才额外查询：
 
 ```bash
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" index get-recent-reading-power --limit 5
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" index get-pattern-usage-stats --last-n 20
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" index get-hook-type-stats --last-n 20
+# 合并查询（一次调用返回 reading_power + pattern_usage + hook_stats）
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" index get-reader-signals --limit 5 --last-n 20
 ```
 
 伏笔处理规则：
-- 主路径：`state.json -> plot_threads.foreshadowing`（基础包 memory_pack 中已包含）
+- 主路径：load-context 的 `urgent_loops`（已包含前 3 条紧急伏笔）
 - 缺失时置空数组，标记 `foreshadowing_data_missing=true`
 - 排序键：`remaining = target_chapter - current_chapter` → `planted_chapter` 升序 → `content` 字典序
 - `必须处理`：`remaining <= 5` 或已超期
@@ -218,8 +234,8 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" inde
    - 情绪底色 = 上章结束情绪 + 事件走向
    - 可用能力 = 当前境界 + 近期获得 + 设定禁用项
 2. 读取裁决层输出：
-   - 从 `.story-system/chapters/chapter_{NNN}.json` 的 `reasoning` 字段读取 `style_priority`、`pacing_strategy`
-   - 从 `master_setting` 的 `anti_patterns` 读取题材毒点
+   - 从 load-context 的 `story_contracts` 中取 chapter 合同的 `reasoning` 字段（style_priority、pacing_strategy）
+   - 从 `story_contracts.master` 的 `anti_patterns` 读取题材毒点
    - 将这些裁决信息翻译为自然语言，织入任务书第 4 段
 3. 组装写作任务书五段（见输出格式）
 4. 执行红线校验（见检查清单）

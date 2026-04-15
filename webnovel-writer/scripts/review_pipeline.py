@@ -52,6 +52,8 @@ def main() -> None:
     parser.add_argument("--review-results", required=True)
     parser.add_argument("--metrics-out", default="")
     parser.add_argument("--report-file", default="")
+    parser.add_argument("--save-metrics", action="store_true",
+                        help="直接写入 index.db，省去单独调用 save-review-metrics")
 
     args = parser.parse_args()
     project_root = Path(args.project_root)
@@ -71,6 +73,13 @@ def main() -> None:
             json.dumps(payload["metrics"], ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+    if args.save_metrics:
+        from data_modules.config import DataModulesConfig
+        from data_modules.index_manager import IndexManager
+        config = DataModulesConfig.from_project_root(project_root)
+        manager = IndexManager(config)
+        manager.save_review_metrics(payload["metrics"])
 
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 

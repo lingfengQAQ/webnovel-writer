@@ -874,6 +874,11 @@ def main():
     hook_stats_parser = subparsers.add_parser("get-hook-type-stats")
     hook_stats_parser.add_argument("--last-n", type=int, default=20)
 
+    # 合并查询：追读力 + 模式统计 + 钩子统计（减少工具调用次数）
+    reader_signals_parser = subparsers.add_parser("get-reader-signals")
+    reader_signals_parser.add_argument("--limit", type=int, default=5)
+    reader_signals_parser.add_argument("--last-n", type=int, default=20)
+
     # 获取待偿还Override
     pending_override_parser = subparsers.add_parser("get-pending-overrides")
     pending_override_parser.add_argument("--before-chapter", type=int, default=None)
@@ -1273,6 +1278,14 @@ def main():
     elif args.command == "get-hook-type-stats":
         stats = manager.get_hook_type_stats(args.last_n)
         emit_success(stats, message="hook_type_stats")
+
+    elif args.command == "get-reader-signals":
+        signals = {
+            "recent_reading_power": manager.get_recent_reading_power(args.limit),
+            "pattern_usage_stats": manager.get_pattern_usage_stats(args.last_n),
+            "hook_type_stats": manager.get_hook_type_stats(args.last_n),
+        }
+        emit_success(signals, message="reader_signals")
 
     elif args.command == "get-pending-overrides":
         overrides = manager.get_pending_overrides(args.before_chapter)
