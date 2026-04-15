@@ -5,6 +5,13 @@
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Compatible-purple.svg)](https://claude.ai/claude-code)
 
 <a href="https://trendshift.io/repositories/22487" target="_blank"><img src="https://trendshift.io/api/badge/repositories/22487" alt="lingfengQAQ%2Fwebnovel-writer | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+
+### 🌐 Language / Ngôn ngữ / 语言
+
+- **[🇻🇳 Tiếng Việt](README_vi.md)** — Hướng dẫn cài đặt và sử dụng bằng tiếng Việt
+- **[🇬🇧 English](README_en.md)** — Installation and usage guide in English
+- **[🇨🇳 中文](README.md)** — 安装与使用指南（当前）
+
 ## 项目简单介绍
 
 `Webnovel Writer` 是基于 Claude Code 的长篇网文创作系统，目标是降低 AI 写作中的“遗忘”和“幻觉”，支持长周期连载创作。
