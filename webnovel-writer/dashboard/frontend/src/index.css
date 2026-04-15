@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Noto+Sans+SC:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Noto+Sans:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&family=Noto+Sans+SC:wght@400;500;700&display=swap');
 
 :root {
   --bg-main: #fff7e8;
@@ -19,7 +19,7 @@
   --shadow-main: 6px 6px 0 #2a220f;
   --shadow-soft: 3px 3px 0 #8f7f5c;
   --font-display: 'Press Start 2P', monospace;
-  --font-body: 'Noto Sans SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
+  --font-body: 'Noto Sans', 'Noto Sans SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
 }
 
 * {
@@ -703,6 +703,42 @@ body {
   .file-content-pane {
     height: calc(100vh - 430px);
     min-height: 320px;
+  }
+}
+
+.lang-switcher {
+  border-top: 3px solid var(--border-main);
+  padding: 8px 10px;
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+.lang-btn {
+  border: 2px solid var(--border-main);
+  background: #fff9e8;
+  color: var(--text-main);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+  transition: transform 0.08s ease;
+}
+
+.lang-btn:hover {
+  transform: translate(-1px, -1px);
+}
+
+.lang-btn.active {
+  background: #dff3ff;
+  border-color: var(--accent-blue);
+}
+
+@media (max-width: 960px) {
+  .lang-switcher {
+    display: none;
   }
 }
 
