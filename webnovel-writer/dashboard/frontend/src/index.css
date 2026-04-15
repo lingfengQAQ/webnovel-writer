@@ -706,6 +706,42 @@ body {
   }
 }
 
+.lang-switcher {
+  border-top: 3px solid var(--border-main);
+  padding: 8px 10px;
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+.lang-btn {
+  border: 2px solid var(--border-main);
+  background: #fff9e8;
+  color: var(--text-main);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+  transition: transform 0.08s ease;
+}
+
+.lang-btn:hover {
+  transform: translate(-1px, -1px);
+}
+
+.lang-btn.active {
+  background: #dff3ff;
+  border-color: var(--accent-blue);
+}
+
+@media (max-width: 960px) {
+  .lang-switcher {
+    display: none;
+  }
+}
+
 @media (max-width: 720px) {
   .page-header h2 {
     font-size: 18px;
