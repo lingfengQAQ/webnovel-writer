@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>PIXEL WRITER HUB - 500章 Demo</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg-main:#fff7e8;--bg-panel:#fffdf6;--bg-card:#fffaf0;--bg-card-2:#fff3d5;--text-main:#2a220f;--text-sub:#5d5035;--text-mute:#8f7f5c;--accent-blue:#26a8ff;--accent-purple:#7f5af0;--accent-green:#2ec27e;--accent-amber:#f5a524;--accent-red:#d7263d;--accent-cyan:#00b8d4;--border-main:#2a220f;--border-soft:#8f7f5c;--shadow-main:6px 6px 0 #2a220f;--shadow-soft:3px 3px 0 #8f7f5c;--font-display:'Press Start 2P',monospace;--font-body:'Noto Sans SC','Microsoft YaHei',sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-body);color:var(--text-main);background:var(--bg-main);background-image:linear-gradient(90deg,rgba(42,34,15,.05) 1px,transparent 1px),linear-gradient(rgba(42,34,15,.05) 1px,transparent 1px);background-size:14px 14px;height:100vh}
+.app{display:grid;grid-template-columns:240px 1fr;height:100vh}
+.sidebar{border-right:3px solid var(--border-main);background:linear-gradient(180deg,#ffe8b8,#ffe19f);display:flex;flex-direction:column}
+.sidebar-hd{padding:16px;border-bottom:3px solid var(--border-main)}
+.sidebar-hd h1{font-family:var(--font-display);font-size:11px;letter-spacing:.08em;line-height:1.45}
+.sidebar-hd .sub{margin-top:10px;font-size:14px;font-weight:500;color:var(--text-sub)}
+.nav{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
+.nav-btn{width:100%;border:2px solid var(--border-main);background:#fff9e8;color:var(--text-main);text-align:left;display:flex;align-items:center;gap:8px;padding:10px 12px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:var(--shadow-soft);font-family:var(--font-body);transition:transform .08s}
+.nav-btn:hover{transform:translate(-1px,-1px)}
+.nav-btn.active{background:#dff3ff;border-color:var(--accent-blue)}
+.nav-btn .ico{width:22px;text-align:center}
+.live{border-top:3px solid var(--border-main);padding:10px 12px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:8px}
+.live-dot{width:10px;height:10px;background:var(--accent-green);border:2px solid var(--border-main)}
+.main{overflow-y:auto;padding:22px}
+.page-hd{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.page-hd h2{font-size:22px;font-weight:700}
+.badge{border:2px solid var(--border-main);font-size:12px;font-weight:700;padding:3px 8px;display:inline-block}
+.b-blue{background:#dff3ff;color:#055d8b}.b-green{background:#dcfce7;color:#0f5132}.b-amber{background:#fff1cd;color:#8a5b00}.b-red{background:#ffe0e5;color:#8f1d30}.b-purple{background:#ece3ff;color:#4a2ea8}.b-cyan{background:#dcfafe;color:#155e75}
+.card{background:var(--bg-card);border:3px solid var(--border-main);box-shadow:var(--shadow-main);padding:16px;margin-bottom:16px}
+.card-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.card-title{font-size:17px;font-weight:700}
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
+.stat .label{font-size:13px;font-weight:600;color:var(--text-mute)}
+.stat .val{font-size:28px;line-height:1.15;margin:6px 0 2px;color:var(--accent-blue);font-variant-numeric:tabular-nums}
+.stat .val.plain{color:var(--text-main)}
+.stat .sub{font-size:13px;font-weight:500;color:var(--text-sub)}
+.progress{margin-top:8px;height:12px;border:2px solid var(--border-main);background:#f8e3b8}
+.progress-bar{height:100%;background:linear-gradient(90deg,#26a8ff,#7f5af0)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.tbl-wrap{overflow-x:auto;border:2px solid var(--border-soft);background:var(--bg-panel)}
+table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+th{text-align:left;padding:8px 10px;border-bottom:2px solid var(--border-soft);background:var(--bg-card-2);font-weight:700;white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid #d8ccb2;font-weight:500}
+tr:hover td{background:#fff4d8}
+.page{display:none}.page.active{display:block}
+.legend-dot{display:inline-block;width:12px;height:12px;border:2px solid var(--border-main);margin-right:4px;vertical-align:-1px}
+
+/* === 翻页控制条 === */
+.pager{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.pager-btn{border:2px solid var(--border-main);background:#fff8e6;color:var(--text-main);font-family:var(--font-body);font-size:13px;font-weight:600;padding:4px 10px;cursor:pointer;box-shadow:2px 2px 0 var(--border-main)}
+.pager-btn:hover:not(:disabled){background:#e6f7ff;border-color:var(--accent-blue)}
+.pager-btn:disabled{opacity:.4;cursor:not-allowed}
+.pager-info{font-size:13px;font-weight:600;color:var(--text-sub)}
+
+/* === 像素柱状图 === */
+.pixel-bars{display:flex;align-items:flex-end;gap:3px;height:120px;padding:14px 4px 0;overflow:hidden}
+.pixel-bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+.pixel-bar{width:100%;border:2px solid var(--border-main);min-width:4px;position:relative}
+.pixel-bar .bar-val{position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;white-space:nowrap;display:none}
+.pixel-bar-col:hover .bar-val{display:block}
+.pixel-bar-label{font-size:9px;color:var(--text-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.bar-green{background:var(--accent-green)}.bar-amber{background:var(--accent-amber)}.bar-red{background:var(--accent-red)}
+
+/* === 热力格按卷分组 === */
+.heatmap-vol{margin-bottom:10px}
+.heatmap-vol-title{font-size:13px;font-weight:700;color:var(--text-sub);margin-bottom:4px}
+.heatmap-row{display:flex;gap:2px;flex-wrap:wrap}
+.heat-cell{width:18px;height:18px;border:1px solid var(--border-soft);cursor:pointer;position:relative}
+.heat-cell:hover::after{content:attr(data-tip);position:absolute;bottom:22px;left:50%;transform:translateX(-50%);background:var(--text-main);color:#fff;font-size:11px;padding:2px 6px;white-space:nowrap;z-index:10;border:2px solid var(--border-main)}
+.h-high{background:#26a8ff}.h-mid{background:#a8d8ff}.h-low{background:#dff3ff}.h-vlow{background:#ffe0e5}.h-none{background:#f5f0e0}
+
+/* === 伏笔甘特 === */
+.gantt-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:13px}
+.gantt-label{width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;flex-shrink:0}
+.gantt-track{flex:1;height:14px;border:2px solid var(--border-soft);background:var(--bg-panel);position:relative}
+.gantt-fill{height:100%;position:absolute}
+.g-active{background:var(--accent-amber)}.g-urgent{background:var(--accent-red)}.g-done{background:var(--accent-green)}
+.gantt-ch{font-size:11px;color:var(--text-mute);width:60px;text-align:right;flex-shrink:0}
+.gantt-now{position:absolute;top:0;bottom:0;width:2px;background:var(--accent-blue);z-index:2}
+
+/* === Strand === */
+.strand-bar{height:12px;border:2px solid var(--border-main);display:flex;margin-bottom:6px}
+.strand-bar .seg{height:100%}.sq{background:#26a8ff}.sf{background:#ff5c8a}.sc{background:#7f5af0}
+.strand-legend{display:flex;gap:14px;font-size:13px;color:var(--text-sub)}
+
+/* === 系统 === */
+.sys-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.status-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #d8ccb2;font-size:14px}
+.status-row:last-child{border:none}
+.status-label{font-weight:600;color:var(--text-sub)}
+
+.ch-card{border:2px solid var(--border-soft);background:var(--bg-panel);padding:10px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.ch-card:hover{background:#fff4d8}
+.ch-title{font-weight:700;font-size:14px}.ch-meta{font-size:13px;color:var(--text-sub);margin-top:2px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-hd"><h1>PIXEL WRITER HUB</h1><div class="sub">斗破苍穹</div></div>
+    <div class="nav">
+      <button class="nav-btn active" onclick="showPage('overview',this)"><span class="ico">📊</span><span>总览</span></button>
+      <button class="nav-btn" onclick="showPage('pacing',this)"><span class="ico">📈</span><span>节奏雷达</span></button>
+      <button class="nav-btn" onclick="showPage('foreshadow',this)"><span class="ico">🔖</span><span>伏笔追踪</span></button>
+      <button class="nav-btn" onclick="showPage('system',this)"><span class="ico">⚙️</span><span>系统状态</span></button>
+    </div>
+    <div class="live"><span class="live-dot"></span> 实时同步中</div>
+  </aside>
+  <main class="main">
+    <div id="p-overview" class="page active"></div>
+    <div id="p-pacing" class="page"></div>
+    <div id="p-foreshadow" class="page"></div>
+    <div id="p-system" class="page"></div>
+  </main>
+</div>
+<script>
+// ========== 模拟 500 章数据 ==========
+const TOTAL_CH = 487, TOTAL_VOL = 5;
+const VOL_RANGES = [[1,100],[101,200],[201,320],[321,420],[421,487]];
+const VOL_NAMES = ['第1卷 废材崛起','第2卷 迦南学院','第3卷 黑角域','第4卷 中州大陆','第5卷 星域之争'];
+
+function randInt(a,b){return Math.floor(Math.random()*(b-a+1))+a}
+function genChapters(){
+  const arr=[];
+  for(let i=1;i<=TOTAL_CH;i++){
+    const score=randInt(55,98);
+    const wc=randInt(1400,3200);
+    const hooks=['strong','medium','weak'];
+    const hook=hooks[score>82?0:score>68?1:2];
+    const strands=['quest','fire','constellation'];
+    arr.push({ch:i,score,wc,hook,strand:strands[randInt(0,2)]});
+  }
+  return arr;
+}
+const DATA=genChapters();
+
+function genForeshadowing(){
+  const names=['三年之约','药老身世','萧家复仇','青莲地心火','灵根置换术','墨蛟契约','星陨阁秘密','魂殿暗线','迦南学院内鬼','炎帝传承','古河谷主的遗嘱','美杜莎蛇族','远古龙族血脉','虚无吞炎','净莲妖火','陀舍古帝遗迹','异火榜终极','联盟暗棋','萧炎父亲下落','荒古遗迹入口'];
+  return names.map((n,i)=>{
+    const planted=randInt(1,Math.min(400,TOTAL_CH-20));
+    const target=planted+randInt(15,120);
+    const resolved=target<TOTAL_CH-30?Math.random()>.5:false;
+    const urgent=!resolved&&target-TOTAL_CH<10;
+    return{name:n,planted,target:Math.min(target,TOTAL_CH+60),status:resolved?'done':urgent?'urgent':'active'};
+  });
+}
+const FORESHADOWING=genForeshadowing();
+
+// ========== 柱状图 ==========
+let barPage=0;
+const BAR_SIZE=20;
+function renderBars(containerId){
+  const total=Math.ceil(TOTAL_CH/BAR_SIZE);
+  const start=barPage*BAR_SIZE+1;
+  const end=Math.min(start+BAR_SIZE-1,TOTAL_CH);
+  const slice=DATA.slice(start-1,end);
+  let html=`<div class="pager">
+    <button class="pager-btn" onclick="barPage=Math.max(0,barPage-1);renderBars('${containerId}')" ${barPage<=0?'disabled':''}>◀</button>
+    <span class="pager-info">第 ${start}-${end} 章 / 共 ${TOTAL_CH} 章</span>
+    <button class="pager-btn" onclick="barPage=Math.min(${total-1},barPage+1);renderBars('${containerId}')" ${barPage>=total-1?'disabled':''}>▶</button>
+    <button class="pager-btn" onclick="barPage=${total-1};renderBars('${containerId}')">最新 ▶▶</button>
+  </div><div class="pixel-bars">`;
+  slice.forEach(d=>{
+    const cls=d.score>=80?'bar-green':d.score>=70?'bar-amber':'bar-red';
+    html+=`<div class="pixel-bar-col"><div class="pixel-bar ${cls}" style="height:${d.score}%"><span class="bar-val">${d.score}</span></div><div class="pixel-bar-label">${d.ch}</div></div>`;
+  });
+  html+=`</div><div style="margin-top:6px;font-size:12px;color:var(--text-mute)">🟢 ≥80　🟡 70-79　🔴 &lt;70　鼠标悬停看分数</div>`;
+  document.getElementById(containerId).innerHTML=html;
+}
+
+// ========== 热力格按卷 ==========
+function renderHeatmap(containerId){
+  let html='';
+  VOL_RANGES.forEach(([s,e],vi)=>{
+    html+=`<div class="heatmap-vol"><div class="heatmap-vol-title">${VOL_NAMES[vi]}（${s}-${e}章）</div><div class="heatmap-row">`;
+    for(let i=s;i<=e;i++){
+      const d=DATA[i-1];
+      const cls=d.wc>=2500?'h-high':d.wc>=2000?'h-mid':d.wc>=1800?'h-low':d.wc>0?'h-vlow':'h-none';
+      html+=`<div class="heat-cell ${cls}" data-tip="第${d.ch}章 ${d.wc}字"></div>`;
+    }
+    html+=`</div></div>`;
+  });
+  html+=`<div style="margin-top:6px;display:flex;gap:10px;font-size:12px;color:var(--text-mute)">
+    <span><span class="legend-dot h-high" style="border-color:var(--border-main)"></span>≥2.5k</span>
+    <span><span class="legend-dot h-mid" style="border-color:var(--border-main)"></span>2.0-2.5k</span>
+    <span><span class="legend-dot h-low" style="border-color:var(--border-main)"></span>1.8-2.0k</span>
+    <span><span class="legend-dot h-vlow" style="border-color:var(--border-main)"></span>&lt;1.8k</span>
+  </div>`;
+  document.getElementById(containerId).innerHTML=html;
+}
+
+// ========== 伏笔甘特 ==========
+let foreshadowFilter='all';
+function renderGantt(){
+  const items=foreshadowFilter==='all'?FORESHADOWING:FORESHADOWING.filter(f=>f.status===foreshadowFilter);
+  const maxCh=Math.max(TOTAL_CH+60,...items.map(f=>f.target));
+  const nowPct=(TOTAL_CH/maxCh*100).toFixed(1);
+  const counts={done:FORESHADOWING.filter(f=>f.status==='done').length,active:FORESHADOWING.filter(f=>f.status==='active').length,urgent:FORESHADOWING.filter(f=>f.status==='urgent').length};
+
+  let statsHtml=`<div class="stats" style="grid-template-columns:repeat(4,1fr)">
+    <div class="card stat"><div class="label">总伏笔</div><div class="val plain">${FORESHADOWING.length}</div></div>
+    <div class="card stat"><div class="label">活跃</div><div class="val" style="color:var(--accent-amber)">${counts.active}</div></div>
+    <div class="card stat"><div class="label">已回收</div><div class="val" style="color:var(--accent-green)">${counts.done}</div></div>
+    <div class="card stat"><div class="label">紧急</div><div class="val" style="color:var(--accent-red)">${counts.urgent}</div></div>
+  </div>`;
+
+  let filterHtml=`<div class="pager" style="margin-bottom:10px">
+    <button class="pager-btn${foreshadowFilter==='all'?' active':''}" onclick="foreshadowFilter='all';renderGantt()" style="${foreshadowFilter==='all'?'background:#dff3ff;border-color:var(--accent-blue)':''}">全部</button>
+    <button class="pager-btn" onclick="foreshadowFilter='urgent';renderGantt()" style="${foreshadowFilter==='urgent'?'background:#ffe0e5;border-color:var(--accent-red)':''}">🔴 紧急</button>
+    <button class="pager-btn" onclick="foreshadowFilter='active';renderGantt()" style="${foreshadowFilter==='active'?'background:#fff1cd;border-color:var(--accent-amber)':''}">🟡 活跃</button>
+    <button class="pager-btn" onclick="foreshadowFilter='done';renderGantt()" style="${foreshadowFilter==='done'?'background:#dcfce7;border-color:var(--accent-green)':''}">🟢 已回收</button>
+  </div>`;
+
+  let ganttHtml='';
+  items.sort((a,b)=>a.status==='urgent'?-1:b.status==='urgent'?1:a.planted-b.planted).forEach(f=>{
+    const left=(f.planted/maxCh*100).toFixed(1);
+    const width=((f.target-f.planted)/maxCh*100).toFixed(1);
+    const cls=f.status==='done'?'g-done':f.status==='urgent'?'g-urgent':'g-active';
+    ganttHtml+=`<div class="gantt-row"><div class="gantt-label">${f.name}</div><div class="gantt-track"><div class="gantt-fill ${cls}" style="left:${left}%;width:${width}%"></div><div class="gantt-now" style="left:${nowPct}%"></div></div><div class="gantt-ch">${f.planted}→${f.target}</div></div>`;
+  });
+
+  document.getElementById('p-foreshadow').innerHTML=`
+    <div class="page-hd"><h2>🔖 伏笔追踪</h2><span class="badge b-cyan">当前第 ${TOTAL_CH} 章</span></div>
+    ${statsHtml}
+    ${filterHtml}
+    <div class="card"><div class="card-hd"><span class="card-title">伏笔时间线</span><span class="badge b-cyan">章节 1 — ${maxCh}</span></div>
+    ${ganttHtml}
+    <div style="margin-top:8px;display:flex;gap:14px;font-size:12px">
+      <span><span class="legend-dot" style="background:var(--accent-green)"></span>已回收</span>
+      <span><span class="legend-dot" style="background:var(--accent-amber)"></span>活跃</span>
+      <span><span class="legend-dot" style="background:var(--accent-red)"></span>紧急</span>
+      <span style="color:var(--accent-blue)">｜ 蓝线 = 当前章</span>
+    </div></div>`;
+}
+
+// ========== 总览页 ==========
+function renderOverview(){
+  const totalWords=DATA.reduce((s,d)=>s+d.wc,0);
+  const recent5=DATA.slice(-5);
+  const avgScore=(recent5.reduce((s,d)=>s+d.score,0)/5).toFixed(1);
+  const urgentCount=FORESHADOWING.filter(f=>f.status==='urgent').length;
+  const pct=(totalWords/1200000*100).toFixed(1);
+
+  document.getElementById('p-overview').innerHTML=`
+    <div class="page-hd"><h2>📊 总览</h2><span class="badge b-blue">玄幻修仙 · 500章级</span></div>
+    <div class="stats">
+      <div class="card stat"><div class="label">总字数</div><div class="val">${(totalWords/10000).toFixed(1)} 万</div><div class="sub">目标 120 万 · ${pct}%</div><div class="progress"><div class="progress-bar" style="width:${pct}%"></div></div></div>
+      <div class="card stat"><div class="label">当前章节</div><div class="val plain">第 ${TOTAL_CH} 章</div><div class="sub">卷 ${TOTAL_VOL} · ${VOL_NAMES[TOTAL_VOL-1].split(' ')[1]}</div></div>
+      <div class="card stat"><div class="label">Story Runtime</div><div class="val plain" style="font-size:18px"><span class="badge b-green">Mainline ✓</span></div><div class="sub">accepted · no fallback</div></div>
+      <div class="card stat"><div class="label">审查均分</div><div class="val" style="color:${avgScore>=80?'var(--accent-green)':avgScore>=70?'var(--accent-amber)':'var(--accent-red)'}">${avgScore}</div><div class="sub">最近 5 章均分</div></div>
+      <div class="card stat"><div class="label">紧急伏笔</div><div class="val" style="color:var(--accent-amber)">${urgentCount}</div><div class="sub">总计 ${FORESHADOWING.length} 条伏笔</div></div>
+    </div>
+    <div class="card"><div class="card-hd"><span class="card-title">📊 审查得分</span></div><div id="overview-bars"></div></div>
+    <div class="card"><div class="card-hd"><span class="card-title">📝 字数热力图（按卷）</span></div><div id="overview-heat"></div></div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-hd"><span class="card-title">⚠️ 紧急伏笔</span></div>
+        <div class="tbl-wrap"><table><thead><tr><th>内容</th><th>状态</th><th>埋设</th><th>目标</th></tr></thead><tbody>
+        ${FORESHADOWING.filter(f=>f.status==='urgent').slice(0,5).map(f=>`<tr><td>${f.name}</td><td><span class="badge b-red">紧急</span></td><td>${f.planted}</td><td>${f.target}</td></tr>`).join('')}
+        </tbody></table></div>
+      </div>
+      <div class="card">
+        <div class="card-hd"><span class="card-title">最近章节</span><span class="badge b-blue">LATEST</span></div>
+        ${DATA.slice(-3).reverse().map(d=>{
+          const cls=d.hook==='strong'?'b-green':d.hook==='medium'?'b-amber':'b-red';
+          return `<div class="ch-card"><div><div class="ch-title">📖 第${d.ch}章</div><div class="ch-meta">审查 ${d.score} · 字数 ${d.wc}</div></div><div style="text-align:right"><span class="badge ${cls}">${d.hook}</span></div></div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  barPage=Math.ceil(TOTAL_CH/BAR_SIZE)-1;
+  renderBars('overview-bars');
+  renderHeatmap('overview-heat');
+}
+
+// ========== 节奏雷达页 ==========
+let pacingPage=0;
+const PACING_SIZE=20;
+function renderPacing(){
+  const total=Math.ceil(TOTAL_CH/PACING_SIZE);
+  const start=pacingPage*PACING_SIZE+1;
+  const end=Math.min(start+PACING_SIZE-1,TOTAL_CH);
+  const slice=DATA.slice(start-1,end);
+
+  let hookHtml=`<div class="pager">
+    <button class="pager-btn" onclick="pacingPage=Math.max(0,pacingPage-1);renderPacing()" ${pacingPage<=0?'disabled':''}>◀</button>
+    <span class="pager-info">第 ${start}-${end} 章</span>
+    <button class="pager-btn" onclick="pacingPage=Math.min(${total-1},pacingPage+1);renderPacing()" ${pacingPage>=total-1?'disabled':''}>▶</button>
+    <button class="pager-btn" onclick="pacingPage=${total-1};renderPacing()">最新 ▶▶</button>
+  </div>`;
+  slice.forEach(d=>{
+    const cls=d.hook==='strong'?'hb-strong':d.hook==='medium'?'hb-medium':'hb-weak';
+    const bcls=d.hook==='strong'?'b-green':d.hook==='medium'?'b-amber':'b-red';
+    hookHtml+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="width:50px;font-size:12px;color:var(--text-mute);text-align:right">${d.ch}</span><div style="flex:1;height:16px;border:2px solid var(--border-soft);background:var(--bg-panel)"><div style="height:100%;width:${d.hook==='strong'?100:d.hook==='medium'?66:33}%;background:${d.hook==='strong'?'var(--accent-green)':d.hook==='medium'?'var(--accent-amber)':'var(--accent-red)'}"></div></div><span style="width:65px;font-size:12px"><span class="badge ${bcls}">${d.hook}</span></span></div>`;
+  });
+
+  let strandHtml='';
+  slice.forEach(d=>{
+    const q=d.strand==='quest'?randInt(40,70):randInt(10,30);
+    const f=d.strand==='fire'?randInt(40,60):randInt(10,30);
+    const c=100-q-f;
+    strandHtml+=`<div style="display:flex;align-items:center;gap:6px"><span style="width:40px;font-size:11px;color:var(--text-mute);text-align:right">${d.ch}</span><div class="strand-bar" style="flex:1;margin:0;height:10px"><div class="seg sq" style="width:${q}%"></div><div class="seg sf" style="width:${f}%"></div><div class="seg sc" style="width:${c}%"></div></div></div>`;
+  });
+
+  document.getElementById('p-pacing').innerHTML=`
+    <div class="page-hd"><h2>📈 节奏雷达</h2><span class="badge b-purple">共 ${TOTAL_CH} 章</span></div>
+    <div class="card"><div class="card-hd"><span class="card-title">钩子强度</span></div>${hookHtml}</div>
+    <div class="two-col">
+      <div class="card"><div class="card-hd"><span class="card-title">Strand 分布</span></div>${strandHtml}
+        <div class="strand-legend" style="margin-top:8px"><span>🔵 Quest</span><span>🔴 Fire</span><span>🟣 Constellation</span></div>
+      </div>
+      <div class="card"><div class="card-hd"><span class="card-title">字数热力图</span></div><div id="pacing-heat"></div></div>
+    </div>`;
+  renderHeatmap('pacing-heat');
+}
+
+// ========== 系统页 ==========
+function renderSystem(){
+  document.getElementById('p-system').innerHTML=`
+    <div class="page-hd"><h2>⚙️ 系统状态</h2></div>
+    <div class="sys-grid">
+      <div class="card"><div class="card-hd"><span class="card-title">Story Runtime</span><span class="badge b-green">Mainline ✓</span></div>
+        <div class="status-row"><span class="status-label">Latest Commit</span><span><span class="badge b-green">accepted</span> 第${TOTAL_CH}章</span></div>
+        <div class="status-row"><span class="status-label">Fallback</span><span>none</span></div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">合同树</span></div>
+        <div class="status-row"><span class="status-label">MASTER_SETTING</span><span><span class="badge b-green">✓</span> 玄幻修仙</span></div>
+        <div class="status-row"><span class="status-label">Volume</span><span>${TOTAL_VOL} 份</span></div>
+        <div class="status-row"><span class="status-label">Chapter</span><span>${TOTAL_CH} 份</span></div>
+        <div class="status-row"><span class="status-label">Review</span><span>${TOTAL_CH} 份</span></div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">最近 Commit</span></div>
+        <div class="tbl-wrap"><table><thead><tr><th>章</th><th>状态</th><th>state</th><th>index</th><th>summ</th><th>mem</th><th>vec</th></tr></thead><tbody>
+        ${DATA.slice(-5).reverse().map(d=>`<tr><td>${d.ch}</td><td><span class="badge b-green">accepted</span></td><td>done</td><td>done</td><td>done</td><td>done</td><td>done</td></tr>`).join('')}
+        </tbody></table></div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">RAG 环境</span></div>
+        <div class="status-row"><span class="status-label">Embed Key</span><span><span class="badge b-green">✓</span></span></div>
+        <div class="status-row"><span class="status-label">Rerank Key</span><span><span class="badge b-amber">未配</span></span></div>
+        <div class="status-row"><span class="status-label">Vector DB</span><span>24.3 MB</span></div>
+        <div class="status-row"><span class="status-label">RAG Mode</span><span><span class="badge b-blue">vector_only</span></span></div></div>
+    </div>`;
+}
+
+// ========== 页面切换 ==========
+function showPage(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('p-'+id).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  if(id==='overview')renderOverview();
+  if(id==='pacing')renderPacing();
+  if(id==='foreshadow')renderGantt();
+  if(id==='system')renderSystem();
+}
+
+// 初始渲染
+renderOverview();
+</script>
+</body>
+</html>

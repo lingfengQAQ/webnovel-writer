@@ -1,0 +1,1 @@
+import{j as s}from"./index-Dyazi077.js";const e={blue:"badge-blue",green:"badge-green",amber:"badge-amber",red:"badge-red",purple:"badge-purple",cyan:"badge-cyan",neutral:"badge-neutral"};function g({tone:a="neutral",className:r="",title:n="",children:t}){const b=e[a]||e.neutral;return s.jsx("span",{className:`badge ${b} ${r}`.trim(),title:n,children:t})}export{g as B};

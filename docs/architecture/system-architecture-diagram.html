@@ -1,19 +1,55 @@
-# Webnovel Writer 系统架构总图
-
-> 生成日期：2026-04-15 ｜ 覆盖范围：init → plan → write 全链路六层主链 + 读写映射
-
-<div style="width: 1280px; box-sizing: border-box; position: relative; background: #f5f3ff; padding: 20px; border-radius: 8px; border: 1px solid #c7c2ea;">
-  <style scoped>
-    .arch-wrapper { display: flex; gap: 12px; }.arch-sidebar { width: 175px; flex-shrink: 0; }.arch-main { flex: 1; min-width: 0; }.arch-title { text-align: center; font-size: 22px; font-weight: bold; color: #312e81; margin-bottom: 4px; }.arch-subtitle { text-align: center; font-size: 12px; color: #6366f1; margin-bottom: 14px; }
-    .arch-layer { margin: 7px 0; padding: 12px; border-radius: 6px; box-shadow: 0 2px 8px rgba(67, 56, 202, 0.06); }.arch-layer-title { font-size: 13px; font-weight: bold; margin-bottom: 8px; text-align: center; }
-    .arch-grid { display: grid; gap: 6px; }.arch-grid-2 { grid-template-columns: repeat(2, 1fr); }.arch-grid-3 { grid-template-columns: repeat(3, 1fr); }.arch-grid-4 { grid-template-columns: repeat(4, 1fr); }.arch-grid-5 { grid-template-columns: repeat(5, 1fr); }.arch-grid-6 { grid-template-columns: repeat(6, 1fr); }
-    .arch-box { border-radius: 5px; padding: 7px; text-align: center; font-size: 10.5px; font-weight: 600; line-height: 1.3; color: #312e81; background: rgba(255, 255, 255, 0.85); border: 1px solid #c7d2fe; }.arch-box.highlight { background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); border: 2px solid #4f46e5; }.arch-box.tech { font-size: 10px; color: #4338ca; background: rgba(238, 242, 255, 0.8); }.arch-box.write { border-left: 3px solid #dc2626; }.arch-box.read { border-left: 3px solid #16a34a; }.arch-box.rw { border-left: 3px solid #d97706; }
-    .arch-layer.user { background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); border: 2px solid #3b82f6; }.arch-layer.user .arch-layer-title { color: #1e40af; }.arch-layer.application { background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); border: 2px solid #4f46e5; }.arch-layer.application .arch-layer-title { color: #3730a3; }.arch-layer.ai { background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%); border: 2px solid #7c3aed; }.arch-layer.ai .arch-layer-title { color: #5b21b6; }.arch-layer.data { background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%); border: 2px solid #9333ea; }.arch-layer.data .arch-layer-title { color: #7e22ce; }.arch-layer.infra { background: linear-gradient(135deg, #fae8ff 0%, #f5d0fe 100%); border: 2px solid #a855f7; }.arch-layer.infra .arch-layer-title { color: #86198f; }.arch-layer.external { background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); border: 2px dashed #94a3b8; }.arch-layer.external .arch-layer-title { color: #64748b; }
-    .arch-sidebar-panel { border-radius: 6px; padding: 10px; background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); border: 2px solid #a5b4fc; margin-bottom: 7px; box-shadow: 0 1px 3px rgba(67, 56, 202, 0.04); }.arch-sidebar-title { font-size: 11px; font-weight: bold; text-align: center; color: #312e81; margin-bottom: 5px; }.arch-sidebar-item { font-size: 9.5px; text-align: center; color: #3730a3; background: rgba(255, 255, 255, 0.8); padding: 4px; border-radius: 4px; margin: 3px 0; border: 1px solid #c7d2fe; }.arch-sidebar-item.metric { background: #e0e7ff; border: 1px solid #6366f1; color: #3730a3; font-weight: 600; }
-    .arch-subgroup { display: flex; gap: 6px; margin-top: 6px; }.arch-subgroup-box { flex: 1; border-radius: 6px; padding: 7px; background: rgba(255, 255, 255, 0.5); border: 1px solid rgba(0, 0, 0, 0.08); }.arch-subgroup-title { font-size: 10px; font-weight: bold; color: #374151; text-align: center; margin-bottom: 5px; }
-    .arch-flow { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 6px 0; font-size: 11px; color: #4f46e5; font-weight: 600; }.arch-arrow { font-size: 16px; color: #818cf8; }
-    .legend { display: flex; gap: 14px; justify-content: center; margin: 8px 0; font-size: 10px; color: #4b5563; }.legend-item { display: flex; align-items: center; gap: 4px; }.legend-bar { width: 14px; height: 10px; border-radius: 2px; }
-  </style>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Webnovel Writer 系统架构</title>
+<style>
+body { margin: 20px; background: #f0eef6; font-family: -apple-system, "Microsoft YaHei", sans-serif; }
+.arch-wrapper { display: flex; gap: 12px; }
+.arch-sidebar { width: 175px; flex-shrink: 0; }
+.arch-main { flex: 1; min-width: 0; }
+.arch-title { text-align: center; font-size: 22px; font-weight: bold; color: #312e81; margin-bottom: 4px; }
+.arch-subtitle { text-align: center; font-size: 12px; color: #6366f1; margin-bottom: 14px; }
+.arch-layer { margin: 7px 0; padding: 12px; border-radius: 6px; box-shadow: 0 2px 8px rgba(67,56,202,0.06); }
+.arch-layer-title { font-size: 13px; font-weight: bold; margin-bottom: 8px; text-align: center; }
+.arch-grid { display: grid; gap: 6px; }
+.arch-grid-2 { grid-template-columns: repeat(2,1fr); }
+.arch-grid-3 { grid-template-columns: repeat(3,1fr); }
+.arch-grid-4 { grid-template-columns: repeat(4,1fr); }
+.arch-grid-5 { grid-template-columns: repeat(5,1fr); }
+.arch-box { border-radius: 5px; padding: 7px; text-align: center; font-size: 10.5px; font-weight: 600; line-height: 1.3; color: #312e81; background: rgba(255,255,255,0.85); border: 1px solid #c7d2fe; }
+.arch-box.highlight { background: linear-gradient(135deg,#e0e7ff,#c7d2fe); border: 2px solid #4f46e5; }
+.arch-box.tech { font-size: 10px; color: #4338ca; background: rgba(238,242,255,0.8); }
+.arch-box.write { border-left: 3px solid #dc2626; }
+.arch-box.read { border-left: 3px solid #16a34a; }
+.arch-box.rw { border-left: 3px solid #d97706; }
+.arch-layer.user { background: linear-gradient(135deg,#dbeafe,#bfdbfe); border: 2px solid #3b82f6; }
+.arch-layer.user .arch-layer-title { color: #1e40af; }
+.arch-layer.application { background: linear-gradient(135deg,#e0e7ff,#c7d2fe); border: 2px solid #4f46e5; }
+.arch-layer.application .arch-layer-title { color: #3730a3; }
+.arch-layer.ai { background: linear-gradient(135deg,#ede9fe,#ddd6fe); border: 2px solid #7c3aed; }
+.arch-layer.ai .arch-layer-title { color: #5b21b6; }
+.arch-layer.data { background: linear-gradient(135deg,#f3e8ff,#e9d5ff); border: 2px solid #9333ea; }
+.arch-layer.data .arch-layer-title { color: #7e22ce; }
+.arch-layer.infra { background: linear-gradient(135deg,#fae8ff,#f5d0fe); border: 2px solid #a855f7; }
+.arch-layer.infra .arch-layer-title { color: #86198f; }
+.arch-layer.external { background: linear-gradient(135deg,#f1f5f9,#e2e8f0); border: 2px dashed #94a3b8; }
+.arch-layer.external .arch-layer-title { color: #64748b; }
+.arch-sidebar-panel { border-radius: 6px; padding: 10px; background: linear-gradient(135deg,#eef2ff,#e0e7ff); border: 2px solid #a5b4fc; margin-bottom: 7px; box-shadow: 0 1px 3px rgba(67,56,202,0.04); }
+.arch-sidebar-title { font-size: 11px; font-weight: bold; text-align: center; color: #312e81; margin-bottom: 5px; }
+.arch-sidebar-item { font-size: 9.5px; text-align: center; color: #3730a3; background: rgba(255,255,255,0.8); padding: 4px; border-radius: 4px; margin: 3px 0; border: 1px solid #c7d2fe; }
+.arch-sidebar-item.metric { background: #e0e7ff; border: 1px solid #6366f1; color: #3730a3; font-weight: 600; }
+.arch-subgroup { display: flex; gap: 6px; margin-top: 6px; }
+.arch-subgroup-box { flex: 1; border-radius: 6px; padding: 7px; background: rgba(255,255,255,0.5); border: 1px solid rgba(0,0,0,0.08); }
+.arch-subgroup-title { font-size: 10px; font-weight: bold; color: #374151; text-align: center; margin-bottom: 5px; }
+.legend { display: flex; gap: 14px; justify-content: center; margin: 8px 0; font-size: 10px; color: #4b5563; }
+.legend-item { display: flex; align-items: center; gap: 4px; }
+.legend-bar { width: 14px; height: 10px; border-radius: 2px; }
+</style>
+</head>
+<body>
+<div style="width: 1280px; margin: 0 auto; background: #f5f3ff; padding: 20px; border-radius: 8px; border: 1px solid #c7c2ea;">
   <div class="arch-title">📖 Webnovel Writer 系统架构</div>
   <div class="arch-subtitle">init → plan → write 六层主链 ｜ 全读写映射</div>
   <div class="legend">
@@ -95,14 +131,14 @@
           <div class="arch-box tech">金手指与设定.csv<br><small>基础表（Base）</small></div>
           <div class="arch-box tech">桥段套路.csv<br><small>动态表（Dynamic）</small></div>
           <div class="arch-box tech">爽点与节奏.csv<br><small>动态表（Dynamic）</small></div>
-          <div class="arch-box">CSV_CONFIG<br><small>per-table 注册<br>search_cols/output_cols<br>poison_col/role</small></div>
+          <div class="arch-box">CSV_CONFIG<br><small>per-table 注册<br>search_cols / output_cols<br>poison_col / role</small></div>
         </div>
       </div>
       <div class="arch-layer ai">
         <div class="arch-layer-title">🧠 Layer 2: 裁决层（Reasoning）— story_system_engine.py</div>
         <div class="arch-grid arch-grid-4">
-          <div class="arch-box read">_route()<br><small>Read: 题材与调性推理.csv<br>匹配题材→推荐表</small></div>
-          <div class="arch-box read">_collect_tables()<br><small>Read: 基础表+动态表<br>BM25 检索</small></div>
+          <div class="arch-box read">_route()<br><small>Read: 题材与调性推理.csv<br>匹配题材 → 推荐表</small></div>
+          <div class="arch-box read">_collect_tables()<br><small>Read: 基础表 + 动态表<br>BM25 检索</small></div>
           <div class="arch-box highlight">_load_reasoning()<br><small>Read: 裁决规则.csv<br>别名匹配（修仙→东方仙侠）<br>fallback 到原始 genre</small></div>
           <div class="arch-box highlight">_apply_reasoning()<br><small>冲突裁决排序<br>毒点加权<br>反模式注入</small></div>
         </div>
@@ -122,7 +158,7 @@
           <div class="arch-subgroup-box">
             <div class="arch-subgroup-title">写后真源（chapter-commit）</div>
             <div class="arch-grid arch-grid-2">
-              <div class="arch-box highlight write">CHAPTER_COMMIT<br><small>Write: accepted/rejected<br>events + deltas + summary</small></div>
+              <div class="arch-box highlight write">CHAPTER_COMMIT<br><small>Write: accepted / rejected<br>events + deltas + summary</small></div>
               <div class="arch-box">anti_patterns.json<br><small>Write: 题材毒点集合</small></div>
             </div>
           </div>
@@ -134,7 +170,7 @@
           <div class="arch-subgroup-box">
             <div class="arch-subgroup-title">context-agent（Step 1 子代理）</div>
             <div class="arch-grid arch-grid-4">
-              <div class="arch-box read">load-context<br><small>Read: contracts<br>summaries/protagonist<br>rules/loops/memory_pack<br>genre_profile_excerpt</small></div>
+              <div class="arch-box read">load-context<br><small>Read: contracts<br>summaries / protagonist<br>rules / loops / memory_pack<br>genre_profile_excerpt</small></div>
               <div class="arch-box read">Read 章纲原文<br><small>大纲/第X卷-详细大纲.md<br>（最高权重）</small></div>
               <div class="arch-box read">按需深查<br><small>query-entity<br>query-rules<br>get-timeline<br>get-reader-signals</small></div>
               <div class="arch-box highlight write">输出: 写作任务书<br><small>五段格式<br>消费 reasoning 裁决<br>内化 Anti-AI 铁律</small></div>
@@ -143,7 +179,7 @@
           <div class="arch-subgroup-box">
             <div class="arch-subgroup-title">辅助查询</div>
             <div class="arch-grid arch-grid-3">
-              <div class="arch-box tech read">context_manager<br><small>纯 JSON 组装器<br>Read: contracts/state<br>runtime/guidance</small></div>
+              <div class="arch-box tech read">context_manager<br><small>纯 JSON 组装器<br>Read: contracts / state<br>runtime / guidance</small></div>
               <div class="arch-box tech read">knowledge_query<br><small>时序查询<br>entity_state_at_chapter<br>relationships_at_chapter</small></div>
               <div class="arch-box tech read">reference_search<br><small>CSV BM25 检索<br>per-table search_cols</small></div>
             </div>
@@ -166,7 +202,7 @@
             <div class="arch-subgroup-title">chapter-commit CLI（Step 5.2）</div>
             <div class="arch-grid arch-grid-3">
               <div class="arch-box read">Read 4份 artifacts<br><small>tmp/*.json</small></div>
-              <div class="arch-box highlight">判定 accepted/rejected<br><small>blocking_count=0<br>missed_nodes=空<br>pending=空</small></div>
+              <div class="arch-box highlight">判定 accepted / rejected<br><small>blocking_count = 0<br>missed_nodes = 空<br>pending = 空</small></div>
               <div class="arch-box write">Write commit.json<br><small>→ 触发投影链</small></div>
             </div>
           </div>
@@ -175,11 +211,11 @@
       <div class="arch-layer infra">
         <div class="arch-layer-title">💿 Layer 6: 投影层（Projection）— EventProjectionRouter → 5 Writers</div>
         <div class="arch-grid arch-grid-5">
-          <div class="arch-box write">state_projection<br><small>Write: state.json<br>entity_state<br>chapter_status<br>（committed/rejected）</small></div>
+          <div class="arch-box write">state_projection<br><small>Write: state.json<br>entity_state<br>chapter_status<br>（committed / rejected）</small></div>
           <div class="arch-box write">index_projection<br><small>Write: index.db<br>entity_deltas<br>relationships</small></div>
           <div class="arch-box write">summary_projection<br><small>Write: summaries/<br>chNNNN.md<br>剧情摘要</small></div>
           <div class="arch-box write">memory_projection<br><small>Write: memory_<br>scratchpad.json<br>长期记忆事实</small></div>
-          <div class="arch-box write">vector_projection<br><small>Write: vector_db<br>event→text→embed<br>delta→text→embed</small></div>
+          <div class="arch-box write">vector_projection<br><small>Write: vector_db<br>event → text → embed<br>delta → text → embed</small></div>
         </div>
       </div>
     </div>
@@ -217,10 +253,12 @@
       <div class="arch-sidebar-panel">
         <div class="arch-sidebar-title">🛡️ 写入保护</div>
         <div class="arch-sidebar-item metric">唯一写后入口: COMMIT</div>
-        <div class="arch-sidebar-item">state/index/summary/memory<br>只由 projection 写入</div>
+        <div class="arch-sidebar-item">state / index / summary / memory<br>只由 projection 写入</div>
         <div class="arch-sidebar-item">skill 不直接 set-chapter-status</div>
         <div class="arch-sidebar-item">data-agent 不直写存储</div>
       </div>
     </div>
   </div>
 </div>
+</body>
+</html>

@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PIXEL WRITER HUB - Dashboard Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<style>
+/* ===== PIXEL WRITER HUB DESIGN SYSTEM ===== */
+:root {
+  --bg-main: #fff7e8;
+  --bg-panel: #fffdf6;
+  --bg-card: #fffaf0;
+  --bg-card-2: #fff3d5;
+  --text-main: #2a220f;
+  --text-sub: #5d5035;
+  --text-mute: #8f7f5c;
+  --accent-blue: #26a8ff;
+  --accent-purple: #7f5af0;
+  --accent-green: #2ec27e;
+  --accent-amber: #f5a524;
+  --accent-red: #d7263d;
+  --accent-cyan: #00b8d4;
+  --border-main: #2a220f;
+  --border-soft: #8f7f5c;
+  --shadow-main: 6px 6px 0 #2a220f;
+  --shadow-soft: 3px 3px 0 #8f7f5c;
+  --font-display: 'Press Start 2P', monospace;
+  --font-body: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; }
+
+body {
+  font-family: var(--font-body);
+  color: var(--text-main);
+  background: var(--bg-main);
+  background-image:
+    linear-gradient(90deg, rgba(42,34,15,.05) 1px, transparent 1px),
+    linear-gradient(rgba(42,34,15,.05) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
+.app-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0,1fr);
+  height: 100vh;
+}
+
+/* ===== SIDEBAR ===== */
+.sidebar {
+  border-right: 3px solid var(--border-main);
+  background: linear-gradient(180deg, #ffe8b8, #ffe19f);
+  display: flex;
+  flex-direction: column;
+}
+.sidebar-header {
+  padding: 16px;
+  border-bottom: 3px solid var(--border-main);
+}
+.sidebar-header h1 {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: .08em;
+  line-height: 1.45;
+}
+.sidebar-header .subtitle {
+  margin-top: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-sub);
+}
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.nav-item {
+  width: 100%;
+  border: 2px solid var(--border-main);
+  background: #fff9e8;
+  color: var(--text-main);
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+  transition: transform .08s;
+  font-family: var(--font-body);
+}
+.nav-item:hover { transform: translate(-1px,-1px); }
+.nav-item.active { background: #dff3ff; border-color: var(--accent-blue); }
+.nav-item .icon { width: 22px; text-align: center; }
+
+.live-indicator {
+  border-top: 3px solid var(--border-main);
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.live-dot {
+  width: 10px; height: 10px;
+  background: var(--accent-green);
+  border: 2px solid var(--border-main);
+}
+
+/* ===== MAIN ===== */
+.main-content {
+  overflow-y: auto;
+  padding: 22px;
+}
+
+.page { display: none; }
+.page.active { display: block; }
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.page-header h2 { font-size: 22px; font-weight: 700; }
+
+/* ===== CARD ===== */
+.card {
+  background: var(--bg-card);
+  border: 3px solid var(--border-main);
+  box-shadow: var(--shadow-main);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.card-title { font-size: 17px; font-weight: 700; }
+
+.badge {
+  border: 2px solid var(--border-main);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 8px;
+  background: #fff;
+  display: inline-block;
+}
+.badge-blue { background: #dff3ff; color: #055d8b; }
+.badge-green { background: #dcfce7; color: #0f5132; }
+.badge-amber { background: #fff1cd; color: #8a5b00; }
+.badge-red { background: #ffe0e5; color: #8f1d30; }
+.badge-purple { background: #ece3ff; color: #4a2ea8; }
+.badge-cyan { background: #dcfafe; color: #155e75; }
+
+/* ===== STAT GRID ===== */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.stat-card .stat-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-mute);
+}
+.stat-card .stat-value {
+  font-size: 28px;
+  line-height: 1.15;
+  margin: 6px 0 2px;
+  color: var(--accent-blue);
+  font-variant-numeric: tabular-nums;
+}
+.stat-card .stat-value.plain { color: var(--text-main); }
+.stat-sub { font-size: 13px; font-weight: 500; color: var(--text-sub); }
+
+.progress-track {
+  margin-top: 8px;
+  height: 12px;
+  border: 2px solid var(--border-main);
+  background: #f8e3b8;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #26a8ff, #7f5af0);
+}
+
+/* ===== CHART CONTAINER ===== */
+.chart-box {
+  width: 100%;
+  height: 320px;
+}
+.chart-box.tall { height: 420px; }
+
+/* ===== TABLE ===== */
+.table-wrap {
+  overflow-x: auto;
+  border: 2px solid var(--border-soft);
+  background: var(--bg-panel);
+}
+.data-table {
+  width: 100%;
+  min-width: 580px;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.data-table th {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 2px solid var(--border-soft);
+  background: var(--bg-card-2);
+  white-space: nowrap;
+  font-weight: 700;
+}
+.data-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #d8ccb2;
+  font-weight: 500;
+}
+.data-table tbody tr:hover td { background: #fff4d8; }
+
+/* ===== FILTER BUTTONS ===== */
+.filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.filter-btn {
+  border: 2px solid var(--border-main);
+  background: #fff8e6;
+  color: var(--text-main);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.filter-btn.active { background: #e6f7ff; border-color: var(--accent-blue); }
+
+/* ===== PAGER ===== */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+}
+.page-btn {
+  border: 2px solid var(--border-main);
+  background: #fff8e6;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.page-btn:hover { background: #e6f7ff; border-color: var(--accent-blue); }
+.page-info { font-size: 13px; font-weight: 600; color: var(--text-sub); }
+
+/* ===== SPLIT LAYOUT ===== */
+.split-layout {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 340px;
+  gap: 14px;
+}
+
+/* ===== GANTT ===== */
+.chart-box.gantt { height: 380px; }
+
+/* ===== SECTION LABEL ===== */
+.section-label {
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: .1em;
+  color: var(--text-mute);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+/* ===== PAGE NOTE ===== */
+.proto-note {
+  background: #fff3d5;
+  border: 2px dashed var(--border-soft);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text-sub);
+  margin-bottom: 14px;
+}
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h1>PIXEL WRITER<br>HUB</h1>
+      <div class="subtitle">《仙道长青》</div>
+    </div>
+    <nav class="sidebar-nav" id="nav">
+      <button class="nav-item active" data-page="overview"><span class="icon">📊</span><span>总览</span></button>
+      <button class="nav-item" data-page="characters"><span class="icon">👤</span><span>角色图鉴</span></button>
+      <button class="nav-item" data-page="pacing"><span class="icon">📈</span><span>节奏雷达</span></button>
+      <button class="nav-item" data-page="foreshadowing"><span class="icon">🔖</span><span>伏笔追踪</span></button>
+      <button class="nav-item" data-page="files"><span class="icon">📁</span><span>文档浏览</span></button>
+      <button class="nav-item" data-page="system"><span class="icon">⚙️</span><span>系统状态</span></button>
+    </nav>
+    <div class="live-indicator">
+      <span class="live-dot"></span>
+      实时同步中
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main-content">
+
+    <!-- ==================== PAGE 1: 总览 ==================== -->
+    <div class="page active" id="page-overview">
+      <div class="page-header">
+        <h2>📊 总览</h2>
+        <span class="badge badge-blue">仙侠</span>
+      </div>
+
+      <div class="stat-grid">
+        <div class="card stat-card">
+          <span class="stat-label">总字数</span>
+          <span class="stat-value">128.6 万</span>
+          <span class="stat-sub">目标 200 万字 · 64.3%</span>
+          <div class="progress-track"><div class="progress-fill" style="width:64.3%"></div></div>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">当前章节</span>
+          <span class="stat-value">第 412 章</span>
+          <span class="stat-sub">目标 800 章 · 卷 5</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">Story Runtime</span>
+          <span class="stat-value plain">Mainline</span>
+          <span class="stat-sub">accepted · projection OK</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">审查均分</span>
+          <span class="stat-value">7.8</span>
+          <span class="stat-sub">最近 50 章平均</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">紧急伏笔</span>
+          <span class="stat-value" style="color:var(--accent-amber)">4</span>
+          <span class="stat-sub">总计 37 条伏笔</span>
+        </div>
+      </div>
+
+      <!-- 审查得分折线图 -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">审查得分趋势</span>
+          <div>
+            <span class="badge badge-green">最近 50 章</span>
+            <button class="page-btn" style="margin-left:6px">← 前 50</button>
+            <button class="page-btn">跳到最新 →</button>
+          </div>
+        </div>
+        <div class="chart-box" id="chart-review-score"></div>
+      </div>
+
+      <!-- 字数分布柱状图 -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">字数分布（按卷）</span>
+          <span class="badge badge-purple">5 卷</span>
+        </div>
+        <div class="chart-box" id="chart-word-dist"></div>
+      </div>
+
+      <!-- Strand Weave -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Strand Weave 整体分布</span>
+          <span class="badge badge-purple">constellation</span>
+        </div>
+        <div class="chart-box" id="chart-strand-overview" style="height:260px"></div>
+      </div>
+
+      <!-- 紧急伏笔 Top 5 -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">紧急伏笔 Top 5</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>内容</th><th>状态</th><th>埋设章</th><th>目标章</th><th>紧急度</th></tr></thead>
+            <tbody>
+              <tr><td>青元秘境的钥匙碎片下落</td><td><span class="badge badge-red">超期</span></td><td>285</td><td>350</td><td><span class="badge badge-red">critical</span></td></tr>
+              <tr><td>凤灵儿真实身份暗示</td><td><span class="badge badge-amber">紧急</span></td><td>312</td><td>420</td><td><span class="badge badge-amber">high</span></td></tr>
+              <tr><td>老道士临终遗言中的数字</td><td><span class="badge badge-amber">紧急</span></td><td>356</td><td>430</td><td><span class="badge badge-amber">high</span></td></tr>
+              <tr><td>黑市拍卖会幕后势力</td><td><span class="badge badge-amber">紧急</span></td><td>389</td><td>440</td><td><span class="badge badge-amber">medium</span></td></tr>
+              <tr><td>主角功法异变的真实原因</td><td><span class="badge badge-blue">活跃</span></td><td>401</td><td>500</td><td><span class="badge badge-blue">normal</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== PAGE 2: 角色图鉴 ==================== -->
+    <div class="page" id="page-characters">
+      <div class="page-header">
+        <h2>👤 角色图鉴</h2>
+        <span class="badge badge-green">48 / 127 个实体</span>
+      </div>
+
+      <div class="filter-group">
+        <button class="filter-btn active">全部</button>
+        <button class="filter-btn">角色</button>
+        <button class="filter-btn">势力</button>
+        <button class="filter-btn">地点</button>
+        <button class="filter-btn">法宝</button>
+      </div>
+
+      <div class="proto-note">Tab 1: 实体列表 + 详情面板（保留现有逻辑） | Tab 2: 关系图谱（下方预览）</div>
+
+      <!-- 关系图谱 -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">关系图谱</span>
+          <span class="badge badge-blue">ECharts graph · 力导向 · 时间轴</span>
+        </div>
+        <!-- 时间轴控制器 -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+          <button class="page-btn" id="graph-play-btn" style="min-width:60px">▶ 播放</button>
+          <span style="font-size:13px;font-weight:600;color:var(--text-mute);white-space:nowrap">第 1 章</span>
+          <input type="range" id="graph-timeline" min="1" max="412" value="412"
+            style="flex:1;min-width:200px;height:12px;accent-color:#26a8ff;cursor:pointer">
+          <span style="font-size:13px;font-weight:600;color:var(--text-mute);white-space:nowrap">第 412 章</span>
+          <span id="graph-chapter-label" class="badge badge-blue" style="min-width:90px;text-align:center">第 412 章</span>
+          <span id="graph-node-count" class="badge badge-green" style="min-width:60px;text-align:center">8 人</span>
+        </div>
+        <div class="chart-box tall" id="chart-relation-graph"></div>
+      </div>
+    </div>
+
+    <!-- ==================== PAGE 3: 节奏雷达 ==================== -->
+    <div class="page" id="page-pacing">
+      <div class="page-header">
+        <h2>📈 节奏雷达</h2>
+        <span class="badge badge-amber">412 章数据</span>
+      </div>
+
+      <!-- 钩子强度面积图 -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">钩子强度走势</span>
+          <div>
+            <span class="badge badge-green">第 363-412 章</span>
+            <button class="page-btn" style="margin-left:6px">← 前 50</button>
+            <button class="page-btn">跳到最新 →</button>
+          </div>
+        </div>
+        <div class="chart-box" id="chart-hook-strength"></div>
+      </div>
+
+      <!-- Strand 堆叠柱状图 -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Strand 分布（逐章）</span>
+          <span class="badge badge-purple">堆叠柱状图</span>
+        </div>
+        <div class="chart-box" id="chart-strand-stack"></div>
+      </div>
+
+      <!-- 字数分布 -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">章节字数分布</span>
+          <span class="badge badge-blue">按卷分组</span>
+        </div>
+        <div class="chart-box" id="chart-pacing-words"></div>
+      </div>
+    </div>
+
+    <!-- ==================== PAGE 4: 伏笔追踪 ==================== -->
+    <div class="page" id="page-foreshadowing">
+      <div class="page-header">
+        <h2>🔖 伏笔追踪</h2>
+      </div>
+
+      <div class="stat-grid">
+        <div class="card stat-card">
+          <span class="stat-label">总伏笔</span>
+          <span class="stat-value plain">37</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">活跃</span>
+          <span class="stat-value" style="color:var(--accent-blue)">18</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">已回收</span>
+          <span class="stat-value" style="color:var(--accent-green)">15</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">紧急/超期</span>
+          <span class="stat-value" style="color:var(--accent-red)">4</span>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <button class="filter-btn active">全部</button>
+        <button class="filter-btn">紧急</button>
+        <button class="filter-btn">活跃</button>
+        <button class="filter-btn">已回收</button>
+      </div>
+
+      <!-- 甘特时间线 -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">伏笔时间线</span>
+          <span class="badge badge-cyan">ECharts 自定义 bar · 甘特</span>
+        </div>
+        <div class="chart-box gantt" id="chart-foreshadow-gantt"></div>
+      </div>
+
+      <!-- 伏笔完整表格 -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">完整伏笔列表</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>内容</th><th>状态</th><th>埋设章</th><th>目标章</th><th>紧急度</th></tr></thead>
+            <tbody>
+              <tr><td>青元秘境的钥匙碎片下落</td><td><span class="badge badge-red">超期</span></td><td>285</td><td>350</td><td><span class="badge badge-red">critical</span></td></tr>
+              <tr><td>凤灵儿真实身份暗示</td><td><span class="badge badge-amber">紧急</span></td><td>312</td><td>420</td><td><span class="badge badge-amber">high</span></td></tr>
+              <tr><td>天魔血脉觉醒征兆</td><td><span class="badge badge-blue">活跃</span></td><td>345</td><td>500</td><td><span class="badge badge-blue">normal</span></td></tr>
+              <tr><td>第一卷师门灭门线索</td><td><span class="badge badge-green">已回收</span></td><td>12</td><td>180</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <button class="page-btn">上一页</button>
+          <span class="page-info">第 1 / 4 页 · 共 37 条</span>
+          <button class="page-btn">下一页</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== PAGE 5: 文档浏览 ==================== -->
+    <div class="page" id="page-files">
+      <div class="page-header">
+        <h2>📁 文档浏览</h2>
+      </div>
+      <div class="proto-note">逻辑不变，从现有 App.jsx 迁移。左侧文件树 + 右侧内容预览。</div>
+      <div class="card" style="height:500px;display:flex;align-items:center;justify-content:center;">
+        <span style="font-size:40px;margin-right:12px">📂</span>
+        <span style="color:var(--text-mute);font-size:16px;font-weight:600">文件树 + 内容预览（直接迁移，无变化）</span>
+      </div>
+    </div>
+
+    <!-- ==================== PAGE 6: 系统状态 ==================== -->
+    <div class="page" id="page-system">
+      <div class="page-header">
+        <h2>⚙️ 系统状态</h2>
+      </div>
+
+      <div class="stat-grid">
+        <div class="card stat-card">
+          <span class="stat-label">Story Runtime</span>
+          <span class="stat-value plain">Mainline</span>
+          <span class="stat-sub">fallback: state.json, index.db</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">Latest Commit</span>
+          <span class="stat-value plain">accepted</span>
+          <span class="stat-sub">第 412 章 · 5 路 projection OK</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">RAG Mode</span>
+          <span class="stat-value" style="color:var(--accent-green)">full</span>
+          <span class="stat-sub">embed + rerank 就绪</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">Vector DB</span>
+          <span class="stat-value plain">2,847</span>
+          <span class="stat-sub">条向量记录</span>
+        </div>
+      </div>
+
+      <!-- 合同树概览 -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">合同树概览</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>类型</th><th>数量</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td>MASTER_SETTING</td><td><span class="badge badge-green">1</span></td><td>仙侠 · 沉稳厚重</td></tr>
+              <tr><td>VOLUME_BRIEF</td><td><span class="badge badge-blue">5</span></td><td>卷 1-5</td></tr>
+              <tr><td>CHAPTER_BRIEF</td><td><span class="badge badge-blue">412</span></td><td>全章</td></tr>
+              <tr><td>REVIEW_CONTRACT</td><td><span class="badge badge-purple">412</span></td><td>全章审查合同</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 最近 Commit -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">最近 Commit 历史</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>章节</th><th>状态</th><th>state</th><th>index</th><th>summary</th><th>memory</th><th>dashboard</th></tr></thead>
+            <tbody>
+              <tr><td>第 412 章</td><td><span class="badge badge-green">accepted</span></td><td><span class="badge badge-green">OK</span></td><td><span class="badge badge-green">OK</span></td><td><span class="badge badge-green">OK</span></td><td><span class="badge badge-green">OK</span></td><td><span class="badge badge-green">OK</span></td></tr>
+              <tr><td>第 411 章</td><td><span class="badge badge-green">accepted</span></td><td><span class="badge badge-green">OK</span></td><td><span class="badge badge-green">OK</span></td><td><span class="badge badge-green">OK</span></td><td><span class="badge badge-green">OK</span></td><td><span class="badge badge-green">OK</span></td></tr>
+              <tr><td>第 410 章</td><td><span class="badge badge-red">rejected</span></td><td><span class="badge badge-amber">skip</span></td><td><span class="badge badge-amber">skip</span></td><td><span class="badge badge-amber">skip</span></td><td><span class="badge badge-amber">skip</span></td><td><span class="badge badge-amber">skip</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- RAG 诊断 -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">RAG 环境</span>
+          <button class="page-btn">运行诊断</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>组件</th><th>状态</th><th>详情</th></tr></thead>
+            <tbody>
+              <tr><td>Embedding Key</td><td><span class="badge badge-green">OK</span></td><td>VOYAGE_API_KEY 已配置</td></tr>
+              <tr><td>Rerank Key</td><td><span class="badge badge-green">OK</span></td><td>COHERE_API_KEY 已配置</td></tr>
+              <tr><td>Vector DB</td><td><span class="badge badge-green">OK</span></td><td>2,847 records · 128 MB</td></tr>
+              <tr><td>RAG Mode</td><td><span class="badge badge-green">full</span></td><td>embed + rerank</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ===== NAV SWITCHING =====
+document.getElementById('nav').addEventListener('click', e => {
+  const btn = e.target.closest('.nav-item');
+  if (!btn) return;
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + btn.dataset.page).classList.add('active');
+  // re-render charts on page switch
+  setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
+});
+
+// ===== ECHARTS PIXEL THEME =====
+const PIXEL_THEME = {
+  color: ['#26a8ff','#f5a524','#7f5af0','#2ec27e','#d7263d','#00b8d4','#ff5c8a'],
+  backgroundColor: 'transparent',
+  textStyle: { fontFamily: "'Noto Sans SC', sans-serif", color: '#2a220f' },
+  title: { textStyle: { fontFamily: "'Press Start 2P', monospace", fontSize: 11, color: '#2a220f' } },
+  legend: { textStyle: { fontSize: 13, fontWeight: 600, color: '#5d5035' } },
+  tooltip: {
+    backgroundColor: '#fffaf0',
+    borderColor: '#2a220f',
+    borderWidth: 2,
+    textStyle: { color: '#2a220f', fontSize: 13 },
+    extraCssText: 'border-radius:0;box-shadow:3px 3px 0 #2a220f;'
+  },
+  categoryAxis: {
+    axisLine: { lineStyle: { color: '#8f7f5c', width: 2 } },
+    axisTick: { lineStyle: { color: '#8f7f5c' } },
+    axisLabel: { color: '#8f7f5c', fontSize: 12 },
+    splitLine: { lineStyle: { color: '#e8dcc4', type: 'dashed' } }
+  },
+  valueAxis: {
+    axisLine: { lineStyle: { color: '#8f7f5c', width: 2 } },
+    axisTick: { lineStyle: { color: '#8f7f5c' } },
+    axisLabel: { color: '#8f7f5c', fontSize: 12 },
+    splitLine: { lineStyle: { color: '#e8dcc4', type: 'dashed' } }
+  },
+  grid: { left: 50, right: 20, top: 30, bottom: 40 }
+};
+echarts.registerTheme('pixel', PIXEL_THEME);
+
+function px(id, opt) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  const chart = echarts.init(el, 'pixel');
+  chart.setOption(opt);
+  window.addEventListener('resize', () => chart.resize());
+  return chart;
+}
+
+// ===== SAMPLE DATA =====
+const chapters50 = Array.from({length:50}, (_,i) => i+363);
+const reviewScores = [7.2,7.5,6.8,7.9,8.1,7.4,7.0,7.8,8.3,7.6,6.5,7.2,7.8,8.0,7.1,7.5,7.9,8.2,7.3,6.9,7.7,8.0,7.4,7.6,8.1,7.8,7.2,7.5,8.4,7.0,7.3,7.9,8.0,7.6,7.1,7.8,8.2,7.5,7.3,8.0,7.7,7.4,8.1,7.9,7.2,7.6,8.3,7.8,7.5,7.8];
+
+// 1. Review Score Line
+px('chart-review-score', {
+  xAxis: { type: 'category', data: chapters50.map(c => '第'+c+'章'), axisLabel: { interval: 9 } },
+  yAxis: { type: 'value', min: 5, max: 10 },
+  series: [{
+    type: 'line', data: reviewScores, smooth: false, step: false,
+    lineStyle: { width: 3, color: '#26a8ff' },
+    itemStyle: { color: '#26a8ff', borderColor: '#2a220f', borderWidth: 2 },
+    symbol: 'rect', symbolSize: 8,
+    markLine: { data: [{ type: 'average', label: { formatter: '均值 {c}' } }], lineStyle: { color: '#f5a524', width: 2, type: 'dashed' } },
+    areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(38,168,255,.2)' }, { offset: 1, color: 'rgba(38,168,255,0)' }] } }
+  }]
+});
+
+// 2. Word Distribution by Volume
+px('chart-word-dist', {
+  xAxis: { type: 'category', data: ['卷一\n求道篇','卷二\n筑基篇','卷三\n历练篇','卷四\n金丹篇','卷五\n元婴篇'] },
+  yAxis: { type: 'value', axisLabel: { formatter: v => (v/10000).toFixed(0)+'万' } },
+  series: [{
+    type: 'bar', data: [
+      { value: 280000, itemStyle: { color: '#26a8ff' } },
+      { value: 310000, itemStyle: { color: '#7f5af0' } },
+      { value: 265000, itemStyle: { color: '#2ec27e' } },
+      { value: 290000, itemStyle: { color: '#f5a524' } },
+      { value: 141000, itemStyle: { color: '#00b8d4' } }
+    ],
+    barWidth: '50%',
+    label: { show: true, position: 'top', formatter: p => (p.value/10000).toFixed(1)+'万', fontSize: 12, fontWeight: 700 },
+    itemStyle: { borderColor: '#2a220f', borderWidth: 2 }
+  }]
+});
+
+// 3. Strand Overview Pie
+px('chart-strand-overview', {
+  legend: { bottom: 0, data: ['Quest','Fire','Constellation'] },
+  series: [{
+    type: 'pie', radius: ['40%','70%'], center: ['50%','45%'],
+    data: [
+      { value: 145, name: 'Quest', itemStyle: { color: '#26a8ff', borderColor: '#2a220f', borderWidth: 2 } },
+      { value: 128, name: 'Fire', itemStyle: { color: '#ff5c8a', borderColor: '#2a220f', borderWidth: 2 } },
+      { value: 139, name: 'Constellation', itemStyle: { color: '#7f5af0', borderColor: '#2a220f', borderWidth: 2 } }
+    ],
+    label: { formatter: '{b}\n{d}%', fontSize: 13, fontWeight: 600 },
+    itemStyle: { borderColor: '#2a220f', borderWidth: 2 }
+  }]
+});
+
+// 4. Relation Graph with Timeline
+const graphNodes = [
+  { name: '林长青', category: 0, appear: 1,   symbolSize: [70,35], itemStyle: { color: '#f5a524' } },
+  { name: '老道士', category: 0, appear: 1 },
+  { name: '太虚宗', category: 1, appear: 5 },
+  { name: '凤灵儿', category: 0, appear: 28 },
+  { name: '初代掌门遗物', category: 2, appear: 45 },
+  { name: '青元秘境', category: 2, appear: 80 },
+  { name: '白玉京', category: 0, appear: 120 },
+  { name: '天魔教', category: 1, appear: 150 },
+  { name: '东海仙城', category: 2, appear: 220 },
+  { name: '龙脉封印', category: 2, appear: 260 },
+  { name: '黑市掮客', category: 0, appear: 310 },
+  { name: '剑灵', category: 0, appear: 380 }
+];
+const graphLinks = [
+  { source: '林长青', target: '老道士', name: '师徒', appear: 1 },
+  { source: '老道士', target: '太虚宗', name: '前长老', appear: 5 },
+  { source: '林长青', target: '太虚宗', name: '入门', appear: 12 },
+  { source: '林长青', target: '凤灵儿', name: '初识', appear: 28, changeTo: '师兄妹', changeAt: 60 },
+  { source: '林长青', target: '初代掌门遗物', name: '获得', appear: 50 },
+  { source: '太虚宗', target: '青元秘境', name: '管辖', appear: 80 },
+  { source: '林长青', target: '青元秘境', name: '历练', appear: 85 },
+  { source: '凤灵儿', target: '太虚宗', name: '弟子', appear: 35 },
+  { source: '林长青', target: '白玉京', name: '初遇', appear: 120, changeTo: '宿敌', changeAt: 200 },
+  { source: '白玉京', target: '天魔教', name: '加入', appear: 180, changeTo: '长老', changeAt: 300 },
+  { source: '太虚宗', target: '天魔教', name: '敌对', appear: 200 },
+  { source: '老道士', target: '东海仙城', name: '隐居', appear: 220 },
+  { source: '林长青', target: '东海仙城', name: '造访', appear: 235 },
+  { source: '林长青', target: '龙脉封印', name: '发现', appear: 260 },
+  { source: '黑市掮客', target: '天魔教', name: '线人', appear: 320 },
+  { source: '林长青', target: '黑市掮客', name: '交易', appear: 330 },
+  { source: '林长青', target: '剑灵', name: '契约', appear: 385 },
+  { source: '剑灵', target: '初代掌门遗物', name: '寄宿', appear: 390 }
+];
+const graphCategories = [
+  { name: '角色', itemStyle: { color: '#26a8ff' } },
+  { name: '势力', itemStyle: { color: '#7f5af0' } },
+  { name: '地点', itemStyle: { color: '#2ec27e' } }
+];
+
+function getGraphDataAtChapter(ch) {
+  const nodes = graphNodes
+    .filter(n => n.appear <= ch)
+    .map(n => ({
+      ...n,
+      symbol: 'rect',
+      symbolSize: n.symbolSize || [60, 30],
+      label: { show: true, fontSize: 12, fontWeight: 700, color: '#fff' },
+      itemStyle: { ...(n.itemStyle || {}), borderColor: '#2a220f', borderWidth: 2 }
+    }));
+  const nodeNames = new Set(nodes.map(n => n.name));
+  const links = graphLinks
+    .filter(l => l.appear <= ch && nodeNames.has(l.source) && nodeNames.has(l.target))
+    .map(l => ({
+      source: l.source,
+      target: l.target,
+      name: (l.changeTo && ch >= l.changeAt) ? l.changeTo : l.name
+    }));
+  return { nodes, links };
+}
+
+const graphEl = document.getElementById('chart-relation-graph');
+const graphChart = echarts.init(graphEl, 'pixel');
+const slider = document.getElementById('graph-timeline');
+const chLabel = document.getElementById('graph-chapter-label');
+const nodeCount = document.getElementById('graph-node-count');
+const playBtn = document.getElementById('graph-play-btn');
+let playing = false, playTimer = null;
+
+function renderGraph(ch) {
+  const { nodes, links } = getGraphDataAtChapter(ch);
+  chLabel.textContent = '第 ' + ch + ' 章';
+  nodeCount.textContent = nodes.length + ' 人';
+  graphChart.setOption({
+    animationDuration: 300,
+    animationEasingUpdate: 'cubicOut',
+    series: [{
+      type: 'graph', layout: 'force', roam: true,
+      symbol: 'rect',
+      edgeLabel: { show: true, fontSize: 11, formatter: p => p.data.name, color: '#5d5035' },
+      force: { repulsion: 350, edgeLength: [120, 200], gravity: 0.1 },
+      lineStyle: { color: '#8f7f5c', width: 2, curveness: 0.1 },
+      categories: graphCategories,
+      nodes: nodes,
+      links: links
+    }]
+  });
+}
+
+slider.addEventListener('input', () => {
+  renderGraph(parseInt(slider.value));
+});
+
+playBtn.addEventListener('click', () => {
+  if (playing) {
+    playing = false;
+    clearInterval(playTimer);
+    playBtn.textContent = '▶ 播放';
+  } else {
+    playing = true;
+    playBtn.textContent = '⏸ 暂停';
+    if (parseInt(slider.value) >= 412) slider.value = 1;
+    playTimer = setInterval(() => {
+      let v = parseInt(slider.value) + 5;
+      if (v > 412) { v = 412; playing = false; clearInterval(playTimer); playBtn.textContent = '▶ 播放'; }
+      slider.value = v;
+      renderGraph(v);
+    }, 120);
+  }
+});
+
+renderGraph(412);
+window.addEventListener('resize', () => graphChart.resize());
+
+// 5. Hook Strength Area
+const hookValues = [3,4,3,5,4,3,2,5,4,3,4,5,3,4,5,4,3,5,4,3,2,4,5,3,4,5,4,3,5,4,3,4,5,3,4,2,5,4,3,5,4,3,5,4,3,4,5,4,3,4];
+px('chart-hook-strength', {
+  xAxis: { type: 'category', data: chapters50.map(c => c+''), axisLabel: { interval: 9 } },
+  yAxis: { type: 'value', min: 0, max: 5, axisLabel: { formatter: v => ['','weak','','medium','','strong'][v] || '' } },
+  series: [{
+    type: 'line', data: hookValues, smooth: false,
+    lineStyle: { width: 3, color: '#f5a524' },
+    itemStyle: { color: '#f5a524', borderColor: '#2a220f', borderWidth: 2 },
+    symbol: 'rect', symbolSize: 6,
+    areaStyle: { color: { type: 'linear', x:0,y:0,x2:0,y2:1, colorStops: [{offset:0,color:'rgba(245,165,36,.3)'},{offset:1,color:'rgba(245,165,36,0)'}] } }
+  }]
+});
+
+// 6. Strand Stack Bar
+const strandChapters = chapters50.map(c => c+'');
+const questData = chapters50.map(() => Math.floor(Math.random()*3)+1);
+const fireData = chapters50.map(() => Math.floor(Math.random()*3)+1);
+const constData = chapters50.map(() => Math.floor(Math.random()*3)+1);
+px('chart-strand-stack', {
+  legend: { data: ['Quest','Fire','Constellation'], bottom: 0 },
+  xAxis: { type: 'category', data: strandChapters, axisLabel: { interval: 9 } },
+  yAxis: { type: 'value' },
+  series: [
+    { name: 'Quest', type: 'bar', stack: 'strand', data: questData, itemStyle: { color: '#26a8ff', borderColor: '#2a220f', borderWidth: 1 }, barWidth: '60%' },
+    { name: 'Fire', type: 'bar', stack: 'strand', data: fireData, itemStyle: { color: '#ff5c8a', borderColor: '#2a220f', borderWidth: 1 } },
+    { name: 'Constellation', type: 'bar', stack: 'strand', data: constData, itemStyle: { color: '#7f5af0', borderColor: '#2a220f', borderWidth: 1 } }
+  ]
+});
+
+// 7. Pacing Words by Volume
+const vol1 = Array.from({length:80}, () => 2800+Math.random()*1200);
+const vol2 = Array.from({length:90}, () => 3000+Math.random()*1500);
+const vol3 = Array.from({length:75}, () => 2500+Math.random()*1800);
+const vol4 = Array.from({length:85}, () => 3200+Math.random()*1200);
+const vol5 = Array.from({length:82}, () => 2600+Math.random()*1600);
+function volBoxData(arr) {
+  const s = [...arr].sort((a,b)=>a-b);
+  return [s[0], s[Math.floor(s.length*.25)], s[Math.floor(s.length*.5)], s[Math.floor(s.length*.75)], s[s.length-1]].map(Math.round);
+}
+px('chart-pacing-words', {
+  xAxis: { type: 'category', data: ['卷一','卷二','卷三','卷四','卷五'] },
+  yAxis: { type: 'value', axisLabel: { formatter: v => (v/1000).toFixed(0)+'k' } },
+  series: [{
+    type: 'boxplot',
+    data: [volBoxData(vol1), volBoxData(vol2), volBoxData(vol3), volBoxData(vol4), volBoxData(vol5)],
+    itemStyle: { color: '#fffaf0', borderColor: '#26a8ff', borderWidth: 2 }
+  }]
+});
+
+// 8. Foreshadowing Gantt
+const foreshadowData = [
+  { name: '青元秘境钥匙碎片', start: 285, end: 350, status: 'overdue' },
+  { name: '凤灵儿真实身份', start: 312, end: 420, status: 'urgent' },
+  { name: '老道士遗言数字', start: 356, end: 430, status: 'urgent' },
+  { name: '黑市幕后势力', start: 389, end: 440, status: 'urgent' },
+  { name: '功法异变原因', start: 401, end: 500, status: 'active' },
+  { name: '天魔血脉觉醒', start: 345, end: 500, status: 'active' },
+  { name: '仙城禁地秘密', start: 220, end: 480, status: 'active' },
+  { name: '师门灭门线索', start: 12, end: 180, status: 'resolved' },
+  { name: '初代掌门遗物', start: 45, end: 150, status: 'resolved' },
+  { name: '龙脉封印', start: 100, end: 260, status: 'resolved' }
+];
+const statusColor = { overdue: '#d7263d', urgent: '#f5a524', active: '#26a8ff', resolved: '#2ec27e' };
+const yLabels = foreshadowData.map(d => d.name);
+
+px('chart-foreshadow-gantt', {
+  grid: { left: 140, right: 30, top: 10, bottom: 40 },
+  xAxis: { type: 'value', min: 0, max: 520, axisLabel: { formatter: v => '第'+v+'章' }, splitLine: { lineStyle: { color: '#e8dcc4', type: 'dashed' } } },
+  yAxis: { type: 'category', data: yLabels, inverse: true, axisLabel: { fontSize: 12, fontWeight: 600 } },
+  series: [
+    {
+      type: 'custom',
+      renderItem: function(params, api) {
+        const catIdx = api.value(0);
+        const start = api.coord([api.value(1), catIdx]);
+        const end = api.coord([api.value(2), catIdx]);
+        const height = api.size([0, 1])[1] * 0.5;
+        return {
+          type: 'rect',
+          shape: { x: start[0], y: start[1] - height/2, width: end[0] - start[0], height: height },
+          style: { fill: api.value(3), stroke: '#2a220f', lineWidth: 2 }
+        };
+      },
+      encode: { x: [1, 2], y: 0 },
+      data: foreshadowData.map((d, i) => [i, d.start, d.end, statusColor[d.status]])
+    },
+    {
+      type: 'line', z: 10,
+      markLine: {
+        silent: true, symbol: 'none',
+        lineStyle: { color: '#26a8ff', width: 3, type: 'solid' },
+        data: [{ xAxis: 412 }],
+        label: { formatter: '当前 412章', position: 'end', fontSize: 11, fontWeight: 700, color: '#26a8ff' }
+      },
+      data: []
+    }
+  ]
+});
+</script>
+</body>
+</html>

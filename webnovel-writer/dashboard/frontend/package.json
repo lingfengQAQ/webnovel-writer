@@ -9,9 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "echarts": "^5.6.0",
+    "echarts-for-react": "^3.0.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-force-graph-3d": "^1.29.1"
+    "react-router-dom": "^7.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

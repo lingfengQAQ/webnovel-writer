@@ -11,5 +11,13 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'echarts-vendor': ['echarts', 'echarts-for-react'],
+        },
+      },
+    },
   },
 })

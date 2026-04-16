@@ -8,6 +8,7 @@ import asyncio
 import json
 import sqlite3
 import sys
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager, closing
 from pathlib import Path
 from typing import Optional
@@ -44,14 +45,176 @@ def _story_system_dir() -> Path:
 
 
 def _build_story_runtime_health_report(project_root: Path) -> dict:
+    from data_modules.story_runtime_health import build_story_runtime_health
+
+    return build_story_runtime_health(project_root)
+
+
+def _ensure_scripts_dir_on_path() -> None:
     scripts_dir = Path(__file__).resolve().parents[1] / "scripts"
     scripts_entry = str(scripts_dir)
     if scripts_entry not in sys.path:
         sys.path.insert(0, scripts_entry)
 
-    from data_modules.story_runtime_health import build_story_runtime_health
 
-    return build_story_runtime_health(project_root)
+def _load_state_payload(*, required: bool = False) -> dict:
+    state_path = _webnovel_dir() / "state.json"
+    if not state_path.is_file():
+        if required:
+            raise HTTPException(404, "state.json 不存在")
+        return {}
+
+    try:
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=500, detail=f"state.json 读取失败: {exc}") from exc
+
+    return payload if isinstance(payload, dict) else {}
+
+
+def _parse_json_value(raw: object, default):
+    if raw is None:
+        return default
+    if isinstance(raw, (dict, list)):
+        return raw
+    if not isinstance(raw, str):
+        return default
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return default
+
+
+def _resolve_volume_for_chapter(state: dict, chapter: int) -> int | None:
+    progress = state.get("progress") if isinstance(state, dict) else {}
+    if not isinstance(progress, dict):
+        return None
+    volumes_planned = progress.get("volumes_planned")
+    if not isinstance(volumes_planned, list):
+        return None
+
+    best: tuple[int, int] | None = None
+    for item in volumes_planned:
+        if not isinstance(item, dict):
+            continue
+        volume = item.get("volume")
+        if not isinstance(volume, int) or volume <= 0:
+            continue
+        chapter_range = str(item.get("chapters_range") or "").strip()
+        if "-" not in chapter_range:
+            continue
+        left, _, right = chapter_range.partition("-")
+        try:
+            start = int(left.strip())
+            end = int(right.strip())
+        except ValueError:
+            continue
+        if start <= 0 or end <= 0 or start > end:
+            continue
+        if start <= chapter <= end:
+            candidate = (start, volume)
+            if best is None or candidate[0] > best[0] or (
+                candidate[0] == best[0] and candidate[1] < best[1]
+            ):
+                best = candidate
+    return best[1] if best else None
+
+
+def _build_strand_map(state: dict) -> dict[int, str]:
+    tracker = state.get("strand_tracker") if isinstance(state, dict) else {}
+    history = tracker.get("history") if isinstance(tracker, dict) else []
+    if not isinstance(history, list):
+        return {}
+
+    strand_map: dict[int, str] = {}
+    for index, entry in enumerate(history, start=1):
+        if not isinstance(entry, dict):
+            continue
+        chapter_value = entry.get("chapter", index)
+        try:
+            chapter = int(chapter_value)
+        except (TypeError, ValueError):
+            chapter = index
+        strand = str(entry.get("strand") or entry.get("dominant") or "").strip().lower()
+        if chapter > 0 and strand:
+            strand_map[chapter] = strand
+    return strand_map
+
+
+def _extract_story_chapter(path: Path) -> int:
+    stem = path.stem
+    if "_" not in stem:
+        return 0
+    _, _, tail = stem.partition("_")
+    try:
+        return int(tail.split(".")[0])
+    except ValueError:
+        return 0
+
+
+def _inspect_vector_db(project_root: Path) -> dict:
+    from data_modules.config import DataModulesConfig
+
+    cfg = DataModulesConfig.from_project_root(project_root)
+    vector_db = cfg.vector_db
+    exists = vector_db.is_file()
+    size_bytes = vector_db.stat().st_size if exists else 0
+    record_count = 0
+    error = ""
+
+    if exists and size_bytes > 0:
+        try:
+            with sqlite3.connect(str(vector_db)) as conn:
+                cursor = conn.cursor()
+                table_exists = cursor.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'vectors'"
+                ).fetchone()
+                if table_exists:
+                    row = cursor.execute("SELECT COUNT(*) FROM vectors").fetchone()
+                    record_count = int(row[0] or 0) if row else 0
+        except sqlite3.Error as exc:
+            error = str(exc)
+
+    return {
+        "path": str(vector_db),
+        "exists": exists,
+        "size_bytes": size_bytes,
+        "record_count": record_count,
+        "error": error,
+    }
+
+
+def _build_env_status(project_root: Path) -> dict:
+    from data_modules.config import DataModulesConfig
+
+    cfg = DataModulesConfig.from_project_root(project_root)
+    vector_info = _inspect_vector_db(project_root)
+
+    embed_ready = bool(str(cfg.embed_api_key or "").strip())
+    rerank_ready = bool(str(cfg.rerank_api_key or "").strip())
+    vector_ready = bool(vector_info["exists"] and vector_info["size_bytes"] > 0)
+
+    if vector_ready and embed_ready and rerank_ready:
+        rag_mode = "full"
+    elif vector_ready and embed_ready:
+        rag_mode = "embed_only"
+    else:
+        rag_mode = "bm25_only"
+
+    return {
+        "embed": {
+            "base_url": cfg.embed_base_url,
+            "model": cfg.embed_model,
+            "api_key_present": embed_ready,
+        },
+        "rerank": {
+            "base_url": cfg.rerank_base_url,
+            "model": cfg.rerank_model,
+            "api_key_present": rerank_ready,
+        },
+        "vector_db": vector_info,
+        "rag_mode": rag_mode,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +226,8 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
 
     if project_root:
         _project_root = Path(project_root).resolve()
+
+    _ensure_scripts_dir_on_path()
 
     @asynccontextmanager
     async def _lifespan(_: FastAPI):
@@ -95,10 +260,7 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
     @app.get("/api/project/info")
     def project_info():
         """返回 state.json 完整内容（只读）。"""
-        state_path = _webnovel_dir() / "state.json"
-        if not state_path.is_file():
-            raise HTTPException(404, "state.json 不存在")
-        return json.loads(state_path.read_text(encoding="utf-8"))
+        return _load_state_payload(required=True)
 
     @app.get("/api/story-runtime/health")
     def story_runtime_health():
@@ -201,7 +363,12 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
     def list_chapters():
         with closing(_get_db()) as conn:
             rows = conn.execute("SELECT * FROM chapters ORDER BY chapter ASC").fetchall()
-            return [dict(r) for r in rows]
+            normalized = []
+            for row in rows:
+                item = dict(row)
+                item["characters"] = _parse_json_value(item.get("characters"), [])
+                normalized.append(item)
+            return normalized
 
     @app.get("/api/scenes")
     def list_scenes(chapter: Optional[int] = None, limit: int = 500):
@@ -230,7 +397,202 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
             rows = conn.execute(
                 "SELECT * FROM review_metrics ORDER BY end_chapter DESC LIMIT ?", (limit,)
             ).fetchall()
-            return [dict(r) for r in rows]
+            normalized = []
+            for row in rows:
+                item = dict(row)
+                item["dimension_scores"] = _parse_json_value(item.get("dimension_scores"), {})
+                item["severity_counts"] = _parse_json_value(item.get("severity_counts"), {})
+                item["critical_issues"] = _parse_json_value(item.get("critical_issues"), [])
+                normalized.append(item)
+            return normalized
+
+    @app.get("/api/stats/chapter-trend")
+    def chapter_trend(limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0)):
+        state = _load_state_payload()
+        strand_map = _build_strand_map(state)
+
+        with closing(_get_db()) as conn:
+            total_rows = _fetchall_safe(conn, "SELECT COUNT(*) AS count FROM chapters")
+            latest_rows = _fetchall_safe(conn, "SELECT MAX(chapter) AS chapter FROM chapters")
+            rows = _fetchall_safe(
+                conn,
+                """
+                WITH selected_chapters AS (
+                    SELECT chapter, title, location, word_count, characters, summary
+                    FROM chapters
+                    ORDER BY chapter DESC
+                    LIMIT ? OFFSET ?
+                )
+                SELECT
+                    c.chapter,
+                    c.title,
+                    c.location,
+                    c.word_count,
+                    c.characters,
+                    c.summary,
+                    rp.hook_type,
+                    rp.hook_strength,
+                    rp.is_transition,
+                    rp.override_count,
+                    rp.debt_balance,
+                    rm.overall_score AS review_score,
+                    rm.severity_counts
+                FROM selected_chapters c
+                LEFT JOIN chapter_reading_power rp ON rp.chapter = c.chapter
+                LEFT JOIN review_metrics rm ON rm.end_chapter = c.chapter
+                ORDER BY c.chapter ASC
+                """,
+                (limit, offset),
+            )
+
+        hook_strength_value = {"weak": 1, "medium": 3, "strong": 5}
+        items = []
+        for row in rows:
+            chapter = int(row.get("chapter") or 0)
+            hook_strength = str(row.get("hook_strength") or "").strip().lower()
+            items.append(
+                {
+                    "chapter": chapter,
+                    "title": row.get("title") or "",
+                    "location": row.get("location") or "",
+                    "word_count": int(row.get("word_count") or 0),
+                    "characters": _parse_json_value(row.get("characters"), []),
+                    "summary": row.get("summary") or "",
+                    "review_score": row.get("review_score"),
+                    "review_severity_counts": _parse_json_value(row.get("severity_counts"), {}),
+                    "hook_type": row.get("hook_type") or "",
+                    "hook_strength": hook_strength,
+                    "hook_strength_value": hook_strength_value.get(hook_strength, 0),
+                    "is_transition": bool(row.get("is_transition")),
+                    "override_count": int(row.get("override_count") or 0),
+                    "debt_balance": float(row.get("debt_balance") or 0.0),
+                    "strand": strand_map.get(chapter, ""),
+                    "volume": _resolve_volume_for_chapter(state, chapter),
+                }
+            )
+
+        return {
+            "items": items,
+            "total": int(total_rows[0]["count"] or 0) if total_rows else 0,
+            "latest_chapter": int(latest_rows[0]["chapter"] or 0) if latest_rows else 0,
+            "limit": limit,
+            "offset": offset,
+        }
+
+    @app.get("/api/commits")
+    def list_commits(limit: int = Query(20, ge=1, le=200)):
+        commits_dir = _story_system_dir() / "commits"
+        if not commits_dir.is_dir():
+            return {"items": [], "total": 0, "limit": limit}
+
+        items = []
+        for path in commits_dir.glob("chapter_*.commit.json"):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+
+            meta = payload.get("meta") if isinstance(payload, dict) else {}
+            provenance = payload.get("provenance") if isinstance(payload, dict) else {}
+            chapter = int((meta or {}).get("chapter") or _extract_story_chapter(path))
+            items.append(
+                {
+                    "chapter": chapter,
+                    "status": str((meta or {}).get("status") or "missing"),
+                    "projection_status": payload.get("projection_status") or {},
+                    "write_fact_role": str((provenance or {}).get("write_fact_role") or ""),
+                    "contract_refs": payload.get("contract_refs") or {},
+                    "path": path.name,
+                    "updated_at": datetime.fromtimestamp(
+                        path.stat().st_mtime, tz=timezone.utc
+                    ).isoformat(),
+                }
+            )
+
+        items.sort(key=lambda item: item["chapter"], reverse=True)
+        return {"items": items[:limit], "total": len(items), "limit": limit}
+
+    @app.get("/api/contracts/summary")
+    def contracts_summary():
+        from data_modules.story_contracts import StoryContractPaths, read_json_if_exists
+
+        project_root = _get_project_root()
+        state = _load_state_payload()
+        runtime = _build_story_runtime_health_report(project_root)
+        chapter = int(runtime.get("chapter") or ((state.get("progress") or {}).get("current_chapter") or 0))
+        current_volume = _resolve_volume_for_chapter(state, chapter) or int(
+            ((state.get("progress") or {}).get("current_volume") or 1)
+        )
+
+        paths = StoryContractPaths.from_project_root(project_root)
+        master_payload = read_json_if_exists(paths.master_json) or {}
+
+        return {
+            "chapter": chapter,
+            "current_volume": current_volume,
+            "master": {
+                "exists": bool(master_payload),
+                "primary_genre": str(((master_payload.get("route") or {}).get("primary_genre") or "")),
+                "core_tone": str(
+                    ((master_payload.get("master_constraints") or {}).get("core_tone") or "")
+                ),
+            },
+            "counts": {
+                "volumes": len(list(paths.volumes_dir.glob("volume_*.json"))) if paths.volumes_dir.is_dir() else 0,
+                "chapters": len(list(paths.chapters_dir.glob("chapter_*.json"))) if paths.chapters_dir.is_dir() else 0,
+                "reviews": len(list(paths.reviews_dir.glob("chapter_*.review.json"))) if paths.reviews_dir.is_dir() else 0,
+                "commits": len(list(paths.commits_dir.glob("chapter_*.commit.json"))) if paths.commits_dir.is_dir() else 0,
+            },
+            "current_contracts": {
+                "volume": paths.volume_json(current_volume).is_file(),
+                "chapter": paths.chapter_json(chapter).is_file() if chapter > 0 else False,
+                "review": paths.review_json(chapter).is_file() if chapter > 0 else False,
+                "commit": paths.commit_json(chapter).is_file() if chapter > 0 else False,
+            },
+        }
+
+    @app.get("/api/env-status")
+    def env_status():
+        return _build_env_status(_get_project_root())
+
+    @app.get("/api/env-status/probe")
+    def env_status_probe():
+        status = _build_env_status(_get_project_root())
+        runtime = _build_story_runtime_health_report(_get_project_root())
+        vector_db = status["vector_db"]
+        checks = [
+            {
+                "name": "embed_api_key",
+                "ok": bool(status["embed"]["api_key_present"]),
+                "detail": "已配置" if status["embed"]["api_key_present"] else "未配置",
+            },
+            {
+                "name": "rerank_api_key",
+                "ok": bool(status["rerank"]["api_key_present"]),
+                "detail": "已配置" if status["rerank"]["api_key_present"] else "未配置",
+            },
+            {
+                "name": "vector_db",
+                "ok": bool(vector_db["exists"] and not vector_db["error"]),
+                "detail": vector_db["error"]
+                or f"{vector_db['record_count']} records · {vector_db['size_bytes']} bytes",
+            },
+            {
+                "name": "story_runtime",
+                "ok": bool(runtime.get("mainline_ready")),
+                "detail": (
+                    f"chapter={runtime.get('chapter')} "
+                    f"status={runtime.get('latest_commit_status')} "
+                    f"fallback={','.join(runtime.get('fallback_sources') or []) or 'none'}"
+                ),
+            },
+        ]
+        return {
+            "ok": all(bool(item["ok"]) for item in checks),
+            "rag_mode": status["rag_mode"],
+            "checks": checks,
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+        }
 
     @app.get("/api/state-changes")
     def list_state_changes(entity: Optional[str] = None, limit: int = 100):
@@ -488,6 +850,8 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
         @app.get("/{full_path:path}")
         def serve_spa(full_path: str):
             """SPA fallback：任何非 /api 路径都返回 index.html。"""
+            if full_path.startswith("api/"):
+                raise HTTPException(404, "API 路径不存在")
             index = STATIC_DIR / "index.html"
             if index.is_file():
                 return FileResponse(str(index))
