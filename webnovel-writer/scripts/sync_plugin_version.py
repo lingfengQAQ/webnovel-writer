@@ -16,8 +16,8 @@ VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 README_ROW_PATTERN = re.compile(
     r"^\| \*\*v(?P<version>[^\s*]+)(?P<current> \(当前\))?\*\* \| (?P<notes>.*) \|$"
 )
-README_HEADER = "| 版本 | 说明 |"
-README_SEPARATOR = "|------|------|"
+README_HEADERS = {"| 版本 | 说明 |", "| 版本 | 主要变化 |"}
+README_SEPARATORS = {"|------|------|", "|------|----------|"}
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -81,12 +81,12 @@ def update_readme_release(content: str, version: str, release_notes: str | None)
     lines = content.splitlines()
 
     try:
-        header_index = next(index for index, line in enumerate(lines) if line.strip() == README_HEADER)
+        header_index = next(index for index, line in enumerate(lines) if line.strip() in README_HEADERS)
     except StopIteration as error:
         raise ValueError("README.md release table header not found") from error
 
     separator_index = header_index + 1
-    if separator_index >= len(lines) or lines[separator_index].strip() != README_SEPARATOR:
+    if separator_index >= len(lines) or lines[separator_index].strip() not in README_SEPARATORS:
         raise ValueError("README.md release table separator not found")
 
     rows = parse_readme_rows(lines)

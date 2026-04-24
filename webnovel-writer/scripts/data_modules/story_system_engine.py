@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from reference_search import search as search_reference
+from reference_search import CSV_CONFIG, GENRE_CANONICAL, resolve_genre, search as search_reference
 
 from .story_contracts import merge_anti_patterns
 
@@ -22,6 +22,8 @@ ANTI_PATTERN_SOURCE_FIELDS = {
     "命名规则": ["毒点"],
     "金手指与设定": ["毒点"],
 }
+
+_TEXT_TOKEN_RE = re.compile(r"[\s|,，、/；;：:（）()【】\[\]<>《》\"'!?！？。…]+")
 
 
 class StorySystemEngine:
@@ -45,10 +47,12 @@ class StorySystemEngine:
         )
 
         # Reasoning layer — try routed genre first, then original genre
-        primary_genre = str(route.get("meta", {}).get("primary_genre", "") or "").strip()
-        reasoning = self._load_reasoning(primary_genre)
+        canonical_genre = str(route.get("meta", {}).get("canonical_genre", "") or "").strip()
+        reasoning = self._load_reasoning(canonical_genre)
         if not reasoning and genre:
-            reasoning = self._load_reasoning(genre)
+            fallback_genre = resolve_genre(genre) or genre
+            if fallback_genre != canonical_genre:
+                reasoning = self._load_reasoning(fallback_genre)
         ranked = self._apply_reasoning(reasoning, base_context, dynamic_context)
 
         source_trace = route["source_trace"] + self._build_source_trace_with_reasoning(ranked, reasoning)
@@ -98,7 +102,7 @@ class StorySystemEngine:
                     "reasoning": (
                         {
                             "genre": reasoning.get("题材", ""),
-                            "inject_target": reasoning.get("contract注入层", ""),
+                            "inject_target": self._reasoning_inject_target(reasoning),
                             "style_priority": reasoning.get("风格优先级", ""),
                             "pacing_strategy": reasoning.get("节奏默认策略", ""),
                         }
@@ -115,6 +119,7 @@ class StorySystemEngine:
     def _route(self, query: str, genre: Optional[str]) -> Dict[str, Any]:
         route_rows = self._load_csv_rows("题材与调性推理")
         query_text = self._normalize_text(" ".join([query or "", genre or ""]))
+        inferred_canonical = "" if genre else self._infer_genre_from_text(query)
 
         matched = None
         route_source = "empty_csv_fallback"
@@ -132,6 +137,10 @@ class StorySystemEngine:
             matched = self._fallback_row_for_genre(route_rows, genre)
             if matched is not None:
                 route_source = "explicit_genre_fallback"
+        if matched is None and inferred_canonical:
+            matched = self._fallback_row_for_genre(route_rows, inferred_canonical)
+            if matched is not None:
+                route_source = "inferred_genre_fallback"
         if matched is None and route_rows:
             matched = route_rows[0]
             route_source = "default_seed_fallback"
@@ -139,10 +148,31 @@ class StorySystemEngine:
             return self._empty_route(query=query, genre=genre)
 
         primary_genre = str(matched.get("题材/流派") or genre or "").strip()
-        genre_filter = str(matched.get("适用题材") or genre or primary_genre).strip()
+        explicit_canonical = resolve_genre(genre)
+        canonical_genre = str(matched.get("canonical_genre") or "").strip()
+        row_canonicals = [
+            resolved
+            for raw in self._split_multi_value(matched.get("适用题材"))
+            for resolved in [resolve_genre(raw) or str(raw or "").strip()]
+            if resolved and resolved != "全部"
+        ]
+        if explicit_canonical and explicit_canonical != "全部":
+            if not row_canonicals or explicit_canonical in row_canonicals or canonical_genre in ("", "全部"):
+                canonical_genre = explicit_canonical
+        elif inferred_canonical and inferred_canonical != "全部":
+            if not row_canonicals or inferred_canonical in row_canonicals or canonical_genre in ("", "全部"):
+                canonical_genre = inferred_canonical
+        if not canonical_genre:
+            resolved_primary = resolve_genre(primary_genre)
+            if resolved_primary in GENRE_CANONICAL:
+                canonical_genre = resolved_primary
+            elif explicit_canonical and explicit_canonical != "全部":
+                canonical_genre = explicit_canonical
+        genre_filter = canonical_genre if canonical_genre not in ("", "全部") else ""
         return {
             "meta": {
                 "primary_genre": primary_genre,
+                "canonical_genre": canonical_genre,
                 "route_source": route_source,
                 "genre_filter": genre_filter,
                 "recommended_base_tables": self._split_multi_value(matched.get("推荐基础检索表")),
@@ -241,12 +271,31 @@ class StorySystemEngine:
         return " ".join(items)
 
     def _fallback_row_for_genre(self, rows: List[Dict[str, Any]], genre: str) -> Dict[str, Any] | None:
-        genre_text = self._normalize_text(genre)
+        genre_text = self._normalize_text(resolve_genre(genre) or genre)
         for row in rows:
-            candidates = self._split_multi_value(row.get("适用题材")) + self._split_multi_value(row.get("题材/流派"))
+            candidates = (
+                self._split_multi_value(row.get("适用题材"))
+                + self._split_multi_value(row.get("题材/流派"))
+                + self._split_multi_value(row.get("canonical_genre"))
+            )
             if any(self._normalize_text(candidate) == genre_text for candidate in candidates):
                 return row
         return None
+
+    def _infer_genre_from_text(self, text: str) -> str:
+        """Infer a canonical genre from plain query text before default routing."""
+        raw_text = str(text or "")
+        tokens = [token.strip() for token in _TEXT_TOKEN_RE.split(raw_text) if token.strip()]
+        for candidate in tokens:
+            resolved = resolve_genre(candidate)
+            if resolved in GENRE_CANONICAL:
+                return resolved or ""
+
+        normalized = self._normalize_text(raw_text)
+        for canonical in sorted(GENRE_CANONICAL, key=len, reverse=True):
+            if self._normalize_text(canonical) in normalized:
+                return canonical
+        return ""
 
     def _extract_route_anti_patterns(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:
         return [
@@ -343,7 +392,7 @@ class StorySystemEngine:
         reasoning: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
         """Build source trace entries enriched with reasoning metadata."""
-        inject_target = reasoning.get("contract注入层", "") if reasoning else ""
+        inject_target = self._reasoning_inject_target(reasoning)
         trace: List[Dict[str, Any]] = []
         for row in ranked:
             trace.append(
@@ -358,14 +407,25 @@ class StorySystemEngine:
             )
         return trace
 
+    def _reasoning_inject_target(self, reasoning: Dict[str, Any]) -> str:
+        if reasoning:
+            explicit = str(reasoning.get("contract注入层") or "").strip()
+            if explicit:
+                return explicit
+        cfg = CSV_CONFIG.get("裁决规则") or {}
+        return str(cfg.get("contract_inject") or "")
+
     def _empty_route(self, query: str, genre: Optional[str]) -> Dict[str, Any]:
         fallback_genre = str(genre or "未命中题材").strip()
+        resolved_explicit = resolve_genre(genre)
+        canonical_genre = resolved_explicit if resolved_explicit not in (None, "全部") else ""
         route_source = "explicit_genre_fallback" if genre else "empty_csv_fallback"
         return {
             "meta": {
                 "primary_genre": fallback_genre,
+                "canonical_genre": canonical_genre,
                 "route_source": route_source,
-                "genre_filter": fallback_genre,
+                "genre_filter": canonical_genre,
                 "recommended_base_tables": ["命名规则", "人设与关系"],
                 "recommended_dynamic_tables": ["桥段套路", "爽点与节奏", "场景写法"],
             },
@@ -374,7 +434,7 @@ class StorySystemEngine:
             "route_anti_patterns": [],
             "recommended_base_tables": ["命名规则", "人设与关系"],
             "recommended_dynamic_tables": ["桥段套路", "爽点与节奏", "场景写法"],
-            "genre_filter": fallback_genre,
+            "genre_filter": canonical_genre,
             "default_query": "",
             "source_trace": [{"table": "题材与调性推理", "id": "", "reason": f"{route_source}:{query}"}],
         }

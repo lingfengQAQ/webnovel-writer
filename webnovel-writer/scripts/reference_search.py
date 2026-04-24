@@ -58,6 +58,7 @@ def load_tables(csv_dir: Path, table: Optional[str] = None) -> Dict[str, List[Di
 # ---------------------------------------------------------------------------
 
 _MULTI_VALUE_SPLIT_RE = re.compile(r"[|,，]+")
+_INTERNAL_TABLE_ROLES = {"route", "reasoning"}
 
 
 def _split_multi_value(cell: str) -> List[str]:
@@ -86,6 +87,14 @@ def _genre_matches(row: Dict[str, str], genre: Optional[str]) -> bool:
     resolved_genre = resolve_genre(genre)
     cell_genres = [resolve_genre(v) for v in _split_multi_value(cell)]
     return resolved_genre in cell_genres
+
+
+def _table_visible_for_search(table_name: str, skill: str, explicit_table: bool) -> bool:
+    """Keep story-system internals out of normal cross-table skill searches."""
+    if explicit_table or skill == "story-system":
+        return True
+    cfg = CSV_CONFIG.get(table_name) or {}
+    return cfg.get("role") not in _INTERNAL_TABLE_ROLES
 
 
 # ---------------------------------------------------------------------------
@@ -167,6 +176,9 @@ CSV_CONFIG: Dict[str, Dict[str, Any]] = {
         "output_cols": ["编号", "命名对象", "核心摘要", "大模型指令", "详细展开"],
         "poison_col": "毒点",
         "role": "base",
+        "contract_inject": "MASTER_SETTING.base_context",
+        "prefix": "NR",
+        "required_cols": ["编号", "适用技能", "分类", "层级", "关键词", "适用题材", "核心摘要"],
     },
     "场景写法": {
         "file": "场景写法.csv",
@@ -174,6 +186,9 @@ CSV_CONFIG: Dict[str, Dict[str, Any]] = {
         "output_cols": ["编号", "模式名称", "核心摘要", "大模型指令", "详细展开"],
         "poison_col": "毒点",
         "role": "base",
+        "contract_inject": "CHAPTER_BRIEF.dynamic_context",
+        "prefix": "SP",
+        "required_cols": ["编号", "适用技能", "分类", "层级", "关键词", "适用题材", "核心摘要"],
     },
     "写作技法": {
         "file": "写作技法.csv",
@@ -181,6 +196,9 @@ CSV_CONFIG: Dict[str, Dict[str, Any]] = {
         "output_cols": ["编号", "技法名称", "核心摘要", "大模型指令", "详细展开"],
         "poison_col": "毒点",
         "role": "base",
+        "contract_inject": "CHAPTER_BRIEF.dynamic_context",
+        "prefix": "WT",
+        "required_cols": ["编号", "适用技能", "分类", "层级", "关键词", "适用题材", "核心摘要"],
     },
     "桥段套路": {
         "file": "桥段套路.csv",
@@ -188,6 +206,9 @@ CSV_CONFIG: Dict[str, Dict[str, Any]] = {
         "output_cols": ["编号", "桥段名称", "核心摘要", "大模型指令", "详细展开"],
         "poison_col": "毒点",
         "role": "dynamic",
+        "contract_inject": "CHAPTER_BRIEF.dynamic_context",
+        "prefix": "TR",
+        "required_cols": ["编号", "适用技能", "分类", "层级", "关键词", "适用题材", "核心摘要"],
     },
     "爽点与节奏": {
         "file": "爽点与节奏.csv",
@@ -195,6 +216,9 @@ CSV_CONFIG: Dict[str, Dict[str, Any]] = {
         "output_cols": ["编号", "节奏类型", "核心摘要", "大模型指令", "详细展开"],
         "poison_col": "毒点",
         "role": "dynamic",
+        "contract_inject": "CHAPTER_BRIEF.dynamic_context",
+        "prefix": "PA",
+        "required_cols": ["编号", "适用技能", "分类", "层级", "关键词", "适用题材", "核心摘要"],
     },
     "人设与关系": {
         "file": "人设与关系.csv",
@@ -202,6 +226,9 @@ CSV_CONFIG: Dict[str, Dict[str, Any]] = {
         "output_cols": ["编号", "人设类型", "核心摘要", "大模型指令", "详细展开"],
         "poison_col": "毒点",
         "role": "base",
+        "contract_inject": "MASTER_SETTING.base_context",
+        "prefix": "CH",
+        "required_cols": ["编号", "适用技能", "分类", "层级", "关键词", "适用题材", "核心摘要"],
     },
     "金手指与设定": {
         "file": "金手指与设定.csv",
@@ -209,13 +236,19 @@ CSV_CONFIG: Dict[str, Dict[str, Any]] = {
         "output_cols": ["编号", "设定类型", "核心摘要", "大模型指令", "详细展开"],
         "poison_col": "毒点",
         "role": "base",
+        "contract_inject": "MASTER_SETTING.base_context",
+        "prefix": "SY",
+        "required_cols": ["编号", "适用技能", "分类", "层级", "关键词", "适用题材", "核心摘要"],
     },
     "题材与调性推理": {
         "file": "题材与调性推理.csv",
         "search_cols": {"关键词": 3, "意图与同义词": 4, "题材别名": 3},
-        "output_cols": ["编号", "题材/流派", "核心调性", "推荐基础检索表", "推荐动态检索表"],
+        "output_cols": ["编号", "题材/流派", "canonical_genre", "核心调性", "推荐基础检索表", "推荐动态检索表"],
         "poison_col": "毒点",
         "role": "route",
+        "contract_inject": "MASTER_SETTING.route",
+        "prefix": "GR",
+        "required_cols": ["编号", "适用技能", "题材/流派", "canonical_genre", "核心调性", "推荐基础检索表", "推荐动态检索表"],
     },
     "裁决规则": {
         "file": "裁决规则.csv",
@@ -224,6 +257,9 @@ CSV_CONFIG: Dict[str, Dict[str, Any]] = {
                         "毒点权重", "冲突裁决", "contract注入层", "反模式"],
         "poison_col": "",
         "role": "reasoning",
+        "contract_inject": "CHAPTER_BRIEF.writing_guidance",
+        "prefix": "RS",
+        "required_cols": ["编号", "题材", "风格优先级", "爽点优先级", "节奏默认策略", "冲突裁决"],
     },
 }
 
@@ -406,6 +442,8 @@ def search(
     # 1) Collect filtered rows with table name annotation
     candidates: List[tuple] = []  # (table_name, row)
     for tbl_name, rows in tables.items():
+        if not _table_visible_for_search(tbl_name, skill, explicit_table=table is not None):
+            continue
         for row in rows:
             if _skill_matches(row, skill) and _genre_matches(row, resolved):
                 candidates.append((tbl_name, row))

@@ -65,3 +65,30 @@
 | query/foreshadowing-urgency-rules.md     | 紧急度排序已在 context-agent 实现     | 输出解释不稳定时补            |
 | learn/pattern-taxonomy.md                | 分类规则可内联 skill                | 分类质量持续不稳时补 CSV       |
 
+---
+
+## 三、2026-04-16 References 完善状态
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| `references/review/blocking-override-guidelines.md` | 已完成 | review blocking 决策参考已落位 |
+| `references/outlining/plot-signal-vs-spoiler.md` | 已完成 | plan 章纲拆分参考已落位 |
+| `references/shared/naming-and-voice-gaps.md` | 已完成 | 命名与口吻缺陷补偿参考已落位 |
+| `references/README.md` | 已完成 | 顶层 references 索引已新增 |
+| `references/csv/genre-canonical.md` | 已完成 | 15 个 canonical genre + platform_tag 映射已落位 |
+| `reference_search.py` canonical 题材解析 | 已完成 | 支持 canonical、platform_tag、legacy 值归一 |
+| `CSV_CONFIG` 结构元数据 | 已完成 | 已补 `prefix`、`required_cols`、`contract_inject` |
+| `validate_csv.py` | 已完成 | 校验列头、编号、前缀、必填列、分隔符、题材、路由/裁决覆盖 |
+| `题材与调性推理.csv` | 已补厚 | 由 8 行扩展到 26 行，覆盖 15 个 canonical genre |
+| `裁决规则.csv` | 已补厚 | 由 7 行扩展到 17 行，覆盖 15 个 canonical genre |
+| CSV `适用题材` canonical 迁移 | 已完成 | `validate_csv.py` 当前 0 errors / 0 warnings |
+
+## 四、后续知识层缺口
+
+| 缺口 | 优先级 | 说明 |
+|------|--------|------|
+| 女频命名规范扩展 | P1 | 继续补 `命名规则.csv` 中古言、现言、甜宠、娱乐圈命名差异 |
+| 言情核心场景扩展 | P1 | 继续补 `场景写法.csv` 中暧昧、误会、重逢、分手、追妻等场景 |
+| 悬疑推理技法扩展 | P1 | 继续补 `写作技法.csv` 与 `桥段套路.csv` 中线索、公平误导、真相揭露 |
+| shared md 可迁移审查 | P2 | `cool-points-guide.md`、`naming-and-voice-gaps.md` 的可条目化内容留待人工逐条录入 |
+

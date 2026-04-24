@@ -39,3 +39,39 @@ def test_csv_config_columns_exist_in_csv_header(table_name, config):
 def test_csv_config_file_field_matches_filename():
     for name, config in CSV_CONFIG.items():
         assert config["file"] == f"{name}.csv"
+
+
+def test_csv_config_has_prefix_field():
+    for name, config in CSV_CONFIG.items():
+        assert "prefix" in config, f"表 {name} 缺少 prefix 字段"
+        assert isinstance(config["prefix"], str)
+        assert len(config["prefix"]) >= 2
+
+
+def test_csv_config_has_required_cols_field():
+    for name, config in CSV_CONFIG.items():
+        assert "required_cols" in config, f"表 {name} 缺少 required_cols 字段"
+        assert isinstance(config["required_cols"], list)
+        assert len(config["required_cols"]) >= 1
+
+
+def test_csv_config_has_contract_inject_field():
+    for name, config in CSV_CONFIG.items():
+        assert "contract_inject" in config, f"表 {name} 缺少 contract_inject 字段"
+        assert isinstance(config["contract_inject"], str)
+        assert "." in config["contract_inject"]
+
+
+def test_csv_config_prefix_matches_actual_data():
+    """Every row's 编号 must start with the declared prefix."""
+    for name, config in CSV_CONFIG.items():
+        csv_path = CSV_DIR / config["file"]
+        if not csv_path.exists():
+            continue
+        prefix = config["prefix"]
+        with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:
+            for row in csv.DictReader(f):
+                row_id = row.get("编号", "")
+                assert row_id.startswith(prefix + "-"), (
+                    f"表 {name} 行 {row_id} 编号不以 {prefix}- 开头"
+                )

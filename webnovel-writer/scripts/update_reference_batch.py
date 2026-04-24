@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-批量更新 references/csv 下的知识库条目。
+Legacy reference batch helper.
 
-特点：
-1. 按 `编号` 去重追加
-2. 严格校验列名，避免把 CSV 写坏
-3. 当前内置一批 2026-04-11 的高频补录条目
+CSV 正式治理规则已经收束为“人工逐条录入 + validate_csv 校验”，禁止再用批量
+脚本迁移或补录真实知识库。本文件仅保留历史去重追加函数供回归测试使用；
+CLI 只允许 dry-run，非 dry-run 会直接拒绝执行。
 """
 
 from __future__ import annotations
@@ -17,6 +16,10 @@ from pathlib import Path
 
 
 DEFAULT_CSV_DIR = Path(__file__).resolve().parents[1] / "references" / "csv"
+LEGACY_DISABLED_MESSAGE = (
+    "update_reference_batch.py is legacy and may not write references/csv. "
+    "Edit CSV rows manually, then run validate_csv.py."
+)
 
 
 BATCH_ROWS: dict[str, list[dict[str, str]]] = {
@@ -6119,6 +6122,9 @@ def append_unique_rows(csv_path: Path, rows: list[dict[str, str]]) -> tuple[int,
 
 
 def apply_batch(csv_dir: Path, dry_run: bool = False) -> list[str]:
+    if not dry_run:
+        raise RuntimeError(LEGACY_DISABLED_MESSAGE)
+
     summaries: list[str] = []
     for filename, rows in BATCH_ROWS.items():
         csv_path = csv_dir / filename
@@ -6150,16 +6156,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="只预览将新增多少条，不实际写入",
+        help="只预览历史批次命中情况；CLI 仅支持 dry-run",
     )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    for line in apply_batch(args.csv_dir, dry_run=args.dry_run):
-        print(line)
-    return 0
+    try:
+        for line in apply_batch(args.csv_dir, dry_run=args.dry_run):
+            print(line)
+        return 0
+    except RuntimeError as exc:
+        print(f"ERROR: {exc}")
+        return 2
 
 
 if __name__ == "__main__":

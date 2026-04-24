@@ -145,6 +145,27 @@ class TestSkillAndGenreFiltering:
         ids = [r["编号"] for r in out["data"]["results"]]
         assert "CH-001" in ids
 
+    def test_internal_story_system_tables_do_not_leak_into_write_search(self):
+        """普通 write 跨表检索不应召回题材路由和裁决层内部表。"""
+        out = run_search(
+            "--skill", "write",
+            "--query", "追妻火葬场 规则 裁决",
+            "--max-results", "20",
+        )
+        tables = {r["表"] for r in out["data"]["results"]}
+        assert "题材与调性推理" not in tables
+        assert "裁决规则" not in tables
+
+    def test_story_system_skill_can_search_route_table(self):
+        """story-system 是内部路由表的实际技能标签。"""
+        out = run_search(
+            "--skill", "story-system",
+            "--table", "题材与调性推理",
+            "--query", "快穿 任务 原主",
+        )
+        ids = [r["编号"] for r in out["data"]["results"]]
+        assert "GR-025" in ids
+
     def test_legacy_comma_delimiters_remain_compatible(self):
         """迁移过渡期仍兼容旧的逗号分隔技能与题材字段。"""
         temp_dir = Path.home() / ".codex" / "memories" / "reference_search_compat"
@@ -313,3 +334,33 @@ class TestGenreCanonical:
         assert out["status"] == "success"
         # Should find results (都市日常 resolves to 都市, matching rows tagged 都市)
         assert out["data"]["total"] >= 0  # may be 0 if no 都市 rows, but no error
+
+
+class TestEndToEndSmoke:
+    """Smoke tests: canonical genre pipeline over current CSV data."""
+
+    def test_xuanhuan_search_returns_results(self):
+        out = run_search("--skill", "write", "--query", "角色命名", "--genre", "玄幻")
+        assert out["status"] == "success"
+        assert out["data"]["total"] >= 1
+
+    def test_romance_search_returns_results(self):
+        out = run_search("--skill", "write", "--query", "追妻 火葬场", "--genre", "现言")
+        assert out["status"] == "success"
+        assert out["data"]["total"] >= 1
+
+    def test_platform_tag_as_genre_returns_results(self):
+        out = run_search("--skill", "write", "--query", "规则 动物园 守则", "--genre", "悬疑脑洞")
+        assert out["status"] == "success"
+        assert out["data"]["total"] >= 1
+
+    def test_validate_csv_zero_errors(self):
+        validate_script = str(Path(__file__).resolve().parents[1] / "validate_csv.py")
+        result = subprocess.run(
+            [sys.executable, validate_script, "--csv-dir", CSV_DIR, "--format", "json"],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        data = json.loads(result.stdout)
+        assert len(data["errors"]) == 0, f"CSV validation errors: {data['errors']}"

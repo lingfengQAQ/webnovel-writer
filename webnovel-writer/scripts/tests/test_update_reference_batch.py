@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.update_reference_batch import append_unique_rows
+from scripts.update_reference_batch import LEGACY_DISABLED_MESSAGE, append_unique_rows, apply_batch
 
 
 def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:
@@ -76,3 +76,12 @@ def test_append_unique_rows_rejects_unknown_columns():
             )
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_apply_batch_refuses_non_dry_run():
+    with pytest.raises(RuntimeError, match="legacy"):
+        apply_batch(Path("."), dry_run=False)
+
+
+def test_apply_batch_error_message_points_to_manual_flow():
+    assert "Edit CSV rows manually" in LEGACY_DISABLED_MESSAGE
