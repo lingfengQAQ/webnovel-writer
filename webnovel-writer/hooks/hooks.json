@@ -7,8 +7,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
+            "shell": "python3",
+            "command": "import os; exec(open(os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'],'hooks','dispatch.py')).read())"
           }
         ]
       }
@@ -19,8 +19,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
+            "shell": "python3",
+            "command": "import os; exec(open(os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'],'hooks','dispatch.py')).read())"
           }
         ]
       }
@@ -30,8 +30,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
+            "shell": "python3",
+            "command": "import os; exec(open(os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'],'hooks','dispatch.py')).read())"
           }
         ]
       }
@@ -42,8 +42,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
+            "shell": "python3",
+            "command": "import os; exec(open(os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'],'hooks','dispatch.py')).read())"
           }
         ]
       }
@@ -54,8 +54,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
+            "shell": "python3",
+            "command": "import os; exec(open(os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'],'hooks','dispatch.py')).read())"
           }
         ]
       }
@@ -66,8 +66,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
+            "shell": "python3",
+            "command": "import os; exec(open(os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'],'hooks','dispatch.py')).read())"
           }
         ]
       }
@@ -78,8 +78,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
+            "shell": "python3",
+            "command": "import os; exec(open(os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'],'hooks','dispatch.py')).read())"
           }
         ]
       }
@@ -90,8 +90,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
+            "shell": "python3",
+            "command": "import os; exec(open(os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'],'hooks','dispatch.py')).read())"
           }
         ]
       }
@@ -102,8 +102,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
+            "shell": "python3",
+            "command": "import os; exec(open(os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'],'hooks','dispatch.py')).read())"
           }
         ]
       }
@@ -114,8 +114,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
+            "shell": "python3",
+            "command": "import os; exec(open(os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'],'hooks','dispatch.py')).read())"
           }
         ]
       }
@@ -125,8 +125,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
+            "shell": "python3",
+            "command": "import os; exec(open(os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'],'hooks','dispatch.py')).read())"
           }
         ]
       }
@@ -136,8 +136,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
+            "shell": "python3",
+            "command": "import os; exec(open(os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'],'hooks','dispatch.py')).read())"
           }
         ]
       }
@@ -148,8 +148,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
+            "shell": "python3",
+            "command": "import os; exec(open(os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'],'hooks','dispatch.py')).read())"
           }
         ]
       }
@@ -160,8 +160,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
+            "shell": "python3",
+            "command": "import os; exec(open(os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'],'hooks','dispatch.py')).read())"
           }
         ]
       }
@@ -172,8 +172,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
+            "shell": "python3",
+            "command": "import os; exec(open(os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'],'hooks','dispatch.py')).read())"
           }
         ]
       }
