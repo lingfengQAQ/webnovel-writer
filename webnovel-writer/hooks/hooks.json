@@ -7,6 +7,11 @@
         "hooks": [
           {
             "type": "command",
+            "shell": "bash",
+            "command": "bash \"$CLAUDE_PLUGIN_ROOT/hooks/log-hook-event.sh\""
+          },
+          {
+            "type": "command",
             "shell": "powershell",
             "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
           }
@@ -19,6 +24,11 @@
         "hooks": [
           {
             "type": "command",
+            "shell": "bash",
+            "command": "bash \"$CLAUDE_PLUGIN_ROOT/hooks/log-hook-event.sh\""
+          },
+          {
+            "type": "command",
             "shell": "powershell",
             "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
           }
@@ -28,6 +38,11 @@
     "UserPromptSubmit": [
       {
         "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "bash \"$CLAUDE_PLUGIN_ROOT/hooks/log-hook-event.sh\""
+          },
           {
             "type": "command",
             "shell": "powershell",
@@ -42,6 +57,11 @@
         "hooks": [
           {
             "type": "command",
+            "shell": "bash",
+            "command": "bash \"$CLAUDE_PLUGIN_ROOT/hooks/log-hook-event.sh\""
+          },
+          {
+            "type": "command",
             "shell": "powershell",
             "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
           }
@@ -52,6 +72,11 @@
       {
         "matcher": "*",
         "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "bash \"$CLAUDE_PLUGIN_ROOT/hooks/log-hook-event.sh\""
+          },
           {
             "type": "command",
             "shell": "powershell",
@@ -66,6 +91,11 @@
         "hooks": [
           {
             "type": "command",
+            "shell": "bash",
+            "command": "bash \"$CLAUDE_PLUGIN_ROOT/hooks/log-hook-event.sh\""
+          },
+          {
+            "type": "command",
             "shell": "powershell",
             "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
           }
@@ -76,6 +106,11 @@
       {
         "matcher": "*",
         "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "bash \"$CLAUDE_PLUGIN_ROOT/hooks/log-hook-event.sh\""
+          },
           {
             "type": "command",
             "shell": "powershell",
@@ -90,6 +125,11 @@
         "hooks": [
           {
             "type": "command",
+            "shell": "bash",
+            "command": "bash \"$CLAUDE_PLUGIN_ROOT/hooks/log-hook-event.sh\""
+          },
+          {
+            "type": "command",
             "shell": "powershell",
             "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
           }
@@ -100,6 +140,11 @@
       {
         "matcher": "*",
         "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "bash \"$CLAUDE_PLUGIN_ROOT/hooks/log-hook-event.sh\""
+          },
           {
             "type": "command",
             "shell": "powershell",
@@ -114,6 +159,11 @@
         "hooks": [
           {
             "type": "command",
+            "shell": "bash",
+            "command": "bash \"$CLAUDE_PLUGIN_ROOT/hooks/log-hook-event.sh\""
+          },
+          {
+            "type": "command",
             "shell": "powershell",
             "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
           }
@@ -125,6 +175,11 @@
         "hooks": [
           {
             "type": "command",
+            "shell": "bash",
+            "command": "bash \"$CLAUDE_PLUGIN_ROOT/hooks/log-hook-event.sh\""
+          },
+          {
+            "type": "command",
             "shell": "powershell",
             "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
           }
@@ -134,6 +189,11 @@
     "TaskCompleted": [
       {
         "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "bash \"$CLAUDE_PLUGIN_ROOT/hooks/log-hook-event.sh\""
+          },
           {
             "type": "command",
             "shell": "powershell",
@@ -148,6 +208,11 @@
         "hooks": [
           {
             "type": "command",
+            "shell": "bash",
+            "command": "bash \"$CLAUDE_PLUGIN_ROOT/hooks/log-hook-event.sh\""
+          },
+          {
+            "type": "command",
             "shell": "powershell",
             "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
           }
@@ -160,6 +225,11 @@
         "hooks": [
           {
             "type": "command",
+            "shell": "bash",
+            "command": "bash \"$CLAUDE_PLUGIN_ROOT/hooks/log-hook-event.sh\""
+          },
+          {
+            "type": "command",
             "shell": "powershell",
             "command": "& \"$env:CLAUDE_PLUGIN_ROOT\\hooks\\log-hook-event.ps1\""
           }
@@ -170,6 +240,11 @@
       {
         "matcher": "*",
         "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "bash \"$CLAUDE_PLUGIN_ROOT/hooks/log-hook-event.sh\""
+          },
           {
             "type": "command",
             "shell": "powershell",
