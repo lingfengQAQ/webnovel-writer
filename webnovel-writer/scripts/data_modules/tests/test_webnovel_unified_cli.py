@@ -432,6 +432,84 @@ def test_review_pipeline_forwards_with_resolved_project_root(monkeypatch, tmp_pa
     ]
 
 
+def test_project_memory_forwards_with_resolved_project_root(monkeypatch, tmp_path):
+    module = _load_webnovel_module()
+
+    book_root = (tmp_path / "book").resolve()
+    called = {}
+
+    def _fake_resolve(explicit_project_root=None):
+        return book_root
+
+    def _fake_run_script(script_name, argv):
+        called["script_name"] = script_name
+        called["argv"] = list(argv)
+        return 0
+
+    monkeypatch.setattr(module, "_resolve_root", _fake_resolve)
+    monkeypatch.setattr(module, "_run_script", _fake_run_script)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "webnovel",
+            "--project-root",
+            str(tmp_path),
+            "project-memory",
+            "add-pattern",
+            "--pattern-type",
+            "format",
+            "--description",
+            '内心独白使用双引号""',
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        module.main()
+
+    assert int(exc.value.code or 0) == 0
+    assert called["script_name"] == "project_memory.py"
+    assert called["argv"] == [
+        "--project-root",
+        str(book_root),
+        "add-pattern",
+        "--pattern-type",
+        "format",
+        "--description",
+        '内心独白使用双引号""',
+    ]
+
+
+def test_project_memory_add_pattern_escapes_quotes(tmp_path):
+    _ensure_scripts_on_path()
+    import project_memory as project_memory_module
+
+    project_root = (tmp_path / "book").resolve()
+    (project_root / ".webnovel").mkdir(parents=True, exist_ok=True)
+    (project_root / ".webnovel" / "state.json").write_text(
+        json.dumps({"progress": {"current_chapter": 3}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    description = "正文格式规范：内心独白使用双引号\"\"，系统界面保留方括号[]"
+    result = project_memory_module.add_pattern(
+        project_root,
+        pattern_type="format",
+        description=description,
+        category="写作规范",
+        importance="high",
+    )
+
+    memory_path = project_root / ".webnovel" / "project_memory.json"
+    raw_text = memory_path.read_text(encoding="utf-8")
+    payload = json.loads(raw_text)
+
+    assert result["status"] == "success"
+    assert '\\"\\"' in raw_text
+    assert payload["patterns"][0]["description"] == description
+    assert payload["patterns"][0]["source_chapter"] == 3
+
+
 def test_review_pipeline_main_creates_output_directories(tmp_path):
     _ensure_scripts_on_path()
     import review_pipeline as review_pipeline_module

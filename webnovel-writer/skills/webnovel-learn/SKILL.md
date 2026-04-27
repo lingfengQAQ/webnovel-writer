@@ -1,7 +1,7 @@
 ---
 name: webnovel-learn
 description: 从当前会话提取成功模式并写入 project_memory.json
-allowed-tools: Read Write Bash
+allowed-tools: Read Bash
 ---
 
 # /webnovel-learn
@@ -9,8 +9,13 @@ allowed-tools: Read Write Bash
 ## Project Root Guard（必须先确认）
 
 - 必须在项目根目录执行（需存在 `.webnovel/state.json`）
-- 若当前目录不存在该文件，先询问用户项目路径并 `cd` 进入
-- 进入后设置变量：`$PROJECT_ROOT = (Resolve-Path ".").Path`
+- 使用统一入口解析项目根，避免写错目录：
+
+```bash
+export WORKSPACE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
+export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT:?}/scripts"
+export PROJECT_ROOT="$(python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
+```
 
 ## 目标
 - 提取可复用的写作模式（钩子/节奏/对话/微兑现等）
@@ -36,13 +41,23 @@ allowed-tools: Read Write Bash
 
 ## 执行流程
 1. 读取 `"$PROJECT_ROOT/.webnovel/state.json"`，获取当前章节号（progress.current_chapter）
-2. 读取 `"$PROJECT_ROOT/.webnovel/project_memory.json"`，若不存在则初始化 `{"patterns": []}`
-3. 解析用户输入，归类 pattern_type（hook/pacing/dialogue/payoff/emotion）
-4. 追加记录并写回文件
+2. 解析用户输入，归类 pattern_type（hook/pacing/dialogue/payoff/emotion/format/other）
+3. 必须调用脚本写入，不得手写或拼接 JSON：
+
+```bash
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" project-memory add-pattern \
+  --pattern-type "{pattern_type}" \
+  --description "{用户输入或提炼后的完整描述}" \
+  --category "{分类，可空}" \
+  --importance "{high|medium|low}"
+```
+
+脚本会自动读取/初始化 `.webnovel/project_memory.json`，并用 JSON 序列化写回，自动转义英文双引号、换行等字符。
 
 ## 约束
 - 不删除旧记录，仅追加
 - 避免完全重复的 description（可去重）
+- 禁止使用 `Write` 或手工编辑 `.webnovel/project_memory.json`
 
 ## 去重规则
 
