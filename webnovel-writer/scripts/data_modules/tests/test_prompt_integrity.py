@@ -376,3 +376,102 @@ def test_no_direct_state_writes_in_agents():
         assert "state set-chapter-status" not in text, (
             f"{agent_file.name}: 不应直接调用 state set-chapter-status"
         )
+
+
+def test_deconstruction_agent_preserves_init_handoff_and_boundaries():
+    """reference deconstruction must remain extraction-only and init-scoped."""
+    text = _read_text(AGENTS_DIR / "deconstruction-agent.md")
+
+    assert "init_reference_research" in text
+    assert ".webnovel/tmp/reference_analyses/<safe-title>/" not in text
+    assert "不写任何文件" in text
+    assert "不得写 `_progress.md`" in text
+    assert "resume_state" in text
+    assert "tools: Read, Grep, Bash" in text
+    assert "快速模式" in text
+    assert "深度模式" in text
+    assert "黄金三章" in text
+    assert "情节点" in text
+    assert "质量门控" in text
+    assert "不得凭记忆" in text
+    assert "条件框架" in text
+    assert "情绪链条" in text
+    assert "核心梗边界" in text
+
+    for field in (
+        "reader_promise",
+        "opening_hook_patterns",
+        "cool_point_loops",
+        "protagonist_patterns",
+        "antagonist_pressure_patterns",
+        "pacing_notes",
+        "borrowable_structures",
+        "do_not_copy",
+        "differentiation_requirements",
+        "init_candidates",
+        "quality",
+        "resume_state",
+        "orphan_plot_fallback",
+        "canon_contamination_warnings",
+    ):
+        assert f'"{field}"' in text
+
+    for forbidden_path in (
+        ".story-system/",
+        "设定集/",
+        "大纲/",
+        "正文/",
+        ".webnovel/",
+    ):
+        assert forbidden_path in text
+
+    assert "不写 `idea_bank.json`" in text
+    assert "用户确认后" in text
+    assert "MIT License attribution" not in text
+
+
+def test_webnovel_init_deconstruction_wiring_keeps_confirmation_gate():
+    """init may consume only confirmed, transformed reference patterns."""
+    text = _read_text(SKILLS_DIR / "webnovel-init" / "SKILL.md")
+
+    assert 'subagent_type: "webnovel-writer:deconstruction-agent"' in text
+    assert "Step 1.5：灵感来源询问" in text
+    assert "进入故事核采集前" in text
+    assert "不要默认拆书" in text
+    assert "你这本书的灵感来源想从哪里开始" in text
+    assert "init_reference_research" in text
+    assert "init_reference_research JSON 对象" in text
+    assert ".webnovel/tmp/reference_analyses/<safe-title>/" not in text
+    assert "project_root=${PROJECT_ROOT" not in text
+    assert "不写任何文件" in text
+    assert "不得由 init 主流程口头替代拆解结果" in text
+    assert "`quality`" in text
+    assert "`quality.passed=false`" in text
+    assert "`confidence < 0.85`" in text
+
+    for handoff_field in (
+        "reader_promise",
+        "opening_hook_patterns",
+        "cool_point_loops",
+        "protagonist_patterns",
+        "antagonist_pressure_patterns",
+        "pacing_notes",
+        "borrowable_structures",
+        "differentiation_requirements",
+        "init_candidates",
+    ):
+        assert handoff_field in text
+
+    for forbidden_path in (
+        "idea_bank.json",
+        ".story-system",
+        "设定集",
+        "大纲",
+        "正文",
+        ".webnovel/state.json",
+    ):
+        assert forbidden_path in text
+
+    assert "用户确认前" in text
+    assert "Step 2-6 只能使用用户确认过、并已变形为本书差异化表达的模式" in text
+    assert "汇总 Step 1.5 已确认的灵感来源" in text

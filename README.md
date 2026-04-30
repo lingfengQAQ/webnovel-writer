@@ -147,6 +147,8 @@ model: sonnet  # 可选：inherit / sonnet / opus / haiku
 本项目使用 **Claude Code + Gemini CLI + Codex** 配合 Vibe Coding 方式开发。  
 灵感来源：[Linux.do 帖子](https://linux.do/t/topic/1397944/49)
 
+感谢 `oh-story-claudecode` 提供拆文流程参考。
+
 ## 贡献
 
 欢迎提交 Issue 和 PR：

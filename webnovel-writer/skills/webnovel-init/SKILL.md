@@ -19,6 +19,7 @@ allowed-tools: Read Write Edit Grep Bash Agent AskUserQuestion WebSearch WebFetc
 3. 允许调用 `Read/Grep/Bash/Agent/AskUserQuestion/WebSearch/WebFetch` 辅助收集。
 4. 用户已明确的信息不重复问；冲突信息优先让用户裁决。
 5. Deep 模式优先完整性，允许慢一点，但禁止漏关键字段。
+6. 参考书拆解只返回结构化结果给 init 主流程；用户确认前不得写入 `idea_bank.json`、`.story-system`、`设定集`、`大纲`、`正文`、`.webnovel/state.json` 或任何 canon/read model 文件。
 
 ## 引用加载策略
 
@@ -57,7 +58,7 @@ allowed-tools: Read Write Edit Grep Bash Agent AskUserQuestion WebSearch WebFetc
 
 - `Read/Grep`：读取项目上下文与参考文件（`README.md`、`CLAUDE.md`、`templates/genres/*`、`references/*`）。
 - `Bash`：执行 `init_project.py`、文件存在性检查、最小验证命令。
-- `Agent`：拆分并行子任务（如题材映射、约束包候选生成、文件验证）。
+- `Agent`：拆分并行子任务（如题材映射、约束包候选生成、文件验证）；Step 1.5 用户选择参考书拆解作为灵感来源时，调用 `webnovel-writer:deconstruction-agent`。
 - `AskUserQuestion`：用于关键分歧裁决、候选方案选择、最终确认。
 - `WebSearch`：用于检索最新市场趋势、平台风向、题材数据（可带域名过滤）。
 - `WebFetch`：用于抓取已确定来源页面内容并做事实核验。
@@ -95,6 +96,39 @@ export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"
 
 输出：
 - 进入 Deep 采集前的"已知信息清单"和"待收集清单"。
+
+### Step 1.5：灵感来源询问（可选）
+
+进入故事核采集前，必须先用 `AskUserQuestion` 或直接提问的方式确认用户是否要提供灵感来源。不要默认拆书，也不要把参考作品当作必填项。
+
+建议询问：
+
+```text
+你这本书的灵感来源想从哪里开始？可以直接说原创想法，也可以提供参考作品做拆书提炼。若要拆书，请给参考书名+平台，并尽量提供章节摘录或文本路径；没有参考也可以直接跳过。
+```
+
+可接受的灵感来源：
+- 用户自由描述的原创想法；
+- 参考作品拆书：书名、平台、章节摘录、完整文本路径；
+- 市场趋势或平台风向；
+- 题材模板、反套路库、已有脑洞片段。
+
+当用户选择参考作品拆书且提供文本路径或章节摘录时，必须使用 `Agent` 工具调用 `webnovel-writer:deconstruction-agent`，不得由 init 主流程口头替代拆解结果。
+
+```text
+Agent(
+  subagent_type: "webnovel-writer:deconstruction-agent",
+  prompt: "reference_title={reference_title}; reference_source={reference_source}; reference_text_path={reference_text_path}; reference_text_excerpt={reference_text_excerpt}; analysis_mode={quick|deep|auto}; init_goal={当前初始化故事方向或空}; target_genre={题材或空}。只返回 init_reference_research JSON 对象，不写任何文件，不创建目录，不写 .story-system、.webnovel、设定集、大纲、正文、idea_bank.json、state.json 或任何 canon/read model 文件。"
+)
+```
+
+处理规则：
+- 如果用户只有书名/平台，没有文本或摘录，先询问是否能提供摘录/路径；若不能提供，则把参考书仅作为"方向线索"，不得编造该书黄金三章、角色、设定或剧情事实。
+- 接收返回的 `init_reference_research` JSON 后，只使用其中的 `reader_promise`、`opening_hook_patterns`、`cool_point_loops`、`protagonist_patterns`、`antagonist_pressure_patterns`、`pacing_notes`、`borrowable_structures`、`differentiation_requirements`、`init_candidates`、`quality`。
+- 先检查 `quality`：`quality.passed=false`、`confidence < 0.85` 或 `warnings` 非空时，不得把候选折叠进创意约束包；只能把风险和需补充材料展示给用户确认。
+- `do_not_copy` 和 `canon_contamination_warnings` 必须进入已知信息清单，作为后续创意生成红线。
+- Step 2-6 只能使用用户确认过、并已变形为本书差异化表达的模式。
+- 禁止把参考书角色、设定、组织、地点、金手指、剧情事实原样写入生成项目文件。
 
 ### Step 2：故事核与商业定位
 
@@ -161,23 +195,25 @@ export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"
 ### Step 6：创意约束包（差异化核心）
 
 流程：
-1. 基于题材映射加载反套路库（最多 2 个主相关库）。
-2. 生成 2-3 套创意包，每套包含：
+1. 汇总 Step 1.5 已确认的灵感来源：原创想法、参考拆书结果、市场趋势、题材模板或反套路库。
+2. 基于题材映射加载反套路库（最多 2 个主相关库）。
+3. 生成 2-3 套创意包，每套包含：
    - 一句话卖点
    - 反套路规则 1 条
    - 硬约束 2-3 条
    - 主角缺陷驱动一句话
    - 反派镜像一句话
    - 开篇钩子
-3. 三问筛选：
+4. 三问筛选：
    - 为什么这题材必须这么写？
    - 换成常规主角会不会塌？
    - 卖点能否一句话讲清且不撞模板？
-4. 展示五维评分（详见 `references/creativity/creativity-constraints.md` 的 `8.1 五维评分`），辅助用户决策。
-5. 用户选择最终方案，或拒绝并给出原因。
+5. 展示五维评分（详见 `references/creativity/creativity-constraints.md` 的 `8.1 五维评分`），辅助用户决策。
+6. 用户选择最终方案，或拒绝并给出原因。
 
 备注：
 - 若用户要求"贴近当下市场"，可触发外部检索并标注时间戳。
+- 若使用了参考拆解，展示候选时必须标明参考来源、转换方式、不可复制项和差异化要求；用户未明确确认前，不写入 `idea_bank.json` 或任何生成项目文件。
 
 ### Step 7：一致性复述与最终确认
 
