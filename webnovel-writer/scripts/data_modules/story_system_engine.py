@@ -25,6 +25,7 @@ ANTI_PATTERN_SOURCE_FIELDS = {
 
 _TEXT_TOKEN_RE = re.compile(r"[\s|,，、/；;：:（）()【】\[\]<>《》\"'!?！？。…]+")
 _PLACEHOLDER_QUERY_RE = re.compile(r"^\s*(\{[^{}]*章纲目标[^{}]*\}|第\s*\d+\s*章\s*章纲目标)\s*$")
+_ASCII_LETTER_RE = re.compile(r"[A-Za-z]")
 
 
 def is_placeholder_query(query: str) -> bool:
@@ -32,6 +33,23 @@ def is_placeholder_query(query: str) -> bool:
     if not text:
         return True
     return bool(_PLACEHOLDER_QUERY_RE.match(text))
+
+
+class StorySystemRoutingError(ValueError):
+    """Raised when story-system cannot select a route row."""
+
+
+def _validate_explicit_genre_source(genre: Optional[str]) -> Optional[str]:
+    normalized = str(genre or "").strip()
+    if not normalized:
+        return None
+    if _ASCII_LETTER_RE.search(normalized):
+        raise StorySystemRoutingError(
+            "story-system 题材参数必须使用中文名称，不能使用英文 profile key "
+            f"'{normalized}'。不会生成 .story-system contracts。"
+            "例如：规则怪谈、悬疑、玄幻。"
+        )
+    return normalized
 
 
 class StorySystemEngine:
@@ -46,6 +64,7 @@ class StorySystemEngine:
         chapter_directive: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         chapter_directive = chapter_directive or {}
+        genre = _validate_explicit_genre_source(genre)
         route = self._route(query=query, genre=genre)
         search_query = self._expand_query(
             query,
@@ -142,7 +161,7 @@ class StorySystemEngine:
         inferred_canonical = "" if genre else self._infer_genre_from_text(query)
 
         matched = None
-        route_source = "empty_csv_fallback"
+        route_source = ""
         for row in route_rows:
             aliases = (
                 self._split_multi_value(row.get("关键词"))
@@ -161,11 +180,8 @@ class StorySystemEngine:
             matched = self._fallback_row_for_genre(route_rows, inferred_canonical)
             if matched is not None:
                 route_source = "inferred_genre_fallback"
-        if matched is None and route_rows:
-            matched = route_rows[0]
-            route_source = "default_seed_fallback"
         if matched is None:
-            return self._empty_route(query=query, genre=genre)
+            raise self._routing_error(query=query, genre=genre, route_rows=route_rows)
 
         primary_genre = str(matched.get("题材/流派") or genre or "").strip()
         explicit_canonical = resolve_genre(genre)
@@ -531,26 +547,22 @@ class StorySystemEngine:
         cfg = CSV_CONFIG.get("裁决规则") or {}
         return str(cfg.get("contract_inject") or "")
 
-    def _empty_route(self, query: str, genre: Optional[str]) -> Dict[str, Any]:
-        fallback_genre = str(genre or "未命中题材").strip()
-        resolved_explicit = resolve_genre(genre)
-        canonical_genre = resolved_explicit if resolved_explicit not in (None, "全部") else ""
-        route_source = "explicit_genre_fallback" if genre else "empty_csv_fallback"
-        return {
-            "meta": {
-                "primary_genre": fallback_genre,
-                "canonical_genre": canonical_genre,
-                "route_source": route_source,
-                "genre_filter": canonical_genre,
-                "recommended_base_tables": ["命名规则", "人设与关系"],
-                "recommended_dynamic_tables": ["桥段套路", "爽点与节奏", "场景写法"],
-            },
-            "core_tone": "",
-            "pacing_strategy": "",
-            "route_anti_patterns": [],
-            "recommended_base_tables": ["命名规则", "人设与关系"],
-            "recommended_dynamic_tables": ["桥段套路", "爽点与节奏", "场景写法"],
-            "genre_filter": canonical_genre,
-            "default_query": "",
-            "source_trace": [{"table": "题材与调性推理", "id": "", "reason": f"{route_source}:{query}"}],
-        }
+    def _routing_error(
+        self,
+        *,
+        query: str,
+        genre: Optional[str],
+        route_rows: List[Dict[str, Any]],
+    ) -> StorySystemRoutingError:
+        query_text = str(query or "").strip()
+        genre_text = str(genre or "").strip()
+        if not route_rows:
+            detail = "题材与调性推理.csv 没有可用路由行"
+        else:
+            detail = f"query={query_text!r}, genre={genre_text!r} 未命中任何路由行"
+        return StorySystemRoutingError(
+            f"无法匹配 story-system 题材路由：{detail}。"
+            "不会生成 .story-system contracts。"
+            "请使用中文题材/流派（例如：规则怪谈、玄幻、仙侠），"
+            "或先在 题材与调性推理.csv 添加路由行。"
+        )

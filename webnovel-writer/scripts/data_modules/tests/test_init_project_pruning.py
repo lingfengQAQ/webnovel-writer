@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import pytest
+
 
 def test_init_skips_dead_templates_and_empty_libraries_for_single_protagonist(tmp_path, monkeypatch):
     import init_project as init_project_module
@@ -68,3 +70,24 @@ def test_init_generates_conditional_protagonist_group_and_heroine(tmp_path, monk
 
     assert (project_root / "设定集" / "主角组.md").is_file()
     assert (project_root / "设定集" / "女主卡.md").is_file()
+
+
+def test_init_rejects_english_profile_key_before_writing_state(tmp_path, monkeypatch):
+    import init_project as init_project_module
+
+    monkeypatch.setattr(init_project_module, "is_git_available", lambda: False)
+    project_root = tmp_path / "book"
+
+    with pytest.raises(SystemExit) as exc:
+        init_project_module.init_project(
+            str(project_root),
+            title="测试书",
+            genre="rules-mystery",
+            protagonist_name="陆鸣",
+            target_chapters=50,
+        )
+
+    message = str(exc.value)
+    assert "rules-mystery" in message
+    assert "规则怪谈" in message
+    assert not (project_root / ".webnovel" / "state.json").exists()

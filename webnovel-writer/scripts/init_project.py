@@ -36,6 +36,19 @@ if sys.platform == "win32":
     enable_windows_utf8_stdio()
 
 
+_ASCII_LETTER_RE = re.compile(r"[A-Za-z]")
+
+
+def _validate_initial_genre_source(genre: str) -> str:
+    normalized = str(genre or "").strip()
+    if _ASCII_LETTER_RE.search(normalized):
+        raise SystemExit(
+            "题材必须使用中文名称，不能使用英文 profile key "
+            f"'{normalized}'。例如：规则怪谈、悬疑、玄幻。"
+        )
+    return normalized
+
+
 def _read_text_if_exists(path: Path) -> str:
     if not path.exists():
         return ""
@@ -273,6 +286,7 @@ def init_project(
     project_path = Path(project_dir).expanduser().resolve()
     if ".claude" in project_path.parts:
         raise SystemExit("Refusing to initialize a project inside .claude. Choose a different directory.")
+    genre = _validate_initial_genre_source(genre)
     project_path.mkdir(parents=True, exist_ok=True)
 
     # 目录结构（同时兼容“卷目录”与后续扩展）

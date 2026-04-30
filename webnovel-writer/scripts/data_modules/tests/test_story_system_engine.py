@@ -5,7 +5,9 @@ import csv
 import uuid
 from pathlib import Path
 
-from data_modules.story_system_engine import StorySystemEngine
+import pytest
+
+from data_modules.story_system_engine import StorySystemEngine, StorySystemRoutingError
 
 
 def _write_csv(path, headers, rows):
@@ -149,10 +151,32 @@ def test_story_system_falls_back_to_explicit_genre():
         csv_dir / "题材与调性推理.csv",
         [
             "编号", "适用技能", "分类", "层级", "关键词", "意图与同义词", "适用题材",
-            "大模型指令", "核心摘要", "详细展开", "题材/流派", "题材别名", "核心调性",
+            "大模型指令", "核心摘要", "详细展开", "题材/流派", "canonical_genre", "题材别名", "核心调性",
             "节奏策略", "毒点", "推荐基础检索表", "推荐动态检索表", "默认查询词",
         ],
-        [],
+        [
+            {
+                "编号": "GR-010",
+                "适用技能": "story-system",
+                "分类": "题材路由",
+                "层级": "知识补充",
+                "关键词": "甜宠日常",
+                "意图与同义词": "",
+                "适用题材": "现言",
+                "大模型指令": "",
+                "核心摘要": "",
+                "详细展开": "",
+                "题材/流派": "现言",
+                "canonical_genre": "现言",
+                "题材别名": "",
+                "核心调性": "",
+                "节奏策略": "",
+                "毒点": "",
+                "推荐基础检索表": "命名规则|人设与关系",
+                "推荐动态检索表": "桥段套路|爽点与节奏|场景写法",
+                "默认查询词": "",
+            }
+        ],
     )
 
     engine = StorySystemEngine(csv_dir=csv_dir)
@@ -161,6 +185,85 @@ def test_story_system_falls_back_to_explicit_genre():
     assert contract["master_setting"]["route"]["primary_genre"] == "现言"
     assert contract["master_setting"]["route"]["route_source"] == "explicit_genre_fallback"
     assert contract["master_setting"]["route"]["recommended_dynamic_tables"] == ["桥段套路", "爽点与节奏", "场景写法"]
+
+
+def test_story_system_unmatched_genre_raises_routing_error():
+    csv_dir = _make_local_tmp_path() / "csv"
+    csv_dir.mkdir()
+
+    _write_csv(
+        csv_dir / "题材与调性推理.csv",
+        [
+            "编号", "适用技能", "分类", "层级", "关键词", "意图与同义词", "适用题材",
+            "大模型指令", "核心摘要", "详细展开", "题材/流派", "canonical_genre", "题材别名", "核心调性",
+            "节奏策略", "毒点", "推荐基础检索表", "推荐动态检索表", "默认查询词",
+        ],
+        [
+            {
+                "编号": "GR-001",
+                "适用技能": "story-system",
+                "分类": "题材路由",
+                "层级": "知识补充",
+                "关键词": "玄幻退婚流|退婚打脸",
+                "意图与同义词": "退婚流|废材逆袭",
+                "适用题材": "玄幻",
+                "大模型指令": "",
+                "核心摘要": "",
+                "详细展开": "",
+                "题材/流派": "玄幻退婚流",
+                "canonical_genre": "玄幻",
+                "题材别名": "退婚流",
+                "核心调性": "",
+                "节奏策略": "",
+                "毒点": "",
+                "推荐基础检索表": "命名规则",
+                "推荐动态检索表": "桥段套路",
+                "默认查询词": "",
+            }
+        ],
+    )
+
+    engine = StorySystemEngine(csv_dir=csv_dir)
+
+    with pytest.raises(StorySystemRoutingError) as exc:
+        engine.build(query="赛博厨神", genre="赛博厨神", chapter=None)
+
+    message = str(exc.value)
+    assert "赛博厨神" in message
+    assert "未命中任何路由行" in message
+    assert "玄幻退婚流" not in message
+
+
+def test_story_system_routes_chinese_rules_mystery_to_canonical_suspense():
+    csv_dir = Path(__file__).resolve().parents[3] / "references" / "csv"
+
+    contract = StorySystemEngine(csv_dir=csv_dir).build(
+        query="规则怪谈",
+        genre="规则怪谈",
+        chapter=None,
+    )
+
+    route = contract["master_setting"]["route"]
+    assert route["canonical_genre"] == "悬疑"
+    assert route["genre_filter"] == "悬疑"
+    assert route["route_source"] != "default_seed_fallback"
+
+
+def test_story_system_rejects_english_explicit_genre_even_when_query_routes():
+    csv_dir = Path(__file__).resolve().parents[3] / "references" / "csv"
+
+    for query in ("rules-mystery", "规则怪谈"):
+        with pytest.raises(StorySystemRoutingError) as exc:
+            StorySystemEngine(csv_dir=csv_dir).build(
+                query=query,
+                genre="rules-mystery",
+                chapter=None,
+            )
+
+        message = str(exc.value)
+        assert "rules-mystery" in message
+        assert "规则怪谈" in message
+        assert "不会生成 .story-system contracts" in message
 
 
 def test_route_output_includes_canonical_genre():
