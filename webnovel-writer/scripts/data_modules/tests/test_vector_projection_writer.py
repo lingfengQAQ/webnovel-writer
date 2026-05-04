@@ -58,6 +58,64 @@ def test_collect_chunks_from_commit():
     assert len(chunks) == 2
     assert chunks[0]["chunk_type"] == "event"
     assert chunks[1]["chunk_type"] == "entity_delta"
+    assert chunks[0]["chunk_id"] != chunks[1]["chunk_id"]
+
+
+def test_collect_chunks_assigns_unique_ids_for_same_chapter_events():
+    writer = VectorProjectionWriter.__new__(VectorProjectionWriter)
+    payload = {
+        "meta": {"chapter": 47, "status": "accepted"},
+        "accepted_events": [
+            {
+                "event_type": "character_state_changed",
+                "chapter": 47,
+                "subject": "韩立",
+                "payload": {"field": "状态", "new": "警觉"},
+            },
+            {
+                "event_type": "character_state_changed",
+                "chapter": 47,
+                "subject": "陈巧倩",
+                "payload": {"field": "状态", "new": "迟疑"},
+            },
+        ],
+        "entity_deltas": [],
+    }
+
+    chunks = writer._collect_chunks(payload)
+
+    assert len(chunks) == 2
+    assert len({chunk["chunk_id"] for chunk in chunks}) == 2
+    assert all(chunk["scene_index"] == 0 for chunk in chunks)
+
+
+def test_collect_chunks_keeps_event_id_stable_when_order_changes():
+    writer = VectorProjectionWriter.__new__(VectorProjectionWriter)
+    event_a = {
+        "event_id": "evt-a",
+        "event_type": "character_state_changed",
+        "chapter": 47,
+        "subject": "韩立",
+        "payload": {"field": "状态", "new": "警觉"},
+    }
+    event_b = {
+        "event_id": "evt-b",
+        "event_type": "character_state_changed",
+        "chapter": 47,
+        "subject": "陈巧倩",
+        "payload": {"field": "状态", "new": "迟疑"},
+    }
+
+    first = writer._collect_chunks(
+        {"meta": {"chapter": 47}, "accepted_events": [event_a, event_b], "entity_deltas": []}
+    )
+    second = writer._collect_chunks(
+        {"meta": {"chapter": 47}, "accepted_events": [event_b, event_a], "entity_deltas": []}
+    )
+
+    first_ids = {chunk["content"]: chunk["chunk_id"] for chunk in first}
+    second_ids = {chunk["content"]: chunk["chunk_id"] for chunk in second}
+    assert first_ids == second_ids
 
 
 def test_rejected_commit_returns_not_applied():

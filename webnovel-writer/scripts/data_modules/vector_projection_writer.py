@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 from pathlib import Path
 from typing import Any, Dict, List
@@ -33,13 +34,18 @@ class VectorProjectionWriter:
         chunks: List[Dict[str, Any]] = []
         chapter = int(commit_payload.get("meta", {}).get("chapter") or 0)
 
+        chunk_counts: Dict[str, int] = {}
+
         for event in commit_payload.get("accepted_events") or []:
             if not isinstance(event, dict):
                 continue
             text = self._event_to_text(event)
             if text:
                 evt_chapter = int(event.get("chapter") or chapter)
+                event_key = event.get("event_id") or f"{event.get('event_type')}:{event.get('subject')}:{text}"
+                chunk_id = self._unique_chunk_id(chunk_counts, "event", evt_chapter, event_key)
                 chunks.append({
+                    "chunk_id": chunk_id,
                     "chapter": evt_chapter,
                     "scene_index": 0,
                     "content": text,
@@ -54,7 +60,10 @@ class VectorProjectionWriter:
             text = self._delta_to_text(delta)
             if text:
                 d_chapter = int(delta.get("chapter") or chapter)
+                delta_key = delta.get("delta_id") or delta.get("entity_id") or text
+                chunk_id = self._unique_chunk_id(chunk_counts, "entity_delta", d_chapter, delta_key)
                 chunks.append({
+                    "chunk_id": chunk_id,
                     "chapter": d_chapter,
                     "scene_index": 0,
                     "content": text,
@@ -64,6 +73,23 @@ class VectorProjectionWriter:
                 })
 
         return chunks
+
+    def _unique_chunk_id(
+        self,
+        counts: Dict[str, int],
+        kind: str,
+        chapter: int,
+        key: Any,
+    ) -> str:
+        base_id = self._chunk_id(kind, chapter, key)
+        occurrence = counts.get(base_id, 0) + 1
+        counts[base_id] = occurrence
+        return base_id if occurrence == 1 else f"{base_id}_{occurrence}"
+
+    def _chunk_id(self, kind: str, chapter: int, key: Any) -> str:
+        raw = f"{kind}:{chapter}:{key}"
+        digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+        return f"ch{chapter:04d}_{kind}_{digest}"
 
     def _event_to_text(self, event: dict) -> str:
         chapter = int(event.get("chapter") or 0)
