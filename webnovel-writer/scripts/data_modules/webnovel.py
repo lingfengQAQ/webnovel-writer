@@ -360,6 +360,20 @@ def main() -> None:
     p_review_pipeline.add_argument("--report-file", default="", help="审查报告路径")
     p_review_pipeline.add_argument("--save-metrics", action="store_true", help="直接写入 index.db")
 
+
+    p_orchestrate = sub.add_parser("orchestrate", help="批量自动编排写作/修复流程")
+    p_orchestrate.add_argument("mode", choices=["write", "heal", "nightly"], help="运行模式")
+    p_orchestrate.add_argument("--chapters", default="1", help="章节范围，如 1-50")
+    p_orchestrate.add_argument("--fail-fast", action="store_true", help="遇到错误即停止")
+    p_orchestrate.add_argument("--auto-vector-heal", action="store_true", help="自动补偿向量索引")
+    p_orchestrate.add_argument("--json-report-out", default="", help="输出批处理 JSON 报告")
+
+
+    p_entity_clean = sub.add_parser("entity-clean", help="扫描并标记实体脏数据（拼音/英文 snake_case）")
+    p_entity_clean.add_argument("--format", choices=["json", "text"], default="json")
+    p_entity_clean.add_argument("--mark-invalid", action="store_true", help="写入 invalid_facts 待处理项")
+    p_entity_clean.add_argument("--chapter", type=int, default=None, help="可选：标记所属章节")
+
     p_placeholder_scan = sub.add_parser("placeholder-scan", help="扫描大纲/设定集未补齐占位")
     p_placeholder_scan.add_argument("--format", choices=["json", "text"], default="json", help="输出格式")
 
@@ -462,6 +476,28 @@ def main() -> None:
         raise SystemExit(_run_script("memory_cli.py", [*forward_args, *rest]))
     if tool == "project-memory":
         raise SystemExit(_run_script("project_memory.py", [*forward_args, *rest]))
+    if tool == "entity-clean":
+        return_args = [*forward_args, "--format", str(args.format)]
+        if args.mark_invalid:
+            return_args.append("--mark-invalid")
+        if args.chapter is not None:
+            return_args.extend(["--chapter", str(args.chapter)])
+        raise SystemExit(_run_script("entity_cleanup.py", return_args))
+
+    if tool == "orchestrate":
+        return_args = [
+            *forward_args,
+            str(args.mode),
+            "--chapters", str(args.chapters),
+        ]
+        if args.fail_fast:
+            return_args.append("--fail-fast")
+        if args.auto_vector_heal:
+            return_args.append("--auto-vector-heal")
+        if args.json_report_out:
+            return_args.extend(["--json-report-out", str(args.json_report_out)])
+        raise SystemExit(_run_script("orchestrate.py", return_args))
+
     if tool == "review-pipeline":
         return_args = [
             *forward_args,
