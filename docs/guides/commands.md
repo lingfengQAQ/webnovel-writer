@@ -206,6 +206,43 @@ python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJE
 python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" orchestrate heal --chapters 91-100 --auto-vector-heal
 ```
 
+### 自动修复建议（指定坏章，如 15/91/92/94）
+
+你这个想法非常好，推荐用“**坏章列表自动修复 + 全书连贯复核 + 大纲反写**”三段式：
+
+1) 先审查定位：
+
+```bash
+/webnovel-review 1-100
+```
+
+2) 在 Claude Code 中按坏章列表循环触发子 agent（示例）：
+
+```bash
+/webnovel-write 15
+/webnovel-write 91
+/webnovel-write 92
+/webnovel-write 94
+```
+
+> `webnovel-write` 会自动调用 context/reviewer/data-agent 子链做修复与重提交。
+
+3) 修完后做全书连贯复核（防止局部修复引发跨章断裂）：
+
+```bash
+/webnovel-review 1-100
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" story-events --health
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" orchestrate heal --chapters 1-100 --auto-vector-heal --json-report-out ".webnovel/reports/continuity-1-100.json"
+```
+
+4) 最后做“大纲反写/校准”，保证后续生成不受旧偏差影响：
+
+```bash
+# 先确认受影响卷号，然后逐卷执行
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" master-outline-sync --volume 2 --format json
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" master-outline-sync --volume 3 --format json
+```
+
 ### 长期记忆子命令
 
 | 子命令 | 说明 |

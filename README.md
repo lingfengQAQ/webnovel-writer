@@ -154,6 +154,16 @@ python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJE
 用于重跑第 100 章完整链（上下文→起草/修复→审查→提交→投影）。  
 如果你要批量修复多章，建议在 Claude Code 中让助手按章循环执行 `/webnovel-write N`，每 10 章做一次 `/webnovel-review A-B` 复核。
 
+坏章定点修复示例（15/91/92/94）：
+
+```bash
+/webnovel-write 15
+/webnovel-write 91
+/webnovel-write 92
+/webnovel-write 94
+/webnovel-review 1-100
+```
+
 ### 6) 可视化面板（可选）
 
 ```bash
