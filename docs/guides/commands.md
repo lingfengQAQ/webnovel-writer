@@ -146,6 +146,7 @@ python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJE
 python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" orchestrate write --chapters 1-20 --auto-vector-heal
 python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" orchestrate heal --chapters 1-200 --fail-fast
 python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" orchestrate nightly --chapters 50-80 --json-report-out ".webnovel/reports/nightly.json"
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" orchestrate autofix --bad-chapters 15,91,92,94 --auto-vector-heal --entity-clean --sync-outline-volumes 2,3 --json-report-out ".webnovel/reports/autofix.json"
 ```
 
 ### 100 章后偏纲的完整修复链（推荐顺序）

@@ -362,10 +362,13 @@ def main() -> None:
 
 
     p_orchestrate = sub.add_parser("orchestrate", help="批量自动编排写作/修复流程")
-    p_orchestrate.add_argument("mode", choices=["write", "heal", "nightly"], help="运行模式")
+    p_orchestrate.add_argument("mode", choices=["write", "heal", "nightly", "autofix"], help="运行模式")
     p_orchestrate.add_argument("--chapters", default="1", help="章节范围，如 1-50")
+    p_orchestrate.add_argument("--bad-chapters", default="", help="坏章列表，如 15,91,92,94")
     p_orchestrate.add_argument("--fail-fast", action="store_true", help="遇到错误即停止")
     p_orchestrate.add_argument("--auto-vector-heal", action="store_true", help="自动补偿向量索引")
+    p_orchestrate.add_argument("--entity-clean", action="store_true", help="autofix 收尾时扫描实体脏数据")
+    p_orchestrate.add_argument("--sync-outline-volumes", default="", help="autofix 后回写总纲卷号，如 2,3")
     p_orchestrate.add_argument("--json-report-out", default="", help="输出批处理 JSON 报告")
 
 
@@ -490,10 +493,16 @@ def main() -> None:
             str(args.mode),
             "--chapters", str(args.chapters),
         ]
+        if args.bad_chapters:
+            return_args.extend(["--bad-chapters", str(args.bad_chapters)])
         if args.fail_fast:
             return_args.append("--fail-fast")
         if args.auto_vector_heal:
             return_args.append("--auto-vector-heal")
+        if args.entity_clean:
+            return_args.append("--entity-clean")
+        if args.sync_outline_volumes:
+            return_args.extend(["--sync-outline-volumes", str(args.sync_outline_volumes)])
         if args.json_report_out:
             return_args.extend(["--json-report-out", str(args.json_report_out)])
         raise SystemExit(_run_script("orchestrate.py", return_args))
