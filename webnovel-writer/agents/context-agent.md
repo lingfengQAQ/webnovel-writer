@@ -115,6 +115,8 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" extr
 
 任一 fail 回 D 重组：事实无冲突、时空有承接、能力有来源、动机不断裂、合同与任务书一致、时间正确、记忆未遗漏、节点不冲突、任务书可独立支撑起草、五段完整语气自然、角色动机非空、有差异化建议、伏笔已按紧急度输出。
 
+节点履约必须可执行：第 2 段必须完整写出 CBN、每个 CPN、CEN、must_cover_nodes 与 forbidden_zones；不能只概括为"围绕章纲推进"。节点缺失、顺序不清、把禁区写成建议、或让 dynamic_context 覆盖章纲，均视为 fail。
+
 ## 7. 输出格式
 
 只输出一份五段任务书。
@@ -123,7 +125,7 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" extr
 书名、章号、标题、一句话目标。
 
 ### 2. 这章的故事
-综合：前文摘要、本章目标/阻力、情节节点（CBN/CPNs/CEN）、必须覆盖/禁区、跨章约束、RAG 线索。
+综合：前文摘要、本章目标/阻力、情节节点（CBN/CPNs/CEN）、必须覆盖/禁区、跨章约束、RAG 线索。CBN、每个 CPN、CEN、必须覆盖项、禁区必须逐项落到自然语言任务书里，供起草后逐项核对。
 
 ### 3. 这章的人物
 每人一段：状态、驱动力、本章作用、说话倾向。

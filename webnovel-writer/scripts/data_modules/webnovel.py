@@ -332,6 +332,18 @@ def main() -> None:
     p_extract_context.add_argument("--chapter", type=int, required=True, help="目标章节号")
     p_extract_context.add_argument("--format", choices=["text", "json"], default="text", help="输出格式")
 
+    p_delete_chapters = sub.add_parser("delete-chapters", help="删除章节及其派生索引/记忆/向量")
+    p_delete_chapters.add_argument("--chapters", required=True, help="章节号/范围，如 1,3,5-7")
+    p_delete_chapters.add_argument("--mode", choices=["delete", "rewrite"], default="delete", help="删除模式")
+    p_delete_chapters.add_argument("--dry-run", action="store_true", help="仅预览，不实际删除")
+    p_delete_chapters.add_argument("--format", choices=["text", "json"], default="json", help="输出格式")
+
+    p_delete = sub.add_parser("delete", help="精确删除章节及其相关数据")
+    p_delete.add_argument("chapters", help="章节号/范围，如 1,3,5-7")
+    p_delete.add_argument("--dry-run", action="store_true", help="仅打印计划，不执行删除")
+    p_delete.add_argument("--yes", action="store_true", help="确认执行删除")
+    p_delete.add_argument("--format", choices=["text", "json"], default="text", help="输出格式")
+
     p_story_system = sub.add_parser("story-system", help="转发到 story_system.py")
     p_story_system.add_argument("args", nargs=argparse.REMAINDER)
 
@@ -455,6 +467,26 @@ def main() -> None:
     if tool == "extract-context":
         return_args = [*forward_args, "--chapter", str(args.chapter), "--format", str(args.format)]
         raise SystemExit(_run_script("extract_chapter_context.py", return_args))
+    if tool == "delete-chapters":
+        return_args = [
+            *forward_args,
+            "--chapters",
+            str(args.chapters),
+            "--mode",
+            str(args.mode),
+            "--format",
+            str(args.format),
+        ]
+        if args.dry_run:
+            return_args.append("--dry-run")
+        raise SystemExit(_run_script("chapter_delete.py", return_args))
+    if tool == "delete":
+        return_args = [*forward_args, str(args.chapters), "--format", str(args.format)]
+        if args.dry_run:
+            return_args.append("--dry-run")
+        if args.yes:
+            return_args.append("--yes")
+        raise SystemExit(_run_script("delete_chapters.py", return_args))
     if tool == "story-system":
         raise SystemExit(_run_script("story_system.py", [*forward_args, *rest]))
     if tool == "story-events":

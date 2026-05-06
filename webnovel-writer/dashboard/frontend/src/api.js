@@ -15,8 +15,16 @@ export async function fetchJSON(path, params = {}) {
     return response.json()
 }
 
-export function fetchProjectInfo() {
-    return fetchJSON('/api/project/info')
+export async function fetchProjectInfo() {
+    const payload = await fetchJSON('/api/project/info')
+    const project = payload?.project_info || payload?.project || {}
+    return {
+        ...payload,
+        project_info: {
+            ...project,
+            ...(payload?.project_info || {}),
+        },
+    }
 }
 
 export function fetchStoryRuntimeHealth() {

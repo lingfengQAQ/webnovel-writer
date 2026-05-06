@@ -40,6 +40,24 @@
 /webnovel-review 45
 ```
 
+### `/webnovel-delete [范围]`
+
+删除指定章节，并同步清理正文、commit、事件、摘要、索引、向量、长期记忆、角色图鉴和关系图谱等派生数据。
+
+```bash
+/webnovel-delete 3
+/webnovel-delete 1,3,5-7
+```
+
+### `/webnovel-rewrite [范围]`
+
+重写指定章节：先执行旧数据清理，再按 `/webnovel-write` 主链逐章重新创作。
+
+```bash
+/webnovel-rewrite 12
+/webnovel-rewrite 12-15
+```
+
 ### `/webnovel-query [关键词]`
 
 查询角色、伏笔、节奏、状态等运行时信息。
@@ -138,6 +156,8 @@ python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJE
 | `backup` | 备份管理 |
 | `archive` | 归档管理 |
 | `extract-context` | 提取章节上下文（`--chapter N --format json`） |
+| `delete-chapters` | 重写前清理旧章节并重建 read-model（`--chapters 1,3,5-7 --mode rewrite`） |
+| `delete` | 精确删除章节及其相关数据（`1,3,5-7 --dry-run/--yes`） |
 | `orchestrate` | 批量自动编排（`write/heal/nightly`），按章节范围自动执行检查与修复 |
 
 `orchestrate` 示例：
