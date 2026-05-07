@@ -332,6 +332,18 @@ def main() -> None:
     p_extract_context.add_argument("--chapter", type=int, required=True, help="目标章节号")
     p_extract_context.add_argument("--format", choices=["text", "json"], default="text", help="输出格式")
 
+    p_delete_chapters = sub.add_parser("delete-chapters", help="删除章节及其派生索引/记忆/向量")
+    p_delete_chapters.add_argument("--chapters", required=True, help="章节号/范围，如 1,3,5-7")
+    p_delete_chapters.add_argument("--mode", choices=["delete", "rewrite"], default="delete", help="删除模式")
+    p_delete_chapters.add_argument("--dry-run", action="store_true", help="仅预览，不实际删除")
+    p_delete_chapters.add_argument("--format", choices=["text", "json"], default="json", help="输出格式")
+
+    p_delete = sub.add_parser("delete", help="精确删除章节及其相关数据")
+    p_delete.add_argument("chapters", help="章节号/范围，如 1,3,5-7")
+    p_delete.add_argument("--dry-run", action="store_true", help="仅打印计划，不执行删除")
+    p_delete.add_argument("--yes", action="store_true", help="确认执行删除")
+    p_delete.add_argument("--format", choices=["text", "json"], default="text", help="输出格式")
+
     p_story_system = sub.add_parser("story-system", help="转发到 story_system.py")
     p_story_system.add_argument("args", nargs=argparse.REMAINDER)
 
@@ -359,6 +371,23 @@ def main() -> None:
     p_review_pipeline.add_argument("--metrics-out", default="", help="metrics 输出文件")
     p_review_pipeline.add_argument("--report-file", default="", help="审查报告路径")
     p_review_pipeline.add_argument("--save-metrics", action="store_true", help="直接写入 index.db")
+
+
+    p_orchestrate = sub.add_parser("orchestrate", help="批量自动编排写作/修复流程")
+    p_orchestrate.add_argument("mode", choices=["write", "heal", "nightly", "autofix"], help="运行模式")
+    p_orchestrate.add_argument("--chapters", default="1", help="章节范围，如 1-50")
+    p_orchestrate.add_argument("--bad-chapters", default="", help="坏章列表，如 15,91,92,94")
+    p_orchestrate.add_argument("--fail-fast", action="store_true", help="遇到错误即停止")
+    p_orchestrate.add_argument("--auto-vector-heal", action="store_true", help="自动补偿向量索引")
+    p_orchestrate.add_argument("--entity-clean", action="store_true", help="autofix 收尾时扫描实体脏数据")
+    p_orchestrate.add_argument("--sync-outline-volumes", default="", help="autofix 后回写总纲卷号，如 2,3")
+    p_orchestrate.add_argument("--json-report-out", default="", help="输出批处理 JSON 报告")
+
+
+    p_entity_clean = sub.add_parser("entity-clean", help="扫描并标记实体脏数据（拼音/英文 snake_case）")
+    p_entity_clean.add_argument("--format", choices=["json", "text"], default="json")
+    p_entity_clean.add_argument("--mark-invalid", action="store_true", help="写入 invalid_facts 待处理项")
+    p_entity_clean.add_argument("--chapter", type=int, default=None, help="可选：标记所属章节")
 
     p_placeholder_scan = sub.add_parser("placeholder-scan", help="扫描大纲/设定集未补齐占位")
     p_placeholder_scan.add_argument("--format", choices=["json", "text"], default="json", help="输出格式")
@@ -438,6 +467,26 @@ def main() -> None:
     if tool == "extract-context":
         return_args = [*forward_args, "--chapter", str(args.chapter), "--format", str(args.format)]
         raise SystemExit(_run_script("extract_chapter_context.py", return_args))
+    if tool == "delete-chapters":
+        return_args = [
+            *forward_args,
+            "--chapters",
+            str(args.chapters),
+            "--mode",
+            str(args.mode),
+            "--format",
+            str(args.format),
+        ]
+        if args.dry_run:
+            return_args.append("--dry-run")
+        raise SystemExit(_run_script("chapter_delete.py", return_args))
+    if tool == "delete":
+        return_args = [*forward_args, str(args.chapters), "--format", str(args.format)]
+        if args.dry_run:
+            return_args.append("--dry-run")
+        if args.yes:
+            return_args.append("--yes")
+        raise SystemExit(_run_script("delete_chapters.py", return_args))
     if tool == "story-system":
         raise SystemExit(_run_script("story_system.py", [*forward_args, *rest]))
     if tool == "story-events":
@@ -462,6 +511,34 @@ def main() -> None:
         raise SystemExit(_run_script("memory_cli.py", [*forward_args, *rest]))
     if tool == "project-memory":
         raise SystemExit(_run_script("project_memory.py", [*forward_args, *rest]))
+    if tool == "entity-clean":
+        return_args = [*forward_args, "--format", str(args.format)]
+        if args.mark_invalid:
+            return_args.append("--mark-invalid")
+        if args.chapter is not None:
+            return_args.extend(["--chapter", str(args.chapter)])
+        raise SystemExit(_run_script("entity_cleanup.py", return_args))
+
+    if tool == "orchestrate":
+        return_args = [
+            *forward_args,
+            str(args.mode),
+            "--chapters", str(args.chapters),
+        ]
+        if args.bad_chapters:
+            return_args.extend(["--bad-chapters", str(args.bad_chapters)])
+        if args.fail_fast:
+            return_args.append("--fail-fast")
+        if args.auto_vector_heal:
+            return_args.append("--auto-vector-heal")
+        if args.entity_clean:
+            return_args.append("--entity-clean")
+        if args.sync_outline_volumes:
+            return_args.extend(["--sync-outline-volumes", str(args.sync_outline_volumes)])
+        if args.json_report_out:
+            return_args.extend(["--json-report-out", str(args.json_report_out)])
+        raise SystemExit(_run_script("orchestrate.py", return_args))
+
     if tool == "review-pipeline":
         return_args = [
             *forward_args,

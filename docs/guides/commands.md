@@ -40,6 +40,24 @@
 /webnovel-review 45
 ```
 
+### `/webnovel-delete [范围]`
+
+删除指定章节，并同步清理正文、commit、事件、摘要、索引、向量、长期记忆、角色图鉴和关系图谱等派生数据。
+
+```bash
+/webnovel-delete 3
+/webnovel-delete 1,3,5-7
+```
+
+### `/webnovel-rewrite [范围]`
+
+重写指定章节：先执行旧数据清理，再按 `/webnovel-write` 主链逐章重新创作。
+
+```bash
+/webnovel-rewrite 12
+/webnovel-rewrite 12-15
+```
+
 ### `/webnovel-query [关键词]`
 
 查询角色、伏笔、节奏、状态等运行时信息。
@@ -138,6 +156,113 @@ python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJE
 | `backup` | 备份管理 |
 | `archive` | 归档管理 |
 | `extract-context` | 提取章节上下文（`--chapter N --format json`） |
+| `delete-chapters` | 重写前清理旧章节并重建 read-model（`--chapters 1,3,5-7 --mode rewrite`） |
+| `delete` | 精确删除章节及其相关数据（`1,3,5-7 --dry-run/--yes`） |
+| `orchestrate` | 批量自动编排（`write/heal/nightly`），按章节范围自动执行检查与修复 |
+
+`orchestrate` 示例：
+
+```bash
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" orchestrate write --chapters 1-20 --auto-vector-heal
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" orchestrate heal --chapters 1-200 --fail-fast
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" orchestrate nightly --chapters 50-80 --json-report-out ".webnovel/reports/nightly.json"
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" orchestrate autofix --bad-chapters 15,91,92,94 --auto-vector-heal --entity-clean --sync-outline-volumes 2,3 --json-report-out ".webnovel/reports/autofix.json"
+```
+
+### 100 章后偏纲的完整修复链（推荐顺序）
+
+当你已经写到 100 章并发现“正文偏离大纲”，建议按下列顺序执行，保证大纲/向量/关系链/实体/事件都被重建与校验：
+
+```bash
+# 0) 环境与主链预检
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" preflight --format json
+
+# 1) 批量修复链（审查 + commit + projection + 向量补偿）
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" orchestrate heal --chapters 1-100 --auto-vector-heal --json-report-out ".webnovel/reports/heal-1-100.json"
+
+# 2) 事件链健康（伏笔追踪/关系链基础）
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" story-events --health
+
+# 3) 实体脏数据扫描并标记（拼音/英文 snake_case）
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" entity-clean --mark-invalid --format json --chapter 100
+
+# 4) 关键观测（实体、关系、审查趋势）
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" index get-core-entities
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" index get-relationship-graph --format json
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" index get-review-trend-stats --last-n 20
+```
+
+说明：
+- `orchestrate heal` 负责批量修复执行链。
+- `story-events --health` 用于检查事件链断裂与健康状态。
+- `entity-clean` 会抓出类似 `old_book_knock_mark` 这类脏实体并写入 `invalid_facts` 待处理。
+
+### Claude Code 插件方式：检查与修复（无需手动找命令）
+
+在 Claude Code 里建议按以下节奏执行：
+
+```bash
+/webnovel-review 1-100
+```
+
+先出总审查报告，定位偏纲、设定冲突、时间线冲突。
+
+```bash
+/webnovel-write 91
+/webnovel-write 92
+/webnovel-write 93
+...
+/webnovel-write 100
+```
+
+对问题章节逐章重跑完整链路（包含审查与提交流程），每批修复完成后再复查：
+
+```bash
+/webnovel-review 91-100
+```
+
+如需检查运行时数据一致性，再补一条：
+
+```bash
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" orchestrate heal --chapters 91-100 --auto-vector-heal
+```
+
+### 自动修复建议（指定坏章，如 15/91/92/94）
+
+你这个想法非常好，推荐用“**坏章列表自动修复 + 全书连贯复核 + 大纲反写**”三段式：
+
+1) 先审查定位：
+
+```bash
+/webnovel-review 1-100
+```
+
+2) 在 Claude Code 中按坏章列表循环触发子 agent（示例）：
+
+```bash
+/webnovel-write 15
+/webnovel-write 91
+/webnovel-write 92
+/webnovel-write 94
+```
+
+> `webnovel-write` 会自动调用 context/reviewer/data-agent 子链做修复与重提交。
+
+3) 修完后做全书连贯复核（防止局部修复引发跨章断裂）：
+
+```bash
+/webnovel-review 1-100
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" story-events --health
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" orchestrate heal --chapters 1-100 --auto-vector-heal --json-report-out ".webnovel/reports/continuity-1-100.json"
+```
+
+4) 最后做“大纲反写/校准”，保证后续生成不受旧偏差影响：
+
+```bash
+# 先确认受影响卷号，然后逐卷执行
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" master-outline-sync --volume 2 --format json
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" master-outline-sync --volume 3 --format json
+```
 
 ### 长期记忆子命令
 

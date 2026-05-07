@@ -95,6 +95,104 @@ def test_extract_context_forwards_with_resolved_project_root(monkeypatch, tmp_pa
     ]
 
 
+def test_delete_chapters_forwards_with_resolved_project_root(monkeypatch, tmp_path):
+    module = _load_webnovel_module()
+
+    book_root = (tmp_path / "book").resolve()
+    called = {}
+
+    def _fake_resolve(explicit_project_root=None):
+        return book_root
+
+    def _fake_run_script(script_name, argv):
+        called["script_name"] = script_name
+        called["argv"] = list(argv)
+        return 0
+
+    monkeypatch.setattr(module, "_resolve_root", _fake_resolve)
+    monkeypatch.setattr(module, "_run_script", _fake_run_script)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "webnovel",
+            "--project-root",
+            str(tmp_path),
+            "delete-chapters",
+            "--chapters",
+            "1-3",
+            "--mode",
+            "rewrite",
+            "--format",
+            "text",
+            "--dry-run",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        module.main()
+
+    assert int(exc.value.code or 0) == 0
+    assert called["script_name"] == "chapter_delete.py"
+    assert called["argv"] == [
+        "--project-root",
+        str(book_root),
+        "--chapters",
+        "1-3",
+        "--mode",
+        "rewrite",
+        "--format",
+        "text",
+        "--dry-run",
+    ]
+
+
+def test_delete_forwards_with_resolved_project_root(monkeypatch, tmp_path):
+    module = _load_webnovel_module()
+
+    book_root = (tmp_path / "book").resolve()
+    called = {}
+
+    def _fake_resolve(explicit_project_root=None):
+        return book_root
+
+    def _fake_run_script(script_name, argv):
+        called["script_name"] = script_name
+        called["argv"] = list(argv)
+        return 0
+
+    monkeypatch.setattr(module, "_resolve_root", _fake_resolve)
+    monkeypatch.setattr(module, "_run_script", _fake_run_script)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "webnovel",
+            "--project-root",
+            str(tmp_path),
+            "delete",
+            "1,3-5",
+            "--yes",
+            "--format",
+            "json",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        module.main()
+
+    assert int(exc.value.code or 0) == 0
+    assert called["script_name"] == "delete_chapters.py"
+    assert called["argv"] == [
+        "--project-root",
+        str(book_root),
+        "1,3-5",
+        "--format",
+        "json",
+        "--yes",
+    ]
+
+
 def test_backup_forwards_resolved_book_root_from_parent_workspace(monkeypatch, tmp_path):
     module = _load_webnovel_module()
 
