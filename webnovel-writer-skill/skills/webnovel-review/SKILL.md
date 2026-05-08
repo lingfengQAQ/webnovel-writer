@@ -6,6 +6,16 @@ allowed-tools: Read Grep Write Edit Bash Agent AskUserQuestion
 
 # Quality Review Skill
 
+
+## 环境准备
+
+```bash
+export SKILL_DIR=$(dirname "$0")
+export WEB_NOVEL_LIB="${SKILL_DIR}/../webnovel-lib"
+export PYTHONPATH="${WEB_NOVEL_LIB}:${PYTHONPATH}"
+```
+
+
 ## 目标
 
 - 解析真实书项目根目录，按统一流程完成章节审查。
@@ -43,8 +53,8 @@ allowed-tools: Read Grep Write Edit Bash Agent AskUserQuestion
 
 ```bash
 export WORKSPACE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
-export SKILL_ROOT="${CLAUDE_PLUGIN_ROOT}/skills/webnovel-review"
-export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"
+export SKILL_ROOT="${WEB_NOVEL_LIB}/skills/webnovel-review"
+export SCRIPTS_DIR="${WEB_NOVEL_LIB}/scripts"
 export PROJECT_ROOT="$(python "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
 ```
 

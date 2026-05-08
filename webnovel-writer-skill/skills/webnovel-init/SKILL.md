@@ -6,6 +6,16 @@ allowed-tools: Read Write Edit Grep Bash Agent AskUserQuestion WebSearch WebFetc
 
 # Project Initialization (Deep Mode)
 
+
+## 环境准备
+
+```bash
+export SKILL_DIR=$(dirname "$0")
+export WEB_NOVEL_LIB="${SKILL_DIR}/../webnovel-lib"
+export PYTHONPATH="${WEB_NOVEL_LIB}:${PYTHONPATH}"
+```
+
+
 ## 目标
 
 - 通过结构化交互收集足够信息，避免"先生成再返工"。
@@ -31,7 +41,7 @@ allowed-tools: Read Write Edit Grep Bash Agent AskUserQuestion WebSearch WebFetc
 |------|---------|-----------|---------|
 | Step 1 | always | 数据流规范 | `${SKILL_ROOT}/references/system-data-flow.md` |
 | Step 1 | always | 题材套路库 | `${SKILL_ROOT}/references/genre-tropes.md` |
-| 卖点/题材采集 | always | 题材配置 | `${SKILL_ROOT}/../../references/genre-profiles.md` |
+| 卖点/题材采集 | always | 题材配置 | `${WEB_NOVEL_LIB}/references/genre-profiles.md` |
 
 ### md 按需
 
@@ -75,17 +85,17 @@ allowed-tools: Read Write Edit Grep Bash Agent AskUserQuestion WebSearch WebFetc
 ```bash
 export WORKSPACE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 
-if [ -z "${CLAUDE_PLUGIN_ROOT}" ] || [ ! -d "${CLAUDE_PLUGIN_ROOT}/scripts" ]; then
-  echo "ERROR: 未设置 CLAUDE_PLUGIN_ROOT 或缺少目录: ${CLAUDE_PLUGIN_ROOT}/scripts" >&2
+if [ -z "${WEB_NOVEL_LIB}" ] || [ ! -d "${WEB_NOVEL_LIB}/scripts" ]; then
+  echo "ERROR: 未设置 CLAUDE_PLUGIN_ROOT 或缺少目录: ${WEB_NOVEL_LIB}/scripts" >&2
   exit 1
 fi
-export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"
+export SCRIPTS_DIR="${WEB_NOVEL_LIB}/scripts"
 ```
 
 必须做：
 - 确认当前目录可写。
 - 解析脚本目录并确认入口存在（仅支持插件目录）：
-  - 固定路径：`${CLAUDE_PLUGIN_ROOT}/scripts`
+  - 固定路径：`${WEB_NOVEL_LIB}/scripts`
   - 入口脚本：`${SCRIPTS_DIR}/webnovel.py`
 - 初始化前不要用 `where` 把 `WORKSPACE_ROOT` 解析成书项目根；新项目尚不存在时，`where` 可能命中旧指针或旧项目。
 - 只打印工作区与脚本目录，确认生成目标将在工作区下的书名安全化子目录中。
@@ -307,7 +317,7 @@ Agent(
 - `project_root` 必须由书名安全化生成（去非法字符，空格转 `-`）。
 - 构造公式：`project_root = <当前工作目录>/<书名安全化结果>`，即 `PROJECT_ROOT="${WORKSPACE_ROOT}/${PROJECT_SLUG}"`。
 - 若安全化结果为空或以 `.` 开头，自动前缀 `proj-`。
-- 禁止在插件目录下生成项目文件（`${CLAUDE_PLUGIN_ROOT}`）。
+- 禁止在插件目录下生成项目文件（`${WEB_NOVEL_LIB}`）。
 - 禁止直接把 `WORKSPACE_ROOT` 当作 `PROJECT_ROOT`，除非用户明确指定当前目录本身就是书项目根。
 - 初始化前必须展示并确认：
   - `WORKSPACE_ROOT`

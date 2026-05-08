@@ -6,6 +6,16 @@ allowed-tools: Read Write Edit Grep Bash Agent
 
 # 写章流程
 
+
+## 环境准备
+
+```bash
+export SKILL_DIR=$(dirname "$0")
+export WEB_NOVEL_LIB="${SKILL_DIR}/../webnovel-lib"
+export PYTHONPATH="${WEB_NOVEL_LIB}:${PYTHONPATH}"
+```
+
+
 ## 目标
 
 产出可发布章节到 `正文/第{NNNN}章-{title}.md`。默认 2000-2500 字，用户/大纲另有要求时从之。

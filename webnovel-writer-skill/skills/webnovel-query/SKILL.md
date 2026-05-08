@@ -6,6 +6,16 @@ allowed-tools: Read Grep Bash AskUserQuestion
 
 # Information Query Skill
 
+
+## 环境准备
+
+```bash
+export SKILL_DIR=$(dirname "$0")
+export WEB_NOVEL_LIB="${SKILL_DIR}/../webnovel-lib"
+export PYTHONPATH="${WEB_NOVEL_LIB}:${PYTHONPATH}"
+```
+
+
 ## Use when
 
 用户询问关于故事设定、角色、力量体系、势力、伏笔、金手指、节奏等项目内信息时触发。
@@ -14,13 +24,13 @@ allowed-tools: Read Grep Bash AskUserQuestion
 
 ```bash
 export WORKSPACE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
-export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"
-export SKILL_ROOT="${CLAUDE_PLUGIN_ROOT}/skills/webnovel-query"
+export SCRIPTS_DIR="${WEB_NOVEL_LIB}/scripts"
+export SKILL_ROOT="${WEB_NOVEL_LIB}/skills/webnovel-query"
 export PROJECT_ROOT="$(python "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
 ```
 
 - `PROJECT_ROOT` 必须包含 `.webnovel/state.json`
-- **禁止**在 `${CLAUDE_PLUGIN_ROOT}/` 下读取或写入项目文件
+- **禁止**在 `${WEB_NOVEL_LIB}/` 下读取或写入项目文件
 
 ## 查询类型识别
 
@@ -43,7 +53,7 @@ export PROJECT_ROOT="$(python "${SCRIPTS_DIR}/webnovel.py" --project-root "${WOR
 |---------|-----------|---------|
 | 所有查询 | 数据流规范 | `${SKILL_ROOT}/references/system-data-flow.md` |
 | 伏笔分析 | 伏笔分析 | `${SKILL_ROOT}/references/advanced/foreshadowing.md` |
-| 节奏分析 | Strand 模式 | `${SKILL_ROOT}/../../references/shared/strand-weave-pattern.md` |
+| 节奏分析 | Strand 模式 | `${WEB_NOVEL_LIB}/references/shared/strand-weave-pattern.md` |
 | 格式查询 | 标签规范 | `${SKILL_ROOT}/references/tag-specification.md` |
 
 不得同时加载两个以上 L2 文件，除非用户请求明确跨多类型。

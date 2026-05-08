@@ -6,6 +6,16 @@ allowed-tools: Read Bash
 
 # /webnovel-learn
 
+
+## 环境准备
+
+```bash
+export SKILL_DIR=$(dirname "$0")
+export WEB_NOVEL_LIB="${SKILL_DIR}/../webnovel-lib"
+export PYTHONPATH="${WEB_NOVEL_LIB}:${PYTHONPATH}"
+```
+
+
 ## Project Root Guard（必须先确认）
 
 - 必须在项目根目录执行（需存在 `.webnovel/state.json`）

@@ -6,6 +6,16 @@ allowed-tools: Bash Read
 
 # Webnovel Dashboard
 
+
+## 环境准备
+
+```bash
+export SKILL_DIR=$(dirname "$0")
+export WEB_NOVEL_LIB="${SKILL_DIR}/../webnovel-lib"
+export PYTHONPATH="${WEB_NOVEL_LIB}:${PYTHONPATH}"
+```
+
+
 ## 目标
 
 - 在本地启动只读 Web 面板。
@@ -20,19 +30,19 @@ allowed-tools: Bash Read
 ```bash
 export WORKSPACE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 
-if [ -z "${CLAUDE_PLUGIN_ROOT}" ] || [ ! -d "${CLAUDE_PLUGIN_ROOT}/dashboard" ]; then
-  echo "ERROR: 未找到 dashboard 模块: ${CLAUDE_PLUGIN_ROOT}/dashboard" >&2
+if [ -z "${WEB_NOVEL_LIB}" ] || [ ! -d "${WEB_NOVEL_LIB}/dashboard" ]; then
+  echo "ERROR: 未找到 dashboard 模块: ${WEB_NOVEL_LIB}/dashboard" >&2
   exit 1
 fi
 
-export DASHBOARD_DIR="${CLAUDE_PLUGIN_ROOT}/dashboard"
+export DASHBOARD_DIR="${WEB_NOVEL_LIB}/dashboard"
 ```
 
 ### Step 2：安装依赖并解析项目根目录
 
 ```bash
 python -m pip install -r "${DASHBOARD_DIR}/requirements.txt" --quiet
-export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"
+export SCRIPTS_DIR="${WEB_NOVEL_LIB}/scripts"
 export PROJECT_ROOT="$(python "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
 echo "项目路径: ${PROJECT_ROOT}"
 ```
@@ -45,9 +55,9 @@ echo "项目路径: ${PROJECT_ROOT}"
 
 ```bash
 if [ -n "${PYTHONPATH:-}" ]; then
-  export PYTHONPATH="${CLAUDE_PLUGIN_ROOT}:${PYTHONPATH}"
+  export PYTHONPATH="${WEB_NOVEL_LIB}:${PYTHONPATH}"
 else
-  export PYTHONPATH="${CLAUDE_PLUGIN_ROOT}"
+  export PYTHONPATH="${WEB_NOVEL_LIB}"
 fi
 
 if [ ! -f "${DASHBOARD_DIR}/frontend/dist/index.html" ]; then
