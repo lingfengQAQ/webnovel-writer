@@ -1,0 +1,56 @@
+{
+  "skill_name": "reviewer",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "审查第4章正文。chapter=4, chapter_file='正文/第0004章-迦南学院的考验.md', project_root='agents/evals/files/test-project', scripts_dir 为本插件的 scripts 目录。",
+      "expected_output": "输出结构化 JSON 问题清单，包含多个 ai_flavor 类型的 issue，识别出密集的 AI 写作痕迹",
+      "files": [
+        "agents/evals/files/test-project/正文/第0004章-迦南学院的考验.md",
+        "agents/evals/files/test-project/.webnovel/state.json",
+        "agents/evals/files/test-project/.webnovel/summaries/ch0003.md",
+        "agents/evals/files/test-project/.webnovel/memory_scratchpad.json"
+      ],
+      "expectations": [
+        "输出是合法 JSON，包含 issues 数组和 summary 字符串",
+        "至少有 1 个 ai_flavor 类型的 issue 识别了'缓缓'或'淡淡'等万能副词",
+        "至少有 1 个 ai_flavor 类型的 issue 识别了'首先/其次/最后'三段式",
+        "至少有 1 个 ai_flavor 类型的 issue 识别了'眸中闪过'或'瞳孔微缩'等神态模板",
+        "至少有 1 个 ai_flavor 类型的 issue 识别了情绪标签化（'他非常紧张'或'他感到欣慰'）",
+        "至少有 1 个 ai_flavor 类型的 issue 识别了章末总结句（'总而言之'）",
+        "每个 issue 都有 severity、category、location、description 字段",
+        "每个 issue 都有 evidence 字段且非空",
+        "没有输出 overall_score（reviewer 不评分）",
+        "没有输出 pass/fail 判定（reviewer 只列问题）"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "审查第4章正文，检查设定一致性。chapter=4, chapter_file='正文/第0004章-迦南学院的考验.md', project_root='agents/evals/files/test-project', scripts_dir 为本插件的 scripts 目录。",
+      "expected_output": "识别出正文中萧炎使用了'吸力控制'（药老指导），这与设定一致；但不应报告虚假的设定冲突",
+      "files": [
+        "agents/evals/files/test-project/正文/第0004章-迦南学院的考验.md",
+        "agents/evals/files/test-project/.webnovel/state.json",
+        "agents/evals/files/test-project/设定集/世界观.md"
+      ],
+      "expectations": [
+        "输出是合法 JSON",
+        "不会把萧炎的斗者九星报告为设定冲突（与 state.json 一致）",
+        "不会虚构 state.json 中不存在的信息来报告问题"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "审查第4章正文，检查连贯性。chapter=4, chapter_file='正文/第0004章-迦南学院的考验.md', project_root='agents/evals/files/test-project', scripts_dir 为本插件的 scripts 目录。上一章摘要在 .webnovel/summaries/ch0003.md。",
+      "expected_output": "检查与上章的衔接，上章结尾在迦南学院演武场、黄昏，本章开头在'晨光'，时间有跳跃需要标注",
+      "files": [
+        "agents/evals/files/test-project/正文/第0004章-迦南学院的考验.md",
+        "agents/evals/files/test-project/.webnovel/summaries/ch0003.md"
+      ],
+      "expectations": [
+        "输出是合法 JSON",
+        "至少有 1 个 continuity 或 timeline 类型的 issue 提到时间跳跃（上章黄昏，本章晨光）"
+      ]
+    }
+  ]
+}
