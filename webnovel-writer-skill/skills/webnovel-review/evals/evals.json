@@ -1,0 +1,22 @@
+{
+  "skill_name": "webnovel-review",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "使用 /webnovel-review 审查第4章（agents/evals/files/test-project/正文/第0004章-迦南学院的考验.md）。项目在 agents/evals/files/test-project/。",
+      "expected_output": "生成审查报告，包含 AI 味问题和时间线问题，并将审查指标写入 index.db",
+      "files": [
+        "agents/evals/files/test-project/正文/第0004章-迦南学院的考验.md",
+        "agents/evals/files/test-project/.webnovel/state.json",
+        "agents/evals/files/test-project/.webnovel/summaries/ch0003.md"
+      ],
+      "expectations": [
+        "审查报告被生成",
+        "报告中识别了至少 3 个 ai_flavor 问题",
+        "报告中识别了时间跳跃问题（上章黄昏→本章晨光）",
+        "审查指标被写入（review_metrics）",
+        "报告中的每个 issue 都有 evidence"
+      ]
+    }
+  ]
+}

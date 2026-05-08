@@ -1,0 +1,63 @@
+{
+  "skill_name": "webnovel-write",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "使用 /webnovel-write 写第4章。项目在 agents/evals/files/test-project/。",
+      "expected_output": "完成 Step 1 到 Step 6 的完整流程，由 context-agent 先生成写作任务书，再起草第4章正文，最终生成审查结果、摘要文件和状态更新",
+      "files": [
+        "agents/evals/files/test-project/.webnovel/state.json",
+        "agents/evals/files/test-project/大纲/总纲.md",
+        "agents/evals/files/test-project/大纲/第1卷-详细大纲.md",
+        "agents/evals/files/test-project/大纲/第1卷-时间线.md",
+        "agents/evals/files/test-project/.webnovel/summaries/ch0003.md",
+        "agents/evals/files/test-project/.webnovel/memory_scratchpad.json",
+        "agents/evals/files/test-project/设定集/世界观.md"
+      ],
+      "expectations": [
+        "正文文件 正文/第0004章*.md 被创建且非空",
+        "正文中包含萧炎参加迦南学院测试的内容（符合章纲）",
+        "正文中回应了上章钩子（纳兰嫣然信使）",
+        "正文中没有出现 [TODO] 或 [待补充] 占位符",
+        "正文字数在 1500-3000 之间",
+        "Step 3 调用了 reviewer agent 进行审查",
+        "Step 1 由 context-agent 生成了写作任务书",
+        "Step 2 只根据写作任务书起草正文",
+        "Step 5 调用了 data-agent 回写数据",
+        "章末保留了未闭合问题或悬念（不是安全着陆）"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "使用 /webnovel-write --fast 写第4章。项目在 agents/evals/files/test-project/。",
+      "expected_output": "fast 模式跳过部分审查维度但仍完成核心流程",
+      "files": [
+        "agents/evals/files/test-project/.webnovel/state.json",
+        "agents/evals/files/test-project/大纲/第1卷-详细大纲.md"
+      ],
+      "expectations": [
+        "正文文件被创建且非空",
+        "流程中包含 Step 3（审查），但为轻量模式",
+        "仍完成 Step 5 数据回写",
+        "正文中没有出现 [TODO] 或 [待补充]"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "使用 /webnovel-write 写第4章。项目在 agents/evals/files/test-project/。特别注意 anti-AI：正文不应有密集的'缓缓''淡淡'副词、不应有'首先其次最后'三段式、不应有情绪标签化描写。",
+      "expected_output": "生成的正文 AI 味低，通过 anti-AI 检查",
+      "files": [
+        "agents/evals/files/test-project/.webnovel/state.json",
+        "agents/evals/files/test-project/大纲/第1卷-详细大纲.md"
+      ],
+      "expectations": [
+        "正文中'缓缓'出现次数不超过 2 次",
+        "正文中'淡淡'出现次数不超过 1 次",
+        "正文中不存在'首先……其次……最后'三段式",
+        "正文中不存在'他感到X'形式的情绪标签（应改为行为暗示）",
+        "正文中不存在'总而言之''由此可见'等总结词",
+        "Step 4 输出 anti_ai_force_check=pass"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+[run]
+# 说明：
+# - 该配置用于“在 .claude/scripts 目录内运行 pytest”时，仍能得到与仓库根目录一致的覆盖率统计。
+# - 若在仓库根目录运行 pytest，则优先使用根目录下的 .coveragerc。
+source = data_modules
+omit =
+    */tests/*
+
+[report]
+show_missing = True
+
