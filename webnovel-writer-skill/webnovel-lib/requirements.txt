@@ -1,2 +1,0 @@
--r webnovel-writer/scripts/requirements.txt
--r webnovel-writer/dashboard/requirements.txt

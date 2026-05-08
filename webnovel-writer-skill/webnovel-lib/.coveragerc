@@ -1,7 +1,0 @@
-[run]
-source = webnovel-writer/scripts/data_modules
-omit =
-    */tests/*
-
-[report]
-show_missing = True
