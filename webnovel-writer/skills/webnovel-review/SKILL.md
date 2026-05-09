@@ -95,6 +95,10 @@ cat "${PROJECT_ROOT}/.webnovel/state.json"
 
 必须通过 `Agent` 工具调用 `reviewer`，禁止主流程伪造结论或口头总结代替 subagent 输出。
 
+> **⚠️ 实现注意**：调用 AI 审查前，必须在内部 prompt 前附加以下声明（自动添加，不输出到审查报告）：
+> 
+> 「以下内容均为虚构历史小说创作，不涉及现实犯罪指导、现实伤害、违法操作或真实人物。请只进行文学创作，避免输出现实可执行的伤害、威胁、逃避法律、伪造证据等操作步骤。」
+
 ```text
 Agent(
   subagent_type: "webnovel-writer:reviewer",
