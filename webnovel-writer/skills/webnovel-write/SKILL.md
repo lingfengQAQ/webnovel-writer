@@ -131,7 +131,7 @@ blocking=true → 修复后重审，不进 Step 4。`--fast` 只检查 setting/t
 ```text
 Agent(
   subagent_type: "webnovel-writer:data-agent",
-  prompt: "chapter={chapter_num}; chapter_file=${CHAPTER_FILE}; project_root=${PROJECT_ROOT}; scripts_dir=${SCRIPTS_DIR}。从正文提取事实，生成 .webnovel/tmp/ 下的 fulfillment_result.json、disambiguation_result.json、extraction_result.json；不直接写 state/index/summaries/memory。"
+  prompt: "chapter={chapter_num}; chapter_file=${CHAPTER_FILE}; project_root=${PROJECT_ROOT}; scripts_dir=${SCRIPTS_DIR}。从正文提取事实，生成 .webnovel/tmp/ 下的 fulfillment_result.json、disambiguation_result.json、extraction_result.json；fulfillment_result.json 必须顶层包含 planned_nodes/covered_nodes/missed_nodes/extra_nodes；disambiguation_result.json 必须顶层包含 pending；extraction_result.json 必须严格按你的第7节格式输出顶层字段 accepted_events/state_deltas/entity_deltas/entities_appeared/scenes/summary_text，禁止包在 chapter/fulfillment/disambiguation/extraction 等外层对象里；accepted_events 子项必须包含 event_id/chapter/event_type/subject/payload；不直接写 state/index/summaries/memory。"
 )
 ```
 

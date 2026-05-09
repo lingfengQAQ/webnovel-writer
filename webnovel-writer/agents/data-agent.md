@@ -36,8 +36,8 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" chap
 **C 生成 artifacts**：
 
 产出三份 JSON 到 `.webnovel/tmp/`：
-- `fulfillment_result.json`：大纲履约（覆盖/遗漏节点）
-- `disambiguation_result.json`：消歧状态
+- `fulfillment_result.json`：顶层必须包含 `planned_nodes`、`covered_nodes`、`missed_nodes`、`extra_nodes` 四个数组
+- `disambiguation_result.json`：顶层必须包含 `pending` 数组
 - `extraction_result.json`：必须包含 `accepted_events`、`state_deltas`、`entity_deltas`、`entities_appeared`、`scenes`、`summary_text`；能判断主导情节线时写 `dominant_strand`
 
 **D 摘要**：100-150 字，含钩子类型。格式：
@@ -91,7 +91,7 @@ hook_strength: "strong"
   "entities_new": [{"suggested_id": "hongyi_girl", "name": "红衣女子", "type": "角色", "tier": "装饰"}],
   "state_deltas": [{"entity_id": "xiaoyan", "field": "realm", "old": "斗者", "new": "斗师"}],
   "entity_deltas": [{"entity_id": "hongyi_girl", "action": "upsert", "entity_type": "角色", "tier": "装饰", "payload": {"name": "红衣女子"}}],
-  "accepted_events": [{"event_type": "open_loop_created", "subject": "three_year_promise", "payload": {"content": "三年之约提及"}}],
+  "accepted_events": [{"event_id": "evt-ch100-001", "chapter": 100, "event_type": "open_loop_created", "subject": "three_year_promise", "payload": {"content": "三年之约提及"}}],
   "summary_text": "摘要",
   "scenes": [{"index": 1, "start_line": 1, "end_line": 30, "location": "萧炎房间", "summary": "药老提醒三年之约", "characters": ["xiaoyan", "yaolao"]}],
   "scenes_chunked": 4,
@@ -105,7 +105,7 @@ hook_strength: "strong"
 
 - **state_deltas 子项**：必须用 `field`（不是 `field_path`），`new`（不是 `new_value`），`old`（不是 `old_value`）。简单字段名直接写（如 `realm`），嵌套路径用点号（如 `power.realm`、`location.current`）。投影器会自动展开嵌套字典。
 - **entity_deltas 子项**：必须用 `entity_type`（不是 `type`），值为 `角色|组织|地点|物品|势力` 等，不是默认填 `"角色"`。`is_protagonist: true` 用于标记主角，主角字段会同步到 `state.protagonist_state`。
-- **accepted_events 通用**：`event_type` 用枚举值（`character_state_changed|power_breakthrough|relationship_changed|world_rule_revealed|world_rule_broken|open_loop_created|open_loop_closed|promise_created|promise_paid_off|artifact_obtained`）。`subject` 是事件主体的 entity_id（不是中文名）。
+- **accepted_events 通用**：每条必须包含 `event_id`、`chapter`、`event_type`、`subject`、`payload`。`event_id` 用章节内稳定 ID（如 `evt-ch100-001`）；`chapter` 写当前章号；`event_type` 用枚举值（`character_state_changed|power_breakthrough|relationship_changed|world_rule_revealed|world_rule_broken|open_loop_created|open_loop_closed|promise_created|promise_paid_off|artifact_obtained`）；`subject` 是事件主体的 entity_id（不是中文名）。
 - **character_state_changed.payload**：用 `field`（或 `field_path`）+ `new`（或 `new_state`/`new_value`）+ `old`（或 `previous_state`/`old_value`）。建议直接用 `field` + `new` + `old` 与 state_deltas 保持一致。
 - **open_loop_created.payload**：必须有 `content`（悬念正文），可选 `loop_type`（悬念类型）、`unanswered_question`（核心疑问）、`urgency`、`planted_chapter`、`expected_payoff`/`loop_deadline`。投影器会从 content > unanswered_question > description 取值，不要省略 content。
 - **world_rule_revealed.payload**：必须有 `rule_content`（或 `rule`、`description`），可选 `rule_category` / `domain`、`scope`。

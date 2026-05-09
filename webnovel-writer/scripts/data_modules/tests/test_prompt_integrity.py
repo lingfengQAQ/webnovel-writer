@@ -338,7 +338,25 @@ def test_data_agent_is_described_as_extraction_only_not_direct_write_mainline():
     text = (AGENTS_DIR / "data-agent.md").read_text(encoding="utf-8")
     assert "chapter-commit" in text
     assert "extraction_result.json" in text
+    assert "planned_nodes" in text
+    assert "missed_nodes" in text
+    assert "pending" in text
+    assert "event_id" in text
+    assert "event_type" in text
+    assert "subject" in text
     assert "直接写入 index.db 和 state.json" not in text
+
+
+def test_webnovel_write_data_agent_prompt_requires_extraction_schema():
+    text = (SKILLS_DIR / "webnovel-write" / "SKILL.md").read_text(encoding="utf-8")
+    assert "webnovel-writer:data-agent" in text
+    assert "fulfillment_result.json 必须顶层" in text
+    assert "planned_nodes/covered_nodes/missed_nodes/extra_nodes" in text
+    assert "disambiguation_result.json 必须顶层包含 pending" in text
+    assert "extraction_result.json 必须严格" in text
+    assert "accepted_events/state_deltas/entity_deltas" in text
+    assert "禁止包在 chapter/fulfillment/disambiguation/extraction" in text
+    assert "event_id/chapter/event_type/subject/payload" in text
 
 
 def test_dashboard_and_plan_skills_surface_story_runtime_mainline():

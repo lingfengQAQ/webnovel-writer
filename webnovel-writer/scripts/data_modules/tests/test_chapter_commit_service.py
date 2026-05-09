@@ -4,6 +4,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 from data_modules.chapter_commit_service import ChapterCommitService
 from data_modules.config import DataModulesConfig
 from data_modules.index_manager import IndexManager
@@ -14,7 +16,12 @@ def test_commit_service_rejects_when_missed_nodes_exist(tmp_path):
     payload = service.build_commit(
         chapter=3,
         review_result={"blocking_count": 0},
-        fulfillment_result={"planned_nodes": ["发现陷阱"], "missed_nodes": ["发现陷阱"]},
+        fulfillment_result={
+            "planned_nodes": ["发现陷阱"],
+            "covered_nodes": [],
+            "missed_nodes": ["发现陷阱"],
+            "extra_nodes": [],
+        },
         disambiguation_result={"pending": []},
         extraction_result={"state_deltas": [], "entity_deltas": [], "accepted_events": []},
     )
@@ -50,6 +57,236 @@ def test_commit_service_includes_volume_ref_and_write_fact_provenance(tmp_path):
     assert payload["contract_refs"]["volume"] == "volume_001.json"
     assert payload["provenance"]["write_fact_role"] == "chapter_commit"
     assert payload["provenance"]["projection_role"] == "derived_read_models"
+
+
+def test_commit_service_rejects_malformed_gate_artifacts(tmp_path):
+    service = ChapterCommitService(tmp_path)
+    valid_fulfillment = {
+        "planned_nodes": [],
+        "covered_nodes": [],
+        "missed_nodes": [],
+        "extra_nodes": [],
+    }
+    valid_disambiguation = {"pending": []}
+    valid_extraction = {"state_deltas": [], "entity_deltas": [], "accepted_events": []}
+
+    with pytest.raises(ValueError, match="blocking_count"):
+        service.build_commit(
+            chapter=3,
+            review_result={},
+            fulfillment_result=valid_fulfillment,
+            disambiguation_result=valid_disambiguation,
+            extraction_result=valid_extraction,
+        )
+
+    with pytest.raises(ValueError, match="fulfillment_result"):
+        service.build_commit(
+            chapter=3,
+            review_result={"blocking_count": 0},
+            fulfillment_result={"fulfillment": {"missed_nodes": ["遗漏节点"]}},
+            disambiguation_result=valid_disambiguation,
+            extraction_result=valid_extraction,
+        )
+
+    with pytest.raises(ValueError, match="disambiguation_result"):
+        service.build_commit(
+            chapter=3,
+            review_result={"blocking_count": 0},
+            fulfillment_result=valid_fulfillment,
+            disambiguation_result={"disambiguation": {"pending": ["宗主"]}},
+            extraction_result=valid_extraction,
+        )
+
+
+def test_commit_service_rejects_nested_extraction_result_shape(tmp_path):
+    service = ChapterCommitService(tmp_path)
+
+    with pytest.raises(ValueError, match="top-level"):
+        service.build_commit(
+            chapter=76,
+            review_result={"blocking_count": 0},
+            fulfillment_result={
+                "planned_nodes": [],
+                "covered_nodes": [],
+                "missed_nodes": [],
+                "extra_nodes": [],
+            },
+            disambiguation_result={"pending": []},
+            extraction_result={
+                "chapter": 76,
+                "extraction": {
+                    "scenes": [{"summary": "场景切分"}],
+                    "unresolved_threads": ["未解线索"],
+                },
+            },
+        )
+
+
+def test_commit_service_rejects_extraction_wrapper_even_with_empty_core_fields(tmp_path):
+    service = ChapterCommitService(tmp_path)
+
+    with pytest.raises(ValueError, match="nested under extraction"):
+        service.build_commit(
+            chapter=76,
+            review_result={"blocking_count": 0},
+            fulfillment_result={
+                "planned_nodes": [],
+                "covered_nodes": [],
+                "missed_nodes": [],
+                "extra_nodes": [],
+            },
+            disambiguation_result={"pending": []},
+            extraction_result={
+                "accepted_events": [],
+                "state_deltas": [],
+                "entity_deltas": [],
+                "extraction": {
+                    "scenes": [{"summary": "真实场景却被包错层"}],
+                    "summary_text": "真实摘要却被包错层",
+                },
+            },
+        )
+
+
+def test_commit_service_rejects_extraction_result_missing_core_fields(tmp_path):
+    service = ChapterCommitService(tmp_path)
+
+    with pytest.raises(ValueError, match="accepted_events"):
+        service.build_commit(
+            chapter=3,
+            review_result={"blocking_count": 0},
+            fulfillment_result={
+                "planned_nodes": [],
+                "covered_nodes": [],
+                "missed_nodes": [],
+                "extra_nodes": [],
+            },
+            disambiguation_result={"pending": []},
+            extraction_result={"summary_text": "摘要"},
+        )
+
+
+def test_commit_service_rejects_non_object_extraction_items(tmp_path):
+    service = ChapterCommitService(tmp_path)
+
+    with pytest.raises(ValueError, match=r"state_deltas\[0\]"):
+        service.build_commit(
+            chapter=3,
+            review_result={"blocking_count": 0},
+            fulfillment_result={
+                "planned_nodes": [],
+                "covered_nodes": [],
+                "missed_nodes": [],
+                "extra_nodes": [],
+            },
+            disambiguation_result={"pending": []},
+            extraction_result={
+                "accepted_events": [],
+                "state_deltas": ["realm changed"],
+                "entity_deltas": [],
+            },
+        )
+
+
+def test_commit_service_rejects_non_object_accepted_event_items(tmp_path):
+    service = ChapterCommitService(tmp_path)
+
+    with pytest.raises(ValueError, match=r"accepted_events\[0\]"):
+        service.build_commit(
+            chapter=3,
+            review_result={"blocking_count": 0},
+            fulfillment_result={
+                "planned_nodes": [],
+                "covered_nodes": [],
+                "missed_nodes": [],
+                "extra_nodes": [],
+            },
+            disambiguation_result={"pending": []},
+            extraction_result={
+                "accepted_events": ["not-a-json-object"],
+                "state_deltas": [],
+                "entity_deltas": [],
+            },
+        )
+
+
+def test_commit_service_normalizes_accepted_events_before_projection(tmp_path):
+    service = ChapterCommitService(tmp_path)
+
+    payload = service.build_commit(
+        chapter=76,
+        review_result={"blocking_count": 0},
+        fulfillment_result={
+            "planned_nodes": [],
+            "covered_nodes": [],
+            "missed_nodes": [],
+            "extra_nodes": [],
+        },
+        disambiguation_result={"pending": []},
+        extraction_result={
+            "state_deltas": [],
+            "entity_deltas": [],
+            "accepted_events": [
+                {
+                    "type": "mystery_introduction",
+                    "characters": ["xiaoyan"],
+                    "payload": {"content": "萧炎发现石门背后的新疑点"},
+                }
+            ],
+        },
+    )
+
+    event = payload["accepted_events"][0]
+    assert event["event_id"].startswith("evt-ch076-001-")
+    assert event["chapter"] == 76
+    assert event["event_type"] == "open_loop_created"
+    assert event["subject"] == "xiaoyan"
+
+
+def test_apply_projections_normalizes_events_before_router_inspection(
+    tmp_path, monkeypatch
+):
+    captured = {}
+
+    class SpyRouter:
+        def required_writers(self, payload):
+            captured["events"] = list(payload.get("accepted_events") or [])
+            return []
+
+    monkeypatch.setattr(
+        "data_modules.chapter_commit_service.EventProjectionRouter",
+        lambda: SpyRouter(),
+    )
+
+    service = ChapterCommitService(tmp_path)
+    payload = {
+        "meta": {"status": "accepted", "chapter": 76},
+        "accepted_events": [
+            {
+                "type": "scene_open",
+                "characters": ["xiaoyan"],
+                "payload": {"content": "萧炎推开石门，新的悬念出现"},
+            }
+        ],
+        "entity_deltas": [],
+        "summary_text": "",
+        "projection_status": {
+            "state": "pending",
+            "index": "pending",
+            "summary": "pending",
+            "memory": "pending",
+            "vector": "pending",
+        },
+    }
+
+    service.apply_projections(payload)
+
+    event = captured["events"][0]
+    assert event["event_id"].startswith("evt-ch076-001-")
+    assert event["chapter"] == 76
+    assert event["event_type"] == "open_loop_created"
+    assert event["subject"] == "xiaoyan"
+    assert payload["accepted_events"] == captured["events"]
 
 
 def test_chapter_commit_cli_builds_and_persists_commit(tmp_path, monkeypatch):

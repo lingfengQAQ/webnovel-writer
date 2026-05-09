@@ -7,6 +7,12 @@ from typing import Any, Dict
 
 from chapter_outline_loader import volume_num_for_chapter_from_state
 
+from .chapter_commit_schema import (
+    DisambiguationResult,
+    ExtractionResult,
+    FulfillmentResult,
+    ReviewResult,
+)
 from .config import DataModulesConfig
 from .event_log_store import EventLogStore
 from .event_projection_router import EventProjectionRouter
@@ -31,11 +37,18 @@ class ChapterCommitService:
         disambiguation_result: Dict[str, Any],
         extraction_result: Dict[str, Any],
     ) -> Dict[str, Any]:
-        rejected = bool(review_result.get("blocking_count")) or bool(
-            fulfillment_result.get("missed_nodes")
-        ) or bool(disambiguation_result.get("pending"))
+        review = ReviewResult.model_validate(review_result)
+        fulfillment = FulfillmentResult.model_validate(fulfillment_result)
+        disambiguation = DisambiguationResult.model_validate(disambiguation_result)
+        extraction = ExtractionResult.model_validate(extraction_result)
+        rejected = bool(review.blocking_count) or bool(
+            fulfillment.missed_nodes
+        ) or bool(disambiguation.pending)
         status = "rejected" if rejected else "accepted"
         volume = volume_num_for_chapter_from_state(self.project_root, chapter) or 1
+        accepted_events = EventLogStore(self.project_root).normalize_events(
+            chapter, extraction.accepted_events
+        )
         return {
             "meta": {
                 "schema_version": "story-system/v1",
@@ -54,22 +67,22 @@ class ChapterCommitService:
                 "legacy_state_role": "projection_only",
             },
             "outline_snapshot": {
-                "planned_nodes": fulfillment_result.get("planned_nodes", []),
-                "covered_nodes": fulfillment_result.get("covered_nodes", []),
-                "missed_nodes": fulfillment_result.get("missed_nodes", []),
-                "extra_nodes": fulfillment_result.get("extra_nodes", []),
+                "planned_nodes": fulfillment.planned_nodes,
+                "covered_nodes": fulfillment.covered_nodes,
+                "missed_nodes": fulfillment.missed_nodes,
+                "extra_nodes": fulfillment.extra_nodes,
             },
-            "review_result": review_result,
-            "fulfillment_result": fulfillment_result,
-            "disambiguation_result": disambiguation_result,
-            "accepted_events": extraction_result.get("accepted_events", []),
-            "state_deltas": extraction_result.get("state_deltas", []),
-            "entity_deltas": extraction_result.get("entity_deltas", []),
-            "entities_appeared": extraction_result.get("entities_appeared", []),
-            "scenes": extraction_result.get("scenes", []),
-            "chapter_meta": extraction_result.get("chapter_meta", {}),
-            "dominant_strand": extraction_result.get("dominant_strand", ""),
-            "summary_text": extraction_result.get("summary_text", ""),
+            "review_result": review.model_dump(),
+            "fulfillment_result": fulfillment.model_dump(),
+            "disambiguation_result": disambiguation.model_dump(),
+            "accepted_events": accepted_events,
+            "state_deltas": extraction.state_deltas,
+            "entity_deltas": extraction.entity_deltas,
+            "entities_appeared": extraction.entities_appeared,
+            "scenes": extraction.scenes,
+            "chapter_meta": extraction.chapter_meta,
+            "dominant_strand": extraction.dominant_strand,
+            "summary_text": extraction.summary_text,
             "projection_status": {
                 "state": "pending",
                 "index": "pending",
@@ -91,7 +104,11 @@ class ChapterCommitService:
             return payload
 
         chapter = int((payload.get("meta") or {}).get("chapter") or 0)
-        EventLogStore(self.project_root).write_events(chapter, payload.get("accepted_events", []))
+        event_store = EventLogStore(self.project_root)
+        payload["accepted_events"] = event_store.normalize_events(
+            chapter, payload.get("accepted_events", [])
+        )
+        event_store.write_events(chapter, payload["accepted_events"])
 
         proposals = AmendProposalTrigger().check(chapter, payload.get("accepted_events", []))
         if proposals:
