@@ -673,3 +673,53 @@ def test_story_system_reference_matching_combines_priority_and_chapter_keywords(
     assert [row["编号"] for row in selected[:2]] == ["FIN-001", "TR-001"]
     trace_by_id = {row["id"]: row for row in contract["chapter_brief"]["source_trace"]}
     assert trace_by_id["FIN-001"]["combined_rank_score"] > trace_by_id["TR-001"]["combined_rank_score"]
+
+
+def test_story_system_composite_platform_genre_filters_dynamic_context():
+    csv_dir = _make_local_tmp_path() / "csv"
+    csv_dir.mkdir()
+    _write_csv(
+        csv_dir / "题材与调性推理.csv",
+        [
+            "编号", "适用技能", "分类", "层级", "关键词", "意图与同义词", "适用题材",
+            "大模型指令", "核心摘要", "详细展开", "题材/流派", "canonical_genre", "题材别名", "核心调性",
+            "节奏策略", "毒点", "推荐基础检索表", "推荐动态检索表", "默认查询词",
+        ],
+        [
+            {
+                "编号": "GR-CITY", "适用技能": "story-system", "分类": "题材路由", "层级": "知识补充",
+                "关键词": "", "意图与同义词": "", "适用题材": "都市", "大模型指令": "",
+                "核心摘要": "", "详细展开": "", "题材/流派": "都市脑洞", "canonical_genre": "都市",
+                "题材别名": "", "核心调性": "", "节奏策略": "", "毒点": "",
+                "推荐基础检索表": "", "推荐动态检索表": "场景写法", "默认查询词": "",
+            }
+        ],
+    )
+    _write_csv(
+        csv_dir / "场景写法.csv",
+        ["编号", "适用技能", "分类", "层级", "关键词", "适用题材", "适用场景", "核心摘要", "毒点"],
+        [
+            {
+                "编号": "FOOD-001", "适用技能": "write", "分类": "场景", "层级": "知识补充",
+                "关键词": "美食|店铺", "适用题材": "都市", "适用场景": "深夜食堂",
+                "核心摘要": "都市美食场景要写烟火气。", "毒点": "",
+            },
+            {
+                "编号": "ELIXIR-001", "适用技能": "write", "分类": "场景", "层级": "知识补充",
+                "关键词": "美食|丹药", "适用题材": "仙侠", "适用场景": "炼丹",
+                "核心摘要": "仙侠炼丹场景强调灵材。", "毒点": "",
+            },
+        ],
+    )
+
+    contract = StorySystemEngine(csv_dir).build(
+        query="美食 店铺",
+        genre="都市脑洞,美食,甜宠",
+        chapter=1,
+    )
+
+    route = contract["master_setting"]["route"]
+    assert route["canonical_genre"] == "都市"
+    assert route["route_source"] == "explicit_genre_fallback"
+    selected_ids = [row["编号"] for row in contract["chapter_brief"]["dynamic_context"]]
+    assert selected_ids == ["FOOD-001"]

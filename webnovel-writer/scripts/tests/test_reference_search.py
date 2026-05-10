@@ -187,6 +187,16 @@ class TestSkillAndGenreFiltering:
         ids = [r["编号"] for r in out["data"]["results"]]
         assert "TS-001" in ids
 
+        out = run_search(
+            "--csv-dir", str(temp_dir),
+            "--skill", "write",
+            "--table", "兼容测试",
+            "--query", "旧格式查询",
+            "--genre", "东方仙侠,都市脑洞",
+        )
+        ids = [r["编号"] for r in out["data"]["results"]]
+        assert "TS-001" in ids
+
 
 class TestErrorHandling:
     """Test error cases."""

@@ -17,10 +17,9 @@ from typing import Any, Dict, List, Optional
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from reference_search import CSV_CONFIG, GENRE_CANONICAL
+from reference_search import CSV_CONFIG, GENRE_CANONICAL, split_multi_value
 
 
-_MULTI_SPLIT_RE = re.compile(r"[|,，]+")
 _CHINESE_COMMA_RE = re.compile(r"，")
 _MULTI_VALUE_COLUMNS = ("适用技能", "关键词", "意图与同义词", "适用题材")
 _ROUTE_TABLE = "题材与调性推理"
@@ -32,9 +31,7 @@ _VALID_LEVELS = {"提醒", "缺陷补偿", "知识补充"}
 
 
 def _split_multi_value(cell: str) -> List[str]:
-    if not cell:
-        return []
-    return [part.strip() for part in _MULTI_SPLIT_RE.split(cell) if part.strip()]
+    return split_multi_value(cell)
 
 
 def _default_csv_dir() -> Path:

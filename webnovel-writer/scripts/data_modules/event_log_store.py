@@ -9,8 +9,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Iterator, List
 
+from .chapter_commit_schema import normalize_accepted_events
 from .story_contracts import StoryContractPaths, read_json_if_exists, write_json
-from .story_event_schema import StoryEvent
 
 
 class EventLogStore:
@@ -31,8 +31,8 @@ class EventLogStore:
         finally:
             conn.close()
 
-    def write_events(self, chapter: int, events: List[dict]) -> Path:
-        normalized = self._normalize_events(chapter, events)
+    def write_events(self, chapter: int, events: Any) -> Path:
+        normalized = self.normalize_events(chapter, events)
         path = self.paths.event_json(chapter)
         write_json(path, normalized)
         self._write_sqlite_mirror(normalized)
@@ -103,15 +103,8 @@ class EventLogStore:
                     sqlite_rows = 0
         return {"ok": True, "sqlite_rows": sqlite_rows, "event_files": file_count}
 
-    def _normalize_events(self, chapter: int, events: List[dict]) -> List[Dict[str, Any]]:
-        normalized: List[Dict[str, Any]] = []
-        for event in events or []:
-            if not isinstance(event, dict):
-                continue
-            payload = dict(event)
-            payload["chapter"] = int(payload.get("chapter") or chapter)
-            normalized.append(StoryEvent.model_validate(payload).model_dump())
-        return normalized
+    def normalize_events(self, chapter: int, events: Any) -> List[Dict[str, Any]]:
+        return normalize_accepted_events(chapter, events)
 
     def _write_sqlite_mirror(self, events: List[Dict[str, Any]]) -> None:
         with self._connect() as conn:

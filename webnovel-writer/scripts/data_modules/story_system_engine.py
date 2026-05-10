@@ -7,7 +7,13 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from reference_search import CSV_CONFIG, GENRE_CANONICAL, resolve_genre, search as search_reference
+from reference_search import (
+    CSV_CONFIG,
+    GENRE_CANONICAL,
+    resolve_genre,
+    search as search_reference,
+    split_multi_value,
+)
 
 from .story_contracts import merge_anti_patterns
 
@@ -88,7 +94,7 @@ class StorySystemEngine:
         canonical_genre = str(route.get("meta", {}).get("canonical_genre", "") or "").strip()
         reasoning = self._load_reasoning(canonical_genre)
         if not reasoning and genre:
-            fallback_genre = resolve_genre(genre) or genre
+            fallback_genre = self._primary_resolved_genre(genre) or genre
             if fallback_genre != canonical_genre:
                 reasoning = self._load_reasoning(fallback_genre)
         ranked = self._apply_reasoning(reasoning, base_context, dynamic_context, chapter_directive)
@@ -184,11 +190,11 @@ class StorySystemEngine:
             raise self._routing_error(query=query, genre=genre, route_rows=route_rows)
 
         primary_genre = str(matched.get("题材/流派") or genre or "").strip()
-        explicit_canonical = resolve_genre(genre)
+        explicit_canonical = self._primary_resolved_genre(genre)
         canonical_genre = str(matched.get("canonical_genre") or "").strip()
         row_canonicals = [
             resolved
-            for raw in self._split_multi_value(matched.get("适用题材"))
+            for raw in self._split_genre_value(matched.get("适用题材"))
             for resolved in [resolve_genre(raw) or str(raw or "").strip()]
             if resolved and resolved != "全部"
         ]
@@ -301,6 +307,24 @@ class StorySystemEngine:
     def _split_multi_value(self, raw: Any) -> List[str]:
         return [item.strip() for item in re.split(r"[|；;]+", str(raw or "")) if item.strip()]
 
+    def _split_genre_value(self, raw: Any) -> List[str]:
+        return split_multi_value(raw)
+
+    def _resolve_genre_values(self, raw: Any) -> List[str]:
+        return [
+            resolved
+            for token in self._split_genre_value(raw)
+            for resolved in [resolve_genre(token)]
+            if resolved
+        ]
+
+    def _primary_resolved_genre(self, raw: Any) -> Optional[str]:
+        resolved_values = self._resolve_genre_values(raw)
+        for value in resolved_values:
+            if value in GENRE_CANONICAL or value == "全部":
+                return value
+        return resolved_values[0] if resolved_values else None
+
     def _expand_query(self, query: str, default_query: str, chapter_query: str = "") -> str:
         items: List[str] = []
         for candidate in [query, chapter_query, *self._split_multi_value(default_query)]:
@@ -323,14 +347,23 @@ class StorySystemEngine:
         return " ".join(parts)
 
     def _fallback_row_for_genre(self, rows: List[Dict[str, Any]], genre: str) -> Dict[str, Any] | None:
-        genre_text = self._normalize_text(resolve_genre(genre) or genre)
+        genre_texts = {
+            self._normalize_text(value)
+            for value in self._resolve_genre_values(genre)
+            if value
+        }
         for row in rows:
             candidates = (
-                self._split_multi_value(row.get("适用题材"))
-                + self._split_multi_value(row.get("题材/流派"))
-                + self._split_multi_value(row.get("canonical_genre"))
+                self._split_genre_value(row.get("适用题材"))
+                + self._split_genre_value(row.get("题材/流派"))
+                + self._split_genre_value(row.get("canonical_genre"))
             )
-            if any(self._normalize_text(candidate) == genre_text for candidate in candidates):
+            resolved_candidates = {
+                self._normalize_text(resolve_genre(candidate) or candidate)
+                for candidate in candidates
+                if candidate
+            }
+            if genre_texts.intersection(resolved_candidates):
                 return row
         return None
 
