@@ -22,6 +22,7 @@ from .memory_contract import (
     TimelineEvent,
 )
 from .story_runtime_sources import load_runtime_sources
+from .urgency_utils import coerce_urgency
 
 logger = logging.getLogger(__name__)
 
@@ -319,7 +320,7 @@ class MemoryContractAdapter:
                     status=item.status,
                     planted_chapter=item.source_chapter,
                     expected_payoff=item.payload.get("expected_payoff", ""),
-                    urgency=float(item.payload.get("urgency", 0.0)),
+                    urgency=coerce_urgency(item.payload.get("urgency")),
                 )
                 for item in items
             ]

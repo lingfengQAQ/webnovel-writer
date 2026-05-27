@@ -292,6 +292,105 @@ async def test_embedding_exception_and_close(tmp_path, monkeypatch):
     assert session.closed is True
 
 
+def test_rerank_build_url(tmp_path):
+    config = DataModulesConfig.from_project_root(tmp_path)
+    config.rerank_api_type = "openai"
+    config.rerank_model = "qwen3-rerank"
+
+    # Jina/Cohere: bare URL
+    config.rerank_base_url = "https://api.jina.ai"
+    client = RerankAPIClient(config)
+    assert client._build_url() == "https://api.jina.ai/v1/rerank"
+
+    # Jina/Cohere: URL ending with /v1
+    config.rerank_base_url = "https://api.jina.ai/v1"
+    assert client._build_url() == "https://api.jina.ai/v1/rerank"
+
+    # Jina/Cohere: URL already ending with /rerank
+    config.rerank_base_url = "https://api.jina.ai/v1/rerank"
+    assert client._build_url() == "https://api.jina.ai/v1/rerank"
+
+    # DashScope: bare URL
+    config.rerank_base_url = "https://dashscope.aliyuncs.com"
+    assert client._build_url() == "https://dashscope.aliyuncs.com/compatible-api/v1/reranks"
+
+    # DashScope: URL ending with /v1 should be normalized to the official compatible API path
+    config.rerank_base_url = "https://dashscope.aliyuncs.com/v1"
+    assert client._build_url() == "https://dashscope.aliyuncs.com/compatible-api/v1/reranks"
+
+    # DashScope: URL ending with /compatible-api
+    config.rerank_base_url = "https://dashscope.aliyuncs.com/compatible-api"
+    assert client._build_url() == "https://dashscope.aliyuncs.com/compatible-api/v1/reranks"
+
+    # DashScope: URL ending with /compatible-api/v1
+    config.rerank_base_url = "https://dashscope.aliyuncs.com/compatible-api/v1"
+    assert client._build_url() == "https://dashscope.aliyuncs.com/compatible-api/v1/reranks"
+
+    # DashScope: URL already ending with /reranks
+    config.rerank_base_url = "https://dashscope.aliyuncs.com/compatible-api/v1/reranks"
+    assert client._build_url() == "https://dashscope.aliyuncs.com/compatible-api/v1/reranks"
+
+    # DashScope: URL accidentally ending with singular /rerank
+    config.rerank_base_url = "https://dashscope.aliyuncs.com/compatible-api/v1/rerank"
+    assert client._build_url() == "https://dashscope.aliyuncs.com/compatible-api/v1/reranks"
+
+    # DashScope: case-insensitive host detection
+    config.rerank_base_url = "https://DashScope.aliyuncs.com/compatible-api/v1"
+    assert client._build_url() == "https://DashScope.aliyuncs.com/compatible-api/v1/reranks"
+
+    # Modal: passthrough
+    config.rerank_api_type = "modal"
+    config.rerank_base_url = "https://modal.example.com/rerank"
+    assert client._build_url() == "https://modal.example.com/rerank"
+
+
+def test_rerank_dashscope_native_url_payload_and_response(tmp_path):
+    config = DataModulesConfig.from_project_root(tmp_path)
+    config.rerank_api_type = "openai"
+    config.rerank_base_url = "https://dashscope.aliyuncs.com"
+    client = RerankAPIClient(config)
+
+    native_url = "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank"
+
+    config.rerank_model = "gte-rerank-v2"
+    assert client._build_url() == native_url
+
+    config.rerank_base_url = "https://dashscope.aliyuncs.com/api/v1"
+    assert client._build_url() == native_url
+
+    config.rerank_base_url = native_url
+    assert client._build_url() == native_url
+
+    payload = client._build_payload("q", ["doc1", "doc2"], top_n=1)
+    assert payload == {
+        "model": "gte-rerank-v2",
+        "input": {
+            "query": "q",
+            "documents": ["doc1", "doc2"],
+        },
+        "parameters": {
+            "return_documents": True,
+            "top_n": 1,
+        },
+    }
+
+    parsed = client._parse_response({"output": {"results": [{"index": 1, "relevance_score": 0.9}]}})
+    assert parsed == [{"index": 1, "relevance_score": 0.9}]
+
+    config.rerank_model = "qwen3-vl-rerank"
+    config.rerank_base_url = "https://dashscope.aliyuncs.com/compatible-api/v1/reranks"
+    assert client._build_url() == native_url
+
+    payload = client._build_payload("q", ["doc", {"image": "https://example.com/a.png"}], top_n=2)
+    assert payload["model"] == "qwen3-vl-rerank"
+    assert payload["input"]["query"] == {"text": "q"}
+    assert payload["input"]["documents"] == [
+        {"text": "doc"},
+        {"image": "https://example.com/a.png"},
+    ]
+    assert payload["parameters"] == {"return_documents": True, "top_n": 2}
+
+
 def test_rerank_headers_payload_and_stats(tmp_path, capsys):
     config = DataModulesConfig.from_project_root(tmp_path)
     config.rerank_api_key = "rk-test"

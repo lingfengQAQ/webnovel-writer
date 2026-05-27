@@ -270,10 +270,58 @@ class RerankAPIClient:
             headers["Authorization"] = f"Bearer {self.config.rerank_api_key}"
         return headers
 
+    def _is_dashscope_url(self, base_url: Optional[str] = None) -> bool:
+        """判断当前 Rerank 配置是否指向 DashScope。"""
+        url = base_url if base_url is not None else self.config.rerank_base_url
+        return "dashscope" in str(url or "").lower()
+
+    def _is_dashscope_native_rerank_model(self) -> bool:
+        """DashScope 原生 rerank 接口使用 input/parameters 请求结构。"""
+        model = str(self.config.rerank_model or "").lower()
+        return model in {"qwen3-vl-rerank", "gte-rerank-v2"}
+
+    def _is_dashscope_native_rerank(self) -> bool:
+        return (
+            self.config.rerank_api_type == "openai"
+            and self._is_dashscope_url()
+            and self._is_dashscope_native_rerank_model()
+        )
+
+    def _dashscope_endpoint_root(self, base_url: str) -> str:
+        """从已配置的 DashScope base URL 中剥离已知 rerank 路径。"""
+        base_url_lower = base_url.lower()
+        known_suffixes = [
+            "/api/v1/services/rerank/text-rerank/text-rerank",
+            "/api/v1/services/rerank/text-rerank",
+            "/api/v1/services/rerank",
+            "/api/v1/services",
+            "/compatible-api/v1/reranks",
+            "/compatible-api/v1/rerank",
+            "/compatible-api/v1",
+            "/compatible-api",
+            "/v1/reranks",
+            "/v1/rerank",
+            "/api/v1",
+            "/api",
+            "/v1",
+        ]
+        for suffix in known_suffixes:
+            if base_url_lower.endswith(suffix):
+                return base_url[:-len(suffix)]
+        return base_url
+
+    def _build_dashscope_url(self, base_url: str) -> str:
+        root_url = self._dashscope_endpoint_root(base_url)
+        if self._is_dashscope_native_rerank_model():
+            return f"{root_url}/api/v1/services/rerank/text-rerank/text-rerank"
+        return f"{root_url}/compatible-api/v1/reranks"
+
     def _build_url(self) -> str:
         """构建请求 URL"""
         base_url = self.config.rerank_base_url.rstrip("/")
         if self.config.rerank_api_type == "openai":
+            if self._is_dashscope_url(base_url):
+                return self._build_dashscope_url(base_url)
             # Jina/Cohere 兼容: /v1/rerank
             if not base_url.endswith("/rerank"):
                 if base_url.endswith("/v1"):
@@ -287,6 +335,30 @@ class RerankAPIClient:
     def _build_payload(self, query: str, documents: List[str], top_n: Optional[int]) -> Dict[str, Any]:
         """构建请求体"""
         if self.config.rerank_api_type == "openai":
+            if self._is_dashscope_native_rerank():
+                parameters: Dict[str, Any] = {"return_documents": True}
+                if top_n:
+                    parameters["top_n"] = top_n
+
+                if str(self.config.rerank_model or "").lower() == "qwen3-vl-rerank":
+                    native_query: Any = {"text": query}
+                    native_documents = [
+                        document if isinstance(document, dict) else {"text": document}
+                        for document in documents
+                    ]
+                else:
+                    native_query = query
+                    native_documents = documents
+
+                return {
+                    "model": self.config.rerank_model,
+                    "input": {
+                        "query": native_query,
+                        "documents": native_documents,
+                    },
+                    "parameters": parameters,
+                }
+
             # Jina/Cohere 格式
             payload: Dict[str, Any] = {
                 "query": query,
@@ -306,6 +378,9 @@ class RerankAPIClient:
     def _parse_response(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """解析响应"""
         if self.config.rerank_api_type == "openai":
+            if self._is_dashscope_native_rerank():
+                # DashScope 原生格式: {"output": {"results": [...]}}
+                return data.get("output", {}).get("results", [])
             # Jina/Cohere 格式: {"results": [{"index": 0, "relevance_score": 0.9}, ...]}
             return data.get("results", [])
         else:

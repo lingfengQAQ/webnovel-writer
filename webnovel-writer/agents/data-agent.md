@@ -107,7 +107,7 @@ hook_strength: "strong"
 - **entity_deltas 子项**：必须用 `entity_type`（不是 `type`），值为 `角色|组织|地点|物品|势力` 等，不是默认填 `"角色"`。`is_protagonist: true` 用于标记主角，主角字段会同步到 `state.protagonist_state`。
 - **accepted_events 通用**：每条必须包含 `event_id`、`chapter`、`event_type`、`subject`、`payload`。`event_id` 用章节内稳定 ID（如 `evt-ch100-001`）；`chapter` 写当前章号；`event_type` 用枚举值（`character_state_changed|power_breakthrough|relationship_changed|world_rule_revealed|world_rule_broken|open_loop_created|open_loop_closed|promise_created|promise_paid_off|artifact_obtained`）；`subject` 是事件主体的 entity_id（不是中文名）。
 - **character_state_changed.payload**：用 `field`（或 `field_path`）+ `new`（或 `new_state`/`new_value`）+ `old`（或 `previous_state`/`old_value`）。建议直接用 `field` + `new` + `old` 与 state_deltas 保持一致。
-- **open_loop_created.payload**：必须有 `content`（悬念正文），可选 `loop_type`（悬念类型）、`unanswered_question`（核心疑问）、`urgency`、`planted_chapter`、`expected_payoff`/`loop_deadline`。投影器会从 content > unanswered_question > description 取值，不要省略 content。
+- **open_loop_created.payload**：必须有 `content`（悬念正文），可选 `loop_type`（悬念类型）、`unanswered_question`（核心疑问）、`urgency`（**0-100 整数**；惯例：紧急≈100、一般≈60、远期≈20。若误传字符串 `"high"`/`"medium"`/`"low"`，消费端会兜底转换，但**首选数字**）、`planted_chapter`、`expected_payoff`/`loop_deadline`。投影器会从 content > unanswered_question > description 取值，不要省略 content。
 - **world_rule_revealed.payload**：必须有 `rule_content`（或 `rule`、`description`），可选 `rule_category` / `domain`、`scope`。
 - **relationship_changed.payload**：必须有 `to_entity` 和 `relationship_type`（不是 `type`）。
 - **artifact_obtained.payload**：必须有 `artifact_id`、`name`、`owner`（或 `holder`）。

@@ -9,6 +9,7 @@ import hashlib
 from typing import Any, Dict, List
 
 from ..config import DataModulesConfig, get_config
+from ..urgency_utils import coerce_urgency
 from .schema import MemoryItem
 from .store import ScratchpadManager
 
@@ -238,7 +239,7 @@ class MemoryWriter:
                 field="status",
                 value=content,
                 payload={
-                    "urgency": row.get("urgency"),
+                    "urgency": coerce_urgency(row.get("urgency")),
                     "planted_chapter": row.get("planted_chapter"),
                     "expected_payoff": row.get("expected_payoff"),
                     "status": row.get("status"),
@@ -314,7 +315,7 @@ class MemoryWriter:
                         {
                             "content": content,
                             "status": payload.get("status") or "active",
-                            "urgency": payload.get("urgency") or 0,
+                            "urgency": coerce_urgency(payload.get("urgency")),
                             "planted_chapter": (
                                 payload.get("planted_chapter") or event.get("chapter") or chapter
                             ),

@@ -171,6 +171,39 @@ class TestGetOpenLoops:
         assert loops[0].content == "萧炎与纳兰嫣然三年之约"
         assert loops[0].urgency == 0.9
 
+    def test_get_open_loops_with_string_urgency_does_not_crash(self, tmp_path):
+        """回归测试：data-agent 输出字符串 urgency 时，整批伏笔不应被吞掉。
+
+        Issue 根因：``get_open_loops`` 内部用 ``float("high")`` 抛
+        ``ValueError``，外层 ``except`` 兜底返回 ``[]``，所有伏笔同时丢失。
+        """
+        cfg = _make_project(tmp_path)
+        from data_modules.memory.schema import MemoryItem
+        from data_modules.memory.store import ScratchpadManager
+
+        store = ScratchpadManager(cfg)
+        # 模拟 LLM 写入的三种典型字符串值，外加一条正常数值
+        for idx, urgency in enumerate(["high", "medium", "low", 75]):
+            store.upsert_item(MemoryItem(
+                id=f"ol-str-{idx}",
+                layer="semantic",
+                category="open_loop",
+                subject=f"loop-{idx}",
+                field="",
+                value=f"伏笔 {idx}",
+                status="active",
+                source_chapter=idx + 1,
+                payload={"urgency": urgency, "expected_payoff": ""},
+            ))
+
+        adapter = MemoryContractAdapter(cfg)
+        loops = adapter.get_open_loops()
+        # 关键：4 条全部返回，而不是因为单条字符串触发 except 后整批失踪
+        assert len(loops) == 4
+        urgencies = sorted(loop.urgency for loop in loops)
+        # high=100, medium=60, low=20, 数值=75 → 排序后应为 [20, 60, 75, 100]
+        assert urgencies == [20.0, 60.0, 75.0, 100.0]
+
 
 class TestGetTimeline:
     def test_get_timeline_empty(self, tmp_path):
