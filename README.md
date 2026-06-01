@@ -80,6 +80,90 @@ RERANK_API_KEY=your_rerank_api_key
 /webnovel-review 1-5  # 审查第 1-5 章
 ```
 
+## 命令总览（更新）
+
+> 你可以只记住两层命令：  
+> 1) Claude Code 插件命令（`/webnovel-*`）  
+> 2) 统一 CLI 命令（`python .../webnovel.py <subcommand>`）
+
+### A. Claude Code 插件命令（面向日常创作）
+
+| 命令 | 作用 | 常见用法 |
+|---|---|---|
+| `/webnovel-init` | 初始化书项目目录、设定模板、状态文件 | `/webnovel-init` |
+| `/webnovel-plan [卷号]` | 生成卷级规划和章节大纲 | `/webnovel-plan 1` |
+| `/webnovel-write [章号]` | 执行完整写作链：上下文→起草→审查→提交 | `/webnovel-write 35` |
+| `/webnovel-review [范围]` | 对已有章节做质量审查 | `/webnovel-review 31-35` |
+| `/webnovel-query [关键词]` | 查询角色/伏笔/状态等运行时信息 | `/webnovel-query 萧炎` |
+| `/webnovel-learn [内容]` | 抽取经验写入项目记忆 | `/webnovel-learn "这章危机钩有效"` |
+| `/webnovel-dashboard` | 启动只读可视化面板 | `/webnovel-dashboard` |
+
+### B. 统一 CLI 子命令（面向运维与自动化）
+
+统一入口：
+
+```bash
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" <子命令> [参数]
+```
+
+| 子命令 | 作用 |
+|---|---|
+| `preflight` | 校验脚本、项目根、主链健康状态 |
+| `where` / `use` | 查看/绑定当前项目根目录 |
+| `story-system` | 生成或刷新 Story System 合同（master/volume/chapter/review） |
+| `review-pipeline` | 处理 reviewer JSON，生成报告并写审查指标 |
+| `chapter-commit` | 提交章节事实并触发 projection（state/index/summary/memory/vector） |
+| `orchestrate` | 批量自动编排（write/heal/nightly），减少手工逐条命令执行 |
+| `rag` | 向量检索与索引管理（如按章索引、统计） |
+| `index/state/entity/context/style` | 各类数据模块运维入口 |
+| `status/update-state/backup/archive` | 状态巡检、手工更新、备份与归档 |
+| `memory` / `memory-contract` / `project-memory` | 长期记忆查询、合同管理、项目记忆管理 |
+| `story-events` | 查询章节事件或查看事件链健康 |
+| `extract-context` | 提取指定章节上下文 |
+| `master-outline-sync` | 卷规划后写回总纲锚点 |
+
+`orchestrate` 示例：
+
+```bash
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" orchestrate write --chapters 1-20 --auto-vector-heal
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" orchestrate heal --chapters 1-200 --json-report-out ".webnovel/reports/heal.json"
+```
+
+实体脏数据（如拼音/英文 snake_case）扫描与标记：
+
+```bash
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" entity-clean --mark-invalid --format json --chapter 100
+```
+
+### Claude Code 插件内一键修复（推荐）
+
+如果你在 **Claude Code 对话框内** 操作，优先用插件命令（不需要手动拼 Python 命令）：
+
+```bash
+/webnovel-review 1-100
+```
+
+先对 1-100 章做一次总审查，确认阻断项和偏纲章段。
+
+然后在 Claude Code 中执行（同一项目会话内）：
+
+```bash
+/webnovel-write 100
+```
+
+用于重跑第 100 章完整链（上下文→起草/修复→审查→提交→投影）。  
+如果你要批量修复多章，建议在 Claude Code 中让助手按章循环执行 `/webnovel-write N`，每 10 章做一次 `/webnovel-review A-B` 复核。
+
+坏章定点修复示例（15/91/92/94）：
+
+```bash
+/webnovel-write 15
+/webnovel-write 91
+/webnovel-write 92
+/webnovel-write 94
+/webnovel-review 1-100
+```
+
 ### 6) 可视化面板（可选）
 
 ```bash

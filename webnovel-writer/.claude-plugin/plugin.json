@@ -3,10 +3,10 @@
   "version": "6.0.0",
   "description": "长篇网文创作系统（skills + agents + data chain + RAG）",
   "author": {
-    "name": "lingfengQAQ"
+    "name": "yangda611"
   },
-  "homepage": "https://github.com/lingfengQAQ/webnovel-writer",
-  "repository": "https://github.com/lingfengQAQ/webnovel-writer",
+  "homepage": "https://github.com/yangda611/webnovel-writer",
+  "repository": "https://github.com/yangda611/webnovel-writer",
   "license": "GPL-3.0",
   "keywords": [
     "webnovel",

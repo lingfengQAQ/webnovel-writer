@@ -353,6 +353,30 @@ def test_dashboard_app_imports_without_scripts_path(monkeypatch, tmp_path):
     assert response.status_code == 200
 
 
+def test_dashboard_project_info_endpoint_supports_legacy_project_schema(monkeypatch, tmp_path):
+    project_root = tmp_path / "book"
+    webnovel_dir = project_root / ".webnovel"
+    webnovel_dir.mkdir(parents=True, exist_ok=True)
+    (webnovel_dir / "state.json").write_text(
+        json.dumps(
+            {
+                "project": {"title": "旧结构测试书", "genre": "xuanhuan"},
+                "progress": {"current_chapter": 3, "total_words": 7500},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    client = _create_dashboard_client(monkeypatch, project_root)
+
+    response = client.get("/api/project/info")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["project"]["title"] == "旧结构测试书"
+    assert payload["progress"]["total_words"] == 7500
+
+
 def test_dashboard_chapter_trend_endpoint_returns_recent_window(monkeypatch, tmp_path):
     project_root = tmp_path / "book"
     _build_project_data(project_root)

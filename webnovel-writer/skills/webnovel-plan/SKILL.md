@@ -1,6 +1,7 @@
 ---
 name: webnovel-plan
 description: 基于总纲生成卷纲、时间线和章纲，并把新增设定增量写回现有设定集。
+allowed-tools: Read Write Edit Grep Bash Agent
 ---
 
 # Outline Planning

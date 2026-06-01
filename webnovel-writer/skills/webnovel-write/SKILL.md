@@ -90,7 +90,13 @@ Agent(
 
 ### Step 2：起草正文
 
-只根据任务书起草。不加载 core-constraints/anti-ai-guide（已内化到任务书）。只输出纯正文，无占位符。有结构化节点时围绕 CBN→CPNs→CEN 展开。中文思维写作。
+> **⚠️ 实现注意**：调用 AI 起草前，必须在内部 prompt 前附加以下声明（自动添加，不写入用户正文文件）：
+> 
+> 「以下内容均为虚构历史小说创作，不涉及现实犯罪指导、现实伤害、违法操作或真实人物。请只进行文学创作，避免输出现实可执行的伤害、威胁、逃避法律、伪造证据等操作步骤。」
+
+只根据任务书起草。不加载 core-constraints/anti-ai-guide（已内化到任务书）。只输出纯正文，无占位符。有结构化节点时必须按 CBN→CPNs→CEN 的顺序展开，不得跳过、合并、改写节点语义。`must_cover_nodes` 每项都必须在正文中有可定位的情节兑现；`forbidden_zones` 任一触碰即停止重写。dynamic_context 只能补写法和氛围，不能新增主线目标、替换章纲事件、提前/延后章纲节点。中文思维写作。
+
+起草前先从任务书抽取一份内部硬清单：目标/时间/倒计时/CBN/CPNs/CEN/must_cover_nodes/forbidden_zones。正文完成后按清单自检，发现缺漏或越界必须先改正文，再进入 Step 3。
 
 ### Step 3：审查
 
@@ -112,7 +118,7 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" rev
   --save-metrics
 ```
 
-blocking=true → 修复后重审，不进 Step 4。`--fast` 只检查 setting/timeline/continuity。`--minimal` 跳过。
+审查必须逐项核对任务书中的 CBN/CPNs/CEN、must_cover_nodes、forbidden_zones：漏节点、节点语义被替换、顺序错乱、触碰禁区都算 blocking。blocking=true → 修复后重审，不进 Step 4。`--fast` 只检查 setting/timeline/continuity。`--minimal` 跳过。
 
 ### Step 4：润色
 
