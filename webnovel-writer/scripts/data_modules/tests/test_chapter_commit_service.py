@@ -289,6 +289,33 @@ def test_apply_projections_normalizes_events_before_router_inspection(
     assert payload["accepted_events"] == captured["events"]
 
 
+def test_apply_projections_updates_state_for_rejected_commit(tmp_path):
+    import json
+
+    (tmp_path / ".webnovel").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".webnovel" / "state.json").write_text("{}", encoding="utf-8")
+
+    service = ChapterCommitService(tmp_path)
+    payload = service.build_commit(
+        chapter=7,
+        review_result={"blocking_count": 1},
+        fulfillment_result={
+            "planned_nodes": ["进入坊市"],
+            "covered_nodes": ["进入坊市"],
+            "missed_nodes": [],
+            "extra_nodes": [],
+        },
+        disambiguation_result={"pending": []},
+        extraction_result={"state_deltas": [], "entity_deltas": [], "accepted_events": []},
+    )
+
+    projected = service.apply_projections(payload)
+
+    state = json.loads((tmp_path / ".webnovel" / "state.json").read_text(encoding="utf-8"))
+    assert projected["projection_status"]["state"] == "done"
+    assert state["progress"]["chapter_status"]["7"] == "chapter_rejected"
+
+
 def test_chapter_commit_cli_builds_and_persists_commit(tmp_path, monkeypatch):
     review_path = tmp_path / "review.json"
     fulfillment_path = tmp_path / "fulfillment.json"

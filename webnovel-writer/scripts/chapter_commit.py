@@ -35,8 +35,7 @@ def main() -> None:
         extraction_result=_read_json(args.extraction_result),
     )
     service.persist_commit(payload)
-    if payload["meta"]["status"] == "accepted":
-        payload = service.apply_projections(payload)
+    payload = service.apply_projections(payload)
     print(json.dumps(payload, ensure_ascii=False))
 
 

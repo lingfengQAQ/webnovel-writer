@@ -100,23 +100,25 @@ class ChapterCommitService:
         return path
 
     def apply_projections(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        if payload["meta"]["status"] != "accepted":
+        status = str((payload.get("meta") or {}).get("status") or "")
+        if status not in {"accepted", "rejected"}:
             return payload
 
-        chapter = int((payload.get("meta") or {}).get("chapter") or 0)
-        event_store = EventLogStore(self.project_root)
-        payload["accepted_events"] = event_store.normalize_events(
-            chapter, payload.get("accepted_events", [])
-        )
-        event_store.write_events(chapter, payload["accepted_events"])
+        if status == "accepted":
+            chapter = int((payload.get("meta") or {}).get("chapter") or 0)
+            event_store = EventLogStore(self.project_root)
+            payload["accepted_events"] = event_store.normalize_events(
+                chapter, payload.get("accepted_events", [])
+            )
+            event_store.write_events(chapter, payload["accepted_events"])
 
-        proposals = AmendProposalTrigger().check(chapter, payload.get("accepted_events", []))
-        if proposals:
-            manager = IndexManager(DataModulesConfig.from_project_root(self.project_root))
-            with manager._get_conn() as conn:
-                ensure_override_ledger_columns(conn)
-                persist_amend_proposals(conn, chapter, proposals)
-                conn.commit()
+            proposals = AmendProposalTrigger().check(chapter, payload.get("accepted_events", []))
+            if proposals:
+                manager = IndexManager(DataModulesConfig.from_project_root(self.project_root))
+                with manager._get_conn() as conn:
+                    ensure_override_ledger_columns(conn)
+                    persist_amend_proposals(conn, chapter, proposals)
+                    conn.commit()
 
         from .index_projection_writer import IndexProjectionWriter
         from .memory_projection_writer import MemoryProjectionWriter

@@ -24,7 +24,11 @@ class EventProjectionRouter:
 
     def required_writers(self, commit_payload: Dict) -> List[str]:
         writers: Set[str] = set()
-        if str((commit_payload.get("meta") or {}).get("status") or "") == "accepted":
+        status = str((commit_payload.get("meta") or {}).get("status") or "")
+        if status == "rejected":
+            writers.add("state")
+            return sorted(writers)
+        if status == "accepted":
             writers.add("state")
             writers.add("index")
         if commit_payload.get("entity_deltas"):
