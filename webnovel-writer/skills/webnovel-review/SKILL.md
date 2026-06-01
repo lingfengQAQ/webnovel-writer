@@ -18,7 +18,7 @@ allowed-tools: Read Grep Write Edit Bash Agent AskUserQuestion
 
 - ❌ 没看 reviewer 原始 JSON 就直接口头总结
 - ❌ 有 blocking issue 仍将流程视为通过
-- ❌ 把 report 文件生成等同于已落库（`save-review-metrics` 未跑）
+- ❌ 把 report 文件生成等同于已落库（`review-pipeline --save-metrics` 未跑）
 - ❌ 主流程伪造 `overall_score` 或审查结论
 - ❌ 按需参考一次性全部读完
 
@@ -134,14 +134,12 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" rev
   --chapter {chapter_num} \
   --review-results "${PROJECT_ROOT}/.webnovel/tmp/review_results.json" \
   --metrics-out "${PROJECT_ROOT}/.webnovel/tmp/review_metrics.json" \
-  --report-file "审查报告/第{chapter_num}章审查报告.md"
-
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" index save-review-metrics \
-  --data "@${PROJECT_ROOT}/.webnovel/tmp/review_metrics.json"
+  --report-file "审查报告/第{chapter_num}章审查报告.md" \
+  --save-metrics
 ```
 
 要求：
-- `review-pipeline` 生成的 `review_metrics.json` 必须可直接写入 `review_metrics` 表
+- `review-pipeline --save-metrics` 必须同时完成报告生成、metrics 文件输出、`review_metrics` 表写入
 - 阻断判断以 reviewer 原始结果中的 `blocking=true` 为准
 
 ### Step 6：写入兼容审查记录并处理阻断
