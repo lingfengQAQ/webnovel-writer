@@ -28,6 +28,14 @@ _project_root: Path | None = None
 _watcher = FileWatcher()
 
 STATIC_DIR = Path(__file__).parent / "frontend" / "dist"
+LOCAL_CORS_ORIGINS = [
+    "http://localhost",
+    "http://localhost:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8000",
+]
 
 
 def _get_project_root() -> Path:
@@ -248,7 +256,7 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=LOCAL_CORS_ORIGINS,
         allow_methods=["GET"],
         allow_headers=["*"],
     )
@@ -810,6 +818,10 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
 
         if not resolved.is_file():
             raise HTTPException(404, "文件不存在")
+
+        max_bytes = 2 * 1024 * 1024
+        if resolved.stat().st_size > max_bytes:
+            raise HTTPException(413, "文件过大，无法预览")
 
         # 文本文件直接读；其他情况返回占位信息
         try:

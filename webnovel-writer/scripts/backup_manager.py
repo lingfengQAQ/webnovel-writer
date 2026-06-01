@@ -118,6 +118,11 @@ __pycache__/
 # Don't ignore .webnovel (we need to track state.json)
 # But ignore cache files
 .webnovel/context_cache.json
+
+# Env files
+.env
+.env.*
+!.env.example
 """)
 
             # 初始提交
