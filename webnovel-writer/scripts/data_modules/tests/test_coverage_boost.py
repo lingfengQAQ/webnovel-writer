@@ -83,6 +83,18 @@ def test_load_json_arg_rejects_file_outside_base_dir(tmp_path):
         load_json_arg(f"@{outside}", base_dir=project)
 
 
+def test_load_json_arg_rejects_relative_escape_outside_base_dir(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    secret = outside_dir / "secret.json"
+    secret.write_text('{"secret": true}', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="outside allowed directory"):
+        load_json_arg("@../outside/secret.json", base_dir=project)
+
+
 def test_load_json_arg_allows_file_inside_base_dir(tmp_path):
     project = tmp_path / "project"
     project.mkdir()

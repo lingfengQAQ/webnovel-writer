@@ -111,6 +111,7 @@ class StateManager:
 
     # 章节状态机（单调递进）
     CHAPTER_STATUS_ORDER = ["chapter_drafted", "chapter_reviewed", "chapter_committed"]
+    REJECTED_CHAPTER_STATUS = "chapter_rejected"
 
     def __init__(self, config=None, enable_sqlite_sync: bool = True):
         """
@@ -294,7 +295,22 @@ class StateManager:
                     if not isinstance(chapter_status, dict):
                         chapter_status = {}
                         progress["chapter_status"] = chapter_status
-                    chapter_status.update(self._pending_chapter_status)
+
+                    def _status_rank(value: str) -> int:
+                        if value == self.REJECTED_CHAPTER_STATUS:
+                            return -1
+                        try:
+                            return self.CHAPTER_STATUS_ORDER.index(value)
+                        except ValueError:
+                            return -1
+
+                    for chapter, pending_status in self._pending_chapter_status.items():
+                        current_status = str(chapter_status.get(chapter) or "")
+                        if current_status == pending_status:
+                            continue
+                        if current_status and _status_rank(pending_status) < _status_rank(current_status):
+                            continue
+                        chapter_status[chapter] = pending_status
                     progress["last_updated"] = self._now_progress_timestamp()
 
                 # v5.1 引入: 强制使用 SQLite 模式，移除大数据字段
@@ -658,13 +674,16 @@ class StateManager:
 
     def set_chapter_status(self, chapter: int, status: str) -> None:
         """设置章节状态（单调递进，不可回退）。"""
-        if status not in self.CHAPTER_STATUS_ORDER:
-            raise ValueError(f"无效状态: {status}，有效值: {self.CHAPTER_STATUS_ORDER}")
+        valid_statuses = set(self.CHAPTER_STATUS_ORDER + [self.REJECTED_CHAPTER_STATUS])
+        if status not in valid_statuses:
+            raise ValueError(
+                f"无效状态: {status}，有效值: {self.CHAPTER_STATUS_ORDER + [self.REJECTED_CHAPTER_STATUS]}"
+            )
 
         current = self.get_chapter_status(chapter)
         if current is not None:
-            current_idx = self.CHAPTER_STATUS_ORDER.index(current)
-            new_idx = self.CHAPTER_STATUS_ORDER.index(status)
+            current_idx = self._chapter_status_rank(current)
+            new_idx = self._chapter_status_rank(status)
             if new_idx < current_idx:
                 raise ValueError(
                     f"章节 {chapter} 状态不可回退: {current} -> {status}"
@@ -677,6 +696,14 @@ class StateManager:
         chapter_status[str(chapter)] = status
         self._pending_chapter_status[str(chapter)] = status
         self.save_state()
+
+    def _chapter_status_rank(self, status: str) -> int:
+        if status == self.REJECTED_CHAPTER_STATUS:
+            return -1
+        try:
+            return self.CHAPTER_STATUS_ORDER.index(status)
+        except ValueError:
+            return -1
 
     def _save_state(self) -> None:
         """直接持久化当前内存状态到 state.json（轻量写入，不走 pending 合并）。"""
@@ -1344,7 +1371,7 @@ def main():
     status_set_parser = subparsers.add_parser("set-chapter-status")
     status_set_parser.add_argument("--chapter", type=int, required=True)
     status_set_parser.add_argument("--status", required=True,
-        choices=["chapter_drafted", "chapter_reviewed", "chapter_committed"])
+        choices=["chapter_rejected", "chapter_drafted", "chapter_reviewed", "chapter_committed"])
 
     argv = normalize_global_project_root(sys.argv[1:])
     args = parser.parse_args(argv)
@@ -1364,12 +1391,13 @@ def main():
                 "INVALID_PROJECT_ROOT",
                 str(exc),
                 suggestion="请传入包含 .webnovel/state.json 的书项目根目录，或先通过 webnovel.py 解析 project_root。",
-            )
+                )
             raise SystemExit(1) from exc
         config = DataModulesConfig.from_project_root(resolved_root)
 
     manager = StateManager(config)
     logger = IndexManager(config)
+    json_base_dir = manager.config.project_root
     tool_name = f"state_manager:{args.command or 'unknown'}"
 
     def _append_timing(success: bool, *, error_code: str | None = None, error_message: str | None = None, chapter: int | None = None):
@@ -1422,7 +1450,7 @@ def main():
         emit_success(payload, message="entities")
 
     elif args.command == "process-chapter":
-        data = load_json_arg(args.data, base_dir=args.project_root)
+        data = load_json_arg(args.data, base_dir=json_base_dir)
         validated = None
         last_exc = None
         for _ in range(3):

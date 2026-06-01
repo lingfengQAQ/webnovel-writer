@@ -13,6 +13,7 @@ import pytest
 
 from data_modules.state_manager import StateManager, EntityState
 from data_modules.index_manager import IndexManager, EntityMeta
+from project_locator import write_current_project_pointer
 
 
 @pytest.fixture
@@ -425,6 +426,28 @@ def test_set_chapter_status_preserves_existing_disk_state(temp_project):
     assert saved["disambiguation_warnings"] == [{"chapter": 4, "mention": "宗主"}]
 
 
+def test_set_chapter_status_does_not_rollback_same_chapter_disk_state(temp_project):
+    temp_project.state_file.write_text(
+        json.dumps({"progress": {"chapter_status": {}}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    manager = StateManager(temp_project, enable_sqlite_sync=False)
+
+    temp_project.state_file.write_text(
+        json.dumps(
+            {"progress": {"chapter_status": {"5": "chapter_reviewed"}}},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    manager.set_chapter_status(5, "chapter_drafted")
+
+    saved = json.loads(temp_project.state_file.read_text(encoding="utf-8"))
+    assert saved["progress"]["chapter_status"]["5"] == "chapter_reviewed"
+    assert manager.get_chapter_status(5) == "chapter_reviewed"
+
+
 def test_sync_to_sqlite_exceptions_and_no_sql_manager(temp_project, monkeypatch):
     manager = StateManager(temp_project)
     manager._pending_progress_chapter = 1
@@ -587,6 +610,44 @@ def test_state_manager_cli_commands(temp_project, monkeypatch, capsys):
         payload,
     ])
     assert out["status"] == "success"
+
+
+def test_state_manager_cli_rejects_json_file_outside_resolved_book_root(tmp_path, monkeypatch):
+    from data_modules.config import DataModulesConfig
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / ".git").mkdir()
+    (workspace / ".claude").mkdir()
+    project_root = workspace / "book"
+    cfg = DataModulesConfig.from_project_root(project_root)
+    cfg.ensure_dirs()
+    if not cfg.state_file.exists():
+        cfg.state_file.write_text("{}", encoding="utf-8")
+    write_current_project_pointer(project_root, workspace_root=workspace)
+
+    outside = workspace / "outside.json"
+    outside.write_text('{"entities_appeared": []}', encoding="utf-8")
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "state_manager",
+            "--project-root",
+            str(workspace),
+            "process-chapter",
+            "--chapter",
+            "1",
+            "--data",
+            f"@{outside}",
+        ],
+    )
+
+    from data_modules import state_manager as sm
+
+    with pytest.raises(ValueError, match="outside allowed directory"):
+        sm.main()
 
 
 def test_state_manager_cli_rejects_invalid_project_root(monkeypatch, tmp_path, capsys):

@@ -7,17 +7,49 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .story_contracts import read_json_if_exists, write_json
+import filelock
+
+from .story_contracts import read_json_if_exists
 
 try:
     from chapter_paths import find_chapter_file
 except ImportError:  # pragma: no cover
     from scripts.chapter_paths import find_chapter_file
 
+try:
+    from security_utils import atomic_write_json
+except ImportError:  # pragma: no cover
+    from scripts.security_utils import atomic_write_json
+
+
+class _LockedState:
+    def __init__(self, state_path: Path, lock_path: Path):
+        self.state_path = state_path
+        self.lock_path = lock_path
+        self.state: dict[str, Any] = {}
+        self._lock: filelock.FileLock | None = None
+
+    def __enter__(self) -> dict[str, Any]:
+        self._lock = filelock.FileLock(str(self.lock_path), timeout=10)
+        self._lock.acquire()
+        self.state = read_json_if_exists(self.state_path) or {}
+        return self.state
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        try:
+            if exc_type is None:
+                atomic_write_json(self.state_path, self.state, use_lock=False, backup=True)
+        finally:
+            if self._lock is not None:
+                self._lock.release()
+        return False
+
 
 class StateProjectionWriter:
     def __init__(self, project_root: Path):
         self.project_root = Path(project_root)
+        self.state_path = self.project_root / ".webnovel" / "state.json"
+        self.lock_path = self.state_path.with_suffix(self.state_path.suffix + ".lock")
 
     def apply(self, commit_payload: dict) -> dict:
         chapter = int(commit_payload.get("meta", {}).get("chapter") or 0)
@@ -25,68 +57,67 @@ class StateProjectionWriter:
 
         if status == "rejected":
             if chapter > 0:
-                state_path = self.project_root / ".webnovel" / "state.json"
-                state = read_json_if_exists(state_path) or {}
-                progress = state.setdefault("progress", {})
-                chapter_status = progress.setdefault("chapter_status", {})
-                chapter_status[str(chapter)] = "chapter_rejected"
-                write_json(state_path, state)
+                with self._locked_state() as state:
+                    progress = state.setdefault("progress", {})
+                    chapter_status = progress.setdefault("chapter_status", {})
+                    chapter_status[str(chapter)] = "chapter_rejected"
             return {"applied": True, "writer": "state", "reason": "commit_rejected_status_updated"}
 
         if status != "accepted":
             return {"applied": False, "writer": "state", "reason": f"unknown_status:{status}"}
 
-        state_path = self.project_root / ".webnovel" / "state.json"
-        state = read_json_if_exists(state_path) or {}
-        entity_state = state.setdefault("entity_state", {})
-        progress = state.setdefault("progress", {})
-        chapter_status = progress.setdefault("chapter_status", {})
+        with self._locked_state() as state:
+            entity_state = state.setdefault("entity_state", {})
+            progress = state.setdefault("progress", {})
+            chapter_status = progress.setdefault("chapter_status", {})
 
-        protagonist_ids = self._collect_protagonist_ids(commit_payload, state)
+            protagonist_ids = self._collect_protagonist_ids(commit_payload, state)
 
-        applied_count = 0
-        for delta in self._collect_state_deltas(commit_payload):
-            entity_id = str(delta.get("entity_id") or "").strip()
-            field = str(delta.get("field") or "").strip()
-            if not entity_id or not field:
-                continue
-            new_value = delta.get("new")
-            entity_bucket = entity_state.setdefault(entity_id, {})
-            self._set_path(entity_bucket, field, new_value)
-            if entity_id in protagonist_ids:
-                self._set_path(state.setdefault("protagonist_state", {}), field, new_value)
-            applied_count += 1
+            applied_count = 0
+            for delta in self._collect_state_deltas(commit_payload):
+                entity_id = str(delta.get("entity_id") or "").strip()
+                field = str(delta.get("field") or "").strip()
+                if not entity_id or not field:
+                    continue
+                new_value = delta.get("new")
+                entity_bucket = entity_state.setdefault(entity_id, {})
+                self._set_path(entity_bucket, field, new_value)
+                if entity_id in protagonist_ids:
+                    self._set_path(state.setdefault("protagonist_state", {}), field, new_value)
+                applied_count += 1
 
-        if chapter > 0:
-            old_current = self._safe_int(progress.get("current_chapter"))
-            old_total = self._safe_int(progress.get("total_words"))
-            old_status = chapter_status.get(str(chapter))
+            if chapter > 0:
+                old_current = self._safe_int(progress.get("current_chapter"))
+                old_total = self._safe_int(progress.get("total_words"))
+                old_status = chapter_status.get(str(chapter))
 
-            chapter_status[str(chapter)] = "chapter_committed"
-            progress["current_chapter"] = max(old_current, chapter)
+                chapter_status[str(chapter)] = "chapter_committed"
+                progress["current_chapter"] = max(old_current, chapter)
 
-            projected_total = self._project_total_words(chapter_status)
-            if projected_total > 0:
-                progress["total_words"] = projected_total
-            else:
-                progress["total_words"] = old_total
+                projected_total = self._project_total_words(chapter_status)
+                if projected_total > 0:
+                    progress["total_words"] = projected_total
+                else:
+                    progress["total_words"] = old_total
 
-            if (
-                old_status != "chapter_committed"
-                or progress.get("current_chapter") != old_current
-                or progress.get("total_words") != old_total
-            ):
-                progress["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                if (
+                    old_status != "chapter_committed"
+                    or progress.get("current_chapter") != old_current
+                    or progress.get("total_words") != old_total
+                ):
+                    progress["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        strand_applied = self._apply_strand_tracker(state, chapter, commit_payload)
+            strand_applied = self._apply_strand_tracker(state, chapter, commit_payload)
 
-        write_json(state_path, state)
         return {
             "applied": applied_count > 0 or chapter > 0,
             "writer": "state",
             "applied_count": applied_count,
             "strand_tracker": strand_applied,
         }
+
+    def _locked_state(self):
+        return _LockedState(self.state_path, self.lock_path)
 
     def _collect_state_deltas(self, commit_payload: dict) -> list[dict]:
         deltas = [

@@ -51,6 +51,20 @@ def test_set_chapter_status_monotonic(state_project):
         sm.set_chapter_status(5, "chapter_drafted")
 
 
+def test_set_chapter_status_allows_rework_after_rejected(state_project):
+    state_file = state_project / ".webnovel" / "state.json"
+    state_file.write_text(
+        json.dumps({"progress": {"chapter_status": {"5": "chapter_rejected"}}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    sm = _make_manager(state_project)
+    sm._load_state()
+
+    sm.set_chapter_status(5, "chapter_drafted")
+
+    assert sm.get_chapter_status(5) == "chapter_drafted"
+
+
 def test_set_chapter_status_progression(state_project):
     sm = _make_manager(state_project)
     sm._load_state()
