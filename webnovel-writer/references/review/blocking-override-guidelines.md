@@ -29,7 +29,7 @@ purpose: review Step 6 blocking issue 用户裁决参考
 以下情况**可以考虑 override**（但仍需用户确认）：
 
 - issue 是**节奏偏差**（本章偏慢/偏快，但不影响剧情正确性）
-- issue 是**风格建议**（对话过于书面化、描写密度偏高等）
+- issue 是**角色风格软偏差**（如对话偏书面，但与人设相符）
 - issue 是**结构化节点未完全覆盖**（可选节点未落地，但必须节点已覆盖）
 
 ## 知识补充层
@@ -37,7 +37,7 @@ purpose: review Step 6 blocking issue 用户裁决参考
 ### 可 override 的典型场景
 
 1. **过渡章节奏偏慢**：reviewer 报告 pacing_score 低，但本章是故意铺垫，用户确认后 override
-2. **对话风格偏书面**：reviewer 标记 ai_flavor，但角色设定就是学者/官员，书面语合理
+2. **对话风格偏书面**：reviewer 标记 character（对话风格偏离），但角色设定就是学者/官员，书面语合理
 3. **可选节点未覆盖**：CPN 中某个可选推进节点在正文中隐含但未显式展开
 
 ### 不可 override 的典型场景

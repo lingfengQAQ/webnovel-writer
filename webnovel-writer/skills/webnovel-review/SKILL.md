@@ -61,7 +61,6 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" \
 - `PROJECT_ROOT` 必须包含 `.webnovel/state.json`
 - 任一关键目录不存在时立即阻断
 - `CHAPTER_GOAL` 必须来自详细大纲真实目标；若 `chapter_brief.meta.query` 仍是 `{章纲目标}` / `第N章章纲目标`，按系统问题记录。
-- 中高严重度 `ai_flavor` issue 会由 review-pipeline 回流到 `.story-system/anti_patterns.json`，作为后续写章避雷模式。
 
 ### Step 2：按需加载参考资料
 
@@ -78,7 +77,6 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" \
 |---------|-----------|
 | 审查涉及爽点或钩子分析 | `../../references/shared/cool-points-guide.md` |
 | 审查涉及多线交织 | `../../references/shared/strand-weave-pattern.md` |
-| ai_flavor issue ≥ 3 | `../../skills/webnovel-write/references/anti-ai-guide.md` |
 | blocking issue 需用户决策 (Step 6) | `../../references/review/blocking-override-guidelines.md` |
 
 ### Step 3：加载项目投影状态与待审正文

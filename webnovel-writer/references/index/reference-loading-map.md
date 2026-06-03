@@ -40,7 +40,6 @@
 | webnovel-review | Step 2 | always | `references/review-schema.md` |
 | webnovel-review | Step 2 | 审查涉及爽点或钩子分析 | `references/shared/cool-points-guide.md` |
 | webnovel-review | Step 2 | 审查涉及多线交织 | `references/shared/strand-weave-pattern.md` |
-| webnovel-review | Step 2 | ai_flavor issue >= 3 | `skills/webnovel-write/references/anti-ai-guide.md` |
 | webnovel-review | Step 6 | blocking issue 需用户决策 | `references/review/blocking-override-guidelines.md` |
 | webnovel-query | 查询识别后 | 所有查询 | `skills/webnovel-query/references/system-data-flow.md` |
 | webnovel-query | 查询识别后 | 伏笔分析 | `skills/webnovel-query/references/advanced/foreshadowing.md` |

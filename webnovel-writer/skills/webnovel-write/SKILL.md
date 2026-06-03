@@ -1,7 +1,7 @@
 ---
 name: webnovel-write
 description: 产出可发布章节，完整执行上下文→起草→审查→润色→提交→备份。
-allowed-tools: Read Write Edit Grep Bash Agent
+allowed-tools: Read Write Edit Grep Bash Agent AskUserQuestion
 ---
 
 # 写章流程
@@ -22,7 +22,7 @@ allowed-tools: Read Write Edit Grep Bash Agent
 
 - 禁止并步、跳步、伪造审查
 - 必须使用 `Agent` 工具调用指定 subagent；不得用主流程口头代替 subagent 输出
-- blocking issue 未解决不进 Step 4/5
+- 审查只跑一轮；blocking issue 定点修复或经用户裁决后才进 Step 4/5
 - 失败只补跑失败步骤，不回退
 - 参考资料按步骤按需加载
 
@@ -112,7 +112,7 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" rev
   --save-metrics
 ```
 
-blocking=true → 修复后重审，不进 Step 4。`--fast` 只检查 setting/timeline/continuity。`--minimal` 跳过。
+审查只跑一轮，reviewer 只调用一次。`blocking=true` 的问题在不改剧情、不破设定的前提下定点修复后直接进 Step 4，不重新调用 reviewer；确实无法修复的 blocking 问题用 `AskUserQuestion` 让用户裁决（接受当前版本 / 手动修复 / 放弃）。非 blocking issue 交给 Step 4 处理。`--fast` 只检查 setting/timeline/continuity。`--minimal` 跳过。
 
 ### Step 4：润色
 
@@ -174,7 +174,7 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" bac
 
 1. 正文文件存在且非空
 2. 审查已落库（`--minimal` 除外）
-3. blocking=true 必须停在 Step 3
+3. blocking=true 必须在 Step 3 定点修复或经用户裁决
 4. anti_ai_force_check=pass（`--minimal` 除外）
 5. accepted CHAPTER_COMMIT，projection 五项 done/skipped
 6. chapter_status=committed（projection 自动推进）

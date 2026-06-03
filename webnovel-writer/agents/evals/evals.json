@@ -4,7 +4,7 @@
     {
       "id": 1,
       "prompt": "审查第4章正文。chapter=4, chapter_file='正文/第0004章-迦南学院的考验.md', project_root='agents/evals/files/test-project', scripts_dir 为本插件的 scripts 目录。",
-      "expected_output": "输出结构化 JSON 问题清单，包含多个 ai_flavor 类型的 issue，识别出密集的 AI 写作痕迹",
+      "expected_output": "输出结构化 JSON 问题清单，并对 5 个维度逐项给出结论（dimension_results）",
       "files": [
         "agents/evals/files/test-project/正文/第0004章-迦南学院的考验.md",
         "agents/evals/files/test-project/.webnovel/state.json",
@@ -13,11 +13,9 @@
       ],
       "expectations": [
         "输出是合法 JSON，包含 issues 数组和 summary 字符串",
-        "至少有 1 个 ai_flavor 类型的 issue 识别了'缓缓'或'淡淡'等万能副词",
-        "至少有 1 个 ai_flavor 类型的 issue 识别了'首先/其次/最后'三段式",
-        "至少有 1 个 ai_flavor 类型的 issue 识别了'眸中闪过'或'瞳孔微缩'等神态模板",
-        "至少有 1 个 ai_flavor 类型的 issue 识别了情绪标签化（'他非常紧张'或'他感到欣慰'）",
-        "至少有 1 个 ai_flavor 类型的 issue 识别了章末总结句（'总而言之'）",
+        "包含 dimension_results，逐项覆盖 setting/timeline/continuity/character/logic 五个维度",
+        "每个维度的 conclusion 非空（无问题时为 pass）",
+        "每个 issue 的 category 属于 setting/timeline/continuity/character/logic/pacing/other 之一",
         "每个 issue 都有 severity、category、location、description 字段",
         "每个 issue 都有 evidence 字段且非空",
         "没有输出 overall_score（reviewer 不评分）",
