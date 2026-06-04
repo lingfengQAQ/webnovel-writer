@@ -280,7 +280,7 @@ def test_webnovel_write_skill_uses_explicit_agent_invocation_templates():
     for subagent in ("context-agent", "reviewer", "data-agent"):
         assert f'subagent_type: "webnovel-writer:{subagent}"' in text
         assert f'subagent_type: "{subagent}"' not in text
-    assert "不得用主流程口头代替 subagent 输出" in text
+    assert "메인 플로우가 subagent 출력을 말로 대체해서는 안 된다" in text
 
 
 def test_story_system_runtime_contract_commands_exist():
@@ -320,8 +320,8 @@ def test_context_agent_prefers_contract_and_latest_commit_mainline():
 def test_context_agent_loads_fixed_guides_and_outputs_writer_brief():
     text = (AGENTS_DIR / "context-agent.md").read_text(encoding="utf-8")
     # core-constraints 和 anti-ai-guide 已内化为"写作铁律"段落
-    assert "写作铁律" in text or "Anti-AI" in text
-    assert "写作任务书" in text
+    assert "집필 철칙" in text or "Anti-AI" in text
+    assert "집필 작업지시서" in text
     assert "Step 2 直写提示词" not in text
     assert "Context Contract" not in text
 
@@ -350,12 +350,12 @@ def test_data_agent_is_described_as_extraction_only_not_direct_write_mainline():
 def test_webnovel_write_data_agent_prompt_requires_extraction_schema():
     text = (SKILLS_DIR / "webnovel-write" / "SKILL.md").read_text(encoding="utf-8")
     assert "webnovel-writer:data-agent" in text
-    assert "fulfillment_result.json 必须顶层" in text
+    assert "fulfillment_result.json은 최상위" in text
     assert "planned_nodes/covered_nodes/missed_nodes/extra_nodes" in text
-    assert "disambiguation_result.json 必须顶层包含 pending" in text
-    assert "extraction_result.json 必须严格" in text
+    assert "disambiguation_result.json은 최상위에 pending" in text
+    assert "extraction_result.json은 반드시" in text
     assert "accepted_events/state_deltas/entity_deltas" in text
-    assert "禁止包在 chapter/fulfillment/disambiguation/extraction" in text
+    assert "chapter/fulfillment/disambiguation/extraction 안에 감싸는 것을 금지" in text
     assert "event_id/chapter/event_type/subject/payload" in text
 
 
@@ -368,7 +368,7 @@ def test_dashboard_and_plan_skills_surface_story_runtime_mainline():
 
 def test_webnovel_write_skill_routes_step2_through_writing_brief():
     text = (SKILLS_DIR / "webnovel-write" / "SKILL.md").read_text(encoding="utf-8")
-    assert "写作任务书" in text
+    assert "집필 작업지시서" in text
     assert "context-agent" in text
     assert "Step 0.5" not in text
     assert 'cat "${SKILL_ROOT}/../../references/shared/core-constraints.md"' not in text
@@ -379,8 +379,8 @@ def test_context_agent_and_write_skill_form_isolated_write_chain():
     context_text = (AGENTS_DIR / "context-agent.md").read_text(encoding="utf-8")
     skill_text = (SKILLS_DIR / "webnovel-write" / "SKILL.md").read_text(encoding="utf-8")
 
-    assert "写作任务书" in context_text
-    assert "写作任务书" in skill_text
+    assert "집필 작업지시서" in context_text
+    assert "집필 작업지시서" in skill_text
     assert "context-agent" in skill_text
     assert "Context Contract" not in context_text
     assert "Step 2 直写提示词" not in context_text
@@ -410,19 +410,19 @@ def test_deconstruction_agent_preserves_init_handoff_and_boundaries():
 
     assert "init_reference_research" in text
     assert ".webnovel/tmp/reference_analyses/<safe-title>/" not in text
-    assert "不写任何文件" in text
-    assert "不得写 `_progress.md`" in text
+    assert "어떤 파일도 쓰지 않는다" in text
+    assert "`_progress.md`를 써서는 안 된다" in text
     assert "resume_state" in text
     assert "tools: Read, Grep, Bash" in text
-    assert "快速模式" in text
-    assert "深度模式" in text
-    assert "黄金三章" in text
-    assert "情节点" in text
-    assert "质量门控" in text
-    assert "不得凭记忆" in text
-    assert "条件框架" in text
-    assert "情绪链条" in text
-    assert "核心梗边界" in text
+    assert "빠른 모드" in text
+    assert "심화 모드" in text
+    assert "황금 3화" in text
+    assert "플롯 포인트" in text
+    assert "품질 게이트" in text
+    assert "기억에 의존" in text
+    assert "조건 프레임" in text
+    assert "감정 체인" in text
+    assert "핵심 소재 경계" in text
 
     for field in (
         "reader_promise",
@@ -451,8 +451,8 @@ def test_deconstruction_agent_preserves_init_handoff_and_boundaries():
     ):
         assert forbidden_path in text
 
-    assert "不写 `idea_bank.json`" in text
-    assert "用户确认后" in text
+    assert "`idea_bank.json`을 쓰지 않는다" in text
+    assert "사용자 확인 후" in text
     assert "MIT License attribution" not in text
 
 
@@ -461,16 +461,16 @@ def test_webnovel_init_deconstruction_wiring_keeps_confirmation_gate():
     text = _read_text(SKILLS_DIR / "webnovel-init" / "SKILL.md")
 
     assert 'subagent_type: "webnovel-writer:deconstruction-agent"' in text
-    assert "Step 1.5：灵感来源询问" in text
-    assert "进入故事核采集前" in text
-    assert "不要默认拆书" in text
-    assert "你这本书的灵感来源想从哪里开始" in text
+    assert "Step 1.5: 영감 출처 질문" in text
+    assert "스토리 코어 수집 전" in text
+    assert "기본적으로 참고작을 분해하지 않" in text
+    assert "영감 출처를 어디서부터 시작하고 싶으신가요" in text
     assert "init_reference_research" in text
-    assert "init_reference_research JSON 对象" in text
+    assert "init_reference_research JSON 객체" in text
     assert ".webnovel/tmp/reference_analyses/<safe-title>/" not in text
     assert "project_root=${PROJECT_ROOT" not in text
-    assert "不写任何文件" in text
-    assert "不得由 init 主流程口头替代拆解结果" in text
+    assert "어떤 파일도 쓰지 않" in text
+    assert "init 메인 플로우가 구두로 분석 결과를 대체해서는 안 된다" in text
     assert "`quality`" in text
     assert "`quality.passed=false`" in text
     assert "`confidence < 0.85`" in text
@@ -498,6 +498,6 @@ def test_webnovel_init_deconstruction_wiring_keeps_confirmation_gate():
     ):
         assert forbidden_path in text
 
-    assert "用户确认前" in text
-    assert "Step 2-6 只能使用用户确认过、并已变形为本书差异化表达的模式" in text
-    assert "汇总 Step 1.5 已确认的灵感来源" in text
+    assert "사용자 확인 전" in text
+    assert "Step 2-6에서는 사용자가 확인하고 본 작품의 차별화된 표현으로 변형된 패턴만 사용할 수 있다" in text
+    assert "Step 1.5에서 확인된 영감 출처를 취합" in text

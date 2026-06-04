@@ -629,28 +629,28 @@ def test_context_manager_genre_alias_guidance_and_heading_extraction(temp_projec
     refs_dir.mkdir(parents=True, exist_ok=True)
     (refs_dir / "genre-profiles.md").write_text(
         """
-### 电竞
-- 联赛升级
+### e스포츠
+- 리그 승급
 
-### 直播文
-- 反馈闭环
+### 현대로맨스
+- 피드백 루프
 
-### 克苏鲁
-- 真相代价
+### 공포
+- 진실의 대가
 """.strip(),
         encoding="utf-8",
     )
     (refs_dir / "reading-power-taxonomy.md").write_text(
         """
-### 电竞
-- 战术决策点
+### e스포츠
+- 전술 결정 포인트
 """.strip(),
         encoding="utf-8",
     )
 
     state = {
-        "project": {"genre": "电竞"},
-        "protagonist_state": {"name": "林燃"},
+        "project": {"genre": "e스포츠"},
+        "protagonist_state": {"name": "임연"},
         "chapter_meta": {},
         "disambiguation_warnings": [],
         "disambiguation_pending": [],
@@ -662,7 +662,11 @@ def test_context_manager_genre_alias_guidance_and_heading_extraction(temp_projec
     guidance = payload["writing_guidance"]
     items = guidance.get("guidance_items") or []
 
-    assert any("战术决策点" in str(text) for text in items)
+    # 장르명(별칭 정규화 결과)이 가이던스에 앵커링되는지
+    assert any("e스포츠" in str(text) for text in items)
+    # genre-profiles.md의 해당 장르 섹션이 추출되어 전략 힌트로 반영되는지
+    assert any("리그 승급" in str(text) for text in items)
+    # 장르 무관 베이스라인(내부 가이던스, 현 단계 중국어 유지)
     assert any("网文节奏基线" in str(text) for text in items)
     assert any("兑现密度基线" in str(text) for text in items)
 
@@ -672,43 +676,43 @@ def test_context_manager_genre_aliases_normalized_for_profile_lookup(temp_projec
     refs_dir.mkdir(parents=True, exist_ok=True)
     (refs_dir / "genre-profiles.md").write_text(
         """
-## 电竞
-- 联赛升级
+## e스포츠
+- 리그 승급
 
-## 直播文
-- 实时反馈
+## 로맨스판타지
+- 실시간 피드백
 
-## 克苏鲁
-- 真相代价
+## 공포
+- 진실의 대가
 """.strip(),
         encoding="utf-8",
     )
     (refs_dir / "reading-power-taxonomy.md").write_text(
         """
-## 电竞
-- 决策后果
+## e스포츠
+- 결정의 결과
 
-## 直播文
-- 数据闭环
+## 로맨스판타지
+- 데이터 루프
 
-## 克苏鲁
-- 规则优先
+## 공포
+- 규칙 우선
 """.strip(),
         encoding="utf-8",
     )
 
     manager = ContextManager(temp_project)
 
-    assert manager._parse_genre_tokens("电竞文") == ["电竞"]
-    assert manager._parse_genre_tokens("直播") == ["直播文"]
-    assert manager._parse_genre_tokens("克系") == ["克苏鲁"]
-    assert manager._parse_genre_tokens("修仙/玄幻") == ["修仙"]
-    assert manager._parse_genre_tokens("都市修真") == ["都市异能"]
-    assert manager._parse_genre_tokens("古言脑洞") == ["古言"]
+    assert manager._parse_genre_tokens("이스포츠") == ["e스포츠"]
+    assert manager._parse_genre_tokens("로판") == ["로맨스판타지"]
+    assert manager._parse_genre_tokens("괴담") == ["공포"]
+    assert manager._parse_genre_tokens("수선") == ["선협"]
+    assert manager._parse_genre_tokens("헌터") == ["헌터물"]
+    assert manager._parse_genre_tokens("스탯창") == ["시스템"]
 
     state = {
-        "project": {"genre": "电竞文+直播"},
-        "protagonist_state": {"name": "叶修"},
+        "project": {"genre": "이스포츠+로판"},
+        "protagonist_state": {"name": "엽수"},
         "chapter_meta": {},
         "disambiguation_warnings": [],
         "disambiguation_pending": [],
@@ -718,14 +722,14 @@ def test_context_manager_genre_aliases_normalized_for_profile_lookup(temp_projec
     payload = manager.build_context(20, template="plot")
     profile = payload["genre_profile"]
 
-    assert profile.get("genre") == "电竞"
-    assert "直播文" in (profile.get("genres") or [])
+    assert profile.get("genre") == "e스포츠"
+    assert "로맨스판타지" in (profile.get("genres") or [])
 
 
 def test_context_manager_enables_methodology_for_xianxia(temp_project):
     state = {
-        "project": {"genre": "修仙"},
-        "protagonist_state": {"name": "韩立"},
+        "project": {"genre": "선협"},
+        "protagonist_state": {"name": "한립"},
         "chapter_meta": {},
         "disambiguation_warnings": [],
         "disambiguation_pending": [],
@@ -818,13 +822,13 @@ def test_context_manager_composite_genre_boundary_three_plus(temp_project):
     manager.config.context_genre_profile_support_composite = True
     manager.config.context_genre_profile_max_genres = 3
 
-    genre_raw = "电竞文+直播+克系+修仙/玄幻+电竞文"
+    genre_raw = "이스포츠+로판+괴담+수선+이스포츠"
     tokens = manager._parse_genre_tokens(genre_raw)
-    assert tokens[:4] == ["电竞", "直播文", "克苏鲁", "修仙"]
+    assert tokens[:4] == ["e스포츠", "로맨스판타지", "공포", "선협"]
 
     state = {
         "project": {"genre": genre_raw},
-        "protagonist_state": {"name": "主角"},
+        "protagonist_state": {"name": "주인공"},
         "chapter_meta": {},
         "disambiguation_warnings": [],
         "disambiguation_pending": [],
@@ -832,8 +836,8 @@ def test_context_manager_composite_genre_boundary_three_plus(temp_project):
 
     profile = manager._load_genre_profile(state)
     assert profile.get("composite") is True
-    assert profile.get("genres") == ["电竞", "直播文", "克苏鲁"]
-    assert profile.get("secondary_genres") == ["直播文", "克苏鲁"]
+    assert profile.get("genres") == ["e스포츠", "로맨스판타지", "공포"]
+    assert profile.get("secondary_genres") == ["로맨스판타지", "공포"]
 
     profile_again = manager._load_genre_profile(state)
     assert profile_again.get("genres") == profile.get("genres")

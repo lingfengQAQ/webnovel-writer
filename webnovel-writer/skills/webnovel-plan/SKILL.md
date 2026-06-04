@@ -1,50 +1,50 @@
 ---
 name: webnovel-plan
-description: 基于总纲生成卷纲、时间线和章纲，并把新增设定增量写回现有设定集。
+description: 마스터 아웃라인을 기반으로 권 아웃라인·타임라인·화별 아웃라인을 생성하고, 새로 추가된 설정을 기존 설정집에 증분 반영합니다.
 ---
 
 # Outline Planning
 
-## 目标
+## 목표
 
-- 基于总纲细化卷纲、时间线与章纲，不重做全局故事。
-- 先补齐设定基线，再产出可直接进入写作的章纲。
-- 卷纲完成后，把新增设定增量写回现有设定集。
-- 将详细大纲升级为"结构化详细大纲"，为下游写作提供中层情节结构。
+- 마스터 대강을 기반으로 권 대강, 타임라인, 화별 대강을 세분화하되 전체 스토리를 다시 만들지 않는다.
+- 먼저 설정 기준선을 보완하고, 그 다음 바로 집필에 들어갈 수 있는 화별 대강을 산출한다.
+- 권 대강 완성 후, 새로 추가된 설정을 기존 설정집에 증분 반영한다.
+- 상세 대강을 "구조화된 상세 대강"으로 업그레이드하여 다운스트림 집필에 중간 레벨 플롯 구조를 제공한다.
 
-## 执行原则
+## 실행 원칙
 
-1. 只做增量补齐，不重写整份总纲或设定集。
-2. 先锁定卷级节奏，再批量拆章。
-3. 时间线是硬约束，所有章纲都必须带时间字段。
-4. 若发现总纲与设定冲突，先阻断，再等用户裁决。
-5. 结构化节点服务于写作执行，不追求语法学上的严格 SVO 抽取。
+1. 증분 보완만 수행하며, 전체 마스터 대강이나 설정집을 다시 쓰지 않는다.
+2. 먼저 권 레벨 리듬을 고정하고, 그 다음 화를 일괄 분해한다.
+3. 타임라인은 하드 제약이므로, 모든 화별 대강에 반드시 시간 필드가 있어야 한다.
+4. 마스터 대강과 설정이 충돌하면 먼저 차단하고 사용자 판단을 기다린다.
+5. 구조화 노드는 집필 실행을 위한 것이며, 언어학적으로 엄격한 SVO 추출을 추구하지 않는다.
 
-## 常见误区
+## 흔한 오류
 
-- ❌ 先拆章再想卷级目标
-- ❌ 时间线字段缺失但仍继续拆章
-- ❌ 把结构化节点写成空泛摘要句
-- ❌ 一次性读完全部 reference 再开始规划
-- ❌ 发现设定冲突后继续产出章纲而不阻断
+- ❌ 화를 먼저 분해하고 나서 권 레벨 목표를 생각하는 것
+- ❌ 타임라인 필드가 없는데도 화 분해를 계속하는 것
+- ❌ 구조화 노드를 공허한 요약 문장으로 작성하는 것
+- ❌ 모든 reference를 한 번에 다 읽고 나서 기획을 시작하는 것
+- ❌ 설정 충돌을 발견했는데도 차단하지 않고 화별 대강을 계속 산출하는 것
 
-## 优先级链
+## 우선순위 체인
 
-1. 用户明确要求（最高）
-2. 总纲核心冲突与卷末高潮（不可偏离）
-3. 时间线硬约束（单调递增、倒计时正确）
-4. skill 默认流程
-5. reference 建议（最低）
+1. 사용자 명시 요구 (최고)
+2. 마스터 대강의 핵심 갈등과 권말 클라이맥스 (이탈 불가)
+3. 타임라인 하드 제약 (단조 증가, 카운트다운 정확)
+4. 스킬 기본 플로우
+5. reference 권고 (최저)
 
-## 决策树入口
+## 결정 트리 진입점
 
-- 若项目根不合法或总纲缺失 → **阻断**
-- 若总纲缺少卷名/章节范围/核心冲突/卷末高潮 → **阻断**，请求用户补全
-- 若 Step 2 发现设定冲突 → **标记 BLOCKER**，等待用户裁决
-- 若批量拆章时时间回跳且未标注闪回 → **阻断**当前批次
-- 若 Step 9 验证失败 → 只重做失败批次，不覆盖整卷
+- 프로젝트 루트가 유효하지 않거나 마스터 대강이 없으면 → **차단**
+- 마스터 대강에 권명/화 범위/핵심 갈등/권말 클라이맥스가 없으면 → **차단**, 사용자에게 보완 요청
+- Step 2에서 설정 충돌 발견 시 → **BLOCKER 표시**, 사용자 판단 대기
+- 화 일괄 분해 시 시간이 역행하고 플래시백 표시가 없으면 → 현재 배치 **차단**
+- Step 9 검증 실패 시 → 실패한 배치만 재작업하고, 전체 권을 덮어쓰지 않음
 
-## 环境准备
+## 환경 준비
 
 ```bash
 export WORKSPACE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
@@ -55,26 +55,26 @@ export PROJECT_ROOT="$(python "${SCRIPTS_DIR}/webnovel.py" --project-root "${WOR
 python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" placeholder-scan --format text
 ```
 
-若本次规划会直接落到具体章节，还必须先刷新 Story System runtime 合同：
+이번 기획이 구체적인 화까지 직접 다루는 경우, 먼저 Story System 런타임 계약을 갱신해야 한다:
 
 ```bash
-# genre 从 state.json 的初始化配置快照读取；写前主链真源是 .story-system 合同树。
-# 必须先从详细大纲解析真实 CHAPTER_GOAL，禁止传 {章纲目标} / 第N章章纲目标 这类占位文本。
+# genre는 state.json의 초기화 설정 스냅샷에서 읽는다. 집필 메인 체인의 진짜 소스는 .story-system 계약 트리다.
+# 반드시 먼저 상세 대강에서 실제 CHAPTER_GOAL을 파싱해야 하며, {화별대강목표} / 제N화 대강목표 같은 플레이스홀더를 전달하는 것을 금지한다.
 GENRE="$(python -X utf8 -c "import json,sys; s=json.load(open('${PROJECT_ROOT}/.webnovel/state.json',encoding='utf-8')); print(s.get('project',{}).get('genre',''))")"
 
 python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" \
   story-system "${CHAPTER_GOAL}" --genre "${GENRE}" --chapter {chapter_num} --persist --emit-runtime-contracts --format both
 ```
 
-生成后必须把 `.story-system/MASTER_SETTING.json`、`.story-system/volumes/`、
-`.story-system/chapters/`、`.story-system/reviews/` 视为后续写作主链输入。
-规划开始/结束都运行 `placeholder-scan`；plan 阶段发现占位先警告并补齐相关文件，进入写章前不得保留当前章相关实体的 `[待...]` / `暂名` / `{占位}`。
-每卷规划完成后，只向 `大纲/总纲.md` 渐进追加下一卷概要与本卷新增/承接伏笔，不在 init 阶段预填 V2-V20 空表。
-规划完成后写回必须来自显式结构化文件 `大纲/第{volume_id}卷-总纲写回.json`，禁止从卷纲自由文本推断伏笔或开放环。
+생성 후 반드시 `.story-system/MASTER_SETTING.json`、`.story-system/volumes/`、
+`.story-system/chapters/`、`.story-system/reviews/`를 이후 집필 메인 체인 입력으로 취급해야 한다.
+기획 시작/종료 시 모두 `placeholder-scan`을 실행한다. plan 단계에서 플레이스홀더가 발견되면 먼저 경고하고 관련 파일을 보완한다. 화 집필 진입 전에는 현재 화 관련 엔티티의 `[미정...]` / `임시명` / `{플레이스홀더}`를 남겨두어서는 안 된다.
+매 권 기획 완료 후, `outline/마스터아웃라인.md`에 다음 권의 개요와 본 권에서 새로 추가/승계된 복선만 점진적으로 추가하며, init 단계에서 V2-V20 빈 표를 미리 채우지 않는다.
+기획 완료 후 반영은 반드시 명시적 구조화 파일 `outline/제{volume_id}권-마스터반영.json`에서 와야 하며, 권 대강 자유 텍스트에서 복선이나 열린 고리를 자유롭게 추론하는 것을 금지한다.
 
-## 引用加载策略
+## 참조 로딩 전략
 
-### md 必读
+### 필수 읽기 md
 
 | Step | Trigger | Reference |
 |------|---------|-----------|
@@ -82,144 +82,144 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" \
 | Step 5 | always | `templates/output/大纲-卷时间线.md` |
 | Step 6 | always | `../../references/genre-profiles.md` |
 | Step 6 | always | `../../references/shared/strand-weave-pattern.md` |
-| 章纲拆分 | always | `../../references/outlining/plot-signal-vs-spoiler.md` |
+| 화별 대강 분해 | always | `../../references/outlining/plot-signal-vs-spoiler.md` |
 
-### md 按需
+### 조건부 읽기 md
 
 | Step | Trigger | Reference |
 |------|---------|-----------|
-| Step 6 | 需要爽点设计 | `../../references/shared/cool-points-guide.md` |
-| Step 6/7 | 需要冲突设计 | `references/outlining/conflict-design.md` |
-| Step 7 | 需要追读力分析 | `../../references/reading-power-taxonomy.md` |
-| Step 7 | 需要章纲细化 | `references/outlining/chapter-planning.md` |
-| Step 6/7 | 特定题材节奏 | `references/outlining/genre-volume-pacing.md` |
+| Step 6 | 사이다 설계 필요 시 | `../../references/shared/cool-points-guide.md` |
+| Step 6/7 | 갈등 설계 필요 시 | `references/outlining/conflict-design.md` |
+| Step 7 | 추독력 분석 필요 시 | `../../references/reading-power-taxonomy.md` |
+| Step 7 | 화별 대강 세분화 필요 시 | `references/outlining/chapter-planning.md` |
+| Step 6/7 | 특정 장르 리듬 | `references/outlining/genre-volume-pacing.md` |
 
-### CSV 检索
+### CSV 검색
 
-| Step | Trigger | 检索命令 |
+| Step | Trigger | 검색 명령 |
 |------|---------|---------|
-| 卷级规划 | always | `python -X utf8 "${SCRIPTS_DIR}/reference_search.py" --skill plan --table 场景写法 --query "卷级结构 叙事功能"` |
-| 章纲拆分 | 新增角色出现 | `... --skill plan --table 命名规则 --query "角色命名" --genre {题材}` |
+| 권 레벨 기획 | always | `python -X utf8 "${SCRIPTS_DIR}/reference_search.py" --skill plan --table 场景写法 --query "卷级结构 叙事功能"` |
+| 화별 대강 분해 | 새 캐릭터 등장 시 | `... --skill plan --table 命名规则 --query "角色命名" --genre {장르}` |
 
-## 执行流程
+## 실행 플로우
 
-### Step 1：加载项目数据并确认前置条件
+### Step 1: 프로젝트 데이터 로딩 및 전제 조건 확인
 
-**必须加载**：
+**반드시 로딩해야 함**:
 
 ```bash
-# 项目配置/投影状态（兼容读取，不作为写后事实真源）
+# 프로젝트 설정/상태 프로젝션 (호환 읽기, 집필 후 사실 진짜 소스로 사용하지 않음)
 cat "$PROJECT_ROOT/.webnovel/state.json"
 
-# 总纲（全局蓝图）
-cat "$PROJECT_ROOT/大纲/总纲.md"
+# 마스터 대강 (전체 블루프린트)
+cat "$PROJECT_ROOT/outline/마스터아웃라인.md"
 
-# 题材（来自 init 配置快照，后续 CSV 检索和裁决匹配依赖此值）
+# 장르 (init 설정 스냅샷에서, 이후 CSV 검색과 판단 매칭에 이 값 사용)
 GENRE="$(python -X utf8 -c "import json; s=json.load(open('${PROJECT_ROOT}/.webnovel/state.json',encoding='utf-8')); print(s.get('project',{}).get('genre',''))")"
 ```
 
-**已有卷的剧情状态**（跨卷规划时必须加载）：
+**기존 권의 플롯 상태** (권 간 기획 시 반드시 로딩):
 
-若已有已完成卷（`.webnovel/summaries/` 下有文件），加载以下数据感知已写内容：
+이미 완성된 권이 있으면 (`.webnovel/summaries/` 아래에 파일이 있으면), 다음 데이터를 로딩하여 기작성 내용을 파악한다:
 
 ```bash
-# 最近 5 章摘要（了解剧情走向）
+# 최근 5화 요약 (플롯 흐름 파악)
 for ch in $(seq $((START_CH - 5)) $((START_CH - 1))); do
   cat "$PROJECT_ROOT/.webnovel/summaries/ch$(printf '%04d' $ch).md" 2>/dev/null
 done
 
-# 核心角色当前状态
+# 핵심 캐릭터 현재 상태
 python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
-  knowledge query-entity-state --entity "{protagonist_id}" --at-chapter {上一卷最后章}
+  knowledge query-entity-state --entity "{protagonist_id}" --at-chapter {이전 권 마지막 화}
 
-# 核心关系当前状态
+# 핵심 관계 현재 상태
 python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
-  knowledge query-relationships --entity "{protagonist_id}" --at-chapter {上一卷最后章}
+  knowledge query-relationships --entity "{protagonist_id}" --at-chapter {이전 권 마지막 화}
 
-# 活跃伏笔（跨卷未回收的伏笔）
+# 활성 복선 (권 간 미회수 복선)
 python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
   memory-contract get-open-loops
 ```
 
-**CSV 创作参考**（卷级规划时按需检索）：
+**CSV 창작 참조** (권 레벨 기획 시 필요에 따라 검색):
 
 ```bash
-python -X utf8 "${SCRIPTS_DIR}/reference_search.py" --skill plan --table 爽点与节奏 --query "{卷级核心冲突}" --genre "${GENRE}"
-python -X utf8 "${SCRIPTS_DIR}/reference_search.py" --skill plan --table 桥段套路 --query "{卷级核心冲突}" --genre "${GENRE}"
+python -X utf8 "${SCRIPTS_DIR}/reference_search.py" --skill plan --table 爽点与节奏 --query "{권 레벨 핵심 갈등}" --genre "${GENRE}"
+python -X utf8 "${SCRIPTS_DIR}/reference_search.py" --skill plan --table 桥段套路 --query "{권 레벨 핵심 갈등}" --genre "${GENRE}"
 ```
 
-**按需读取**（设定集）：
-- `设定集/世界观.md`
-- `设定集/力量体系.md`
-- `设定集/主角卡.md`
-- `设定集/反派设计.md`
+**필요에 따라 읽기** (설정집):
+- `settings/세계관.md`
+- `settings/파워시스템.md`
+- `settings/주인공카드.md`
+- `settings/빌런설계.md`
 - `.webnovel/idea_bank.json`
 
-阻断条件：
-- 总纲缺少卷名、章节范围、核心冲突或卷末高潮
+차단 조건:
+- 마스터 대강에 권명, 화 범위, 핵심 갈등 또는 권말 클라이맥스가 없을 때
 
-### Step 2：补齐设定基线
+### Step 2: 설정 기준선 보완
 
-目标：让设定集从骨架模板进入"可规划、可写作"的状态。
+목표: 설정집을 골격 템플릿 상태에서 "기획 가능, 집필 가능" 상태로 전환한다.
 
-必须补齐：
-- `设定集/世界观.md`：世界边界、社会结构、关键地点用途
-- `设定集/力量体系.md`：境界链、限制、代价与冷却
-- `设定集/主角卡.md`：欲望、缺陷、初始资源与限制
-- `设定集/反派设计.md`：小/中/大反派层级与镜像关系
+반드시 보완해야 할 항목:
+- `settings/세계관.md`: 세계 경계, 사회 구조, 핵심 장소 용도
+- `settings/파워시스템.md`: 경지 체계, 제한, 대가와 쿨다운
+- `settings/주인공카드.md`: 욕망, 결함, 초기 자원과 제한
+- `settings/빌런설계.md`: 소/중/대 빌런 계층과 미러 관계
 
-硬规则：
-- 只增量补齐，不清空、不重写整文件
-- 发现冲突时先列出冲突并阻断
+하드 규칙:
+- 증분 보완만 수행하고, 전체 파일을 비우거나 다시 쓰지 않는다
+- 충돌 발견 시 충돌 목록을 먼저 나열하고 차단한다
 
-### Step 3：选择目标卷并确认范围
+### Step 3: 목표 권 선택 및 범위 확인
 
-必须确认：
-- 卷名
-- 章节范围
-- 核心冲突
-- 是否存在特殊要求，例如视角、情感线、题材偏移
+반드시 확인해야 할 항목:
+- 권명
+- 화 범위
+- 핵심 갈등
+- 특수 요구 사항 여부 (시점, 감정 라인, 장르 변화 등)
 
-### Step 4：生成卷节拍表
+### Step 4: 권 비트 시트 생성
 
-执行前加载模板：
+실행 전 템플릿 로딩:
 
 ```bash
 cat "${SKILL_ROOT}/../../templates/output/大纲-卷节拍表.md"
 ```
 
-硬要求：
-- 必须填写中段反转；若确实没有，写"无（理由：...）"
-- 危机链至少 3 次递增
-- 卷末新钩子必须能落到最后一章的章末未闭合问题
+하드 요구사항:
+- 반드시 중간 반전을 작성해야 한다. 실제로 없다면 "없음 (이유: ...)"으로 적는다
+- 위기 체인은 최소 3번 점층적으로 고조되어야 한다
+- 권말 새 훅은 반드시 마지막 화의 화말 미결 문제로 연결될 수 있어야 한다
 
-输出文件：`大纲/第{volume_id}卷-节拍表.md`
+출력 파일: `outline/제{volume_id}권-비트시트.md`
 
-### Step 5：生成卷时间线表
+### Step 5: 권 타임라인 표 생성
 
-执行前加载模板：
+실행 전 템플릿 로딩:
 
 ```bash
 cat "${SKILL_ROOT}/../../templates/output/大纲-卷时间线.md"
 ```
 
-硬要求：
-- 必须明确时间体系
-- 必须明确本卷时间跨度
-- 有倒计时事件时必须列出并标记 D-N
+하드 요구사항:
+- 반드시 시간 체계를 명확히 해야 한다
+- 반드시 본 권의 시간 범위를 명확히 해야 한다
+- 카운트다운 이벤트가 있을 때 반드시 나열하고 D-N으로 표시해야 한다
 
-输出文件：`大纲/第{volume_id}卷-时间线.md`
+출력 파일: `outline/제{volume_id}권-타임라인.md`
 
-### Step 6：生成卷纲骨架
+### Step 6: 권 대강 골격 생성
 
-必须加载：
+반드시 로딩해야 함:
 
 ```bash
 cat "${SKILL_ROOT}/../../references/genre-profiles.md"
 cat "${SKILL_ROOT}/../../references/shared/strand-weave-pattern.md"
 ```
 
-按需加载：
+필요에 따라 로딩:
 
 ```bash
 cat "${SKILL_ROOT}/../../references/shared/cool-points-guide.md"
@@ -228,157 +228,157 @@ cat "${SKILL_ROOT}/references/outlining/genre-volume-pacing.md"
 cat "$PROJECT_ROOT/.webnovel/idea_bank.json"
 ```
 
-卷纲必须明确：
-- 卷摘要
-- 关键人物与反派层级
-- Strand 分布
-- 爽点密度规划
-- 伏笔规划
-- 约束触发规划
+권 대강에 반드시 명확히 해야 할 항목:
+- 권 요약
+- 핵심 인물과 빌런 계층
+- Strand 분포
+- 사이다 밀도 기획
+- 복선 기획
+- 제약 트리거 기획
 
-跨卷一致性检查（非首卷时必须执行）：
-- 上一卷未回收的伏笔必须出现在新卷的伏笔规划中（继续推进或标记回收）
-- 角色关系变化必须延续（不能当上一卷没发生过）
-- 主角能力/境界必须承接（不能回退也不能跳级，除非有剧情解释）
+권 간 일관성 검사 (첫 권이 아닐 때 반드시 실행):
+- 이전 권에서 미회수된 복선은 새 권의 복선 기획에 반드시 등장해야 한다 (계속 추진하거나 회수 표시)
+- 캐릭터 관계 변화는 반드시 이어받아야 한다 (이전 권에 아무 일도 없었던 것처럼 할 수 없음)
+- 주인공의 능력/경지는 반드시 이어받아야 한다 (후퇴하거나 단계를 건너뛸 수 없음, 플롯 설명이 있는 경우 제외)
 
-### Step 7：批量生成章纲
+### Step 7: 화별 대강 일괄 생성
 
-批次规则：
-- 默认按 `10章/批`
-- 复杂题材或多线并进时可降到 `8章/批`
-- 简单升级流可放宽到 `12章/批`
-- 不建议单批超过 `12章`
+배치 규칙:
+- 기본 `10화/배치`
+- 복잡한 장르나 다중 라인 병행 시 `8화/배치`로 줄일 수 있음
+- 단순 레벨업 물은 `12화/배치`로 늘릴 수 있음
+- 단일 배치 `12화` 초과는 권장하지 않음
 
-按需加载：
+필요에 따라 로딩:
 
 ```bash
 cat "${SKILL_ROOT}/../../references/reading-power-taxonomy.md"
 cat "${SKILL_ROOT}/references/outlining/chapter-planning.md"
 ```
 
-每章必须包含：
-- 目标
-- 阻力
-- 代价
-- 时间锚点
-- 章内时间跨度
-- 与上章时间差
-- 倒计时状态
-- 爽点
+각 화에 반드시 포함해야 할 항목:
+- 목표
+- 저항
+- 대가
+- 시간 앵커
+- 화 내 시간 범위
+- 이전 화와의 시간 차
+- 카운트다운 상태
+- 사이다
 - Strand
-- 反派层级
-- 视角/主角
-- 关键实体
-- 本章变化
-- 章末未闭合问题
-- 钩子
-- `章节起点（CBN）`
-- `推进节点（CPNs）`
-- `章节终点（CEN）`
-- `必须覆盖节点`
-- `本章禁区`
+- 빌런 계층
+- 시점/주인공
+- 핵심 엔티티
+- 이번 화 변화
+- 화말 미결 문제
+- 훅
+- `화 시작점 (CBN)`
+- `추진 노드 (CPNs)`
+- `화 종점 (CEN)`
+- `반드시 커버할 노드`
+- `이번 화 금지 구역`
 
-#### 结构化节点规范
+#### 구조화 노드 규범
 
-节点格式统一为：
+노드 형식 통일:
 
-`主体 | 动作/变化 | 对象/结果`
+`주체 | 행동/변화 | 대상/결과`
 
-说明：
-- 这里的节点是写作执行骨架，不追求严格语法学 SVO。
-- `动作/变化` 可以表示行动、判断、意识变化或状态转移。
-- `对象/结果` 可以是人、物、地点，也可以是结果状态。
+설명:
+- 여기서의 노드는 집필 실행 골격이며, 엄격한 언어학적 SVO를 추구하지 않는다.
+- `행동/변화`는 행동, 판단, 인식 변화, 또는 상태 전이를 표현할 수 있다.
+- `대상/결과`는 사람, 사물, 장소일 수도 있고 결과 상태일 수도 있다.
 
-示例：
-- `萧炎 | 抵达 | 迦南学院入口`
-- `萧炎 | 展示 | 异火控制力`
-- `药老 | 对萧炎产生 | 明确兴趣`
-- `萧炎 | 意识到 | 学院考核远比预想更严苛`
+예시:
+- `소염 | 도착 | 가남학원 입구`
+- `소염 | 시연 | 이화 제어력`
+- `약로 | 소염에게 | 명확한 관심 형성`
+- `소염 | 인식 | 학원 시험이 예상보다 훨씬 엄격함`
 
-结构规则：
-- 每章固定 `1 个 CBN`
-- 每章 `2-4 个 CPN`
-- 每章固定 `1 个 CEN`
-- 相邻章节 `CEN -> 下一章 CBN` 必须逻辑承接（首章和末章除外）
-- `CPNs` 必须按时间顺序排列
+구조 규칙:
+- 각 화 고정 `1개 CBN`
+- 각 화 `2~4개 CPN`
+- 각 화 고정 `1개 CEN`
+- 인접한 화의 `CEN → 다음 화 CBN`은 반드시 논리적으로 이어져야 함 (첫 화와 마지막 화 제외)
+- `CPNs`는 반드시 시간 순서로 나열해야 함
 
-必须覆盖规则：
-- 每章必须覆盖节点最多 `4` 个
-- 建议为：`CBN + CEN + 1~2 个核心 CPN`
-- 可选节点只作为写作建议，不得作为 fail 主依据
+반드시 커버할 노드 규칙:
+- 각 화 반드시 커버할 노드는 최대 `4`개
+- 권장 구성: `CBN + CEN + 핵심 CPN 1~2개`
+- 선택 노드는 집필 제안으로만 활용하며, fail의 주요 근거로 삼아서는 안 됨
 
-本章禁区规则：
-- 不超过 `5` 条
-- 只写本章绝对不能发生的硬禁区
-- 不写风格类建议，不写空泛表述
+이번 화 금지 구역 규칙:
+- `5`개를 초과하지 않음
+- 이번 화에 절대 일어나서는 안 되는 하드 금지 구역만 작성
+- 스타일 관련 제안이나 공허한 서술을 쓰지 않음
 
-向后兼容：
-- 若旧项目章纲缺失 `CBN/CPNs/CEN/必须覆盖节点/本章禁区` 字段，下游流程正常执行，仅跳过结构化检查
+하위 호환:
+- 구 프로젝트 화별 대강에 `CBN/CPNs/CEN/반드시 커버할 노드/이번 화 금지 구역` 필드가 없는 경우, 다운스트림 플로우는 정상 실행하되 구조화 검사만 건너뜀
 
-输出文件：`大纲/第{volume_id}卷-详细大纲.md`
+출력 파일: `outline/제{volume_id}권-상세대강.md`
 
-### Step 8：把新增设定写回现有设定集
+### Step 8: 새로 추가된 설정을 기존 설정집에 반영
 
-输入来源：
-- 卷节拍表
-- 卷时间线表
-- 卷详细大纲
-- 现有设定集文件
+입력 소스:
+- 권 비트 시트
+- 권 타임라인 표
+- 권 상세 대강
+- 기존 설정집 파일
 
-写回规则：
-- 只增量补充相关段落
-- 新角色写入角色卡或角色组
-- 新势力、地点、规则写入世界观或力量体系
-- 新反派层级写入反派设计
+반영 규칙:
+- 관련 단락만 증분 보완한다
+- 새 캐릭터는 캐릭터 카드 또는 캐릭터 그룹에 작성한다
+- 새 세력, 장소, 규칙은 세계관 또는 파워 체계에 작성한다
+- 새 빌런 계층은 빌런 설계에 작성한다
 
-硬规则：
-- 若发现与总纲或既有设定冲突，标记 `BLOCKER` 并停止后续更新
+하드 규칙:
+- 마스터 대강 또는 기존 설정과 충돌이 발견되면 `BLOCKER`를 표시하고 이후 업데이트를 중단한다
 
-### Step 9：验证、保存并更新状态
+### Step 9: 검증, 저장 및 상태 업데이트
 
-必须通过以下检查：
-- 节拍表存在且非空
-- 时间线表存在且非空
-- 详细大纲存在且非空
-- 每章时间字段齐全
-- 时间线单调递增
-- 倒计时推进正确
-- 新设定已回写到现有设定集
+다음 검사를 반드시 통과해야 한다:
+- 비트 시트가 존재하고 비어있지 않음
+- 타임라인 표가 존재하고 비어있지 않음
+- 상세 대강이 존재하고 비어있지 않음
+- 각 화 시간 필드가 모두 완전함
+- 타임라인이 단조 증가함
+- 카운트다운이 올바르게 추진됨
+- 새 설정이 기존 설정집에 반영됨
 - `BLOCKER=0`
-- 有节点时，相邻章节 `CEN -> CBN` 无明显逻辑冲突
-- 有节点时，每章必须覆盖节点不超过 `4` 个
+- 노드가 있을 때, 인접한 화의 `CEN → CBN`에 명백한 논리 충돌이 없음
+- 노드가 있을 때, 각 화 반드시 커버할 노드가 `4`개를 초과하지 않음
 
-验证全部通过后，生成显式结构化写回文件：
+모든 검증을 통과한 후, 명시적 구조화 반영 파일을 생성한다:
 
 ```json
 {
   "next_volume_anchor": {
     "volume": 2,
-    "volume_name": "下一卷卷名",
-    "core_conflict": "下一卷核心冲突",
-    "volume_end_climax": "下一卷卷末高潮"
+    "volume_name": "다음 권명",
+    "core_conflict": "다음 권 핵심 갈등",
+    "volume_end_climax": "다음 권 권말 클라이맥스"
   },
   "foreshadow_writeback": [
-    {"content": "本卷规划明确新增的伏笔", "buried_chapter": "第10章", "payoff_chapter": "", "level": "卷级"}
+    {"content": "본 권 기획에서 명확히 새로 추가된 복선", "buried_chapter": "제10화", "payoff_chapter": "", "level": "권 레벨"}
   ],
   "open_loop_writeback": [
-    {"content": "本卷结束后仍持续开放的问题", "buried_chapter": "", "payoff_chapter": "", "level": "持续开放环"}
+    {"content": "본 권 종료 후에도 계속 열려있는 문제", "buried_chapter": "", "payoff_chapter": "", "level": "지속 열린 고리"}
   ]
 }
 ```
 
-只允许写入规划过程中显式列出的结构化伏笔/开放环；不要把自由文本里的暗示整理进去。随后执行最小总纲写回：
+기획 과정에서 명시적으로 나열된 구조화 복선/열린 고리만 작성이 허용된다. 자유 텍스트의 암시를 정리해서 넣지 않는다. 그 후 최소 마스터 대강 반영을 실행한다:
 
 ```bash
 python "${SCRIPTS_DIR}/webnovel.py" --project-root "$PROJECT_ROOT" master-outline-sync \
   --volume {volume_id} \
-  --writeback-file "大纲/第{volume_id}卷-总纲写回.json" \
+  --writeback-file "outline/제{volume_id}권-마스터반영.json" \
   --format text
 ```
 
-该步骤只允许更新 `大纲/总纲.md` 的 V+1 卷名 / 核心冲突 / 卷末高潮与伏笔表，不得生成下一卷详细大纲、节拍表、时间线或章纲。
+이 단계는 `outline/마스터아웃라인.md`의 V+1 권명 / 핵심 갈등 / 권말 클라이맥스와 복선 표만 업데이트할 수 있으며, 다음 권의 상세 대강, 비트 시트, 타임라인 또는 화별 대강을 생성해서는 안 된다.
 
-更新状态：
+상태 업데이트:
 
 ```bash
 python "${SCRIPTS_DIR}/webnovel.py" --project-root "$PROJECT_ROOT" update-state -- \
@@ -386,20 +386,20 @@ python "${SCRIPTS_DIR}/webnovel.py" --project-root "$PROJECT_ROOT" update-state 
   --chapters-range "{start}-{end}"
 ```
 
-## 硬失败条件
+## 하드 실패 조건
 
-- 节拍表不存在或为空
-- 中段反转缺失且未给出理由
-- 时间线表不存在或为空
-- 详细大纲不存在或为空
-- 任一章节缺少时间字段
-- 时间回跳且未标注闪回
-- 倒计时算术冲突
-- 与总纲核心冲突或卷末高潮明显冲突
-- 存在 `BLOCKER` 未裁决
+- 비트 시트가 없거나 비어있음
+- 중간 반전이 없고 이유도 제시되지 않음
+- 타임라인 표가 없거나 비어있음
+- 상세 대강이 없거나 비어있음
+- 어느 화든 시간 필드가 누락됨
+- 시간이 역행하고 플래시백 표시가 없음
+- 카운트다운 산술 충돌
+- 마스터 대강의 핵심 갈등 또는 권말 클라이맥스와 명백히 충돌
+- 미판단된 `BLOCKER`가 존재
 
-## 恢复规则
+## 복구 규칙
 
-1. 只重做失败批次，不覆盖整卷文件。
-2. 最后一个批次无效时，只删除并重写该批次。
-3. 仅在全部验证通过后更新状态。
+1. 실패한 배치만 재작업하고, 전체 권 파일을 덮어쓰지 않는다.
+2. 마지막 배치가 유효하지 않을 때, 해당 배치만 삭제하고 재작성한다.
+3. 모든 검증을 통과한 후에만 상태를 업데이트한다.

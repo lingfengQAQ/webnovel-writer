@@ -93,7 +93,7 @@
 
 ## 🛠️ 人物卡模板 (Character Sheet)
 
-在 `/webnovel-init` 生成的 `设定集/主角卡.md` 中，应包含：
+在 `/webnovel-init` 生成的 `settings/주인공카드.md` 中，应包含：
 
 ```markdown
 **姓名**: 林天

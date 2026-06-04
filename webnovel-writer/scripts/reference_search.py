@@ -171,6 +171,14 @@ def resolve_genre(genre: Optional[str]) -> Optional[str]:
         return PLATFORM_TO_CANONICAL[g]
     if g in _LEGACY_GENRE_MAP:
         return _LEGACY_GENRE_MAP[g]
+    # 한국 장르 입력 → 중국어 canonical 브리지 (참고 CSV 매칭용)
+    try:
+        from data_modules.genre_aliases import to_csv_genre
+    except ImportError:  # pragma: no cover
+        from scripts.data_modules.genre_aliases import to_csv_genre
+    cn = to_csv_genre(g)
+    if cn:
+        return cn
     return g  # unresolvable — pass through
 
 

@@ -781,41 +781,47 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
         }
 
     # ===========================================================
-    # API：文档浏览（正文/大纲/设定集 —— 只读）
+    # API: 문서 브라우징(manuscript/outline/settings — 읽기 전용)
+    # 영문 디렉터리 우선, 레거시(중국어) 디렉터리도 존재 시 노출.
     # ===========================================================
+
+    # (영문, 레거시) 쌍 — 존재하는 쪽을 사용
+    _DOC_FOLDERS = (
+        ("manuscript", "正文"),
+        ("outline", "大纲"),
+        ("settings", "设定集"),
+    )
 
     @app.get("/api/files/tree")
     def file_tree():
-        """列出 正文/、大纲/、设定集/ 三个目录的树结构。"""
+        """manuscript/outline/settings 세 디렉터리의 트리 구조를 반환."""
         root = _get_project_root()
         result = {}
-        for folder_name in ("正文", "大纲", "设定集"):
-            folder = root / folder_name
-            if not folder.is_dir():
-                result[folder_name] = []
-                continue
-            result[folder_name] = _walk_tree(folder, root)
+        for english, legacy in _DOC_FOLDERS:
+            folder = root / english if (root / english).is_dir() else root / legacy
+            result[english] = _walk_tree(folder, root) if folder.is_dir() else []
         return result
 
     @app.get("/api/files/read")
     def file_read(path: str):
-        """只读读取一个文件内容（限 正文/大纲/设定集 目录）。"""
+        """파일 내용을 읽기 전용으로 반환(manuscript/outline/settings 한정)."""
         root = _get_project_root()
         resolved = safe_resolve(root, path)
 
-        # 二次限制：只允许三大目录
-        allowed_parents = [root / n for n in ("正文", "大纲", "设定集")]
+        # 2차 제한: 허용된 디렉터리(영문+레거시)만
+        allowed_names = [name for pair in _DOC_FOLDERS for name in pair]
+        allowed_parents = [root / n for n in allowed_names]
         if not any(_is_child(resolved, p) for p in allowed_parents):
-            raise HTTPException(403, "仅允许读取 正文/大纲/设定集 目录下的文件")
+            raise HTTPException(403, "manuscript/outline/settings 디렉터리의 파일만 읽을 수 있습니다")
 
         if not resolved.is_file():
-            raise HTTPException(404, "文件不存在")
+            raise HTTPException(404, "파일이 없습니다")
 
         # 文本文件直接读；其他情况返回占位信息
         try:
             content = resolved.read_text(encoding="utf-8")
         except UnicodeDecodeError:
-            content = "[二进制文件，无法预览]"
+            content = "[바이너리 파일 — 미리보기 불가]"
 
         return {"path": path, "content": content}
 

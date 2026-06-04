@@ -3,9 +3,12 @@
 """
 Data Modules - 配置文件
 
-API 配置通过环境变量读取（支持 .env 文件）：
+API 설정은 환경변수로 읽는다(.env 파일 지원):
 - EMBED_BASE_URL, EMBED_MODEL, EMBED_API_KEY
 - RERANK_BASE_URL, RERANK_MODEL, RERANK_API_KEY
+
+주의(한국 시장): embed_base_url 기본값은 ModelScope(중국)다. 한국에서 접속이
+불안정할 수 있으므로 OpenAI 호환 다국어 임베딩 엔드포인트를 .env로 지정하길 권장한다.
 """
 
 import os
@@ -16,6 +19,16 @@ from typing import Optional
 from runtime_compat import normalize_windows_path
 
 from .context_weights import TEMPLATE_WEIGHTS_DYNAMIC_DEFAULT
+from .naming import (
+    DIR_MANUSCRIPT,
+    DIR_SETTINGS,
+    DIR_OUTLINE,
+    DIR_REVIEWS,
+    LEGACY_DIR_MANUSCRIPT,
+    LEGACY_DIR_SETTINGS,
+    LEGACY_DIR_OUTLINE,
+    LEGACY_DIR_REVIEWS,
+)
 
 def _get_user_claude_root() -> Path:
     raw = os.environ.get("WEBNOVEL_CLAUDE_HOME") or os.environ.get("CLAUDE_HOME")
@@ -112,17 +125,36 @@ class DataModulesConfig:
 
     # v5.1 引入: alias_index_file 已废弃，别名存储在 index.db aliases 表
 
+    def _resolve_dir(self, english: str, legacy: str) -> Path:
+        """영문 디렉터리를 우선하되, 레거시(중국어) 디렉터리가 있으면 읽기 호환.
+
+        - 영문 디렉터리가 존재하면 그것을 반환
+        - 영문은 없고 레거시만 존재하면 레거시 반환(기존 중국어 프로젝트 호환)
+        - 둘 다 없으면 영문 경로 반환(신규 생성은 항상 영문)
+        """
+        english_path = self.project_root / english
+        if english_path.exists():
+            return english_path
+        legacy_path = self.project_root / legacy
+        if legacy_path.exists():
+            return legacy_path
+        return english_path
+
     @property
     def chapters_dir(self) -> Path:
-        return self.project_root / "正文"
+        return self._resolve_dir(DIR_MANUSCRIPT, LEGACY_DIR_MANUSCRIPT)
 
     @property
     def settings_dir(self) -> Path:
-        return self.project_root / "设定集"
+        return self._resolve_dir(DIR_SETTINGS, LEGACY_DIR_SETTINGS)
 
     @property
     def outline_dir(self) -> Path:
-        return self.project_root / "大纲"
+        return self._resolve_dir(DIR_OUTLINE, LEGACY_DIR_OUTLINE)
+
+    @property
+    def reviews_dir(self) -> Path:
+        return self._resolve_dir(DIR_REVIEWS, LEGACY_DIR_REVIEWS)
 
     @property
     def story_system_dir(self) -> Path:
@@ -219,10 +251,18 @@ class DataModulesConfig:
     context_ranker_hook_bonus: float = 0.2
     context_ranker_length_bonus_cap: float = 0.2
     context_ranker_alert_critical_keywords: tuple[str, ...] = (
-        "冲突",
-        "矛盾",
+        # 한국어
+        "충돌",
+        "모순",
+        "위반",
+        "단절",
+        "오류",
+        # 영문
         "critical",
         "break",
+        # 레거시(중국어) 호환
+        "冲突",
+        "矛盾",
         "违规",
         "断裂",
     )
@@ -323,11 +363,12 @@ class DataModulesConfig:
     strand_constellation_ratio_min: int = 10
     strand_constellation_ratio_max: int = 20
 
-    # ================= 爽点节奏 =================
+    # ================= 사이다(爽点) 밀도 =================
+    # 한국 웹소설은 1편 ≈ 5,000자 기준 → 중국 기준(편당 ~2,000자) 대비 약 2.5배로 재조정.
     pacing_segment_size: int = 100
-    pacing_words_per_point_excellent: int = 1000
-    pacing_words_per_point_good: int = 1500
-    pacing_words_per_point_acceptable: int = 2000
+    pacing_words_per_point_excellent: int = 2500
+    pacing_words_per_point_good: int = 3500
+    pacing_words_per_point_acceptable: int = 5000
 
     # ================= RAG 存储 =================
     @property

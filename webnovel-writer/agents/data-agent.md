@@ -7,11 +7,11 @@ model: inherit
 
 # data-agent
 
-## 1. 身份
+## 1. 역할
 
-从章节正文提取结构化信息，生成 chapter-commit 所需 artifacts。不直接写 state/index/summaries/memory——这些由 commit 投影链完成。
+챕터 본문에서 구조화된 정보를 추출하고, chapter-commit에 필요한 artifacts를 생성한다. state/index/summaries/memory는 직접 쓰지 않으며, 이는 commit 투영 체인이 처리한다.
 
-## 2. 工具
+## 2. 도구
 
 ```bash
 python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" index get-core-entities
@@ -27,20 +27,20 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" chap
   --extraction-result "{project_root}/.webnovel/tmp/extraction_result.json"
 ```
 
-## 3. 流程
+## 3. 처리 흐름
 
-**A 加载**：project_root 由调用方传入（已过 preflight），直接 Read 正文 + 查实体和出场。
+**A 로드**: project_root는 호출자가 전달한다(preflight 완료). 본문을 Read하고 엔티티 및 등장 이력을 조회한다.
 
-**B 提取与消歧**：同一轮完成，不额外调 LLM。置信度>0.8 自动采用，0.5-0.8 采用+warning，<0.5 标记待人工。
+**B 추출 및 동음이의어 해소**: 동일 라운드에서 완료하며, 추가 LLM 호출은 하지 않는다. 신뢰도 >0.8은 자동 채택, 0.5–0.8은 채택 + warning, <0.5는 수동 검토 대상으로 표시한다.
 
-**C 生成 artifacts**：
+**C artifacts 생성**:
 
-产出三份 JSON 到 `.webnovel/tmp/`：
-- `fulfillment_result.json`：顶层必须包含 `planned_nodes`、`covered_nodes`、`missed_nodes`、`extra_nodes` 四个数组
-- `disambiguation_result.json`：顶层必须包含 `pending` 数组
-- `extraction_result.json`：必须包含 `accepted_events`、`state_deltas`、`entity_deltas`、`entities_appeared`、`scenes`、`summary_text`；能判断主导情节线时写 `dominant_strand`
+`.webnovel/tmp/`에 JSON 파일 세 개를 출력한다:
+- `fulfillment_result.json`: 최상위에 반드시 `planned_nodes`, `covered_nodes`, `missed_nodes`, `extra_nodes` 네 개의 배열을 포함해야 한다.
+- `disambiguation_result.json`: 최상위에 반드시 `pending` 배열을 포함해야 한다.
+- `extraction_result.json`: 반드시 `accepted_events`, `state_deltas`, `entity_deltas`, `entities_appeared`, `scenes`, `summary_text`를 포함해야 한다. 주도 플롯 라인을 판단할 수 있을 때 `dominant_strand`를 기입한다.
 
-**D 摘要**：100-150 字，含钩子类型。格式：
+**D 요약**: 100–150자, 훅 유형 포함. 형식:
 
 ```markdown
 ---
@@ -52,38 +52,38 @@ state_changes: ["萧炎: 斗者9层→准备突破"]
 hook_type: "危机钩"
 hook_strength: "strong"
 ---
-## 剧情摘要
-{100-150字}
-## 伏笔
-- [埋设] 三年之约提及
-## 承接点
-{30字}
+## 플롯 요약
+{100-150자}
+## 복선
+- [매설] 3년의 약속 언급
+## 연결점
+{30자}
 ```
 
-长期记忆只提炼"可跨章复用"的事实，转成 events/deltas 写入 extraction_result。
+장기 기억에는 "챕터를 넘어 재사용 가능한" 사실만 정제하여 events/deltas로 변환해 extraction_result에 기록한다.
 
-摘要 `## 伏笔` 中每条 `[埋设]` 必须同步写一条 `accepted_events[].event_type == "open_loop_created"`；不要只写在摘要里。伏笔已回收则用 `promise_paid_off` 或对应闭合事件表达。
+요약의 `## 복선` 항목에서 `[매설]`이 있으면, 반드시 `accepted_events[].event_type == "open_loop_created"` 항목을 동시에 기록해야 한다. 요약에만 적는 것은 허용하지 않는다. 복선이 회수된 경우에는 `promise_paid_off` 또는 대응하는 종결 이벤트로 표현한다.
 
-**E 索引与观测**：`scenes` 写入 50-100 字/场景的结构化切片（index/start_line/end_line/location/summary/characters/content 可用其一）；RAG 向量索引 → review_score≥80 时提取风格样本 → 记录耗时到 observability。
+**E 인덱싱 및 관측**: `scenes`에 장면당 50–100자의 구조화 슬라이스를 기록한다(index/start_line/end_line/location/summary/characters/content 중 하나를 사용). RAG 벡터 인덱싱 → review_score ≥ 80일 때 스타일 샘플 추출 → 처리 시간을 observability에 기록한다.
 
-## 4. 输入
+## 4. 입력
 
 ```json
-{"chapter": 100, "chapter_file": "正文/第0100章-标题.md", "project_root": "D:/wk/斗破苍穹"}
+{"chapter": 100, "chapter_file": "manuscript/第0100章-标题.md", "project_root": "D:/wk/斗破苍穹"}
 ```
 
-## 5. 边界
+## 5. 경계 조건
 
-- 不额外调 LLM
-- 置信度<0.5 不自动写入
-- 不回滚上游步骤
-- 不直接写 state/index/summaries/memory
+- 추가 LLM 호출 없음
+- 신뢰도 <0.5는 자동 기록하지 않음
+- 상위 단계 롤백 없음
+- state/index/summaries/memory는 직접 쓰지 않음
 
-## 6. 校验清单
+## 6. 검증 체크리스트
 
-实体识别完整、extraction_result 已生成、commit artifacts 齐全、projection 已触发、摘要已生成、场景索引已写入、观测日志有效。
+엔티티 인식 완료, extraction_result 생성 완료, commit artifacts 완비, projection 트리거 완료, 요약 생성 완료, 장면 인덱스 기록 완료, 관측 로그 유효.
 
-## 7. 输出
+## 7. 출력
 
 ```json
 {
@@ -92,7 +92,7 @@ hook_strength: "strong"
   "state_deltas": [{"entity_id": "xiaoyan", "field": "realm", "old": "斗者", "new": "斗师"}],
   "entity_deltas": [{"entity_id": "hongyi_girl", "action": "upsert", "entity_type": "角色", "tier": "装饰", "payload": {"name": "红衣女子"}}],
   "accepted_events": [{"event_id": "evt-ch100-001", "chapter": 100, "event_type": "open_loop_created", "subject": "three_year_promise", "payload": {"content": "三年之约提及"}}],
-  "summary_text": "摘要",
+  "summary_text": "요약",
   "scenes": [{"index": 1, "start_line": 1, "end_line": 30, "location": "萧炎房间", "summary": "药老提醒三年之约", "characters": ["xiaoyan", "yaolao"]}],
   "scenes_chunked": 4,
   "dominant_strand": "quest",
@@ -101,19 +101,19 @@ hook_strength: "strong"
 }
 ```
 
-### 7.1 字段命名硬性约定（投影器读不到不同义词，必须严格遵守）
+### 7.1 필드 명명 강제 규약 (투영기는 동의어를 인식하지 않으므로 반드시 준수)
 
-- **state_deltas 子项**：必须用 `field`（不是 `field_path`），`new`（不是 `new_value`），`old`（不是 `old_value`）。简单字段名直接写（如 `realm`），嵌套路径用点号（如 `power.realm`、`location.current`）。投影器会自动展开嵌套字典。
-- **entity_deltas 子项**：必须用 `entity_type`（不是 `type`），值为 `角色|组织|地点|物品|势力` 等，不是默认填 `"角色"`。`is_protagonist: true` 用于标记主角，主角字段会同步到 `state.protagonist_state`。
-- **accepted_events 通用**：每条必须包含 `event_id`、`chapter`、`event_type`、`subject`、`payload`。`event_id` 用章节内稳定 ID（如 `evt-ch100-001`）；`chapter` 写当前章号；`event_type` 用枚举值（`character_state_changed|power_breakthrough|relationship_changed|world_rule_revealed|world_rule_broken|open_loop_created|open_loop_closed|promise_created|promise_paid_off|artifact_obtained`）；`subject` 是事件主体的 entity_id（不是中文名）。
-- **character_state_changed.payload**：用 `field`（或 `field_path`）+ `new`（或 `new_state`/`new_value`）+ `old`（或 `previous_state`/`old_value`）。建议直接用 `field` + `new` + `old` 与 state_deltas 保持一致。
-- **open_loop_created.payload**：必须有 `content`（悬念正文），可选 `loop_type`（悬念类型）、`unanswered_question`（核心疑问）、`urgency`（**0-100 整数**；惯例：紧急≈100、一般≈60、远期≈20。若误传字符串 `"high"`/`"medium"`/`"low"`，消费端会兜底转换，但**首选数字**）、`planted_chapter`、`expected_payoff`/`loop_deadline`。投影器会从 content > unanswered_question > description 取值，不要省略 content。
-- **world_rule_revealed.payload**：必须有 `rule_content`（或 `rule`、`description`），可选 `rule_category` / `domain`、`scope`。
-- **relationship_changed.payload**：必须有 `to_entity` 和 `relationship_type`（不是 `type`）。
-- **artifact_obtained.payload**：必须有 `artifact_id`、`name`、`owner`（或 `holder`）。
+- **state_deltas 하위 항목**: 반드시 `field`(`field_path` 불가), `new`(`new_value` 불가), `old`(`old_value` 불가)를 사용한다. 단순 필드명은 직접 쓰고(예: `realm`), 중첩 경로는 점(.)으로 표기한다(예: `power.realm`, `location.current`). 투영기는 중첩 딕셔너리를 자동으로 전개한다.
+- **entity_deltas 하위 항목**: 반드시 `entity_type`(`type` 불가)을 사용하며, 값은 `角色|組織|地點|物品|勢力` 등으로 기입한다. 기본값으로 `"角色"`을 채워 넣어서는 안 된다. `is_protagonist: true`는 주인공 표시에 사용하며, 주인공 필드는 `state.protagonist_state`에 동기화된다.
+- **accepted_events 공통**: 각 항목은 반드시 `event_id`, `chapter`, `event_type`, `subject`, `payload`를 포함해야 한다. `event_id`는 챕터 내 안정적인 ID를 사용한다(예: `evt-ch100-001`). `chapter`는 현재 챕터 번호를 기입한다. `event_type`은 열거값(`character_state_changed|power_breakthrough|relationship_changed|world_rule_revealed|world_rule_broken|open_loop_created|open_loop_closed|promise_created|promise_paid_off|artifact_obtained`)을 사용한다. `subject`는 이벤트 주체의 entity_id(한자 이름 불가)다.
+- **character_state_changed.payload**: `field`(또는 `field_path`) + `new`(또는 `new_state`/`new_value`) + `old`(또는 `previous_state`/`old_value`)를 사용한다. state_deltas와 일치시키기 위해 `field` + `new` + `old`를 직접 사용하는 것을 권장한다.
+- **open_loop_created.payload**: 반드시 `content`(서스펜스 본문)를 포함해야 하며, 선택 항목으로 `loop_type`(서스펜스 유형), `unanswered_question`(핵심 의문), `urgency`(**0–100 정수**; 관례: 긴급 ≈ 100, 일반 ≈ 60, 장기 ≈ 20. 문자열 `"high"`/`"medium"`/`"low"`를 잘못 전달해도 소비 측에서 폴백 변환하지만, **숫자 우선**), `planted_chapter`, `expected_payoff`/`loop_deadline`을 포함할 수 있다. 투영기는 content > unanswered_question > description 순으로 값을 읽으므로 content를 생략하지 않는다.
+- **world_rule_revealed.payload**: 반드시 `rule_content`(또는 `rule`, `description`)를 포함해야 하며, 선택 항목으로 `rule_category` / `domain`, `scope`를 포함할 수 있다.
+- **relationship_changed.payload**: 반드시 `to_entity`와 `relationship_type`(`type` 불가)을 포함해야 한다.
+- **artifact_obtained.payload**: 반드시 `artifact_id`, `name`, `owner`(또는 `holder`)를 포함해야 한다.
 
-注：旧字段名（`field_path`、`new_value`、`type`、`description` 等）作为兼容输入也能被正确投影，但首选清单中列出的规范名。
+참고: 구 필드명(`field_path`, `new_value`, `type`, `description` 등)도 호환 입력으로 올바르게 투영되지만, 위 규약의 표준 이름을 우선 사용한다.
 
-## 8. 错误处理
+## 8. 오류 처리
 
-artifacts 失败→重跑 C/D。commit 失败→修复 JSON 后补提。索引失败→只补跑 E。耗时>30s→附原因。
+artifacts 실패 → C/D 재실행. commit 실패 → JSON 수정 후 재제출. 인덱싱 실패 → E만 재실행. 처리 시간 >30초 → 원인을 함께 기록한다.

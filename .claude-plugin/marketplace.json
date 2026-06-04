@@ -10,7 +10,7 @@
   "plugins": [
     {
       "name": "webnovel-writer",
-      "description": "长篇网文创作系统（skills + agents + data chain + RAG）",
+      "description": "한국 웹소설 장편 창작 시스템 (skills + agents + data chain + RAG)",
       "version": "6.0.0",
       "author": {
         "name": "lingfengQAQ"

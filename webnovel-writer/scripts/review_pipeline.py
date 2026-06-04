@@ -70,7 +70,7 @@ def render_review_report(payload: Dict[str, Any]) -> str:
     severity_counts = metrics.get("severity_counts", {})
 
     lines: List[str] = [
-        f"# 第{payload['chapter']}章审查报告",
+        f"# {payload['chapter']}화 심사 보고서",
         "",
         "## 总览",
         "",

@@ -1,46 +1,46 @@
 ---
 name: webnovel-write
-description: 产出可发布章节，完整执行上下文→起草→审查→润色→提交→备份。
+description: 발행 가능한 화를 생성하며 컨텍스트→초고→심사→윤문→커밋→백업을 전 과정 수행합니다.
 allowed-tools: Read Write Edit Grep Bash Agent
 ---
 
-# 写章流程
+# 화 집필 플로우
 
-## 目标
+## 목표
 
-产出可发布章节到 `正文/第{NNNN}章-{title}.md`。默认 2000-2500 字，用户/大纲另有要求时从之。
+발행 가능한 화를 `manuscript/ch{NNNN}-{제목}.md`에 출력한다. 기본 ~5,000자이며, 사용자 또는 대강에 별도 요건이 있을 경우 그에 따른다.
 
-## 模式
+## 모드
 
-| 模式 | 流程 |
+| 모드 | 플로우 |
 |------|------|
-| 默认 | Step 1→2→3→4→5→6 |
-| `--fast` | Step 1→2→3(轻量)→4→5→6 |
-| `--minimal` | Step 1→2→4(仅排版)→5→6 |
+| 기본 | Step 1→2→3→4→5→6 |
+| `--fast` | Step 1→2→3(경량)→4→5→6 |
+| `--minimal` | Step 1→2→4(타입세팅만)→5→6 |
 
-## 硬规则
+## 하드 규칙
 
-- 禁止并步、跳步、伪造审查
-- 必须使用 `Agent` 工具调用指定 subagent；不得用主流程口头代替 subagent 输出
-- blocking issue 未解决不进 Step 4/5
-- 失败只补跑失败步骤，不回退
-- 参考资料按步骤按需加载
+- 단계 병합·생략·심사 위조 금지
+- 지정된 subagent는 반드시 `Agent` 도구로 호출해야 하며, 메인 플로우가 subagent 출력을 말로 대체해서는 안 된다
+- blocking issue가 해소되지 않으면 Step 4/5로 진입 불가
+- 실패 시 실패한 단계만 재실행하며, 이전 단계로 되돌리지 않는다
+- 참고 자료는 단계별로 필요할 때만 로드한다
 
-## 优先级
+## 우선순위
 
-用户要求 > 状态机硬门槛 > 项目约束（总纲/设定/记忆）> skill 流程 > reference 建议
+사용자 요구 > 상태 머신 하드 임계값 > 프로젝트 제약(총설/설정/메모리) > skill 플로우 > reference 권고
 
-## CSV 检索（Step 2 按需）
+## CSV 검색 (Step 2 필요 시)
 
 ```bash
-python -X utf8 "${SCRIPTS_DIR}/reference_search.py" --skill write --table {表名} --query "{关键词}" --genre {题材}
+python -X utf8 "${SCRIPTS_DIR}/reference_search.py" --skill write --table {표名} --query "{키워드}" --genre {장르}
 ```
 
-触发条件：新角色→命名规则，战斗→场景写法，多角色对话→写作技法，情感描写→写作技法，高频桥段→场景写法。
+트리거 조건: 신규 캐릭터→명명 규칙, 전투→장면 묘사법, 다중 캐릭터 대화→집필 기법, 감정 묘사→집필 기법, 자주 쓰이는 브리지 장면→장면 묘사법.
 
-## 执行流程
+## 실행 플로우
 
-### 准备：预检
+### 준비: 사전 점검
 
 ```bash
 export WORKSPACE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
@@ -53,9 +53,9 @@ export PROJECT_ROOT="$(python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-roo
 python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" placeholder-scan --format text
 ```
 
-### 准备：刷新合同树
+### 준비: 컨트랙트 트리 갱신
 
-genre 从 `.webnovel/state.json` 的初始化配置快照读取，用于刷新合同树；写前主链真源仍是 `.story-system/` 合同。调用 story-system 前必须先从详细大纲解析真实本章目标，禁止传 `{章纲目标}`、`第N章章纲目标` 等占位 query。
+장르는 `.webnovel/state.json`의 초기화 설정 스냅샷에서 읽어 컨트랙트 트리를 갱신하는 데 사용한다. 집필 전 메인 체인의 진실 출처는 여전히 `.story-system/` 컨트랙트다. story-system 호출 전에 반드시 상세 대강에서 실제 본화 목표를 파싱해야 하며, `{챕터 목표}`, `제N화 챕터 목표` 등의 자리 표시자를 query로 전달하는 것을 금지한다.
 
 ```bash
 GENRE="$(python -X utf8 -c "import json,sys; s=json.load(open('${PROJECT_ROOT}/.webnovel/state.json',encoding='utf-8')); print(s.get('project',{}).get('genre',''))")"
@@ -64,37 +64,37 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" \
   story-system "${CHAPTER_GOAL}" --genre "${GENRE}" --chapter {chapter_num} --persist --emit-runtime-contracts --format both
 ```
 
-必备文件：`MASTER_SETTING.json`（调性/禁忌）、`volume_{NNN}.json`（卷级节奏）、`chapter_{NNN}.review.json`（必须节点/禁区）。缺失则阻断。
+필수 파일: `MASTER_SETTING.json`(톤/금기), `volume_{NNN}.json`(권 단위 리듬), `chapter_{NNN}.review.json`(필수 노드/금지 구역). 누락 시 차단.
 
-`chapter_{NNN}.json` 必须优先检查顶层 `chapter_directive`。`chapter_focus` 只能来自 `chapter_directive.goal` 或真实 query，不得从 `dynamic_context` 的参考摘要继承。
+`chapter_{NNN}.json`은 최상위의 `chapter_directive`를 반드시 우선 확인해야 한다. `chapter_focus`는 오직 `chapter_directive.goal` 또는 실제 query에서만 가져와야 하며, `dynamic_context`의 참고 요약에서 상속하는 것을 금지한다.
 
-写作任务书排序必须固定为：
-1. 本章硬性约束：`chapter_directive.goal/time_anchor/chapter_span/countdown/chapter_end_open_question`
-2. CBN/CPNs/CEN 与 `must_cover_nodes`
-3. 本章禁区：`forbidden_zones`，违反即不通过
-4. 风格指引：reasoning、主角卡 OOC 警戒、anti_patterns
-5. 场景写法补充：`dynamic_context`，仅作风格参考，不能覆盖章纲约束
+집필 작업지시서의 정렬 순서는 반드시 다음으로 고정한다:
+1. 본화 하드 제약: `chapter_directive.goal/time_anchor/chapter_span/countdown/chapter_end_open_question`
+2. CBN/CPNs/CEN과 `must_cover_nodes`
+3. 본화 금지 구역: `forbidden_zones`, 위반 시 불통과
+4. 스타일 지침: reasoning, 주인공 OOC 경보, anti_patterns
+5. 장면 묘사 보완: `dynamic_context`, 스타일 참고 용도로만 사용하며 챕터 목표 제약을 덮어쓸 수 없다
 
-### Step 1：context-agent 生成写作任务书
+### Step 1: context-agent가 집필 작업지시서 생성
 
-必须使用 `Agent` 工具调用 `context-agent`，不得由主流程自行整理任务书。
+반드시 `Agent` 도구로 `context-agent`를 호출해야 하며, 메인 플로우가 직접 작업지시서를 정리하는 것을 금지한다.
 
 ```text
 Agent(
   subagent_type: "webnovel-writer:context-agent",
-  prompt: "chapter={chapter_num}; project_root=${PROJECT_ROOT}; scripts_dir=${SCRIPTS_DIR}; storage_path=${PROJECT_ROOT}/.webnovel; state_file=${PROJECT_ROOT}/.webnovel/state.json（projection/read-model，仅兼容读取）。先 research，再按 本章硬性约束→CBN/CPNs/CEN→本章禁区→风格指引→dynamic_context补充参考 的顺序输出五段写作任务书。"
+  prompt: "chapter={chapter_num}; project_root=${PROJECT_ROOT}; scripts_dir=${SCRIPTS_DIR}; storage_path=${PROJECT_ROOT}/.webnovel; state_file=${PROJECT_ROOT}/.webnovel/state.json（projection/read-model，仅兼容读取）。先 research，再按 본화 하드 제약→CBN/CPNs/CEN→본화 금지 구역→스타일 지침→dynamic_context 보완 참고 의 순서로 5단락 집필 작업지시서를 출력한다."
 )
 ```
 
-产物：一份写作任务书，能独立支撑 Step 2 起草。
+산출물: Step 2 초고를 독립적으로 지원할 수 있는 집필 작업지시서 1부.
 
-### Step 2：起草正文
+### Step 2: 원고 초고 작성
 
-只根据任务书起草。不加载 core-constraints/anti-ai-guide（已内化到任务书）。只输出纯正文，无占位符。有结构化节点时围绕 CBN→CPNs→CEN 展开。中文思维写作。
+오직 작업지시서에 근거해 초고를 작성한다. core-constraints/anti-ai-guide는 로드하지 않는다(이미 작업지시서에 내재화됨). 순수 원고만 출력하며 자리 표시자 없음. 구조화 노드가 있을 경우 CBN→CPNs→CEN을 중심으로 전개한다.
 
-### Step 3：审查
+### Step 3: 심사
 
-必须使用 `Agent` 工具调用 `reviewer`，不得由主流程伪造审查 JSON。
+반드시 `Agent` 도구로 `reviewer`를 호출해야 하며, 메인 플로우가 심사 JSON을 위조하는 것을 금지한다.
 
 ```text
 Agent(
@@ -108,34 +108,34 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" rev
   --chapter {chapter_num} \
   --review-results "${PROJECT_ROOT}/.webnovel/tmp/review_results.json" \
   --metrics-out "${PROJECT_ROOT}/.webnovel/tmp/review_metrics.json" \
-  --report-file "审查报告/第{chapter_num}章审查报告.md" \
+  --report-file "reviews/제{chapter_num}화심사보고서.md" \
   --save-metrics
 ```
 
-blocking=true → 修复后重审，不进 Step 4。`--fast` 只检查 setting/timeline/continuity。`--minimal` 跳过。
+blocking=true → 수정 후 재심사, Step 4로 진입 불가. `--fast`는 setting/timeline/continuity만 검사. `--minimal`은 건너뜀.
 
-### Step 4：润色
+### Step 4: 윤문
 
-加载 `polish-guide.md`、`typesetting.md`、`style-adapter.md`。
+`polish-guide.md`, `typesetting.md`, `style-adapter.md`를 로드한다.
 
-顺序：修复非 blocking issue → 风格适配 → 排版 → Anti-AI 终检。
+순서: non-blocking issue 수정 → 스타일 적응 → 타입세팅 → Anti-AI 최종 검사.
 
-只改表达不改事实。`anti_ai_force_check=fail` 时不进 Step 5。`--minimal` 仅排版。
+표현만 수정하며 사실은 변경하지 않는다. `anti_ai_force_check=fail` 시 Step 5로 진입 불가. `--minimal`은 타입세팅만.
 
-### Step 5：提交
+### Step 5: 커밋
 
-#### 5.1 Data Agent 提取事实
+#### 5.1 Data Agent 사실 추출
 
-必须使用 `Agent` 工具调用 `data-agent`，产出 fulfillment_result / disambiguation_result / extraction_result 三份 JSON，并复用 Step 3 的 review_results。
+반드시 `Agent` 도구로 `data-agent`를 호출해야 하며, fulfillment_result / disambiguation_result / extraction_result 세 개의 JSON을 산출하고 Step 3의 review_results를 재사용한다.
 
 ```text
 Agent(
   subagent_type: "webnovel-writer:data-agent",
-  prompt: "chapter={chapter_num}; chapter_file=${CHAPTER_FILE}; project_root=${PROJECT_ROOT}; scripts_dir=${SCRIPTS_DIR}。从正文提取事实，生成 .webnovel/tmp/ 下的 fulfillment_result.json、disambiguation_result.json、extraction_result.json；fulfillment_result.json 必须顶层包含 planned_nodes/covered_nodes/missed_nodes/extra_nodes；disambiguation_result.json 必须顶层包含 pending；extraction_result.json 必须严格按你的第7节格式输出顶层字段 accepted_events/state_deltas/entity_deltas/entities_appeared/scenes/summary_text，禁止包在 chapter/fulfillment/disambiguation/extraction 等外层对象里；accepted_events 子项必须包含 event_id/chapter/event_type/subject/payload；不直接写 state/index/summaries/memory。"
+  prompt: "chapter={chapter_num}; chapter_file=${CHAPTER_FILE}; project_root=${PROJECT_ROOT}; scripts_dir=${SCRIPTS_DIR}。원고에서 사실을 추출하여 .webnovel/tmp/ 아래의 fulfillment_result.json, disambiguation_result.json, extraction_result.json을 생성한다. fulfillment_result.json은 최상위에 planned_nodes/covered_nodes/missed_nodes/extra_nodes를 포함해야 하며, disambiguation_result.json은 최상위에 pending을 포함해야 하고, extraction_result.json은 반드시 7절 형식에 따라 최상위 필드 accepted_events/state_deltas/entity_deltas/entities_appeared/scenes/summary_text를 출력해야 하며 chapter/fulfillment/disambiguation/extraction 안에 감싸는 것을 금지한다. accepted_events 하위 항목은 반드시 event_id/chapter/event_type/subject/payload를 포함해야 한다. state/index/summaries/memory는 직접 쓰지 않는다."
 )
 ```
 
-Data Agent 只提取事实+生成 artifacts，不直接写 state/index/summaries/memory。
+Data Agent는 사실 추출 및 아티팩트 생성만 수행하며, state/index/summaries/memory는 직접 쓰지 않는다.
 
 #### 5.2 CHAPTER_COMMIT
 
@@ -148,19 +148,19 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" cha
   --extraction-result "${PROJECT_ROOT}/.webnovel/tmp/extraction_result.json"
 ```
 
-自动判定：blocking_count>0 或 missed_nodes 非空 或 pending 非空 → rejected，否则 accepted。
+자동 판정: blocking_count>0 이거나 missed_nodes가 비어 있지 않거나 pending이 비어 있지 않으면 → rejected, 그 외에는 accepted.
 
-#### 5.3 验证投影
+#### 5.3 프로젝션 검증
 
-projection_status 五项（state/index/summary/memory/vector）全部 done 或 skipped。
+projection_status 5개 항목(state/index/summary/memory/vector) 모두 done 또는 skipped.
 
-chapter_status 由 projection writer 自动推进：accepted→committed，rejected→rejected。
+chapter_status는 projection writer가 자동으로 진행: accepted→committed, rejected→rejected.
 
-#### 5.4 失败隔离
+#### 5.4 장애 격리
 
-commit 未生成→重跑 5.2。projection 失败→只补跑失败项。不回退 Step 1-4。
+커밋 미생성 → 5.2 재실행. 프로젝션 실패 → 실패 항목만 재실행. Step 1-4는 되돌리지 않는다.
 
-### Step 6：Git 备份
+### Step 6: Git 백업
 
 ```bash
 python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" backup \
@@ -168,17 +168,17 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" bac
   --chapter-title "{title}"
 ```
 
-备份必须以解析后的 `PROJECT_ROOT` 为准，禁止从工作区父目录执行裸全量 Git add，避免把书项目仓库作为父仓库的嵌入仓库/submodule 加入。
+백업은 반드시 파싱된 `PROJECT_ROOT`를 기준으로 해야 하며, 워크스페이스 상위 디렉터리에서 전체 Git add를 실행하는 것을 금지한다. 이는 책 프로젝트 저장소가 부모 저장소의 서브모듈로 추가되는 것을 방지하기 위함이다.
 
-## 充分性闸门
+## 충분성 게이트
 
-1. 正文文件存在且非空
-2. 审查已落库（`--minimal` 除外）
-3. blocking=true 必须停在 Step 3
-4. anti_ai_force_check=pass（`--minimal` 除外）
-5. accepted CHAPTER_COMMIT，projection 五项 done/skipped
-6. chapter_status=committed（projection 自动推进）
+1. 원고 파일이 존재하며 비어 있지 않다
+2. 심사가 DB에 저장되었다(`--minimal` 제외)
+3. blocking=true이면 반드시 Step 3에서 멈춘다
+4. anti_ai_force_check=pass(`--minimal` 제외)
+5. CHAPTER_COMMIT이 accepted이며, 프로젝션 5개 항목이 done/skipped
+6. chapter_status=committed(프로젝션이 자동 진행)
 
-## 失败恢复
+## 실패 복구
 
-审查缺失→重跑 Step 3。摘要/状态/记忆缺失→重跑 Step 5。润色失真→回 Step 4 修复后重跑 Step 5。
+심사 누락 → Step 3 재실행. 요약/상태/메모리 누락 → Step 5 재실행. 윤문 왜곡 → Step 4로 돌아가 수정 후 Step 5 재실행.

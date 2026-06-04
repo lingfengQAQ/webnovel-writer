@@ -9,7 +9,28 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 
+try:
+    from data_modules.naming import (
+        DIR_OUTLINE,
+        DIR_SETTINGS,
+        LEGACY_DIR_OUTLINE,
+        LEGACY_DIR_SETTINGS,
+    )
+except ImportError:  # pragma: no cover
+    from scripts.data_modules.naming import (
+        DIR_OUTLINE,
+        DIR_SETTINGS,
+        LEGACY_DIR_OUTLINE,
+        LEGACY_DIR_SETTINGS,
+    )
+
+
 PLACEHOLDER_PATTERNS = [
+    # 한국어 플레이스홀더
+    re.compile(r"\[(?:미정|추후|TBD)[^\]]*\]"),
+    re.compile(r"（가제）|\(가제\)|（추후보충）|\(추후보충\)|（미정）|\(미정\)"),
+    re.compile(r"\{플레이스홀더\}|<플레이스홀더>|\{미정\}|<미정>"),
+    # 레거시(중국어)
     re.compile(r"\[待[^\]]*\]"),
     re.compile(r"（暂名）|\(暂名\)|（待补充）|\(待补充\)"),
     re.compile(r"\{占位\}|<占位>"),
@@ -33,7 +54,7 @@ def _scan_file(path: Path, project_root: Path) -> List[Dict[str, Any]]:
                         "line": line_no,
                         "pattern": match.group(0),
                         "context": line.strip(),
-                        "suggested_fill_phase": "plan" if rel.startswith("大纲/") else "setting_update",
+                        "suggested_fill_phase": "plan" if rel.startswith((f"{DIR_OUTLINE}/", f"{LEGACY_DIR_OUTLINE}/")) else "setting_update",
                     }
                 )
     return results
@@ -42,7 +63,7 @@ def _scan_file(path: Path, project_root: Path) -> List[Dict[str, Any]]:
 def scan_placeholders(project_root: str | Path) -> List[Dict[str, Any]]:
     root = Path(project_root).expanduser().resolve()
     targets: List[Path] = []
-    for dirname in ("大纲", "设定集"):
+    for dirname in (DIR_OUTLINE, DIR_SETTINGS, LEGACY_DIR_OUTLINE, LEGACY_DIR_SETTINGS):
         base = root / dirname
         if base.is_dir():
             targets.extend(sorted(base.rglob("*.md")))

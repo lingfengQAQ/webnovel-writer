@@ -13,6 +13,22 @@ try:
 except ImportError:  # pragma: no cover
     from scripts.chapter_paths import volume_num_for_chapter
 
+try:
+    from data_modules.naming import DIR_OUTLINE, LEGACY_DIR_OUTLINE, CHAPTER_PREFIX
+except ImportError:  # pragma: no cover
+    from scripts.data_modules.naming import DIR_OUTLINE, LEGACY_DIR_OUTLINE, CHAPTER_PREFIX
+
+
+def _outline_dir(project_root: Path) -> Path:
+    """대강 디렉터리. 영문(outline) 우선, 레거시(大纲)는 읽기 호환."""
+    eng = project_root / DIR_OUTLINE
+    if eng.exists():
+        return eng
+    legacy = project_root / LEGACY_DIR_OUTLINE
+    if legacy.exists():
+        return legacy
+    return eng
+
 
 _CHAPTER_RANGE_RE = re.compile(r"^\s*(\d+)\s*-\s*(\d+)\s*$")
 
@@ -75,6 +91,12 @@ def volume_num_for_chapter_from_state(project_root: Path, chapter_num: int) -> i
 
 def _find_split_outline_file(outline_dir: Path, chapter_num: int) -> Path | None:
     patterns = [
+        # 영문 토큰(신규)
+        f"{CHAPTER_PREFIX}{chapter_num}*.md",
+        f"{CHAPTER_PREFIX}{chapter_num:02d}*.md",
+        f"{CHAPTER_PREFIX}{chapter_num:03d}*.md",
+        f"{CHAPTER_PREFIX}{chapter_num:04d}*.md",
+        # 레거시(중국어) 호환
         f"第{chapter_num}章*.md",
         f"第{chapter_num:02d}章*.md",
         f"第{chapter_num:03d}章*.md",
@@ -88,9 +110,14 @@ def _find_split_outline_file(outline_dir: Path, chapter_num: int) -> Path | None
 
 
 def _find_volume_outline_file(project_root: Path, chapter_num: int) -> Path | None:
-    outline_dir = project_root / "大纲"
+    outline_dir = _outline_dir(project_root)
     volume_num = volume_num_for_chapter_from_state(project_root, chapter_num) or volume_num_for_chapter(chapter_num)
     candidates = [
+        # 한국어(신규)
+        outline_dir / f"제{volume_num}권-상세대강.md",
+        outline_dir / f"제{volume_num}권 - 상세대강.md",
+        outline_dir / f"제{volume_num}권 상세대강.md",
+        # 레거시(중국어)
         outline_dir / f"第{volume_num}卷-详细大纲.md",
         outline_dir / f"第{volume_num}卷 - 详细大纲.md",
         outline_dir / f"第{volume_num}卷 详细大纲.md",
@@ -100,6 +127,9 @@ def _find_volume_outline_file(project_root: Path, chapter_num: int) -> Path | No
 
 def _extract_outline_section(content: str, chapter_num: int) -> str | None:
     patterns = [
+        # 한국어 헤딩(신규): "### 7화: ..." (다음 'N화'/'## '/끝까지)
+        rf"###\s*{chapter_num}\s*화[：:]\s*(.+?)(?=###\s*\d+\s*화|##\s|$)",
+        # 레거시(중국어) 헤딩: "### 第7章：..."
         rf"###\s*第\s*{chapter_num}\s*章[：:]\s*(.+?)(?=###\s*第\s*\d+\s*章|##\s|$)",
         rf"###\s*第{chapter_num}章[：:]\s*(.+?)(?=###\s*第\d+章|##\s|$)",
     ]
@@ -147,7 +177,7 @@ def _extract_directive_section(content: str, chapter_num: int) -> str | None:
 
 
 def load_chapter_outline(project_root: Path, chapter_num: int, max_chars: int | None = 1500) -> str:
-    outline_dir = project_root / "大纲"
+    outline_dir = _outline_dir(project_root)
 
     split_outline = _find_split_outline_file(outline_dir, chapter_num)
     if split_outline is not None:
@@ -155,11 +185,11 @@ def load_chapter_outline(project_root: Path, chapter_num: int, max_chars: int | 
 
     volume_outline = _find_volume_outline_file(project_root, chapter_num)
     if volume_outline is None:
-        return f"⚠️ 大纲文件不存在：第 {chapter_num} 章"
+        return f"⚠️ 대강 파일이 없습니다: {chapter_num}화"
 
     outline = _extract_outline_section(volume_outline.read_text(encoding="utf-8"), chapter_num)
     if outline is None:
-        return f"⚠️ 未找到第 {chapter_num} 章的大纲"
+        return f"⚠️ {chapter_num}화 대강을 찾지 못했습니다"
 
     if max_chars and len(outline) > max_chars:
         return outline[:max_chars] + "\n...(已截断)"
@@ -169,12 +199,18 @@ _PLOT_SECTION_FIELD_MAP = {
     "cbn": "cbn",
     "cpns": "cpns",
     "cen": "cen",
+    # 한국어 라벨
+    "필수포함노드": "mandatory_nodes",
+    "필수노드": "mandatory_nodes",
+    "이번화금지": "prohibitions",
+    "금지구역": "prohibitions",
+    # 레거시(중국어)
     "必须覆盖节点": "mandatory_nodes",
     "本章禁区": "prohibitions",
 }
 
 _CHAPTER_HEADING_RE = re.compile(
-    r"^(#{1,6})\s*第\s*([0-9零〇一二两三四五六七八九十]+)\s*章\b.*$",
+    r"^(#{1,6})\s*(?:第\s*)?([0-9零〇一二两三四五六七八九十]+)\s*(?:章|화)\b.*$",
     re.MULTILINE,
 )
 
@@ -194,6 +230,36 @@ _CHINESE_NUMERAL_DIGITS = {
 }
 
 _DIRECTIVE_FIELD_MAP = {
+    # 한국어 라벨(신규)
+    "목표": "goal",
+    "이번화목표": "goal",
+    "화목표": "goal",
+    "저항": "obstacles",
+    "장애": "obstacles",
+    "대가": "cost",
+    "시간기준점": "time_anchor",
+    "시간": "time_anchor",
+    "화내범위": "chapter_span",
+    "장범위": "chapter_span",
+    "카운트다운상태": "countdown",
+    "카운트다운": "countdown",
+    "필수포함노드": "must_cover_nodes",
+    "이번화금지": "forbidden_zones",
+    "금지구역": "forbidden_zones",
+    "화말미해결질문": "chapter_end_open_question",
+    "화말질문": "chapter_end_open_question",
+    "훅유형": "hook_type",
+    "후크유형": "hook_type",
+    "훅강도": "hook_strength",
+    "핵심엔티티": "key_entities",
+    "등장엔티티": "key_entities",
+    "반동인물층위": "antagonist_tier",
+    # 공통 식별자
+    "cbn": "cbn",
+    "cpns": "cpns",
+    "cen": "cen",
+    "strand": "strand",
+    # 레거시(중국어)
     "目标": "goal",
     "本章目标": "goal",
     "章目标": "goal",
@@ -206,9 +272,6 @@ _DIRECTIVE_FIELD_MAP = {
     "章节跨度": "chapter_span",
     "倒计时状态": "countdown",
     "倒计时": "countdown",
-    "cbn": "cbn",
-    "cpns": "cpns",
-    "cen": "cen",
     "必须覆盖节点": "must_cover_nodes",
     "本章禁区": "forbidden_zones",
     "章末未闭合问题": "chapter_end_open_question",
@@ -217,7 +280,6 @@ _DIRECTIVE_FIELD_MAP = {
     "钩子强度": "hook_strength",
     "关键实体": "key_entities",
     "涉及实体": "key_entities",
-    "strand": "strand",
     "反派层级": "antagonist_tier",
 }
 
@@ -286,7 +348,7 @@ def parse_chapter_plot_structure(outline_text: str) -> Dict[str, Any]:
         if not stripped:
             current_field = ""
             continue
-        if re.match(r"^#{1,6}\s*第\s*\d+\s*章", stripped):
+        if re.match(r"^#{1,6}\s*(?:第\s*\d+\s*章|\d+\s*화)", stripped):
             current_field = ""
             continue
 
@@ -379,7 +441,7 @@ def parse_chapter_execution_directive(outline_text: str) -> Dict[str, Any]:
 
 
 def load_chapter_execution_directive(project_root: Path, chapter_num: int) -> Dict[str, Any]:
-    outline_dir = project_root / "大纲"
+    outline_dir = _outline_dir(project_root)
     split_outline = _find_split_outline_file(outline_dir, chapter_num)
     if split_outline is not None:
         return parse_chapter_execution_directive(split_outline.read_text(encoding="utf-8"))

@@ -10,11 +10,29 @@ from typing import Any
 
 from runtime_compat import enable_windows_utf8_stdio
 
+try:
+    from data_modules.naming import DIR_OUTLINE, LEGACY_DIR_OUTLINE
+except ImportError:  # pragma: no cover
+    from scripts.data_modules.naming import DIR_OUTLINE, LEGACY_DIR_OUTLINE
 
+
+def _outline_dir(project_root: Path) -> Path:
+    """대강 디렉터리. 영문(outline) 우선, 레거시(大纲)는 읽기 호환."""
+    eng = project_root / DIR_OUTLINE
+    if eng.exists():
+        return eng
+    legacy = project_root / LEGACY_DIR_OUTLINE
+    if legacy.exists():
+        return legacy
+    return eng
+
+
+# 권 단위 대강 아티팩트 파일명 — (한국어 신규, 레거시 중국어) 쌍.
+# 쓰기는 한국어, 읽기는 둘 중 존재하는 쪽을 인정한다.
 REQUIRED_VOLUME_ARTIFACTS = (
-    "第{volume}卷-节拍表.md",
-    "第{volume}卷-时间线.md",
-    "第{volume}卷-详细大纲.md",
+    ("제{volume}권-비트시트.md", "第{volume}卷-节拍表.md"),
+    ("제{volume}권-타임라인.md", "第{volume}卷-时间线.md"),
+    ("제{volume}권-상세대강.md", "第{volume}卷-详细大纲.md"),
 )
 
 
@@ -36,16 +54,25 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 def _require_current_volume_artifacts(project_root: Path, volume: int) -> list[str]:
     missing: list[str] = []
-    outline_dir = project_root / "大纲"
-    for pattern in REQUIRED_VOLUME_ARTIFACTS:
-        path = outline_dir / pattern.format(volume=volume)
-        if not path.is_file() or not path.read_text(encoding="utf-8").strip():
-            missing.append(path.relative_to(project_root).as_posix())
+    found: list[str] = []
+    outline_dir = _outline_dir(project_root)
+    for korean, legacy in REQUIRED_VOLUME_ARTIFACTS:
+        kor_path = outline_dir / korean.format(volume=volume)
+        leg_path = outline_dir / legacy.format(volume=volume)
+        chosen = None
+        for path in (kor_path, leg_path):
+            if path.is_file() and path.read_text(encoding="utf-8").strip():
+                chosen = path
+                break
+        if chosen is None:
+            missing.append(kor_path.relative_to(project_root).as_posix())
+        else:
+            found.append(chosen.name)
     if missing:
         raise MasterOutlineSyncError(
             "current volume planning artifacts are incomplete: " + ", ".join(missing)
         )
-    return [f.format(volume=volume) for f in REQUIRED_VOLUME_ARTIFACTS]
+    return found
 
 
 def _resolve_writeback_source(
@@ -54,19 +81,25 @@ def _resolve_writeback_source(
     volume: int,
     writeback_file: str | Path | None,
 ) -> Path:
-    expected = (outline_dir / f"第{volume}卷-总纲写回.json").resolve()
+    expected_kor = (outline_dir / f"제{volume}권-마스터반영.json").resolve()
+    expected_legacy = (outline_dir / f"第{volume}卷-总纲写回.json").resolve()
     if writeback_file:
         candidate = Path(writeback_file)
         if not candidate.is_absolute():
             candidate = project_root / candidate
         candidate = candidate.resolve()
-        if candidate != expected:
+        if candidate not in (expected_kor, expected_legacy):
             raise MasterOutlineSyncError(
                 "writeback source must be the structured planning file: "
-                f"{expected.relative_to(project_root).as_posix()}"
+                f"{expected_kor.relative_to(project_root).as_posix()}"
             )
         return candidate
-    return expected
+    # 명시 지정이 없으면: 한국어 우선, 없으면 레거시
+    if expected_kor.is_file():
+        return expected_kor
+    if expected_legacy.is_file():
+        return expected_legacy
+    return expected_kor
 
 
 def _cell(value: Any) -> str:
@@ -95,9 +128,9 @@ def _normalize_anchor(payload: dict[str, Any], expected_volume: int) -> dict[str
     if volume != expected_volume:
         raise MasterOutlineSyncError(f"next_volume_anchor.volume must be {expected_volume}, got {volume}")
 
-    name = raw.get("volume_name") or raw.get("name") or raw.get("卷名")
-    conflict = raw.get("core_conflict") or raw.get("核心冲突")
-    climax = raw.get("volume_end_climax") or raw.get("end_climax") or raw.get("卷末高潮")
+    name = raw.get("volume_name") or raw.get("name") or raw.get("권명") or raw.get("卷名")
+    conflict = raw.get("core_conflict") or raw.get("핵심갈등") or raw.get("核心冲突")
+    climax = raw.get("volume_end_climax") or raw.get("end_climax") or raw.get("권말클라이맥스") or raw.get("卷末高潮")
     if not all(_cell(v) for v in (name, conflict, climax)):
         raise MasterOutlineSyncError(
             "next_volume_anchor requires volume_name, core_conflict, and volume_end_climax"
@@ -107,13 +140,13 @@ def _normalize_anchor(payload: dict[str, Any], expected_volume: int) -> dict[str
         "volume_name": _cell(name),
         "core_conflict": _cell(conflict),
         "volume_end_climax": _cell(climax),
-        "chapters_range": _cell(raw.get("chapters_range") or raw.get("章节范围") or ""),
+        "chapters_range": _cell(raw.get("chapters_range") or raw.get("화범위") or raw.get("章节范围") or ""),
     }
 
 
 def _update_volume_table(text: str, anchor: dict[str, str]) -> tuple[str, bool]:
     lines = text.splitlines()
-    header_idx = next((i for i, line in enumerate(lines) if line.strip().startswith("| 卷号")), None)
+    header_idx = next((i for i, line in enumerate(lines) if line.strip().startswith(("| 권 번호", "| 卷号"))), None)
     new_row = _render_row(
         [
             anchor["volume"],
@@ -126,8 +159,8 @@ def _update_volume_table(text: str, anchor: dict[str, str]) -> tuple[str, bool]:
     if header_idx is None:
         addition = [
             "",
-            "## 卷划分",
-            "| 卷号 | 卷名 | 章节范围 | 核心冲突 | 卷末高潮 |",
+            "## 권 구성",
+            "| 권 번호 | 권 제목 | 화 범위 | 핵심 갈등 | 권말 클라이맥스 |",
             "|------|------|----------|----------|----------|",
             new_row,
         ]
@@ -172,15 +205,15 @@ def _structured_writeback_items(payload: dict[str, Any]) -> list[dict[str, str]]
         for raw in raw_items:
             if not isinstance(raw, dict):
                 raise MasterOutlineSyncError(f"{field} entries must be objects")
-            content = raw.get("content") or raw.get("text") or raw.get("伏笔内容")
+            content = raw.get("content") or raw.get("text") or raw.get("복선내용") or raw.get("伏笔内容")
             if not _cell(content):
                 continue
             items.append(
                 {
                     "content": _cell(content),
-                    "buried_chapter": _cell(raw.get("buried_chapter") or raw.get("bury_chapter") or raw.get("埋设章") or ""),
-                    "payoff_chapter": _cell(raw.get("payoff_chapter") or raw.get("recover_chapter") or raw.get("回收章") or ""),
-                    "level": _cell(raw.get("level") or raw.get("层级") or default_level),
+                    "buried_chapter": _cell(raw.get("buried_chapter") or raw.get("bury_chapter") or raw.get("매설화") or raw.get("埋设章") or ""),
+                    "payoff_chapter": _cell(raw.get("payoff_chapter") or raw.get("recover_chapter") or raw.get("회수화") or raw.get("回收章") or ""),
+                    "level": _cell(raw.get("level") or raw.get("층위") or raw.get("层级") or default_level),
                 }
             )
     return items
@@ -191,13 +224,13 @@ def _append_foreshadow_rows(text: str, items: list[dict[str, str]]) -> tuple[str
         return text, 0
 
     lines = text.splitlines()
-    header_idx = next((i for i, line in enumerate(lines) if line.strip().startswith("| 伏笔内容")), None)
+    header_idx = next((i for i, line in enumerate(lines) if line.strip().startswith(("| 복선 내용", "| 伏笔内容"))), None)
     if header_idx is None:
         lines.extend(
             [
                 "",
-                "## 伏笔表",
-                "| 伏笔内容 | 埋设章 | 回收章 | 层级 |",
+                "## 복선 표",
+                "| 복선 내용 | 매설 화 | 회수 화 | 층위 |",
                 "|----------|--------|--------|------|",
             ]
         )
@@ -249,10 +282,15 @@ def sync_master_outline(
 
     _require_current_volume_artifacts(root, volume)
 
-    outline_dir = root / "大纲"
-    master_path = outline_dir / "总纲.md"
+    outline_dir = _outline_dir(root)
+    master_path = outline_dir / "마스터아웃라인.md"
     if not master_path.is_file():
-        raise MasterOutlineSyncError("missing master outline: 大纲/总纲.md")
+        # 레거시(중국어) 마스터 대강 읽기 호환
+        legacy_master = outline_dir / "总纲.md"
+        if legacy_master.is_file():
+            master_path = legacy_master
+        else:
+            raise MasterOutlineSyncError(f"missing master outline: {outline_dir.name}/마스터아웃라인.md")
 
     source_path = _resolve_writeback_source(root, outline_dir, volume, writeback_file)
     payload = _read_json(source_path)
@@ -277,10 +315,10 @@ def sync_master_outline(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Sync minimal next-volume anchors into 大纲/总纲.md")
+    parser = argparse.ArgumentParser(description="다음 권 앵커를 마스터 대강(outline/마스터아웃라인.md)에 동기화")
     parser.add_argument("--project-root", required=True)
-    parser.add_argument("--volume", type=int, required=True, help="当前已完成规划的卷号")
-    parser.add_argument("--writeback-file", default="", help="显式结构化写回 JSON；默认 大纲/第N卷-总纲写回.json")
+    parser.add_argument("--volume", type=int, required=True, help="규획을 완료한 현재 권 번호")
+    parser.add_argument("--writeback-file", default="", help="구조화 라이트백 JSON 명시 지정; 기본값 outline/제N권-마스터반영.json")
     parser.add_argument("--format", choices=["json", "text"], default="json")
     args = parser.parse_args()
 

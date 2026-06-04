@@ -32,6 +32,7 @@ ANTI_PATTERN_SOURCE_FIELDS = {
 _TEXT_TOKEN_RE = re.compile(r"[\s|,，、/；;：:（）()【】\[\]<>《》\"'!?！？。…]+")
 _PLACEHOLDER_QUERY_RE = re.compile(r"^\s*(\{[^{}]*章纲目标[^{}]*\}|第\s*\d+\s*章\s*章纲目标)\s*$")
 _ASCII_LETTER_RE = re.compile(r"[A-Za-z]")
+_HANGUL_RE = re.compile(r"[가-힣]")
 
 
 def is_placeholder_query(query: str) -> bool:
@@ -49,11 +50,11 @@ def _validate_explicit_genre_source(genre: Optional[str]) -> Optional[str]:
     normalized = str(genre or "").strip()
     if not normalized:
         return None
-    if _ASCII_LETTER_RE.search(normalized):
+    if _ASCII_LETTER_RE.search(normalized) and not _HANGUL_RE.search(normalized):
         raise StorySystemRoutingError(
-            "story-system 题材参数必须使用中文名称，不能使用英文 profile key "
-            f"'{normalized}'。不会生成 .story-system contracts。"
-            "例如：规则怪谈、悬疑、玄幻。"
+            "story-system 장르 인자는 한국어 명칭을 사용하세요. 내부 영문 profile key "
+            f"('{normalized}')는 사용할 수 없습니다. .story-system contracts는 생성되지 않습니다. "
+            "예: 헌터물, 로맨스판타지, 무협, 추리."
         )
     return normalized
 
@@ -590,12 +591,12 @@ class StorySystemEngine:
         query_text = str(query or "").strip()
         genre_text = str(genre or "").strip()
         if not route_rows:
-            detail = "题材与调性推理.csv 没有可用路由行"
+            detail = "题材与调性推理.csv에 사용 가능한 라우팅 행이 없습니다"
         else:
-            detail = f"query={query_text!r}, genre={genre_text!r} 未命中任何路由行"
+            detail = f"query={query_text!r}, genre={genre_text!r} 가 어떤 라우팅 행에도 매칭되지 않았습니다"
         return StorySystemRoutingError(
-            f"无法匹配 story-system 题材路由：{detail}。"
-            "不会生成 .story-system contracts。"
-            "请使用中文题材/流派（例如：规则怪谈、玄幻、仙侠），"
-            "或先在 题材与调性推理.csv 添加路由行。"
+            f"story-system 장르 라우팅 매칭 실패: {detail}. "
+            ".story-system contracts는 생성되지 않습니다. "
+            "한국 장르명(예: 헌터물, 무협, 추리)을 사용하거나, "
+            "题材与调性推理.csv에 해당 라우팅 행을 추가하세요."
         )

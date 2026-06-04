@@ -220,8 +220,8 @@ class ContextManager:
         latest_commit = runtime_sources.latest_commit or {}
 
         global_ctx = {
-            "worldview_skeleton": self._load_setting("世界观"),
-            "power_system_skeleton": self._load_setting("力量体系"),
+            "worldview_skeleton": self._load_setting("세계관"),
+            "power_system_skeleton": self._load_setting("파워시스템"),
             "style_contract_ref": self._load_setting("风格契约"),
         }
 
@@ -720,19 +720,33 @@ class ContextManager:
         appearances = self.index_manager.get_recent_appearances(limit=limit)
         return appearances or []
 
+    # 한국어 설정 파일명 → 레거시(중국어) 파일명 (읽기 호환)
+    _SETTING_LEGACY_NAMES = {
+        "세계관": "世界观",
+        "파워시스템": "力量体系",
+        "주인공카드": "主角卡",
+        "여주카드": "女主卡",
+        "주인공그룹": "主角组",
+        "빌런설계": "反派设计",
+        "치트키": "金手指",
+    }
+
     def _load_setting(self, keyword: str) -> str:
         settings_dir = self.config.settings_dir
-        candidates = [
-            settings_dir / f"{keyword}.md",
-        ]
-        for path in candidates:
+        names = [keyword]
+        legacy = self._SETTING_LEGACY_NAMES.get(keyword)
+        if legacy:
+            names.append(legacy)
+        for name in names:
+            path = settings_dir / f"{name}.md"
             if path.exists():
                 return path.read_text(encoding="utf-8")
-        # fallback: any file containing keyword
-        matches = list(settings_dir.glob(f"*{keyword}*.md"))
-        if matches:
-            return matches[0].read_text(encoding="utf-8")
-        return f"[{keyword}设定未找到]"
+        # fallback: any file containing keyword (영문/레거시 모두 시도)
+        for name in names:
+            matches = list(settings_dir.glob(f"*{name}*.md"))
+            if matches:
+                return matches[0].read_text(encoding="utf-8")
+        return f"[{keyword} 설정을 찾지 못함]"
 
     def _extract_summary_excerpt(self, text: str, max_chars: int) -> str:
         if not text:

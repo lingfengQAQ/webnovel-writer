@@ -1,47 +1,47 @@
 ---
 name: webnovel-dashboard
-description: 启动只读小说管理面板，查看项目状态、实体图谱与章节内容。
+description: 읽기 전용 소설 관리 대시보드를 실행해 프로젝트 상태, 엔티티 그래프, 화별 내용을 확인합니다.
 allowed-tools: Bash Read
 ---
 
 # Webnovel Dashboard
 
-## 目标
+## 목표
 
-- 在本地启动只读 Web 面板。
-- 实时查看创作进度、设定词典、关系图谱、章节内容与追读力数据。
-- 显式查看 Story Runtime 主链状态，包括 `story-runtime/health`、latest commit 与 fallback 情况。
-- 允许监听 `.webnovel/` 变化，但不得修改项目内容。
+- 로컬에서 읽기 전용 Web 패널을 실행합니다.
+- 창작 진행 상황, 설정 사전, 관계 그래프, 화별 내용 및 추독력 데이터를 실시간으로 확인합니다.
+- Story Runtime 메인 체인 상태(`story-runtime/health`, latest commit, fallback 현황 포함)를 명시적으로 확인합니다.
+- `.webnovel/` 변경 사항을 모니터링할 수 있지만, 프로젝트 내용을 수정해서는 안 됩니다.
 
-## 执行流程
+## 실행 흐름
 
-### Step 1：确认环境与模块目录
+### Step 1：환경 및 모듈 디렉터리 확인
 
 ```bash
 export WORKSPACE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 
 if [ -z "${CLAUDE_PLUGIN_ROOT}" ] || [ ! -d "${CLAUDE_PLUGIN_ROOT}/dashboard" ]; then
-  echo "ERROR: 未找到 dashboard 模块: ${CLAUDE_PLUGIN_ROOT}/dashboard" >&2
+  echo "ERROR: dashboard 모듈을 찾을 수 없습니다: ${CLAUDE_PLUGIN_ROOT}/dashboard" >&2
   exit 1
 fi
 
 export DASHBOARD_DIR="${CLAUDE_PLUGIN_ROOT}/dashboard"
 ```
 
-### Step 2：安装依赖并解析项目根目录
+### Step 2：의존성 설치 및 프로젝트 루트 디렉터리 해석
 
 ```bash
 python -m pip install -r "${DASHBOARD_DIR}/requirements.txt" --quiet
 export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"
 export PROJECT_ROOT="$(python "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
-echo "项目路径: ${PROJECT_ROOT}"
+echo "프로젝트 경로: ${PROJECT_ROOT}"
 ```
 
-补充要求：
-- `PROJECT_ROOT` 必须解析成功
-- 若依赖已安装，可重复执行，不视为错误
+추가 요구 사항:
+- `PROJECT_ROOT` 는 반드시 성공적으로 해석되어야 합니다
+- 의존성이 이미 설치된 경우 재실행해도 오류로 처리하지 않습니다
 
-### Step 3：准备 Python 模块路径并校验前端产物
+### Step 3：Python 모듈 경로 설정 및 프런트엔드 빌드 산출물 검증
 
 ```bash
 if [ -n "${PYTHONPATH:-}" ]; then
@@ -51,51 +51,51 @@ else
 fi
 
 if [ ! -f "${DASHBOARD_DIR}/frontend/dist/index.html" ]; then
-  echo "ERROR: 缺少前端构建产物 ${DASHBOARD_DIR}/frontend/dist/index.html" >&2
+  echo "ERROR: 프런트엔드 빌드 산출물이 없습니다 ${DASHBOARD_DIR}/frontend/dist/index.html" >&2
   exit 1
 fi
 ```
 
-### Step 4：启动 Dashboard
+### Step 4：Dashboard 실행
 
 ```bash
 python -m dashboard.server --project-root "${PROJECT_ROOT}"
 ```
 
-如不需要自动打开浏览器：
+브라우저 자동 열기가 필요하지 않은 경우:
 
 ```bash
 python -m dashboard.server --project-root "${PROJECT_ROOT}" --no-browser
 ```
 
-启动后优先确认以下接口可用：
+실행 후 다음 엔드포인트가 사용 가능한지 우선 확인합니다:
 - `/api/story-runtime/health`
 - `/api/preflight`
 
-## 注意事项
+## 주의 사항
 
-- Dashboard 为纯只读面板，不提供修改接口。
-- 文件读取必须限制在 `PROJECT_ROOT` 范围内。
-- 如需自定义端口，使用 `--port 9000`。
+- Dashboard 는 완전한 읽기 전용 패널로, 수정 API를 제공하지 않습니다.
+- 파일 읽기는 반드시 `PROJECT_ROOT` 범위 내로 제한해야 합니다.
+- 포트를 커스터마이즈해야 하는 경우 `--port 9000` 을 사용합니다.
 
-## 成功标准
+## 성공 기준
 
-- Dashboard 进程已启动且输出了可访问的 URL
-- 浏览器可正常打开页面（或 `--no-browser` 模式下 URL 可手动访问）
-- 页面显示项目数据（章节列表、实体图谱等）
+- Dashboard 프로세스가 실행되어 접근 가능한 URL을 출력했습니다
+- 브라우저에서 정상적으로 페이지를 열 수 있습니다 (또는 `--no-browser` 모드에서 URL을 수동으로 접근 가능)
+- 페이지에 프로젝트 데이터(화 목록, 엔티티 그래프 등)가 표시됩니다
 
-## 失败恢复
+## 실패 복구
 
-| 故障 | 恢复方式 |
+| 오류 | 복구 방법 |
 |------|---------|
-| 依赖安装失败 | 检查 Python 版本和网络，手动 `pip install -r requirements.txt` |
-| 前端 `dist/` 缺失 | 确认插件完整安装，dist 应随插件打包 |
-| 项目根解析失败 | 检查 `.webnovel/state.json` 是否存在，确认 `WORKSPACE_ROOT` 正确 |
-| 端口占用 | 使用 `--port <其他端口>` 或关闭占用进程 |
-| 页面空白/数据缺失 | 确认 `.webnovel/` 下有 state.json、index.db 等数据文件 |
+| 의존성 설치 실패 | Python 버전과 네트워크를 확인하고, 수동으로 `pip install -r requirements.txt` 를 실행합니다 |
+| 프런트엔드 `dist/` 누락 | 플러그인이 완전히 설치되었는지 확인합니다. dist 는 플러그인 패키지에 포함되어야 합니다 |
+| 프로젝트 루트 해석 실패 | `.webnovel/state.json` 이 존재하는지 확인하고, `WORKSPACE_ROOT` 가 올바른지 점검합니다 |
+| 포트 충돌 | `--port <다른 포트>` 를 사용하거나 해당 포트를 점유한 프로세스를 종료합니다 |
+| 페이지 공백/데이터 누락 | `.webnovel/` 아래에 state.json, index.db 등 데이터 파일이 있는지 확인합니다 |
 
-## 安全边界
+## 보안 경계
 
-- 只读操作，不修改任何项目文件
-- 文件访问限制在 `PROJECT_ROOT` 范围内
-- 不暴露外部网络（默认 localhost）
+- 읽기 전용 작업으로, 프로젝트 파일을 일절 수정하지 않습니다
+- 파일 접근은 `PROJECT_ROOT` 범위 내로 제한합니다
+- 외부 네트워크에 노출하지 않습니다 (기본값: localhost)

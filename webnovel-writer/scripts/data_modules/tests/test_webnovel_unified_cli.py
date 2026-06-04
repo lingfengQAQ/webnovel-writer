@@ -630,7 +630,7 @@ def test_review_pipeline_main_creates_output_directories(tmp_path):
     )
 
     metrics_out = project_root / ".webnovel" / "tmp" / "review" / "metrics.json"
-    report_file = project_root / "审查报告" / "第9章审查报告.md"
+    report_file = project_root / "reviews" / "9화-심사보고서.md"
 
     old_argv = sys.argv
     sys.argv = [
@@ -644,7 +644,7 @@ def test_review_pipeline_main_creates_output_directories(tmp_path):
         "--metrics-out",
         str(metrics_out),
         "--report-file",
-        "审查报告/第9章审查报告.md",
+        "reviews/9화-심사보고서.md",
         "--save-metrics",
     ]
     try:
@@ -655,7 +655,7 @@ def test_review_pipeline_main_creates_output_directories(tmp_path):
     assert metrics_out.is_file()
     assert report_file.is_file()
     report_text = report_file.read_text(encoding="utf-8")
-    assert "# 第9章审查报告" in report_text
+    assert "# 9화 심사 보고서" in report_text
     assert "小问题" in report_text
     assert "## 其他问题" in report_text
 
@@ -665,7 +665,7 @@ def test_review_pipeline_main_creates_output_directories(tmp_path):
         row = conn.execute(
             "SELECT start_chapter, end_chapter, report_file FROM review_metrics"
         ).fetchone()
-    assert row == (9, 9, "审查报告/第9章审查报告.md")
+    assert row == (9, 9, "reviews/9화-심사보고서.md")
 
 
 def test_webnovel_skill_flow_runs_story_contract_context_and_review_pipeline_with_stubbed_vector_model(

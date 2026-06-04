@@ -1,66 +1,73 @@
-# Webnovel Writer
+# Webnovel Writer (한국 웹소설 에디션)
 
 [![License](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Compatible-purple.svg)](https://claude.ai/claude-code)
 
-<a href="https://trendshift.io/repositories/22487" target="_blank"><img src="https://trendshift.io/api/badge/repositories/22487" alt="lingfengQAQ%2Fwebnovel-writer | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-## 这是什么？
+> 이 저장소는 중국 웹소설용으로 만들어진 원본을 **한국 웹소설 시장에 맞게 현지화**한 버전입니다.
+> 프롬프트·문서는 한국어, 생성되는 프로젝트 폴더명은 영문(`manuscript/`, `outline/`, `settings/`, `reviews/`), 장르 체계는 한국 웹소설 장르로 매핑되어 있습니다.
 
-`Webnovel Writer` 是一个基于 Claude Code 的长篇网文创作系统。
+## 이게 뭔가요?
 
-它的目标很简单：**让 AI 在写长篇小说时不乱编、不忘事**。
+`Webnovel Writer`는 Claude Code 기반의 장편 웹소설 창작 시스템입니다.
 
-系统会自动管理角色设定、剧情伏笔、世界观规则，让你可以安心连载几百章而不用担心前后矛盾。
+목표는 간단합니다: **AI가 장편을 쓸 때 설정을 헷갈리거나 앞 내용을 잊지 않게 하는 것.**
 
-📖 详细文档在 `docs/` 目录：
+시스템이 캐릭터 설정·복선·세계관 규칙을 자동으로 관리해, 수백 화를 연재해도 앞뒤 모순 없이 이어갈 수 있게 돕습니다.
 
-- [架构与模块](docs/architecture/overview.md) — 系统怎么工作的
-- [命令详解](docs/guides/commands.md) — 所有可用命令
-- [RAG 与配置](docs/guides/rag-and-config.md) — 检索和环境变量配置
-- [题材模板](docs/guides/genres.md) — 37 个内置网文题材
-- [运维与恢复](docs/operations/operations.md) — 项目结构与日常运维
-- [插件发版](docs/operations/plugin-release.md) — 发版流程
-- [文档导航](docs/README.md) — 所有文档索引
+## 빠른 시작
 
-## 快速开始
+### 1) 플러그인 설치
 
-### 1) 安装插件
-
-通过 Claude Code 官方 Marketplace 安装：
+Claude Code 마켓플레이스에서 설치:
 
 ```bash
 claude plugin marketplace add lingfengQAQ/webnovel-writer --scope user
 claude plugin install webnovel-writer@webnovel-writer-marketplace --scope user
 ```
 
-> 如果只想在当前项目生效，把 `--scope user` 改成 `--scope project`。
+> 현재 프로젝트에서만 쓰려면 `--scope user`를 `--scope project`로 바꾸세요.
 
-### 2) 安装 Python 依赖
+### 2) Python 의존성 설치
 
 ```bash
 python -m pip install -r https://raw.githubusercontent.com/lingfengQAQ/webnovel-writer/HEAD/requirements.txt
 ```
 
-### 3) 初始化小说项目
+### 3) 소설 프로젝트 초기화
 
-在 Claude Code 中输入：
+Claude Code에서:
 
 ```bash
 /webnovel-init
 ```
 
-系统会引导你填写书名、题材、主角等信息，然后在当前工作区下创建项目目录。
+제목·장르·주인공 등을 단계별로 입력하면 작업 폴더에 프로젝트가 생성됩니다.
 
-### 4) 配置 RAG（必做）
+**장르 입력 예시(한국 웹소설):** `헌터물`, `현대판타지`, `무협`, `선협`, `시스템`, `회귀`, `로맨스판타지`(`로판`), `현대로맨스`, `재벌물`, `추리`, `공포`, `e스포츠`, `대체역사`, `게임`. 복합 장르는 `+`로 연결합니다(예: `현대판타지+공포`).
 
-进入书项目根目录，把配置模板复制为 `.env` 并填写 API Key：
+생성되는 폴더 구조(영문):
+
+```
+<프로젝트>/
+├── manuscript/   # 원고(화 본문)
+├── outline/      # 대강(마스터/권/화 아웃라인)
+├── settings/     # 설정집(세계관·파워시스템·캐릭터 등)
+├── reviews/      # 심사 보고서
+└── .webnovel/    # 런타임 상태(읽기 모델)
+```
+
+> 기존 중국어 폴더(`正文/`, `大纲/`, `设定集/`, `审查报告/`)로 만들어진 프로젝트는 **읽기 호환**됩니다. 새로 쓰는 파일은 항상 영문 폴더로 생성됩니다.
+
+### 4) RAG 설정(필수)
+
+프로젝트 루트에서 설정 템플릿을 `.env`로 복사하고 API Key를 채웁니다:
 
 ```bash
 cp .env.example .env
 ```
 
-最小配置：
+최소 설정:
 
 ```bash
 EMBED_BASE_URL=https://api-inference.modelscope.cn/v1
@@ -72,89 +79,58 @@ RERANK_MODEL=jina-reranker-v3
 RERANK_API_KEY=your_rerank_api_key
 ```
 
-### 5) 开始写作
+> ⚠️ **한국 사용자 주의:** 임베딩 기본값은 ModelScope(중국)입니다. 한국에서 접속이 불안정할 수 있으니, OpenAI 호환 다국어 임베딩 엔드포인트로 `EMBED_BASE_URL`/`EMBED_MODEL`을 바꾸는 것을 권장합니다.
+
+### 5) 집필 시작
 
 ```bash
-/webnovel-plan 1      # 规划第 1 卷大纲
-/webnovel-write 1     # 写第 1 章
-/webnovel-review 1-5  # 审查第 1-5 章
+/webnovel-plan 1      # 1권 아웃라인 기획
+/webnovel-write 1     # 1화 집필
+/webnovel-review 1-5  # 1~5화 심사
 ```
 
-### 6) 可视化面板（可选）
+> 한국 웹소설 1편 분량(약 5,000자)에 맞춰 사이다(쾌감) 밀도·분량 기준값이 조정되어 있습니다.
+
+### 6) 시각화 대시보드(선택)
 
 ```bash
 /webnovel-dashboard
 ```
 
-只读面板，可以浏览项目状态、实体图谱、章节内容和追读力数据。前端已随插件预构建，不需要本地 `npm build`。
+읽기 전용 대시보드로 프로젝트 상태, 엔티티 그래프, 화별 내용, 추독력 데이터를 볼 수 있습니다. 프런트엔드는 플러그인에 미리 빌드되어 있어 `npm build`가 필요 없습니다.
 
-## Story System 主链（Phase 5）
+## 장르 매핑
 
-当前默认链路已经切到：
+한국 장르명은 내부 프로필 키로 매핑됩니다(구조는 원본 유지):
 
-1. 写前读取 `.story-system/MASTER_SETTING.json`、`volumes/`、`chapters/`、`reviews/`
-2. 写后提交 accepted `CHAPTER_COMMIT`
-3. 由 commit projection writers 更新 `.webnovel/state.json`、`index.db`、`summaries/`、`memory_scratchpad.json`
+| 한국 장르 | 내부 프로필 |
+|---|---|
+| 선협 / 무협 / 동양판타지 / 아카데미물 | xianxia |
+| 헌터물 / 현대판타지 / 재벌물 | urban-power |
+| 시스템 / 회귀 / 빙의 / 환생 | shuangwen |
+| 로맨스판타지 / 현대로맨스 | romance |
+| 게임 | game-lit |
+| 추리 / 미스터리 | mystery |
+| 공포 / 괴담 | rules-mystery |
+| e스포츠 | esports |
+| 대체역사 | history-travel |
 
-这意味着：
+> `회귀`·`빙의`·`환생`은 교차 트로프라 단독 입력 시 사이다/성장 중심 기본 프로필(`shuangwen`)로 해소됩니다. 다른 장르와 조합해 쓰는 것을 권장합니다.
 
-- `.story-system/` 是主链真源
-- `.webnovel/*` 是投影 / read-model
-- `references/genre-profiles.md` 只在合同缺失时作为 fallback
-- `preflight --format json` 和 dashboard 会直接暴露 `story_runtime` 健康状态
+## 현지화 적용 범위(1차)
 
-### 7) Agent 模型设置（可选）
+- ✅ 생성 폴더명 영문화(`manuscript`/`outline`/`settings`/`reviews`) + 챕터 파일명 ASCII 토큰화(`ch0007`/`vol01`)
+- ✅ 한국 장르 매핑(별칭·프로필·템플릿 파일 매핑)
+- ✅ 한국 시장 기본값(편당 분량/사이다 밀도, 한국어 경보 키워드, 임베딩 안내)
+- ✅ 사용자 노출 CLI 메시지·스킬 설명·문서 한국어화
+- ✅ 레거시(중국어) 프로젝트 읽기 호환
 
-所有内置 Agent 默认继承当前会话模型：
+> 진행 중(다음 단계): 스킬/에이전트 본문 프롬프트 전면 한국어화, 9개 참고 CSV 본문 현지화, 장르 템플릿/설정 본문 한국어화, 대시보드 프런트엔드.
 
-```yaml
-model: inherit
-```
+## 오픈소스 라이선스
 
-如需单独指定，编辑对应 `agents/*.md` 的 frontmatter：
+본 프로젝트는 `GPL v3`를 따릅니다. 자세한 내용은 [LICENSE](LICENSE) 참고.
 
-```yaml
----
-model: sonnet  # 可选：inherit / sonnet / opus / haiku
----
-```
+## 감사의 글
 
-## 更新简介
-
-| 版本 | 主要变化 |
-|------|----------|
-| **v6.0.0 (当前)** | Story System 全链路上线（合同种子 + 运行时合同 + 章节提交 + 事件审计），补齐集成测试 |
-| **v5.5.5** | 长期记忆闭环：写前注入 + 写后沉淀，新增 `memory` 运维命令 |
-| **v5.5.4** | 写作链提示词强约束，统一中文化审查和报告文案 |
-| **v5.5.3** | 统一 `preflight` 预检命令，修复 Windows 终端编码问题 |
-| **v5.5.2** | 大纲章节名同步到正文文件名 |
-| **v5.5.1** | 修复卷级大纲上下文提取，补齐 Dashboard 和 Learn 命令文档 |
-| **v5.5.0** | 新增只读可视化 Dashboard，支持实时刷新 |
-| **v5.4.4** | 接入 Plugin Marketplace 安装机制 |
-| **v5.4.3** | 增强 RAG 智能上下文（`auto/graph_hybrid` 回退 BM25） |
-| **v5.3** | 引入追读力系统（Hook / Cool-point / 微兑现 / 债务追踪） |
-
-## 开源协议
-
-本项目使用 `GPL v3` 协议，详见 [LICENSE](LICENSE)。
-
-## Star 历史
-
-[![Star History Chart](https://api.star-history.com/svg?repos=lingfengQAQ/webnovel-writer&type=Date)](https://star-history.com/#lingfengQAQ/webnovel-writer&Date)
-
-## 致谢
-
-本项目使用 **Claude Code + Gemini CLI + Codex** 配合 Vibe Coding 方式开发。  
-灵感来源：[Linux.do 帖子](https://linux.do/t/topic/1397944/49)
-
-感谢 `oh-story-claudecode` 提供拆文流程参考。
-
-## 贡献
-
-欢迎提交 Issue 和 PR：
-
-```bash
-git checkout -b feature/your-feature
-git commit -m "feat: add your feature"
-git push origin feature/your-feature
-```
+원본 프로젝트: [lingfengQAQ/webnovel-writer](https://github.com/lingfengQAQ/webnovel-writer) — **Claude Code + Gemini CLI + Codex** Vibe Coding으로 개발.

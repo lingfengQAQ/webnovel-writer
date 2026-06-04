@@ -1509,7 +1509,7 @@ def main():
                     "chunk_type": "scene",
                     "parent_chunk_id": parent_chunk_id,
                     "chunk_id": chunk_id,
-                    "source_file": f"正文/第{args.chapter:04d}章.md#scene_{int(scene_index)}",
+                    "source_file": f"manuscript/ch{args.chapter:04d}.md#scene_{int(scene_index)}",
                 }
             )
 

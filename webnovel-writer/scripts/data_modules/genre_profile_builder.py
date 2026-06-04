@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import List
 
-from .genre_aliases import normalize_genre_token
+from .genre_aliases import normalize_genre_token, to_profile_key
 
 
 def parse_genre_tokens(
@@ -57,13 +57,24 @@ def extract_genre_section(text: str, genre: str) -> str:
     capture: List[str] = []
     active = False
     target = genre.strip().lower()
+    # 한국 장르명은 중국어 헤딩과 직접 매칭되지 않으므로, 프로필 키로도 매칭한다.
+    # genre-profiles.md 헤딩은 "(shuangwen)"처럼 프로필 키를 포함한다.
+    profile_key = to_profile_key(genre).strip().lower()
+
+    def _heading_matches(normalized_heading: str) -> bool:
+        if target and target in normalized_heading:
+            return True
+        # 프로필 키는 "(shuangwen)" 형태로 괄호 안에 표기됨 → 오탐 방지를 위해 괄호 포함 매칭
+        if profile_key and f"({profile_key})" in normalized_heading:
+            return True
+        return False
 
     for line in lines:
         normalized = line.strip().lower()
         if normalized.startswith("## ") or normalized.startswith("### "):
             if active:
                 break
-            active = target in normalized
+            active = _heading_matches(normalized)
             if active:
                 capture.append(line)
             continue

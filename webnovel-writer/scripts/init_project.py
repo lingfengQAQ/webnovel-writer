@@ -30,6 +30,23 @@ import re
 from security_utils import sanitize_commit_message, atomic_write_json, is_git_available
 from project_locator import write_current_project_pointer
 
+try:
+    from data_modules.genre_aliases import normalize_genre_token, to_template_file
+    from data_modules.naming import (
+        DIR_MANUSCRIPT,
+        DIR_SETTINGS,
+        DIR_OUTLINE,
+        DIR_REVIEWS,
+    )
+except ImportError:  # pragma: no cover
+    from scripts.data_modules.genre_aliases import normalize_genre_token, to_template_file
+    from scripts.data_modules.naming import (
+        DIR_MANUSCRIPT,
+        DIR_SETTINGS,
+        DIR_OUTLINE,
+        DIR_REVIEWS,
+    )
+
 
 # Windows 编码兼容性修复
 if sys.platform == "win32":
@@ -37,14 +54,17 @@ if sys.platform == "win32":
 
 
 _ASCII_LETTER_RE = re.compile(r"[A-Za-z]")
+_HANGUL_RE = re.compile(r"[가-힣]")
 
 
 def _validate_initial_genre_source(genre: str) -> str:
     normalized = str(genre or "").strip()
-    if _ASCII_LETTER_RE.search(normalized):
+    # 한글이 전혀 없고 ASCII 영문만 있는 경우 → 내부 profile key 오입력으로 간주.
+    # (예: "xianxia", "romance"). "e스포츠"처럼 한글이 섞이면 허용한다.
+    if _ASCII_LETTER_RE.search(normalized) and not _HANGUL_RE.search(normalized):
         raise SystemExit(
-            "题材必须使用中文名称，不能使用英文 profile key "
-            f"'{normalized}'。例如：规则怪谈、悬疑、玄幻。"
+            f"장르는 한국어 명칭으로 입력하세요. 내부 profile key('{normalized}')는 사용할 수 없습니다. "
+            "예: 헌터물, 로맨스판타지, 무협, 회귀, 추리."
         )
     return normalized
 
@@ -74,24 +94,8 @@ def _split_genre_keys(genre: str) -> list[str]:
 
 
 def _normalize_genre_key(key: str) -> str:
-    aliases = {
-        "修仙/玄幻": "修仙",
-        "玄幻修仙": "修仙",
-        "玄幻": "修仙",
-        "修真": "修仙",
-        "都市修真": "都市异能",
-        "都市高武": "高武",
-        "都市奇闻": "都市脑洞",
-        "古言脑洞": "古言",
-        "游戏电竞": "电竞",
-        "电竞文": "电竞",
-        "直播": "直播文",
-        "直播带货": "直播文",
-        "主播": "直播文",
-        "克系": "克苏鲁",
-        "克系悬疑": "克苏鲁",
-    }
-    return aliases.get(key, key)
+    # 한국 장르 정규화는 genre_aliases 단일 출처를 재사용한다.
+    return normalize_genre_token(key)
 
 
 def _apply_label_replacements(text: str, replacements: Dict[str, str]) -> str:
@@ -103,10 +107,13 @@ def _apply_label_replacements(text: str, replacements: Dict[str, str]) -> str:
         for label, value in replacements.items():
             if not value:
                 continue
-            prefix = f"- {label}："
-            if stripped.startswith(prefix):
-                leading = line[: len(line) - len(stripped)]
-                lines[i] = f"{leading}{prefix}{value}"
+            # 전각(：)/반각(:) 콜론 모두 허용
+            for colon in ("：", ":"):
+                prefix = f"- {label}{colon}"
+                if stripped.startswith(prefix):
+                    leading = line[: len(line) - len(stripped)]
+                    lines[i] = f"{leading}{prefix}{value}"
+                    break
     return "\n".join(lines)
 
 
@@ -140,7 +147,7 @@ def _render_team_rows(names: List[str], roles: List[str]) -> List[str]:
     rows = []
     for idx, name in enumerate(names):
         role = roles[idx] if idx < len(roles) else ""
-        rows.append(f"| {name} | {role or '主线/副线'} | | | |")
+        rows.append(f"| {name} | {role or '메인라인/서브라인'} | | | |")
     return rows
 
 
@@ -198,11 +205,11 @@ def _ensure_state_schema(state: Dict[str, Any]) -> Dict[str, Any]:
 def _build_master_outline(target_chapters: int, *, chapters_per_volume: int = 50) -> str:
     volumes = (target_chapters - 1) // chapters_per_volume + 1 if target_chapters > 0 else 1
     lines: list[str] = [
-        "# 总纲",
+        "# 마스터 아웃라인",
         "",
-        "> 本文件为“总纲骨架”，用于 /webnovel-plan 细化为卷大纲与章纲。",
+        "> 이 파일은 '마스터 아웃라인 골격'으로, /webnovel-plan에서 권 대강과 화별 대강으로 세분화한다.",
         "",
-        "## 卷结构",
+        "## 권 구성",
         "",
     ]
 
@@ -211,12 +218,12 @@ def _build_master_outline(target_chapters: int, *, chapters_per_volume: int = 50
         end = min(v * chapters_per_volume, target_chapters)
         lines.extend(
             [
-                f"### 第{v}卷（第{start}-{end}章）",
-                "- 核心冲突：",
-                "- 关键爽点：",
-                "- 卷末高潮：",
-                "- 主要登场角色：",
-                "- 关键伏笔（埋/收）：",
+                f"### 제{v}권 ({start}-{end}화)",
+                "- 핵심 갈등:",
+                "- 핵심 사이다:",
+                "- 권말 클라이맥스:",
+                "- 주요 등장 인물:",
+                "- 핵심 복선(매설/회수):",
                 "",
             ]
         )
@@ -229,7 +236,8 @@ def _inject_volume_rows(template_text: str, target_chapters: int, *, chapters_pe
     lines = template_text.splitlines()
     header_idx = None
     for i, line in enumerate(lines):
-        if line.strip().startswith("| 卷号"):
+        # 한국어(신규) "| 권 번호" + 레거시 "| 卷号" 모두 인식
+        if line.strip().startswith(("| 권 번호", "| 卷号")):
             header_idx = i
             break
     if header_idx is None:
@@ -237,7 +245,7 @@ def _inject_volume_rows(template_text: str, target_chapters: int, *, chapters_pe
 
     insert_idx = header_idx + 2 if header_idx + 1 < len(lines) else len(lines)
     end = min(chapters_per_volume, target_chapters) if target_chapters > 0 else chapters_per_volume
-    rows = [f"| 1 | | 第1-{end}章 | | |"]
+    rows = [f"| 1 | | 1-{end}화 | | |"]
 
     # 避免重复插入（若模板已有数据行）
     existing = {line.strip() for line in lines}
@@ -294,10 +302,10 @@ def init_project(
         ".webnovel/backups",
         ".webnovel/archive",
         ".webnovel/summaries",
-        "设定集",
-        "大纲",
-        "正文",
-        "审查报告",
+        DIR_SETTINGS,
+        DIR_OUTLINE,
+        DIR_MANUSCRIPT,
+        DIR_REVIEWS,
     ]
     for dir_path in directories:
         (project_path / dir_path).mkdir(parents=True, exist_ok=True)
@@ -383,10 +391,13 @@ def init_project(
         if not key or key in seen:
             continue
         seen.add(key)
-        template_text = _read_text_if_exists(templates_dir / "genres" / f"{key}.md")
+        # 한국 장르명 → 기존(중국어) 템플릿 파일명으로 매핑해 로드
+        template_text = _read_text_if_exists(templates_dir / "genres" / f"{to_template_file(key)}.md")
         if template_text:
             genre_templates.append(template_text.strip())
     genre_template = "\n\n---\n\n".join(genre_templates)
+    # 템플릿 파일명은 현 단계 기존(중국어) 유지(본문 한국어화는 다음 단계).
+    # 생성되는 프로젝트 파일명은 한국어(세계관.md 등)로 쓴다.
     output_worldview = _read_text_if_exists(output_templates_dir / "设定集-世界观.md")
     output_power = _read_text_if_exists(output_templates_dir / "设定集-力量体系.md")
     output_protagonist = _read_text_if_exists(output_templates_dir / "设定集-主角卡.md")
@@ -427,17 +438,17 @@ def init_project(
         worldview_content = _apply_label_replacements(
             worldview_content,
             {
-                "大陆/位面数量": world_scale,
-                "核心势力": factions,
-                "社会阶层": social_class,
-                "资源分配规则": resource_distribution,
-                "宗门/组织层级": sect_hierarchy,
-                "货币体系": currency_system,
-                "兑换规则": currency_exchange,
+                "대륙/차원 수": world_scale,
+                "핵심 세력": factions,
+                "사회 계층": social_class,
+                "자원 분배 규칙": resource_distribution,
+                "문파/조직 위계": sect_hierarchy,
+                "화폐 체계": currency_system,
+                "환전 규칙": currency_exchange,
             },
         )
     _write_text_if_missing(
-        project_path / "设定集" / "世界观.md",
+        project_path / DIR_SETTINGS / "세계관.md",
         worldview_content,
     )
 
@@ -467,13 +478,13 @@ def init_project(
         power_content = _apply_label_replacements(
             power_content,
             {
-                "体系类型": power_system_type,
-                "典型境界链（可选）": cultivation_chain,
-                "小境界划分": cultivation_subtiers,
+                "체계 유형": power_system_type,
+                "대표 경지 체인(선택)": cultivation_chain,
+                "소경지 구분": cultivation_subtiers,
             },
         )
     _write_text_if_missing(
-        project_path / "设定集" / "力量体系.md",
+        project_path / DIR_SETTINGS / "파워시스템.md",
         power_content,
     )
 
@@ -507,13 +518,13 @@ def init_project(
         protagonist_content = _apply_label_replacements(
             protagonist_content,
             {
-                "姓名": protagonist_name,
-                "真正渴望（可能不自知）": protagonist_desire,
-                "性格缺陷": protagonist_flaw,
+                "이름": protagonist_name,
+                "진짜 욕망(본인도 모를 수 있음)": protagonist_desire,
+                "성격적 결함": protagonist_flaw,
             },
         )
     _write_text_if_missing(
-        project_path / "设定集" / "主角卡.md",
+        project_path / DIR_SETTINGS / "주인공카드.md",
         protagonist_content,
     )
 
@@ -522,11 +533,11 @@ def init_project(
         heroine_content = _apply_label_replacements(
             heroine_content,
             {
-                "姓名": heroine_names,
-                "与主角关系定位（对手/盟友/共谋/牵制）": heroine_role,
+                "이름": heroine_names,
+                "주인공과의 관계 포지션(라이벌/동맹/공모/견제)": heroine_role,
             },
         )
-        _write_text_if_missing(project_path / "设定集" / "女主卡.md", heroine_content)
+        _write_text_if_missing(project_path / DIR_SETTINGS / "여주카드.md", heroine_content)
 
     team_content = output_team.strip() if output_team else ""
     if team_content and _needs_protagonist_group(protagonist_structure):
@@ -538,16 +549,16 @@ def init_project(
             replaced = False
             out_lines: List[str] = []
             for line in lines:
-                if line.strip().startswith("| 主角A"):
+                if line.strip().startswith("| 주인공A"):
                     out_lines.extend(new_rows)
                     replaced = True
                     continue
-                if replaced and line.strip().startswith("| 主角"):
+                if replaced and line.strip().startswith("| 주인공"):
                     continue
                 out_lines.append(line)
             team_content = "\n".join(out_lines)
         _write_text_if_missing(
-            project_path / "设定集" / "主角组.md",
+            project_path / DIR_SETTINGS / "주인공그룹.md",
             team_content,
         )
 
@@ -555,15 +566,15 @@ def init_project(
     if not antagonist_content:
         antagonist_content = "\n".join(
             [
-                "# 反派设计",
+                "# 빌런 설계",
                 "",
-                f"> 项目：{title}｜创建：{now}",
+                f"> 프로젝트: {title}｜생성: {now}",
                 "",
-                f"- 反派等级：{antagonist_level or '（待填写）'}",
-                "- 动机：",
-                "- 资源/势力：",
-                "- 与主角的镜像关系：",
-                "- 终局：",
+                f"- 빌런 등급: {antagonist_level or '(작성 필요)'}",
+                "- 동기:",
+                "- 자원/세력:",
+                "- 주인공과의 미러 관계:",
+                "- 결말:",
                 "",
             ]
         ).rstrip() + "\n"
@@ -573,38 +584,40 @@ def init_project(
             lines = antagonist_content.splitlines()
             out_lines = []
             for line in lines:
-                if line.strip().startswith("| 小反派"):
-                    name = tier_map.get("小反派", "")
-                    out_lines.append(f"| 小反派 | {name} | 前期 | | |")
+                if line.strip().startswith("| 소형빌런"):
+                    name = tier_map.get("소형빌런", "")
+                    out_lines.append(f"| 소형빌런 | {name} | 초반 | | |")
                     continue
-                if line.strip().startswith("| 中反派"):
-                    name = tier_map.get("中反派", "")
-                    out_lines.append(f"| 中反派 | {name} | 中期 | | |")
+                if line.strip().startswith("| 중형빌런"):
+                    name = tier_map.get("중형빌런", "")
+                    out_lines.append(f"| 중형빌런 | {name} | 중반 | | |")
                     continue
-                if line.strip().startswith("| 大反派"):
-                    name = tier_map.get("大反派", "")
-                    out_lines.append(f"| 大反派 | {name} | 后期 | | |")
+                if line.strip().startswith("| 대형빌런"):
+                    name = tier_map.get("대형빌런", "")
+                    out_lines.append(f"| 대형빌런 | {name} | 후반 | | |")
                     continue
                 out_lines.append(line)
             antagonist_content = "\n".join(out_lines)
-    _write_text_if_missing(project_path / "设定集" / "反派设计.md", antagonist_content)
+    _write_text_if_missing(project_path / DIR_SETTINGS / "빌런설계.md", antagonist_content)
 
     outline_content = output_outline.strip() if output_outline else ""
     if outline_content:
         outline_content = _inject_volume_rows(outline_content, int(target_chapters)).rstrip() + "\n"
     else:
         outline_content = _build_master_outline(int(target_chapters))
-    _write_text_if_missing(project_path / "大纲" / "总纲.md", outline_content)
+    _write_text_if_missing(project_path / DIR_OUTLINE / "마스터아웃라인.md", outline_content)
 
     # 生成环境变量模板（不写入真实密钥）
     _write_text_if_missing(
         project_path / ".env.example",
         "\n".join(
             [
-                "# Webnovel Writer 配置示例（复制为 .env 后填写）",
-                "# 注意：请勿将包含真实 API_KEY 的 .env 提交到版本库。",
+                "# Webnovel Writer 설정 예시 (.env로 복사 후 작성)",
+                "# 주의: 실제 API_KEY가 담긴 .env는 버전관리에 커밋하지 마세요.",
                 "",
                 "# Embedding",
+                "# 기본값은 ModelScope(중국)입니다. 한국에서 접속이 불안정하면",
+                "# OpenAI 호환 다국어 임베딩 엔드포인트로 바꾸세요.",
                 "EMBED_BASE_URL=https://api-inference.modelscope.cn/v1",
                 "EMBED_MODEL=Qwen/Qwen3-Embedding-8B",
                 "EMBED_API_KEY=",
@@ -623,10 +636,10 @@ def init_project(
     git_dir = project_path / ".git"
     if not git_dir.exists():
         if not is_git_available():
-            print("\n⚠️  Git 不可用，跳过版本控制初始化")
-            print("💡 如需启用 Git 版本控制，请安装 Git: https://git-scm.com/")
+            print("\n⚠️  Git을 사용할 수 없어 버전관리 초기화를 건너뜁니다")
+            print("💡 Git 버전관리를 쓰려면 Git을 설치하세요: https://git-scm.com/")
         else:
-            print("\nInitializing Git repository...")
+            print("\nGit 저장소 초기화 중...")
             try:
                 subprocess.run(["git", "init"], cwd=project_path, check=True, capture_output=True, text=True)
 
@@ -665,7 +678,7 @@ __pycache__/
                 # 安全修复：清理 title 防止命令注入
                 safe_title = sanitize_commit_message(title)
                 subprocess.run(
-                    ["git", "commit", "-m", f"初始化网文项目：{safe_title}"],
+                    ["git", "commit", "-m", f"웹소설 프로젝트 초기화: {safe_title}"],
                     cwd=project_path,
                     check=True,
                     capture_output=True,
@@ -682,59 +695,59 @@ __pycache__/
     except Exception as e:
         print(f"Default project pointer update failed (non-fatal): {e}")
 
-    print(f"\nProject initialized at: {project_path}")
-    print("Key files:")
+    print(f"\n프로젝트 초기화 완료: {project_path}")
+    print("주요 파일:")
     print(" - .webnovel/state.json")
-    print(" - 设定集/世界观.md")
-    print(" - 设定集/力量体系.md")
-    print(" - 设定集/主角卡.md")
-    print(" - 大纲/总纲.md")
+    print(f" - {DIR_SETTINGS}/세계관.md")
+    print(f" - {DIR_SETTINGS}/파워시스템.md")
+    print(f" - {DIR_SETTINGS}/주인공카드.md")
+    print(f" - {DIR_OUTLINE}/마스터아웃라인.md")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="网文项目初始化脚本（生成项目结构 + state.json + 基础模板）")
-    parser.add_argument("project_dir", help="项目目录（建议 ./webnovel-project）")
-    parser.add_argument("title", help="小说标题")
+    parser = argparse.ArgumentParser(description="웹소설 프로젝트 초기화 스크립트(프로젝트 구조 + state.json + 기본 템플릿 생성)")
+    parser.add_argument("project_dir", help="프로젝트 디렉터리(권장: ./webnovel-project)")
+    parser.add_argument("title", help="소설 제목")
     parser.add_argument(
         "genre",
-        help="题材类型（可用“+”组合，如：都市脑洞+规则怪谈；示例：修仙/系统流/都市异能/古言/现实题材）",
+        help="장르(\"+\"로 복합 지정 가능, 예: 현대판타지+공포; 예시: 헌터물/시스템/무협/로맨스판타지/추리)",
     )
 
-    parser.add_argument("--protagonist-name", default="", help="主角姓名")
-    parser.add_argument("--target-words", type=int, default=2_000_000, help="目标总字数（默认 2000000）")
-    parser.add_argument("--target-chapters", type=int, default=600, help="目标总章节数（默认 600）")
+    parser.add_argument("--protagonist-name", default="", help="주인공 이름")
+    parser.add_argument("--target-words", type=int, default=2_000_000, help="목표 총 글자수(기본 2000000)")
+    parser.add_argument("--target-chapters", type=int, default=600, help="목표 총 화수(기본 600)")
 
-    parser.add_argument("--golden-finger-name", default="", help="金手指称呼/系统名（建议读者可见的代号）")
-    parser.add_argument("--golden-finger-type", default="", help="金手指类型（如 系统流/鉴定流/签到流）")
-    parser.add_argument("--golden-finger-style", default="", help="金手指风格（如 冷漠工具型/毒舌吐槽型）")
-    parser.add_argument("--core-selling-points", default="", help="核心卖点（逗号分隔）")
-    parser.add_argument("--protagonist-structure", default="", help="主角结构（单主角/多主角）")
-    parser.add_argument("--heroine-config", default="", help="女主配置（无女主/单女主/多女主）")
-    parser.add_argument("--heroine-names", default="", help="女主姓名（多个用逗号分隔）")
-    parser.add_argument("--heroine-role", default="", help="女主定位（事业线/情感线/对抗线）")
-    parser.add_argument("--co-protagonists", default="", help="多主角姓名（逗号分隔）")
-    parser.add_argument("--co-protagonist-roles", default="", help="多主角定位（逗号分隔）")
-    parser.add_argument("--antagonist-tiers", default="", help="反派分层（如 小反派:张三;中反派:李四;大反派:王五）")
-    parser.add_argument("--world-scale", default="", help="世界规模")
-    parser.add_argument("--factions", default="", help="势力格局/核心势力")
-    parser.add_argument("--power-system-type", default="", help="力量体系类型")
-    parser.add_argument("--social-class", default="", help="社会阶层")
-    parser.add_argument("--resource-distribution", default="", help="资源分配")
-    parser.add_argument("--gf-visibility", default="", help="金手指可见度（明牌/半明牌/暗牌）")
-    parser.add_argument("--gf-irreversible-cost", default="", help="金手指不可逆代价")
-    parser.add_argument("--currency-system", default="", help="货币体系")
-    parser.add_argument("--currency-exchange", default="", help="货币兑换/面值规则")
-    parser.add_argument("--sect-hierarchy", default="", help="宗门/组织层级")
-    parser.add_argument("--cultivation-chain", default="", help="典型境界链")
-    parser.add_argument("--cultivation-subtiers", default="", help="小境界划分（初/中/后/巅 等）")
+    parser.add_argument("--golden-finger-name", default="", help="치트키/시스템 명칭(독자에게 보이는 코드네임 권장)")
+    parser.add_argument("--golden-finger-type", default="", help="치트키 유형(예: 시스템/감정/출석체크)")
+    parser.add_argument("--golden-finger-style", default="", help="치트키 스타일(예: 냉정한 도구형/독설 츤데레형)")
+    parser.add_argument("--core-selling-points", default="", help="핵심 셀링포인트(쉼표 구분)")
+    parser.add_argument("--protagonist-structure", default="", help="주인공 구조(단일주인공/다중주인공)")
+    parser.add_argument("--heroine-config", default="", help="여주 구성(여주없음/단일여주/다수여주)")
+    parser.add_argument("--heroine-names", default="", help="여주 이름(여러 명은 쉼표 구분)")
+    parser.add_argument("--heroine-role", default="", help="여주 포지션(사업라인/감정라인/대립라인)")
+    parser.add_argument("--co-protagonists", default="", help="다중주인공 이름(쉼표 구분)")
+    parser.add_argument("--co-protagonist-roles", default="", help="다중주인공 포지션(쉼표 구분)")
+    parser.add_argument("--antagonist-tiers", default="", help="빌런 계층(예: 소형빌런:홍길동;중형빌런:김철수;대형빌런:이영희)")
+    parser.add_argument("--world-scale", default="", help="세계 규모")
+    parser.add_argument("--factions", default="", help="세력 구도/핵심 세력")
+    parser.add_argument("--power-system-type", default="", help="파워 시스템 유형")
+    parser.add_argument("--social-class", default="", help="사회 계층")
+    parser.add_argument("--resource-distribution", default="", help="자원 분배")
+    parser.add_argument("--gf-visibility", default="", help="치트키 노출도(공개/반공개/비공개)")
+    parser.add_argument("--gf-irreversible-cost", default="", help="치트키의 비가역 대가")
+    parser.add_argument("--currency-system", default="", help="화폐 체계")
+    parser.add_argument("--currency-exchange", default="", help="화폐 환전/액면 규칙")
+    parser.add_argument("--sect-hierarchy", default="", help="문파/조직 위계")
+    parser.add_argument("--cultivation-chain", default="", help="대표 경지(레벨) 체계")
+    parser.add_argument("--cultivation-subtiers", default="", help="소경지 구분(초/중/후/극 등)")
 
-    # 深度模式可选参数（用于预填模板）
-    parser.add_argument("--protagonist-desire", default="", help="主角核心欲望（深度模式）")
-    parser.add_argument("--protagonist-flaw", default="", help="主角性格弱点（深度模式）")
-    parser.add_argument("--protagonist-archetype", default="", help="主角人设类型（深度模式）")
-    parser.add_argument("--antagonist-level", default="", help="反派等级（深度模式）")
-    parser.add_argument("--target-reader", default="", help="目标读者（深度模式）")
-    parser.add_argument("--platform", default="", help="发布平台（深度模式）")
+    # 심화 모드 선택 인자(템플릿 사전 채우기용)
+    parser.add_argument("--protagonist-desire", default="", help="주인공 핵심 욕망(심화 모드)")
+    parser.add_argument("--protagonist-flaw", default="", help="주인공 성격적 약점(심화 모드)")
+    parser.add_argument("--protagonist-archetype", default="", help="주인공 캐릭터 유형(심화 모드)")
+    parser.add_argument("--antagonist-level", default="", help="빌런 등급(심화 모드)")
+    parser.add_argument("--target-reader", default="", help="타깃 독자(심화 모드)")
+    parser.add_argument("--platform", default="", help="연재 플랫폼(심화 모드)")
 
     args = parser.parse_args()
 

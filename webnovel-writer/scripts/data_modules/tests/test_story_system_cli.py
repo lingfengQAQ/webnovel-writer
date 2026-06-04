@@ -164,7 +164,7 @@ def test_story_system_warns_on_placeholder_query(tmp_path, monkeypatch, capsys):
 
     captured = capsys.readouterr()
     assert "placeholder" in captured.err
-    assert "无法匹配 story-system 题材路由" in captured.err
+    assert "story-system 장르 라우팅 매칭 실패" in captured.err
 
 
 def test_story_system_persist_unroutable_exits_without_contracts(tmp_path, monkeypatch, capsys):
@@ -231,5 +231,5 @@ def test_story_system_persist_unroutable_exits_without_contracts(tmp_path, monke
     assert exc.value.code == 2
     captured = capsys.readouterr()
     assert "rules-mystery" in captured.err
-    assert "规则怪谈" in captured.err
+    assert "헌터물" in captured.err
     assert not (project_root / ".story-system").exists()

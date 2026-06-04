@@ -130,7 +130,8 @@ class StatusReporter:
         self.project_root = Path(project_root)
         self.config = get_config(self.project_root)
         self.state_file = self.project_root / ".webnovel/state.json"
-        self.chapters_dir = self.project_root / "正文"
+        # 영문(manuscript) 우선, 레거시(正文) 읽기 호환은 config가 처리
+        self.chapters_dir = self.config.chapters_dir
 
         self.state = None
         self.chapters_data = []
@@ -342,13 +343,15 @@ class StatusReporter:
     def scan_chapters(self):
         """扫描所有章节文件"""
         if not self.chapters_dir.exists():
-            print(f"⚠️  正文目录不存在: {self.chapters_dir}")
+            print(f"⚠️  원고 디렉터리가 없습니다: {self.chapters_dir}")
             return
 
-        # 支持两种目录结构：
-        # 1) 正文/第0001章.md
-        # 2) 正文/第1卷/第001章-标题.md
-        chapter_files = sorted(self.chapters_dir.rglob("第*.md"))
+        # 두 가지 레이아웃 지원(영문 토큰 + 레거시 중국어):
+        # 1) manuscript/ch0001.md          (레거시 正文/第0001章.md)
+        # 2) manuscript/vol01/ch001-제목.md (레거시 正文/第1卷/第001章-标题.md)
+        chapter_files = sorted(
+            list(self.chapters_dir.rglob("ch*.md")) + list(self.chapters_dir.rglob("第*.md"))
+        )
 
         # v5.1 引入: 从 SQLite 获取已知角色名
         known_character_names: List[str] = []

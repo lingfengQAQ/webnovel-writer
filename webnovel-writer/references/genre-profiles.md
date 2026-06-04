@@ -1,82 +1,82 @@
-# 题材配置档案 (Genre Profiles)
+# 장르 설정 프로파일 (Genre Profiles)
 
-> **状态：Fallback Only**
+> **상태: Fallback Only**
 >
-> 高频题材的主判定、主调性、主禁忌已迁移到 Story Contracts / CSV route seed。
-> 本文件只在合同缺失、项目未升级或显式 fallback 时提供补充提示。
+> 고빈도 장르의 주요 판정·주조성·주금기 사항은 Story Contracts / CSV route seed로 이전되었습니다.
+> 이 파일은 계약이 없거나, 프로젝트가 업그레이드되지 않았거나, 명시적 fallback 시에만 보조 프롬프트를 제공합니다.
 >
-> **定位**：本文档定义各题材的追读力配置参数，供 Step 1.5 / Context Agent / Checkers 读取。
+> **역할**: 이 문서는 각 장르의 추독력 설정 파라미터를 정의하며, Step 1.5 / Context Agent / Checkers가 읽어 사용합니다.
 >
-> **原则**：配置用于"调整权重和建议"，不做硬性裁决。
+> **원칙**: 설정은 "가중치와 제안 조정"에 사용되며, 강제 판정은 하지 않습니다.
 >
-> **说明**：基于 xslca.cc 热门榜实证数据扩展，新增 history-travel / game-lit，并更新 shuangwen / xianxia / urban-power 关键参数。
+> **설명**: xslca.cc 인기 순위 실증 데이터를 기반으로 확장하였으며, history-travel / game-lit을 신규 추가하고 shuangwen / xianxia / urban-power의 주요 파라미터를 업데이트하였습니다.
 
 ---
 
-## 一、Profile 字段说明
+## 1. Profile 필드 설명
 
-### 1.1 核心字段
+### 1.1 핵심 필드
 
-| 字段 | 类型 | 说明 |
+| 필드 | 타입 | 설명 |
 |------|------|------|
-| `id` | string | 题材唯一标识（英文小写） |
-| `name` | string | 题材中文名 |
-| `description` | string | 一句话描述核心卖点 |
-| `tags` | string[] | 可叠加的题材标签（预留多标签扩展） |
+| `id` | string | 장르 고유 식별자 (영문 소문자) |
+| `name` | string | 장르 한국어명 |
+| `description` | string | 핵심 매력 포인트 한 줄 요약 |
+| `tags` | string[] | 중첩 가능한 장르 태그 (다중 태그 확장 예약) |
 
-### 1.2 钩子配置 (hook_config)
+### 1.2 훅 설정 (hook_config)
 
-| 字段 | 类型 | 说明 |
+| 필드 | 타입 | 설명 |
 |------|------|------|
-| `preferred_types` | string[] | 偏好钩子类型（按优先级排序） |
-| `strength_baseline` | string | 默认钩子强度：strong/medium/weak |
-| `chapter_end_required` | boolean | 章末钩子偏好（true=强偏好，不是逐章硬性） |
-| `transition_allowance` | number | 过渡章豁免上限（连续多少章可降级） |
+| `preferred_types` | string[] | 선호 훅 유형 (우선순위 순) |
+| `strength_baseline` | string | 기본 훅 강도: strong/medium/weak |
+| `chapter_end_required` | boolean | 화말 훅 선호 여부 (true=강한 선호, 화별 강제 아님) |
+| `transition_allowance` | number | 전환화 면제 상한 (연속 몇 화까지 등급 하향 허용) |
 
-### 1.3 爽点配置 (coolpoint_config)
+### 1.3 사이다 설정 (coolpoint_config)
 
-| 字段 | 类型 | 说明 |
+| 필드 | 타입 | 설명 |
 |------|------|------|
-| `preferred_patterns` | string[] | 偏好爽点模式（按优先级排序） |
-| `density_per_chapter` | string | 每章爽点密度：high(2+)/medium(1)/low(0-1) |
-| `combo_interval` | number | combo爽点建议间隔（每N章参考1个） |
-| `milestone_interval` | number | 阶段性胜利建议间隔（每N章参考1个） |
+| `preferred_patterns` | string[] | 선호 사이다 패턴 (우선순위 순) |
+| `density_per_chapter` | string | 화당 사이다 밀도: high(2+)/medium(1)/low(0-1) |
+| `combo_interval` | number | 콤보 사이다 권장 간격 (N화마다 1개 참고) |
+| `milestone_interval` | number | 단계별 승리 권장 간격 (N화마다 1개 참고) |
 
-### 1.4 微兑现配置 (micropayoff_config)
+### 1.4 마이크로 사이다 설정 (micropayoff_config)
 
-| 字段 | 类型 | 说明 |
+| 필드 | 타입 | 설명 |
 |------|------|------|
-| `preferred_types` | string[] | 偏好微兑现类型 |
-| `min_per_chapter` | number | 每章建议微兑现下限 |
-| `transition_min` | number | 过渡章建议微兑现下限 |
+| `preferred_types` | string[] | 선호 마이크로 사이다 유형 |
+| `min_per_chapter` | number | 화당 권장 마이크로 사이다 최솟값 |
+| `transition_min` | number | 전환화 권장 마이크로 사이다 최솟값 |
 
-### 1.5 节奏红线 (pacing_config)
+### 1.5 페이스 레드라인 (pacing_config)
 
-| 字段 | 类型 | 说明 |
+| 필드 | 타입 | 설명 |
 |------|------|------|
-| `stagnation_threshold` | number | 节奏停滞阈值（连续N章无推进=HARD-003） |
-| `strand_quest_max` | number | Quest主线最大连续章数 |
-| `strand_fire_gap_max` | number | Fire感情线最大断档章数 |
-| `transition_max_consecutive` | number | 过渡章最大连续数 |
+| `stagnation_threshold` | number | 페이스 정체 임계값 (연속 N화 진행 없음=HARD-003) |
+| `strand_quest_max` | number | Quest 본선 최대 연속 화수 |
+| `strand_fire_gap_max` | number | Fire 감정선 최대 단절 화수 |
+| `transition_max_consecutive` | number | 전환화 최대 연속 수 |
 
-### 1.6 约束豁免 (override_config)
+### 1.6 제약 면제 (override_config)
 
-| 字段 | 类型 | 说明 |
+| 필드 | 타입 | 설명 |
 |------|------|------|
-| `allowed_rationale_types` | string[] | 允许的Override理由类型 |
-| `debt_multiplier` | number | 债务倍率（>1表示该题材更严格） |
-| `payback_window_default` | number | 默认偿还窗口（章数） |
+| `allowed_rationale_types` | string[] | 허용되는 Override 사유 유형 |
+| `debt_multiplier` | number | 부채 배율 (>1이면 해당 장르가 더 엄격) |
+| `payback_window_default` | number | 기본 상환 윈도우 (화수) |
 
 ---
 
-## 二、内置题材 Profiles
+## 2. 내장 장르 Profiles
 
-### 2.1 爽文/系统流 (shuangwen)
+### 2.1 사이다/시스템 (shuangwen)
 
 ```yaml
 id: shuangwen
-name: 爽文/系统流
-description: 金手指开挂，快节奏升级，打脸装逼一条龙
+name: 사이다/시스템
+description: 치트키로 무한 성장, 빠른 페이스 레벨업, 과시·응징 풀코스
 tags: [shuangwen]
 
 hook_config:
@@ -108,21 +108,21 @@ override_config:
   payback_window_default: 3
 ```
 
-**题材特点**：
-- 追求高密度爽点，读者期待快节奏
-- 章末优先保留明确期待（要突破了/要打脸了/要发财了）
-- 过渡章容忍度低，建议不连续超过 2 章
-- 数值反馈建议可视化（战力50→战力180，前后对比）
-- 金手指建议设置上限/消耗/冷却，避免无限使用
+**장르 특징**:
+- 고밀도 사이다를 추구하며, 독자는 빠른 페이스를 기대함
+- 화말에는 명확한 기대감 유지 권장 (돌파 직전/응징 직전/한몫 잡을 예감)
+- 전환화 허용도 낮음, 연속 2화를 초과하지 않도록 권장
+- 수치 피드백은 시각화 권장 (전투력 50 → 전투력 180, 전후 비교)
+- 치트키는 상한/소모/쿨다운 설정 권장, 무제한 사용 방지
 
 ---
 
-### 2.2 修仙/玄幻 (xianxia)
+### 2.2 선협/동양판타지 (xianxia)
 
 ```yaml
 id: xianxia
-name: 修仙/玄幻
-description: 逆天改命，残酷法则，机缘与争斗并存
+name: 선협/동양판타지
+description: 운명을 거스르는 수련, 냉혹한 법칙, 기연과 쟁투의 공존
 tags: [xianxia]
 
 hook_config:
@@ -154,20 +154,20 @@ override_config:
   payback_window_default: 5
 ```
 
-**题材特点**：
-- 需要世界观构建，允许更多铺垫章
-- 境界突破是核心期待，阶位制建议可视化（8-10级体系，前后对比数值）
-- 资源货币化体系（灵石/丹药/功法）是核心微兑现载体
-- 设定约束可作为合理Override理由
+**장르 특징**:
+- 세계관 구축이 필요하며, 더 많은 복선 화수를 허용함
+- 경지 돌파는 핵심 기대 요소로, 단계 체계 시각화 권장 (8-10단계 체계, 전후 수치 비교)
+- 자원 화폐 체계 (영석/단약/공법)는 핵심 마이크로 사이다 수단
+- 설정 제약은 합리적 Override 사유로 사용 가능
 
 ---
 
-### 2.3 言情/甜宠 (romance)
+### 2.3 로맨스/달달물 (romance)
 
 ```yaml
 id: romance
-name: 言情/甜宠
-description: 情感互动，关系推进，心动与虐心交织
+name: 로맨스/달달물
+description: 감정 교류, 관계 진전, 설렘과 고구마가 교차
 tags: [romance]
 
 hook_config:
@@ -199,19 +199,19 @@ override_config:
   payback_window_default: 4
 ```
 
-**题材特点**：
-- 感情线是绝对核心，断档容忍度极低
-- 情绪钩是王牌（心疼/心动/吃醋）
-- 关系进展是最重要的微兑现
+**장르 특징**:
+- 감정선이 절대적 핵심이며, 단절 허용도가 극히 낮음
+- 감정 훅이 최강 카드 (안쓰러움/설렘/질투)
+- 관계 진전이 가장 중요한 마이크로 사이다
 
 ---
 
-### 2.4 悬疑/推理 (mystery)
+### 2.4 미스터리/추리 (mystery)
 
 ```yaml
 id: mystery
-name: 悬疑/推理
-description: 谜题驱动，逻辑推演，真相一步步揭示
+name: 미스터리/추리
+description: 수수께끼 중심 전개, 논리적 추론, 진실의 단계적 공개
 tags: [mystery]
 
 hook_config:
@@ -243,19 +243,19 @@ override_config:
   payback_window_default: 5
 ```
 
-**题材特点**：
-- 逻辑完整性优先于爽点密度
-- 信息兑现是核心微兑现（建议保持持续线索推进）
-- LOGIC_INTEGRITY可作为降级钩子强度的合理理由
+**장르 특징**:
+- 논리적 완결성이 사이다 밀도보다 우선
+- 정보 마이크로 사이다가 핵심 (지속적인 단서 진행 유지 권장)
+- LOGIC_INTEGRITY는 훅 강도 하향의 합리적 사유로 사용 가능
 
 ---
 
-### 2.5 规则怪谈 (rules-mystery)
+### 2.5 규칙 괴담 (rules-mystery)
 
 ```yaml
 id: rules-mystery
-name: 规则怪谈
-description: 诡异规则，生存推理，反杀怪谈
+name: 규칙 괴담
+description: 기괴한 규칙, 생존 추리, 괴담을 역이용한 반격
 tags: [rules-mystery, horror]
 
 hook_config:
@@ -287,19 +287,19 @@ override_config:
   payback_window_default: 2
 ```
 
-**题材特点**：
-- 紧张氛围要求高钩子强度
-- 过渡章容忍度极低（1章）
-- 规则约束是合理Override理由
+**장르 특징**:
+- 긴장감 유지를 위해 높은 훅 강도 필요
+- 전환화 허용도 극히 낮음 (1화)
+- 규칙 제약은 합리적 Override 사유로 사용 가능
 
 ---
 
-### 2.6 都市异能 (urban-power)
+### 2.6 현대판타지/이능 (urban-power)
 
 ```yaml
 id: urban-power
-name: 都市异能
-description: 现代背景，隐藏超能，低调装逼，产业链博弈
+name: 현대판타지/이능
+description: 현대 배경, 숨겨진 초능력, 조용한 과시, 산업 파워게임
 tags: [urban, power, industry]
 
 hook_config:
@@ -331,21 +331,21 @@ override_config:
   payback_window_default: 3
 ```
 
-**题材特点**：
-- 装逼打脸系列是核心爽点
-- 现代背景要求身份隐藏→掉马的节奏控制
-- 社会地位变化是重要微兑现
-- 娱乐圈/产业链背景热门，感情线权重高（断档容忍度降至8章）
-- 3章一峰节奏：第1章困境，第2章能力初展，第3章小胜+新阻力
+**장르 특징**:
+- 과시와 응징 시리즈가 핵심 사이다
+- 현대 배경 특성상 신분 숨기기 → 정체 공개의 페이스 조율 필요
+- 사회적 지위 변화가 중요한 마이크로 사이다
+- 연예계/산업 배경이 인기이며, 감정선 비중 높음 (단절 허용도 8화로 감소)
+- 3화 1피크 리듬: 1화 위기, 2화 능력 첫 발휘, 3화 소규모 승리+새 장애물
 
 ---
 
-### 2.7 知乎短篇 (zhihu-short)
+### 2.7 단편 (zhihu-short)
 
 ```yaml
 id: zhihu-short
-name: 知乎短篇
-description: 短平快，强反转，情绪冲击
+name: 단편
+description: 빠르고 강렬한 반전, 강한 감정 충격
 tags: [short, zhihu]
 
 hook_config:
@@ -377,19 +377,19 @@ override_config:
   payback_window_default: 1
 ```
 
-**题材特点**：
-- 过渡章窗口极窄，建议每章至少有一项可感知收获
-- 极高钩子强度要求
-- 债务倍率最高（短篇应避免长期欠债）
+**장르 특징**:
+- 전환화 허용 폭이 극히 좁으며, 화당 체감 가능한 수확이 최소 1개 이상 권장
+- 매우 높은 훅 강도 요구
+- 부채 배율 최고 (단편에서 장기 부채는 지양)
 
 ---
 
-### 2.8 替身文/虐文 (substitute)
+### 2.8 대역물/고구마 (substitute)
 
 ```yaml
 id: substitute
-name: 替身文/虐文
-description: 情感纠葛，误解与反转，追妻火葬场
+name: 대역물/고구마
+description: 감정 갈등, 오해와 반전, 매달리는 남주의 뒤늦은 뉘우침
 tags: [substitute, angst]
 
 hook_config:
@@ -421,19 +421,19 @@ override_config:
   payback_window_default: 4
 ```
 
-**题材特点**：
-- 情绪钩是绝对核心（虐心→心疼→期待）
-- 身份掉马是王牌爽点
-- 感情线断档容忍度极低
+**장르 특징**:
+- 감정 훅이 절대적 핵심 (고구마→안쓰러움→기대감)
+- 정체 공개가 최강 사이다
+- 감정선 단절 허용도 극히 낮음
 
 ---
 
-### 2.9 电竞 (esports)
+### 2.9 e스포츠 (esports)
 
 ```yaml
 id: esports
-name: 电竞
-description: 赛场博弈，团队磨合，逆风翻盘与冠军追逐
+name: e스포츠
+description: 경기장 파워게임, 팀 호흡 맞추기, 역전극과 우승 추격
 tags: [esports, competition]
 
 hook_config:
@@ -465,19 +465,19 @@ override_config:
   payback_window_default: 2
 ```
 
-**题材特点**：
-- 比赛章节建议有可追踪的胜负目标与决策节点
-- 逆风局/翻盘局是核心爽点来源
-- 过渡章容忍度低，需保持实时反馈感（比分/舆论/状态）
+**장르 특징**:
+- 경기 화에는 추적 가능한 승패 목표와 결정 포인트 권장
+- 역경/역전 상황이 핵심 사이다 원천
+- 전환화 허용도 낮으며, 실시간 피드백 감각 유지 필요 (스코어/여론/컨디션)
 
 ---
 
-### 2.10 直播文 (livestream)
+### 2.10 방송물 (livestream)
 
 ```yaml
 id: livestream
-name: 直播文
-description: 平台流量博弈，实时反馈驱动，舆论与商业双线并进
+name: 방송물
+description: 플랫폼 트래픽 파워게임, 실시간 피드백 중심, 여론과 비즈니스 투트랙 전개
 tags: [livestream, urban]
 
 hook_config:
@@ -509,19 +509,19 @@ override_config:
   payback_window_default: 2
 ```
 
-**题材特点**：
-- 优先形成“外部反馈→主角反应→结果变化”闭环
-- 舆论反转与商业博弈需依赖证据链，不靠口号
-- 数据变化（在线/榜单/转化）可作为高频微兑现
+**장르 특징**:
+- "외부 반응→주인공 반응→결과 변화"의 피드백 루프 우선 형성
+- 여론 반전과 비즈니스 파워게임은 증거 체인에 기반해야 하며, 구호에 의존하면 안 됨
+- 수치 변화 (시청자 수/순위/전환율)를 고빈도 마이크로 사이다로 활용 가능
 
 ---
 
-### 2.11 克苏鲁 (cosmic-horror)
+### 2.11 코즈믹 호러 (cosmic-horror)
 
 ```yaml
 id: cosmic-horror
-name: 克苏鲁
-description: 规则污染与理性崩塌并行，真相越近代价越高
+name: 코즈믹 호러
+description: 규칙 오염과 이성 붕괴의 병행, 진실에 다가갈수록 대가는 커진다
 tags: [horror, mystery, cosmic]
 
 hook_config:
@@ -553,17 +553,17 @@ override_config:
   payback_window_default: 2
 ```
 
-**题材特点**：
-- 恐怖感来自规则和代价，而非纯氛围堆叠
-- 每次推进真相都应绑定明确损失（理智/关系/资源）
-- 高强度钩子优先“未闭合规则问题”而非单纯惊吓
+**장르 특징**:
+- 공포감은 규칙과 대가에서 비롯되며, 단순 분위기 쌓기가 아님
+- 진실을 진전시킬 때마다 명확한 손실 (이성/관계/자원)을 결부시켜야 함
+- 강도 높은 훅은 "미결 규칙 문제"를 우선시하며, 단순 공포 자극은 지양
 
-### 2.12 历史穿越 (history-travel)
+### 2.12 대체역사 (history-travel)
 
 ```yaml
 id: history-travel
-name: 历史穿越
-description: 现代灵魂穿越古代，知识优势改变历史，种田发家逆袭
+name: 대체역사
+description: 현대의 영혼이 과거로 이동, 지식 우위로 역사를 바꾸고 입지를 키워 역전
 tags: [history, travel, knowledge]
 
 hook_config:
@@ -595,21 +595,21 @@ override_config:
   payback_window_default: 4
 ```
 
-**题材特点**：
-- 知识优势 > 武力优势，推导过程要展示（不能只说答案）
-- 3章一峰节奏：第1章困境/穿越，第2章知识初展，第3章小胜+新阻力
-- 反派有合理动机（利益冲突），权威人物不轻易被说服（需多次证明）
-- 历史有惯性，改变一件事会引发连锁反应（非线性结果）
-- 女性主角占比上升，种田/发家/行业改革标签热门
+**장르 특징**:
+- 지식 우위 > 무력 우위, 추론 과정을 보여줘야 하며 결론만 제시해선 안 됨
+- 3화 1피크 리듬: 1화 위기/이동, 2화 지식 첫 발휘, 3화 소규모 승리+새 장애물
+- 반대 세력은 합리적 동기 보유 (이해관계 충돌), 권위 인물은 쉽게 설득되지 않음 (수차례 증명 필요)
+- 역사에는 관성이 있으며, 하나를 바꾸면 연쇄 반응 유발 (비선형 결과)
+- 여성 주인공 비율 상승, 내정/세력 키우기/업계 개혁 태그 인기
 
 ---
 
-### 2.13 游戏文 (game-lit)
+### 2.13 게임 (game-lit)
 
 ```yaml
 id: game-lit
-name: 游戏文
-description: 游戏化世界观，系统金手指驱动，数值反馈爽感，极致反差起点
+name: 게임
+description: 게임화된 세계관, 시스템 치트키 중심, 수치 피드백의 사이다, 극한의 반차 시작점
 tags: [game, system, apocalypse]
 
 hook_config:
@@ -641,34 +641,34 @@ override_config:
   payback_window_default: 2
 ```
 
-**题材特点**：
-- 早期章节建议尽快亮出金手指（通常前 1-2 章）
-- 数值反馈建议可视化（战力50→战力180，前后对比）
-- 金手指建议设置上限/消耗/冷却，避免无限使用
-- 过渡章窗口很窄，建议保持“爽点或数值推进”至少一项
-- IP融合（LOL/宝可梦等）是差异化标签，末日生存系兴起
-- 前期（建议前 3 章）应出现明确对手（环境/规则/具体反派任选其一）
+**장르 특징**:
+- 초반 화에서 치트키를 가능한 빨리 공개 권장 (보통 1-2화 이내)
+- 수치 피드백 시각화 권장 (전투력 50 → 전투력 180, 전후 비교)
+- 치트키는 상한/소모/쿨다운 설정 권장, 무제한 사용 방지
+- 전환화 허용 폭이 매우 좁으며, "사이다 또는 수치 진행" 중 최소 하나 유지 권장
+- IP 융합 (LOL/포켓몬 등)이 차별화 태그이며, 종말 생존계 부상
+- 초반 (권장 3화 이내)에 명확한 적대 요소 등장 권장 (환경/규칙/구체적 반대 세력 중 택일)
 
 ---
 
-## 三、Profile 加载机制
+## 3. Profile 로드 메커니즘
 
-### 3.1 加载时机
+### 3.1 로드 시점
 
-1. **Step 1.5**：根据 `state.json → project.genre` 加载对应profile
-2. **Context Agent**：将profile相关字段注入创作任务书
-3. **Checkers**：根据profile调整检测阈值和建议权重
+1. **Step 1.5**: `state.json → project.genre`에 따라 해당 profile 로드
+2. **Context Agent**: profile 관련 필드를 창작 태스크 시트에 주입
+3. **Checkers**: profile에 따라 감지 임계값 및 제안 가중치 조정
 
-### 3.2 多标签支持（预留）
+### 3.2 다중 태그 지원 (예약)
 
-当前为单标签模式。未来支持多标签时：
-- 使用 `tags` 字段叠加
-- 冲突字段取更严格的值
-- 例：`[romance, mystery]` → 感情线断档取 min(5, 20) = 5
+현재는 단일 태그 모드입니다. 향후 다중 태그 지원 시:
+- `tags` 필드를 중첩 적용
+- 충돌 필드는 더 엄격한 값 채택
+- 예: `[romance, mystery]` → 감정선 단절 허용은 min(5, 20) = 5 적용
 
-### 3.3 自定义Profile
+### 3.3 커스텀 Profile
 
-用户可在 `state.json` 中覆盖默认值：
+사용자는 `state.json`에서 기본값을 덮어쓸 수 있습니다:
 
 ```json
 {
@@ -685,12 +685,12 @@ override_config:
 
 ---
 
-## 四、与 Taxonomy 的关系
+## 4. Taxonomy와의 관계
 
-| Taxonomy 定义 | Profile 配置 |
+| Taxonomy 정의 | Profile 설정 |
 |--------------|-------------|
-| 钩子类型清单 | 哪些类型偏好 |
-| 爽点模式清单 | 哪些模式偏好 |
-| 微兑现类型清单 | 哪些类型偏好 |
-| Hard/Soft 标准 | 阈值调整 |
-| Override 理由类型 | 哪些理由允许 |
+| 훅 유형 목록 | 어떤 유형을 선호하는가 |
+| 사이다 패턴 목록 | 어떤 패턴을 선호하는가 |
+| 마이크로 사이다 유형 목록 | 어떤 유형을 선호하는가 |
+| Hard/Soft 기준 | 임계값 조정 |
+| Override 사유 유형 | 어떤 사유를 허용하는가 |

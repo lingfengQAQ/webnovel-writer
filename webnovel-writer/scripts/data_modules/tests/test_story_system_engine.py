@@ -230,7 +230,7 @@ def test_story_system_unmatched_genre_raises_routing_error():
 
     message = str(exc.value)
     assert "赛博厨神" in message
-    assert "未命中任何路由行" in message
+    assert "어떤 라우팅 행에도 매칭되지 않았습니다" in message
     assert "玄幻退婚流" not in message
 
 
@@ -262,8 +262,8 @@ def test_story_system_rejects_english_explicit_genre_even_when_query_routes():
 
         message = str(exc.value)
         assert "rules-mystery" in message
-        assert "规则怪谈" in message
-        assert "不会生成 .story-system contracts" in message
+        assert "헌터물" in message
+        assert ".story-system contracts는 생성되지 않습니다" in message
 
 
 def test_route_output_includes_canonical_genre():
