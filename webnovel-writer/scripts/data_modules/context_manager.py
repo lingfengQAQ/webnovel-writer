@@ -319,7 +319,12 @@ class ContextManager:
         fallback = str(getattr(self.config, "context_genre_profile_fallback", "shuangwen") or "shuangwen")
         project = state.get("project") or {}
         project_info = state.get("project_info") or {}
-        genre_raw = str(project.get("genre") or project_info.get("genre") or fallback)
+        genre_raw = str(
+            project_info.get("genre")
+            or project_info.get("genre_label")
+            or project.get("genre")
+            or fallback
+        )
         genres = self._parse_genre_tokens(genre_raw)
         if not genres:
             genres = [fallback]

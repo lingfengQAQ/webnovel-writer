@@ -232,7 +232,14 @@ class MemoryContractAdapter:
             if not genre:
                 sm = self._state_manager()
                 sm._load_state()
-                genre = str(sm._state.get("project", {}).get("genre", "")).strip()
+                project_info = sm._state.get("project_info", {}) or {}
+                legacy_project = sm._state.get("project", {}) or {}
+                genre = str(
+                    project_info.get("genre")
+                    or project_info.get("genre_label")
+                    or legacy_project.get("genre")
+                    or ""
+                ).strip()
             if genre:
                 profile_path = self.config.project_root / ".claude" / "references" / "genre-profiles.md"
                 if profile_path.exists():

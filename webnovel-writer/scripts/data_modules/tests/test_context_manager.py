@@ -861,7 +861,7 @@ def test_context_manager_genre_profile_fallbacks_to_project_info(temp_project):
     assert profile.get("genre") == "xuanhuan"
 
 
-def test_context_manager_genre_profile_prefers_project_over_project_info(temp_project):
+def test_context_manager_genre_profile_prefers_project_info_over_project(temp_project):
     manager = ContextManager(temp_project)
 
     profile = manager._load_genre_profile(
@@ -871,8 +871,8 @@ def test_context_manager_genre_profile_prefers_project_over_project_info(temp_pr
         }
     )
 
-    assert profile.get("genre_raw") == "xuanhuan"
-    assert profile.get("genre") == "xuanhuan"
+    assert profile.get("genre_raw") == "dushi"
+    assert profile.get("genre") == "dushi"
 
 
 def test_context_manager_includes_plot_structure_when_outline_has_nodes(temp_project):

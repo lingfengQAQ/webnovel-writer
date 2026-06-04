@@ -338,6 +338,21 @@ class TestLoadContext:
         assert pack.sections["runtime_status"]["primary_write_source"] == "chapter_commit"
         assert pack.sections["latest_commit"]["meta"]["status"] == "accepted"
 
+    def test_load_context_genre_profile_fallback_reads_project_info(self, tmp_path):
+        cfg = _make_project(tmp_path)
+        (cfg.webnovel_dir / "state.json").write_text(
+            json.dumps({"project_info": {"genre": "规则怪谈"}}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        refs_dir = tmp_path / ".claude" / "references"
+        refs_dir.mkdir(parents=True, exist_ok=True)
+        (refs_dir / "genre-profiles.md").write_text("## 规则怪谈\n- 规则优先", encoding="utf-8")
+
+        adapter = MemoryContractAdapter(cfg)
+        pack = adapter.load_context(1)
+
+        assert "规则优先" in pack.sections["genre_profile_excerpt"]
+
     def test_load_context_prefers_actual_latest_commit_status(self, tmp_path):
         cfg = _make_project(tmp_path)
         story_root = tmp_path / ".story-system"

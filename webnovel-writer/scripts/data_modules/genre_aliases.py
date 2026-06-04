@@ -6,26 +6,11 @@ Genre alias normalization and profile key mapping.
 
 from __future__ import annotations
 
-
-GENRE_INPUT_ALIASES: dict[str, str] = {
-    "修仙/玄幻": "修仙",
-    "玄幻修仙": "修仙",
-    "玄幻": "修仙",
-    "修真": "修仙",
-    "都市修真": "都市异能",
-    "都市高武": "高武",
-    "都市奇闻": "都市脑洞",
-    "古言脑洞": "古言",
-    "游戏电竞": "电竞",
-    "电竞文": "电竞",
-    "直播": "直播文",
-    "直播带货": "直播文",
-    "主播": "直播文",
-    "克系": "克苏鲁",
-    "克系悬疑": "克苏鲁",
-}
+from genre_taxonomy import normalize_genre_label_for_profile
 
 
+# Fallback profile keys are a legacy markdown-section namespace, not canonical
+# genre values. User-input aliases live in references/taxonomy/genre-index.csv.
 GENRE_PROFILE_KEY_ALIASES: dict[str, str] = {
     "修仙": "xianxia",
     "修仙/玄幻": "xianxia",
@@ -54,7 +39,7 @@ def normalize_genre_token(token: str) -> str:
     value = str(token or "").strip()
     if not value:
         return ""
-    return GENRE_INPUT_ALIASES.get(value, value)
+    return normalize_genre_label_for_profile(value)
 
 
 def to_profile_key(genre: str) -> str:
