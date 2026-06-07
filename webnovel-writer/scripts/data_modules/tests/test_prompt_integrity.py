@@ -27,6 +27,12 @@ SCRIPTS_DIR = PLUGIN_ROOT / "scripts"
 AGENT_FILES = sorted(AGENTS_DIR.glob("*.md"))
 SKILL_FILES = sorted(SKILLS_DIR.glob("*/SKILL.md"))
 ALL_PROMPT_FILES = AGENT_FILES + SKILL_FILES
+AUTHOR_REPORT_SKILLS = (
+    "webnovel-init",
+    "webnovel-plan",
+    "webnovel-write",
+    "webnovel-review",
+)
 
 # webnovel.py 注册的子命令（从 add_parser 提取）
 REGISTERED_CLI_SUBCOMMANDS = {
@@ -279,6 +285,66 @@ def test_webnovel_write_skill_uses_explicit_agent_invocation_templates():
         assert f"webnovel-writer:{subagent}" in text, f"缺少 {subagent} 的注册名显式调用"
     assert "subagent_type:" not in text, "不应再使用伪函数 subagent_type 调用块"
     assert "不得用主流程口头代替 subagent 输出" in text
+
+
+@pytest.mark.parametrize("skill_name", AUTHOR_REPORT_SKILLS)
+def test_main_skills_define_author_friendly_final_report_contract(skill_name: str):
+    """四个主 Skill 必须提供作者友好的总状态 + 三段式最终报告契约。"""
+    text = _read_text(SKILLS_DIR / skill_name / "SKILL.md")
+
+    assert "作者友好最终报告契约" in text
+    assert "总状态：已完成 / 部分完成 / 需要你处理 / 未完成" in text
+    for section in (
+        "一、产生的文件与完成情况",
+        "二、过程中遇到的问题与异常耗时",
+        "三、下一步建议",
+    ):
+        assert section in text, f"{skill_name}: 缺少最终报告段落 {section}"
+    for issue_type in ("已自动处理", "建议确认", "必须处理"):
+        assert issue_type in text, f"{skill_name}: 缺少异常分类 {issue_type}"
+    assert "任务化语言" in text
+    assert "可复制命令" in text
+    assert "/webnovel-doctor" in text
+    assert "不写 token 统计" in text
+
+
+def test_write_skill_final_report_covers_commit_projection_and_backup():
+    """写章最终报告必须覆盖正文、审查、data artifacts、commit、projection、backup。"""
+    text = _read_text(SKILLS_DIR / "webnovel-write" / "SKILL.md")
+    for required in (
+        "正文文件路径",
+        "审查报告路径",
+        ".webnovel/tmp/review_results.json",
+        ".webnovel/tmp/fulfillment_result.json",
+        ".webnovel/tmp/disambiguation_result.json",
+        ".webnovel/tmp/extraction_result.json",
+        ".story-system/commits/chapter_{NNN}.commit.json",
+        "state / index / summary / memory / vector 更新状态",
+        "备份状态",
+        "是否可以继续写下一章",
+    ):
+        assert required in text
+    assert "chapter-commit rejected" in text
+    assert "最终状态不得写“已完成”" in text
+    assert "--fast" in text and "--minimal" in text
+    assert "projection retry" in text
+
+
+def test_review_skill_final_report_covers_metrics_and_blocking_decision():
+    """审查最终报告必须覆盖报告、metrics、blocking 数与用户裁决状态。"""
+    text = _read_text(SKILLS_DIR / "webnovel-review" / "SKILL.md")
+    for required in (
+        "审查报告文件",
+        ".webnovel/tmp/review_results.json",
+        ".webnovel/tmp/review_metrics.json",
+        "review_metrics",
+        "阻断问题数量",
+        "用户裁决状态",
+        "如果无阻断，明确可以继续写作",
+    ):
+        assert required in text
+    assert "有 blocking 问题且用户未选择处理策略" in text
+    assert "最终状态为“需要你处理”" in text
 
 
 def test_story_system_runtime_contract_commands_exist():

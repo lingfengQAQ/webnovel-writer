@@ -236,3 +236,53 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" bac
 ## 失败恢复
 
 审查缺失→重跑 Step 3。摘要/状态/记忆缺失→重跑 Step 5。润色失真→回 Step 4 修复后重跑 Step 5。
+
+## 作者友好最终报告契约
+
+最终回复必须面向作者，不输出原始 JSON、traceback 或长命令日志。使用固定三段式，并以一句总状态开头：
+
+```text
+总状态：已完成 / 部分完成 / 需要你处理 / 未完成。
+
+一、产生的文件与完成情况
+- ...
+
+二、过程中遇到的问题与异常耗时
+- 已自动处理：...
+- 建议确认：...
+- 必须处理：...
+
+三、下一步建议
+- ...
+```
+
+必须汇报：
+- 正文文件路径。
+- 审查报告路径。
+- `.webnovel/tmp/review_results.json`。
+- `.webnovel/tmp/fulfillment_result.json`。
+- `.webnovel/tmp/disambiguation_result.json`。
+- `.webnovel/tmp/extraction_result.json`。
+- `.story-system/commits/chapter_{NNN}.commit.json`。
+- state / index / summary / memory / vector 更新状态。
+- 备份状态。
+- 是否可以继续写下一章。
+
+状态规则：
+- `chapter-commit rejected`、任一 `write-gate` failed、projection failed 时，最终状态不得写“已完成”。
+- `--fast` 和 `--minimal` 的跳过项必须说明；`--minimal` 跳过审查时归入“已自动处理”或“建议确认”，不得假装已完成完整审查。
+- projection retry 发生时必须说明已自动处理和最终结果。
+
+异常分类：
+- 已自动处理：projection retry 成功、RAG 临时降级但不影响结果、旧 no-review artifact 被本章新 artifact 覆盖。
+- 建议确认：新增角色名 / 设定名、低置信歧义但不阻断、非阻断审查建议。
+- 必须处理：blocking issue 未裁决、data artifacts 缺失或 schema 不完整、commit rejected、projection failed。
+
+下一步建议必须使用任务化语言 + 可复制命令，例如：
+
+```text
+- 接下来可以写下一章：
+  /webnovel-write {next_chapter}
+```
+
+不写 token 统计；如需排查故障，只给日志路径或建议运行 `/webnovel-doctor`。

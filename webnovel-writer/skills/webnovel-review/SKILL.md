@@ -108,3 +108,50 @@ python "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" update-stat
 3. 审查报告已生成，`review_metrics` 已写入 `index.db`，`review_metrics.json` 已输出。
 4. 审查记录已写入 `.webnovel/state.json` 兼容投影。
 5. 存在阻断问题时，用户已明确选择处理策略。
+
+## 作者友好最终报告契约
+
+最终回复必须面向作者，不输出原始 JSON、traceback 或长命令日志。使用固定三段式，并以一句总状态开头：
+
+```text
+总状态：已完成 / 部分完成 / 需要你处理 / 未完成。
+
+一、产生的文件与完成情况
+- ...
+
+二、过程中遇到的问题与异常耗时
+- 已自动处理：...
+- 建议确认：...
+- 必须处理：...
+
+三、下一步建议
+- ...
+```
+
+必须汇报：
+- 审查报告文件。
+- `.webnovel/tmp/review_results.json`。
+- `.webnovel/tmp/review_metrics.json`。
+- `review_metrics` 是否落库。
+- 阻断问题数量。
+- 用户裁决状态。
+- 如果无阻断，明确可以继续写作。
+
+状态规则：
+- 有 blocking 问题且用户未选择处理策略时，最终状态为“需要你处理”。
+- 只保存报告、稍后处理时，最终状态为“需要你处理”或“部分完成”。
+- reviewer 跳过、失败或输出不完整时，最终状态不得写“已完成”。
+
+异常分类：
+- 已自动处理：重复生成报告、覆盖本次旧审查中间文件、成功补写 metrics。
+- 建议确认：非阻断但高收益修改建议、命名或设定细节建议看一眼。
+- 必须处理：blocking issue、缺待审正文、reviewer 输出不完整、metrics 落库失败。
+
+下一步建议必须使用任务化语言 + 可复制命令，例如：
+
+```text
+- 审查无阻断，可以继续写下一章：
+  /webnovel-write {next_chapter}
+```
+
+不写 token 统计；如需排查故障，只给日志路径或建议运行 `/webnovel-doctor`。
