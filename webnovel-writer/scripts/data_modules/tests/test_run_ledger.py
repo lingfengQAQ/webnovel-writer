@@ -119,3 +119,53 @@ def test_write_resume_retries_backup_after_commit_done(tmp_path: Path) -> None:
     assert actions["backup"] == "retry"
     assert plan["resume_from"] == "backup"
     assert any(item["code"] == "chapter_already_accepted" for item in plan["needs_user_confirmation"])
+
+
+def test_write_resume_reruns_commit_after_rejected_commit(tmp_path: Path) -> None:
+    _make_project(tmp_path)
+    chapter_file = tmp_path / "正文" / "第0001章.md"
+    chapter_file.write_text("正文\n", encoding="utf-8")
+    review_path = tmp_path / ".webnovel" / "tmp" / "review_results.json"
+    _write_json(review_path, {"blocking_count": 1})
+    fulfillment_path = tmp_path / ".webnovel" / "tmp" / "fulfillment_result.json"
+    disambiguation_path = tmp_path / ".webnovel" / "tmp" / "disambiguation_result.json"
+    extraction_path = tmp_path / ".webnovel" / "tmp" / "extraction_result.json"
+    _write_json(fulfillment_path, {"planned_nodes": [], "covered_nodes": [], "missed_nodes": [], "extra_nodes": []})
+    _write_json(disambiguation_path, {"pending": []})
+    _write_json(extraction_path, {"accepted_events": [], "state_deltas": [], "entity_deltas": []})
+    record_write_step(
+        tmp_path,
+        chapter=1,
+        step="draft",
+        status="completed",
+        outputs={"chapter_file": chapter_file},
+    )
+    record_write_step(
+        tmp_path,
+        chapter=1,
+        step="review",
+        status="completed",
+        inputs={"chapter_file": chapter_file},
+        outputs={"review_result": review_path},
+    )
+    record_write_step(
+        tmp_path,
+        chapter=1,
+        step="data",
+        status="completed",
+        inputs={"chapter_file": chapter_file},
+        outputs={
+            "fulfillment_result": fulfillment_path,
+            "disambiguation_result": disambiguation_path,
+            "extraction_result": extraction_path,
+        },
+    )
+    _write_json(tmp_path / ".story-system" / "commits" / "chapter_001.commit.json", _commit_payload("rejected"))
+
+    plan = build_write_resume_plan(tmp_path, chapter=1)
+
+    actions = {item["step"]: item["action"] for item in plan["steps"]}
+    assert actions["commit"] == "run"
+    assert actions["projection"] == "run"
+    assert plan["resume_from"] == "commit"
+    assert any(item["code"] == "chapter_commit_rejected" for item in plan["needs_user_confirmation"])

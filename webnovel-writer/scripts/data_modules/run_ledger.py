@@ -5,18 +5,29 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+if __package__ in {None, ""}:  # pragma: no cover - direct script entry
+    scripts_dir = Path(__file__).resolve().parents[1]
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
 
 try:
     from chapter_paths import find_chapter_file
 except ImportError:  # pragma: no cover
     from scripts.chapter_paths import find_chapter_file
 
-from .artifact_validator import OK_PROJECTION_STATUSES, REQUIRED_PROJECTION_WRITERS
-from .project_phase import COMMIT_ARTIFACT_FILES, contract_files_for_chapter
-from .projection_log import latest_projection_run, projection_status_from_run
+if __package__ in {None, ""}:  # pragma: no cover - direct script entry
+    from data_modules.artifact_validator import OK_PROJECTION_STATUSES, REQUIRED_PROJECTION_WRITERS
+    from data_modules.project_phase import COMMIT_ARTIFACT_FILES, contract_files_for_chapter
+    from data_modules.projection_log import latest_projection_run, projection_status_from_run
+else:
+    from .artifact_validator import OK_PROJECTION_STATUSES, REQUIRED_PROJECTION_WRITERS
+    from .project_phase import COMMIT_ARTIFACT_FILES, contract_files_for_chapter
+    from .projection_log import latest_projection_run, projection_status_from_run
 
 
 SCHEMA_VERSION = "webnovel-run-ledger/v1"
@@ -216,8 +227,8 @@ def build_write_resume_plan(
     review_entry = _step_completed(run, "review")
     data_entry = _step_completed(run, "data")
     commit_status = _commit_status(root, chapter)
-    commit_done = commit_status in {"accepted", "rejected"}
     accepted_done = commit_status == "accepted"
+    rejected_done = commit_status == "rejected"
 
     steps: list[dict[str, str]] = []
     confirmations: list[dict[str, str]] = []
@@ -255,10 +266,32 @@ def build_write_resume_plan(
                 "message": "本章已 accepted；重跑前需要确认是重写正文，还是只查看状态/补跑后续步骤。",
             }
         )
-    steps.append({"step": "commit", "action": "skip" if commit_done else "run", "reason": f"commit status={commit_status}" if commit_done else "尚未生成 commit"})
+    if rejected_done:
+        confirmations.append(
+            {
+                "code": "chapter_commit_rejected",
+                "message": "本章事实提交未通过，需要先处理审查/大纲/消歧阻断项，再重新提交。",
+            }
+        )
+    commit_reason = (
+        f"commit status={commit_status}"
+        if accepted_done
+        else "commit rejected，需要修复后重新提交"
+        if rejected_done
+        else "尚未生成 commit"
+    )
+    steps.append({"step": "commit", "action": "skip" if accepted_done else "run", "reason": commit_reason})
 
     projection_done = bool(commit_status == "accepted" and _projection_done(root, chapter))
-    steps.append({"step": "projection", "action": "skip" if projection_done else "retry", "reason": "资料更新已完成" if projection_done else "需要补跑资料更新"})
+    projection_action = "skip" if projection_done else ("retry" if accepted_done else "run")
+    projection_reason = (
+        "资料更新已完成"
+        if projection_done
+        else "commit accepted 后再更新资料"
+        if not accepted_done
+        else "需要补跑资料更新"
+    )
+    steps.append({"step": "projection", "action": projection_action, "reason": projection_reason})
 
     backup_done = _backup_exists(root, chapter)
     backup_action = "skip" if backup_done else ("retry" if commit_status == "accepted" else "run")

@@ -153,6 +153,23 @@ def test_render_write_report_success(tmp_path: Path) -> None:
     assert "三、下一步建议" in text
 
 
+def test_render_write_report_uses_commit_snapshots_when_tmp_artifacts_are_cleaned(tmp_path: Path) -> None:
+    _write_success_case(tmp_path, chapter=1)
+    for path in (tmp_path / ".webnovel" / "tmp").glob("*_result.json"):
+        path.unlink()
+
+    report = build_user_report(tmp_path, stage="write", chapter=1)
+
+    assert report["overall_status"] == "completed"
+    assert not report["issues"]["must_handle"]
+    artifact_files = [
+        item for item in report["files"]
+        if item["label"] in {"review_result", "fulfillment_result", "disambiguation_result", "extraction_result"}
+    ]
+    assert artifact_files
+    assert all(item["path"].endswith("chapter_001.commit.json") for item in artifact_files)
+
+
 def test_render_write_report_commit_rejected(tmp_path: Path) -> None:
     _write_success_case(tmp_path, chapter=1)
     payload = _commit_payload(chapter=1, status="rejected")

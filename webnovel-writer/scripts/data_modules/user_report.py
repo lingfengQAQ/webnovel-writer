@@ -4,38 +4,72 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
+
+if __package__ in {None, ""}:  # pragma: no cover - direct script entry
+    scripts_dir = Path(__file__).resolve().parents[1]
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
 
 try:
     from chapter_paths import find_chapter_file
 except ImportError:  # pragma: no cover
     from scripts.chapter_paths import find_chapter_file
 
-from .artifact_validator import (
-    OK_PROJECTION_STATUSES,
-    REQUIRED_PROJECTION_WRITERS,
-    validate_disambiguation_result,
-    validate_extraction_result,
-    validate_fulfillment_result,
-    validate_review_result,
-)
-from .error_catalog import AuthorError, classify_issue
-from .project_phase import (
-    COMMIT_ARTIFACT_FILES,
-    INIT_REQUIRED_DIRS,
-    INIT_REQUIRED_FILES,
-    contract_files_for_chapter,
-)
-from .project_status import build_project_status
-from .projection_log import (
-    latest_projection_run,
-    projection_run_failed,
-    projection_run_pending,
-    projection_status_from_run,
-    read_projection_runs,
-)
-from .review_author_view import build_review_author_view
+if __package__ in {None, ""}:  # pragma: no cover - direct script entry
+    from data_modules.artifact_validator import (
+        OK_PROJECTION_STATUSES,
+        REQUIRED_PROJECTION_WRITERS,
+        validate_artifact_payload,
+        validate_disambiguation_result,
+        validate_extraction_result,
+        validate_fulfillment_result,
+        validate_review_result,
+    )
+    from data_modules.error_catalog import AuthorError, classify_issue
+    from data_modules.project_phase import (
+        COMMIT_ARTIFACT_FILES,
+        INIT_REQUIRED_DIRS,
+        INIT_REQUIRED_FILES,
+        contract_files_for_chapter,
+    )
+    from data_modules.project_status import build_project_status
+    from data_modules.projection_log import (
+        latest_projection_run,
+        projection_run_failed,
+        projection_run_pending,
+        projection_status_from_run,
+        read_projection_runs,
+    )
+    from data_modules.review_author_view import build_review_author_view
+else:
+    from .artifact_validator import (
+        OK_PROJECTION_STATUSES,
+        REQUIRED_PROJECTION_WRITERS,
+        validate_artifact_payload,
+        validate_disambiguation_result,
+        validate_extraction_result,
+        validate_fulfillment_result,
+        validate_review_result,
+    )
+    from .error_catalog import AuthorError, classify_issue
+    from .project_phase import (
+        COMMIT_ARTIFACT_FILES,
+        INIT_REQUIRED_DIRS,
+        INIT_REQUIRED_FILES,
+        contract_files_for_chapter,
+    )
+    from .project_status import build_project_status
+    from .projection_log import (
+        latest_projection_run,
+        projection_run_failed,
+        projection_run_pending,
+        projection_status_from_run,
+        read_projection_runs,
+    )
+    from .review_author_view import build_review_author_view
 
 
 SCHEMA_VERSION = "webnovel-user-report/v1"
@@ -219,8 +253,59 @@ def _validate_artifact_for_report(
     }
     validator = validators[artifact]
     result = validator(path)
+    return _add_artifact_validation_result(
+        report,
+        artifact=artifact,
+        result=result,
+        path=path,
+        ok_note="已生成",
+        error_note="缺失或格式不完整",
+    )
+
+
+def _validate_commit_artifact_for_report(
+    report: dict[str, Any],
+    artifact: str,
+    commit_payload: dict[str, Any],
+    commit_path: Path,
+) -> dict[str, Any]:
+    if artifact not in commit_payload:
+        result = {
+            "artifact": artifact,
+            "ok": False,
+            "errors": [
+                {
+                    "type": "missing_artifact",
+                    "message": f"chapter commit missing {artifact}",
+                    "impact": "commit 文件缺少提交 artifact 快照。",
+                    "repair": "重新执行 chapter-commit 生成完整 commit。",
+                }
+            ],
+            "payload": None,
+        }
+    else:
+        result = validate_artifact_payload(artifact, commit_payload.get(artifact), path=str(commit_path))
+    return _add_artifact_validation_result(
+        report,
+        artifact=artifact,
+        result=result,
+        path=commit_path,
+        ok_note="已存入本章事实提交",
+        error_note="commit 内 artifact 格式不完整",
+    )
+
+
+def _add_artifact_validation_result(
+    report: dict[str, Any],
+    *,
+    artifact: str,
+    result: dict[str, Any],
+    path: Path,
+    ok_note: str,
+    error_note: str,
+) -> dict[str, Any]:
     file_status = "completed" if result.get("ok") else "failed"
-    note = "已生成" if result.get("ok") else "缺失或格式不完整"
+    note = ok_note if result.get("ok") else error_note
     _add_file(report, label=artifact, path=_rel(Path(report["project_root"]), path), status=file_status, note=note)
     for item in result.get("errors") or []:
         issue = {
@@ -400,6 +485,8 @@ def _append_project_status_next_action(report: dict[str, Any], project_root: Pat
 def build_write_report(project_root: Path, *, chapter: int, volume: int | None = None) -> dict[str, Any]:
     report = _new_report(project_root, stage="write", chapter=chapter, volume=volume)
     core_files = 0
+    commit_path = _commit_path(project_root, chapter)
+    commit_payload, commit_error = _read_json(commit_path)
 
     chapter_file = find_chapter_file(project_root, chapter)
     if chapter_file:
@@ -426,8 +513,20 @@ def build_write_report(project_root: Path, *, chapter: int, volume: int | None =
         _add_file(report, label="审查报告", path="审查报告", status="missing", note="未找到审查报告文件")
 
     artifact_results: dict[str, dict[str, Any]] = {}
-    for artifact, path in _artifact_paths(project_root).items():
-        artifact_results[artifact] = _validate_artifact_for_report(report, artifact, path)
+    commit_has_artifact_snapshots = not commit_error and any(
+        artifact in commit_payload for artifact in _artifact_paths(project_root)
+    )
+    if commit_has_artifact_snapshots:
+        for artifact in _artifact_paths(project_root):
+            artifact_results[artifact] = _validate_commit_artifact_for_report(
+                report,
+                artifact,
+                commit_payload,
+                commit_path,
+            )
+    else:
+        for artifact, path in _artifact_paths(project_root).items():
+            artifact_results[artifact] = _validate_artifact_for_report(report, artifact, path)
 
     review_payload = artifact_results.get("review_result", {}).get("payload") or {}
     if isinstance(review_payload, dict) and review_payload.get("review_skipped"):
@@ -444,8 +543,6 @@ def build_write_report(project_root: Path, *, chapter: int, volume: int | None =
             path=COMMIT_ARTIFACT_FILES[0],
         )
 
-    commit_path = _commit_path(project_root, chapter)
-    commit_payload, commit_error = _read_json(commit_path)
     if commit_error:
         _add_file(report, label="本章事实提交", path=_rel(project_root, commit_path), status="missing", note="未生成 commit")
         _add_classified_issue(

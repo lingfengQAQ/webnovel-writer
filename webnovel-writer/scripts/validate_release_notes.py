@@ -77,6 +77,16 @@ def _infer_previous_tag(root: Path, version: str) -> str:
     return sorted(candidates)[-1][1]
 
 
+def _changelog_section(text: str, version: str) -> str:
+    heading_re = re.compile(rf"^##\s+v{re.escape(version)}(?:\s|$)", re.MULTILINE)
+    match = heading_re.search(text)
+    if not match:
+        return ""
+    next_match = re.search(r"^##\s+", text[match.end():], re.MULTILINE)
+    end = match.end() + next_match.start() if next_match else len(text)
+    return text[match.start():end]
+
+
 def validate_release_notes(
     root: str | Path | None = None,
     *,
@@ -154,7 +164,8 @@ def validate_release_notes(
             )
         )
     else:
-        if f"## v{target_version}" not in changelog_text:
+        current_changelog_section = _changelog_section(changelog_text, target_version)
+        if not current_changelog_section:
             issues.append(
                 _issue(
                     "changelog.version",
@@ -163,7 +174,7 @@ def validate_release_notes(
                     repair="在 CHANGELOG.md 中新增当前版本小节。",
                 )
             )
-        if previous and previous not in changelog_text:
+        if previous and current_changelog_section and previous not in current_changelog_section:
             issues.append(
                 _issue(
                     "changelog.range",

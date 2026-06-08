@@ -96,3 +96,30 @@ def test_validate_release_notes_requires_previous_tag_in_release_note(tmp_path):
 
     assert report["ok"] is False
     assert any(item["code"] == "release_note.range" for item in report["issues"])
+
+
+def test_validate_release_notes_requires_previous_tag_in_current_changelog_section(tmp_path):
+    _write_release_files(tmp_path)
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        """# 更新日志
+
+## v1.2.3 - 写章结果更清楚
+
+发版范围：上个版本到本版本。
+
+### 给作者看的变化
+
+- 作者写章反馈更清楚。
+
+## v1.2.2 - 旧版本
+
+发版范围：`v1.2.1..v1.2.2`。
+""",
+        encoding="utf-8",
+    )
+
+    report = validate_release_notes(tmp_path, version="1.2.3", previous_tag="v1.2.2")
+
+    assert report["ok"] is False
+    assert any(item["code"] == "changelog.range" for item in report["issues"])
