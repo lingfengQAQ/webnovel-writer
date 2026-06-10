@@ -22,9 +22,9 @@
 - Modify: `webnovel-writer/scripts/backup_manager.py:150-166, 228-254`
 - Test: `webnovel-writer/scripts/tests/test_backup_manager.py`
 
-- [ ] **Step 1: 写失败测试**：在 tmp git 仓库中故意不配置 `user.name/user.email`（`git config --local --unset` 或 `-c user.useConfigOnly=true`），调用 `backup()`，断言返回失败且输出包含"备份失败"、不产生 `ch{N}` tag。
-- [ ] **Step 2: 运行确认现状是假成功**（当前会打印 ✅ 并打 tag 在旧 HEAD）。
-- [ ] **Step 3: 修复 `_run_git_command`**：`check=False` 分支改为返回 `(result.returncode == 0, stdout, stderr)`；调用方据真实退出码判断。"nothing to commit" 改为从 stdout/stderr 文本判断（当前 `:233` 的 `if not success and "nothing to commit"` 是永假死代码，一并删除重写）：
+- [x] **Step 1: 写失败测试**：在 tmp git 仓库中故意不配置 `user.name/user.email`（`git config --local --unset` 或 `-c user.useConfigOnly=true`），调用 `backup()`，断言返回失败且输出包含"备份失败"、不产生 `ch{N}` tag。
+- [x] **Step 2: 运行确认现状是假成功**（当前会打印 ✅ 并打 tag 在旧 HEAD）。
+- [x] **Step 3: 修复 `_run_git_command`**：`check=False` 分支改为返回 `(result.returncode == 0, stdout, stderr)`；调用方据真实退出码判断。"nothing to commit" 改为从 stdout/stderr 文本判断（当前 `:233` 的 `if not success and "nothing to commit"` 是永假死代码，一并删除重写）：
 
 ```python
 def _run_git_command(self, args, check=True):
@@ -38,8 +38,8 @@ def _run_git_command(self, args, check=True):
     return ok, result.stdout, result.stderr
 ```
 
-- [ ] **Step 4: `backup()` 中 commit 失败时中止**：不打 tag、返回非零、输出含修复指引（提示运行 `git config user.name/user.email`）；"nothing to commit" 视为成功但提示"本章无变更"。
-- [ ] **Step 5: 跑全部 backup 测试通过后提交** `fix: backup reports real git failures and aborts tagging`。
+- [x] **Step 4: `backup()` 中 commit 失败时中止**：不打 tag、返回非零、输出含修复指引（提示运行 `git config user.name/user.email`）；"nothing to commit" 视为成功但提示"本章无变更"。
+- [x] **Step 5: 跑全部 backup 测试通过后提交** `fix: backup reports real git failures and aborts tagging`。
 
 ### Task 2: rollback 改为前滚式恢复，去掉 detached HEAD 与硬编码 master
 
