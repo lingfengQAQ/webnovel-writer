@@ -11,9 +11,11 @@ from typing import Any
 
 
 DISABLE_ENV = "WEBNOVEL_DISABLE_RUNTIME_GUARD_HOOK"
+# state.json is intentionally NOT protected: audits routinely require bulk
+# fixes that update_state.py flags cannot express, and state.json has its own
+# backup + rebuild path (issue #113).
 PROTECTED_SUFFIXES = (
     ".story-system/commits/",
-    ".webnovel/state.json",
     ".webnovel/index.db",
     ".webnovel/vectors.db",
     ".webnovel/memory_scratchpad.json",

@@ -47,11 +47,35 @@ def test_guard_blocks_direct_commit_file_write():
     assert "permissionDecision" in proc.stderr
 
 
-def test_guard_blocks_direct_state_write():
+def test_guard_allows_direct_state_write():
+    # issue #113: audit fixes need direct state.json edits; the guard no
+    # longer blocks them.
     proc = _run_guard(
         {
             "tool_name": "Edit",
             "tool_input": {"file_path": r"D:\book\.webnovel\state.json"},
+        }
+    )
+
+    assert proc.returncode == 0
+
+
+def test_guard_allows_bash_state_write():
+    proc = _run_guard(
+        {
+            "tool_name": "Bash",
+            "tool_input": {"command": 'python fix_state.py > "D:/book/.webnovel/state.json"'},
+        }
+    )
+
+    assert proc.returncode == 0
+
+
+def test_guard_still_blocks_index_db_write():
+    proc = _run_guard(
+        {
+            "tool_name": "Edit",
+            "tool_input": {"file_path": r"D:\book\.webnovel\index.db"},
         }
     )
 
