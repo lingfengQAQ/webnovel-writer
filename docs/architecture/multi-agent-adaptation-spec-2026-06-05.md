@@ -1,7 +1,7 @@
 # Webnovel Writer 多宿主与多智能体适配 Spec
 
-> 日期：2026-06-05（v3 修订：2026-06-11）
-> 状态：草案 v3
+> 日期：2026-06-05（v3 修订：2026-06-11；v3.1：同日，hook 语义 deny → ask，依据 #113，见 §5.5）
+> 状态：草案 v3.1
 > 基线：**v7 story repo**（`story-repo-spec-2026-06-10.md` 0.5 冻结稿）。v2 的基线是 v6.1.0 Python runtime，该架构已被 v7 推翻；本版继承 v2 的元层纪律，重写全部基座层。
 > 来源：v2（基于 PR #110 review 重写）+ 2026-06 多平台调研核验 + `story-repo-spec-feedback-2026-06-11.md` §二.3
 > 定位：把 v7 的格式层（story repo）原封不动地暴露给多个 agent 宿主——格式平台无关，本 spec 只管入口怎么落、角色怎么生成、安装怎么零门槛、支持等级怎么诚实。
@@ -116,7 +116,8 @@ settle / retcon / fix 原子 commit → story repo
 
 ### 5.5 Hook 只是 Claude Code 上的自动兜底
 
-- SessionStart 自动报盘面、PreToolUse 阻断直写 `定稿/`——都只是把显式脚本调用自动化。
+- SessionStart 自动报盘面、PreToolUse 提醒直写 `定稿/`——都只是把显式脚本调用自动化。
+- **Hook 语义是 ask，不是 deny**：PreToolUse 检测到直写 `定稿/` 或 `大纲/承诺/` 时提醒"这是定稿区，确认直写还是走事务？"，确认后放行；事后由手改检测（story repo spec §9）提议 fix 结转兜底。deny 式 hook 无法区分"绕过 settle 破坏一致性"和"替作者批量修数据"，被拦的往往是后者——v6 的 state.json guard 即此教训（#113，已于 73447d7 放开）。这与 story repo spec 不变量 1（"检测手改并提议结转，永不报错拒绝"）和"可靠性来自自愈，不来自门禁"原则自洽。
 - 任何关键能力不得只存在于 hook 中；无 hook 宿主由状态机入口（每次启动先跑盘面与手改检测）补足，行为等价。
 
 ### 5.6 零依赖与 UTF-8 First（Node 口径）
