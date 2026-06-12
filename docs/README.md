@@ -8,8 +8,9 @@
 
 ### 架构（v7 规格）
 
-- [`architecture/story-repo-spec-2026-06-10.md`](./architecture/story-repo-spec-2026-06-10.md)：v7 story repo 格式规格（法律文本，0.5 冻结）
-- [`architecture/multi-agent-adaptation-spec-2026-06-05.md`](./architecture/multi-agent-adaptation-spec-2026-06-05.md)：多宿主与多智能体适配 spec（v3.1，基线为 v7 story repo）
+- [`architecture/v7-prd.md`](./architecture/v7-prd.md)：**v7 产品需求文档（PRD 1.0，产品法律文本）**——作者旅程、功能需求全集、范围切分、发布判据、术语表，含对两份 spec 的修订指令
+- [`architecture/story-repo-spec-2026-06-10.md`](./architecture/story-repo-spec-2026-06-10.md)：v7 story repo 格式规格（0.5，冻结已解除，待按 PRD §10 修订为 0.6）
+- [`architecture/multi-agent-adaptation-spec-2026-06-05.md`](./architecture/multi-agent-adaptation-spec-2026-06-05.md)：多宿主与多智能体适配 spec（v3.1，待按 PRD §10 修订为 v3.2）
 - [`architecture/v7-design-discussion-notes-2026-06-11.md`](./architecture/v7-design-discussion-notes-2026-06-11.md)：v7 设计讨论纪要（v6 病根诊断、问题空间 16 项、多平台调研）
 - [`architecture/story-repo-spec-feedback-2026-06-11.md`](./architecture/story-repo-spec-feedback-2026-06-11.md)：另一线对 story repo spec 0.4 的差异意见（已在 0.5 吸收，留档）
 
@@ -37,6 +38,7 @@
 
 ## 推荐阅读顺序
 
-1. 先看 [`architecture/story-repo-spec-2026-06-10.md`](./architecture/story-repo-spec-2026-06-10.md)——v7 的法律文本
-2. 再看 [`architecture/v7-design-discussion-notes-2026-06-11.md`](./architecture/v7-design-discussion-notes-2026-06-11.md)——为什么这样设计
-3. 关心多平台支持看 [`architecture/multi-agent-adaptation-spec-2026-06-05.md`](./architecture/multi-agent-adaptation-spec-2026-06-05.md)
+1. 先看 [`architecture/v7-prd.md`](./architecture/v7-prd.md)——v7 是什么、给谁用、做到什么程度
+2. 再看 [`architecture/story-repo-spec-2026-06-10.md`](./architecture/story-repo-spec-2026-06-10.md)——格式层怎么落（注意以 PRD §10 修订指令为准）
+3. 想知道为什么这样设计看 [`architecture/v7-design-discussion-notes-2026-06-11.md`](./architecture/v7-design-discussion-notes-2026-06-11.md)
+4. 关心多平台支持看 [`architecture/multi-agent-adaptation-spec-2026-06-05.md`](./architecture/multi-agent-adaptation-spec-2026-06-05.md)
