@@ -21,8 +21,8 @@ the rest conversationally.
 
 ## Status (update the checkboxes as you complete each item)
 
-- [ ] Fill backend guidelines
-- [ ] Add code examples
+- [x] Fill backend guidelines (baseline 1.0, 2026-06-12 — derived from v7 PRD 1.0 + spec 0.6; v7 code does not exist yet, so rules codify decided constraints, not observed code)
+- [ ] Add code examples (deferred until the first v7 code task lands real code)
 
 ---
 

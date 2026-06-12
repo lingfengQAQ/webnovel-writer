@@ -1,51 +1,56 @@
-# Quality Guidelines
+# 质量规范
 
-> Code quality standards for backend development.
-
----
-
-## Overview
-
-<!--
-Document your project's quality standards here.
-
-Questions to answer:
-- What patterns are forbidden?
-- What linting rules do you enforce?
-- What are your testing requirements?
-- What code review standards apply?
--->
-
-(To be filled by the team)
+> 版本：基线 1.0（2026-06-12）。依据：PRD §1.4 产品原则 2/5、§5 非功能需求、§7 发布判据；story-repo-spec 0.6 §2.2。
 
 ---
 
-## Forbidden Patterns
+## 1. 运行时与依赖（硬约束）
 
-<!-- Patterns that should never be used and why -->
+1.1 Node ≥ 22；**零第三方运行时依赖**。新增依赖的 PR 必须被驳回，除非先修订 PRD。
 
-(To be filled by the team)
+1.2 禁止引入 Python、pip、.env；安装即用，无环境配置步骤。
 
----
+1.3 开发期依赖（测试框架等）允许，但必须不进入发布产物。
 
-## Required Patterns
+## 2. 职责分界（宪法级，评审必查）
 
-<!-- Patterns that must always be used -->
+2.1 **脚本能做的归脚本，做不到的归 AI 语义判断**：可计数项（字数、频次、格式校验、关键词命中）必须用脚本实现，禁止让模型估算；语义判断（是否真泄密、正文是否写到了某事）必须归 AI，**禁止用正则硬凑语义判断**。
 
-(To be filled by the team)
+2.2 机检必须零 token；AI 调用次数每章有预算上限（实现时定数）。
 
----
+2.3 **精准读取**：每类数据文件必须配"定位读到所需一段"的脚本接口；写作材料组装默认用片段，禁止默认整文件读取。
 
-## Testing Requirements
+## 3. 编码与平台（CI 强制）
 
-<!-- What level of testing is expected -->
+3.1 一切文件 IO 显式 UTF-8 无 BOM；禁止依赖系统 locale。
 
-(To be filled by the team)
+3.2 Windows 中文环境是一等公民：CI 必须含 Windows 中文路径全链路测试（建库→写章→定稿→重建缓存）。中文路径、中文文件名在任何代码路径上都必须正确处理。
 
----
+3.3 书仓库初始化必须设置 `git config core.quotepath false`。
 
-## Code Review Checklist
+3.4 缩进两空格。
 
-<!-- What reviewers should check -->
+## 4. 测试要求
 
-(To be filled by the team)
+4.1 每个 CI 验收项对应 PRD/spec 的一条可验证承诺，最低集合：
+
+- 删光 `.cache/` 全量重建，查询结果不变；
+- Windows 中文路径全链路；
+- 定稿原子性（中途失败时工作区原样保留）；
+- 防呆方言（系统写出的 YAML 平铺/块列表/危险值引号）。
+
+4.2 修 bug 必须附回归测试；同一问题第二次出现视为流程缺陷，必须复盘。
+
+## 5. 评审清单（PR 必过）
+
+- [ ] 不新增运行时依赖、不引入 Python
+- [ ] 作者界面文案符合术语表（PRD §8），无废止词、无机器味
+- [ ] 错误路径符合错误处理规范（永不带堆栈崩溃）
+- [ ] 可计数逻辑在脚本里，语义判断不在正则里
+- [ ] 行为变更先改了文档（PRD/spec），代码与文档一致
+
+## 6. 待增量补充
+
+- [ ] lint / 格式化工具选型与配置（首个代码任务时定）
+- [ ] 测试框架选型（Node 内置 test runner 候选）与覆盖率要求
+- [ ] commit message 在开发仓库（本仓库）的前缀约定沿用现状：feat/fix/docs/chore

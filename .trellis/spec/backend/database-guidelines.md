@@ -1,51 +1,46 @@
-# Database Guidelines
+# 数据与存储规范
 
-> Database patterns and conventions for this project.
-
----
-
-## Overview
-
-<!--
-Document your project's database conventions here.
-
-Questions to answer:
-- What ORM/query library do you use?
-- How are migrations managed?
-- What are the naming conventions for tables/columns?
-- How do you handle transactions?
--->
-
-(To be filled by the team)
+> 版本：基线 1.0（2026-06-12）。依据：story-repo-spec 0.6 §11（缓存）、不变量 1/2、PRD §4-16（真源唯一）。
 
 ---
 
-## Query Patterns
+## 1. 真源原则
 
-<!-- How should queries be written? Batch operations? -->
+1.1 **文件即真相**：一本书的全部持久状态必须且只能存在于书仓库的 Markdown / YAML 源文件中（`定稿/`、`大纲/`、`文风/`）。禁止任何"只存在于数据库里"的状态。
 
-(To be filled by the team)
+1.2 多条记录必须**每条一个文件**（角色卡、伏笔、悬念、感情线、信息差各自成文件）；禁止大一统数据文件。自由文本归 Markdown 正文，front matter 只承载少量平铺短字段。
 
----
+## 2. 唯一派生物：`.cache/index.db`
 
-## Migrations
+2.1 全系统唯一允许的持久派生物是书仓库内的 `.cache/index.db`，必须使用 Node 内置 `node:sqlite`，必须 gitignored。
 
-<!-- How to create and run migrations -->
+2.2 该缓存必须**任何时刻可删**：删除后系统从源文件全量重建，所有查询照常回答。"删光 `.cache/` 全量重建"是 CI 验收项。
 
-(To be filled by the team)
+2.3 **重建器即格式的参考实现**：重建器能完整重建，即证明源文件格式自洽。修改任何源文件格式时必须同步修改重建器。
 
----
+2.4 表名属机器域，用英文：`chapters`、`threads`、`secrets`、`entities`、`fingerprints`。表设计必须支撑精准读取接口（PRD §3.6）的全部查询。
 
-## Naming Conventions
+## 3. 禁止事项
 
-<!-- Table names, column names, index names -->
+3.1 禁止引入第二个数据库、向量库（语义检索为可选插件，永不做事实召回主路径）、常驻服务。
 
-(To be filled by the team)
+3.2 禁止任何形式的"投影/事件溯源"持久层（v6 教训：派生状态与作者手改冲突无解）。
 
----
+3.3 禁止把缓存当真源读：业务逻辑必须能在"缓存刚被删光"的状态下正确工作（触发重建后照常返回）。
 
-## Common Mistakes
+## 4. 系统写出的结构化内容（防呆方言，CI 强制）
 
-<!-- Database-related mistakes your team has made -->
+4.1 front matter 与 `book.yaml` 必须**一律平铺**，禁止嵌套映射。
 
-(To be filled by the team)
+4.2 列表必须块格式（一行一条 `- 条目`），禁止行内 `[a, b]`。
+
+4.3 凡可能被 YAML 误判类型的字符串值，写出时必须加引号。
+
+4.4 缩进统一两空格；编码 UTF-8 无 BOM。
+
+4.5 读取必须**容错**：遇到未知字段必须保留原样写回，禁止丢弃或报错。
+
+## 5. 待增量补充
+
+- [ ] 各表的列定义与索引（实现 O4 精准读取接口时定稿）
+- [ ] 重建器的增量更新策略（全量重建 vs 按 commit 增量）

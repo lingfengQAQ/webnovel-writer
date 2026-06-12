@@ -1,38 +1,36 @@
-# Backend Development Guidelines
+# 后端开发规范索引
 
-> Best practices for backend development in this project.
-
----
-
-## Overview
-
-This directory contains guidelines for backend development. Fill in each file with your project's specific conventions.
+> 本项目（webnovel-writer v7）的开发规范入口。规范条款的上游依据是 `docs/architecture/v7-prd.md`（产品法律文本）与两份 spec；本目录是其在开发执行层的落地。
 
 ---
 
-## Guidelines Index
+## 开发前检查清单（Pre-Development Checklist）
 
-| Guide | Description | Status |
+写代码前必须确认：
+
+1. 已读当前任务的 `prd.md`；
+2. 已读本目录中与任务相关的规范文件（见下表）;
+3. 行为变更已先落进 PRD/spec（文档先行，见目录结构规范 §2.1）。
+
+## 规范索引
+
+| 规范 | 内容 | 状态 |
 |-------|-------------|--------|
-| [Directory Structure](./directory-structure.md) | Module organization and file layout | To fill |
-| [Database Guidelines](./database-guidelines.md) | ORM patterns, queries, migrations | To fill |
-| [Error Handling](./error-handling.md) | Error types, handling strategies | To fill |
-| [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
-| [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
+| [目录结构](./directory-structure.md) | 分支策略、仓库布局、v7 代码布局原则 | 基线 1.0 |
+| [数据与存储](./database-guidelines.md) | 真源原则、`.cache/index.db`、防呆方言 | 基线 1.0 |
+| [错误处理](./error-handling.md) | 永不崩溃、错误分级、原子性、错误文案 | 基线 1.0 |
+| [质量规范](./quality-guidelines.md) | 零依赖、职责分界、CI 要求、评审清单 | 基线 1.0 |
+| [输出与日志](./logging-guidelines.md) | 作者界面域/机器域分离、报告文风 | 基线 1.0 |
+
+## 质量检查（Quality Check）
+
+提交前必须过质量规范 §5 的评审清单。
+
+## 维护方式
+
+- 基线版（2026-06-12）依据 PRD 1.0 与 spec 0.6 提炼，先于 v7 代码存在；各文件末尾的"待增量补充"清单在对应代码任务落地时填实。
+- 每个任务收尾时按 workflow 阶段 3.3（spec update）评估是否有新约定要写回本目录。
 
 ---
 
-## How to Fill These Guidelines
-
-For each guideline file:
-
-1. Document your project's **actual conventions** (not ideals)
-2. Include **code examples** from your codebase
-3. List **forbidden patterns** and why
-4. Add **common mistakes** your team has made
-
-The goal is to help AI assistants and new team members understand how YOUR project works.
-
----
-
-**Language**: All documentation should be written in **English**.
+**语言**：本目录文档用中文书写，行文采用严谨的规范体（必须/禁止/应当）。

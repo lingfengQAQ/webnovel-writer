@@ -1,54 +1,43 @@
-# Directory Structure
+# 目录结构规范
 
-> How backend code is organized in this project.
-
----
-
-## Overview
-
-<!--
-Document your project's backend directory structure here.
-
-Questions to answer:
-- How are modules/packages organized?
-- Where does business logic live?
-- Where are API endpoints defined?
-- How are utilities and helpers organized?
--->
-
-(To be filled by the team)
+> 版本：基线 1.0（2026-06-12）。依据：v7 PRD 1.0、story-repo-spec 0.6。v7 代码骨架落地后增量修订。
 
 ---
 
-## Directory Layout
+## 1. 分支策略
+
+1.1 `master` 为 v6 维护线，**冻结**：仅允许致命 bug 修复，禁止合入任何 v7 工作。
+
+1.2 `v7` 为主开发分支：所有 v7 工作的 PR base 必须设为 `v7`。
+
+## 2. 仓库顶层布局
 
 ```
-<!-- Replace with your actual structure -->
-src/
-├── ...
-└── ...
+webnovel-writer/                # 仓库根
+├── docs/architecture/          # 设计真源：v7-prd.md（产品决策）、story-repo-spec（格式）、multi-agent-adaptation-spec（多宿主）
+├── .trellis/                   # 开发流程层（任务/规范/日志），与产品代码无关
+├── webnovel-writer/            # v6 插件本体（遗产，禁止改动）
+├── requirements.txt pytest.ini # v6 Python 遗产（禁止改动；v7 禁止引入 Python）
+└── （v7 代码目录待定）          # npx 包骨架落地时修订本节
 ```
 
----
+2.1 **文档先行**：`docs/architecture/v7-prd.md` 是产品决策真源，两份 spec 是格式与多宿主行为真源。代码与文档冲突时以文档为准；变更行为必须先修订文档（走任务流程），再改代码。
 
-## Module Organization
+## 3. v7 产品代码布局原则（骨架待定，原则已定）
 
-<!-- How should new features/modules be organized? -->
+3.1 分发渠道只有 npx（`npx webnovel-writer init` / `update`），即单一 npm 包；禁止恢复插件市场分发。
 
-(To be filled by the team)
+3.2 运行时必须为 **Node ≥ 22，零第三方运行时依赖**；缓存必须使用内置 `node:sqlite`。任何引入运行时依赖的设计必须被驳回。
 
----
+3.3 用户侧安装产物布局（代码必须与之对齐）：
 
-## Naming Conventions
+- 工作目录 ⊃ 书目录；插件本体住 `工作目录/.webnovel/`（Node 脚本、角色定义、模板哈希清单、`books.jsonl`）。
+- 书仓库内必须**零工程文件**（唯一例外：指路 `AGENTS.md`）；作者可见的目录名、文件名一律中文。
 
-<!-- File and folder naming rules -->
+3.4 文件排序必须依赖零填充数字前缀（`0152-`、`第05卷`、`伏笔-031`），禁止依赖中文字典序。
 
-(To be filled by the team)
+## 4. 待增量补充
 
----
-
-## Examples
-
-<!-- Link to well-organized modules as examples -->
-
-(To be filled by the team)
+- [ ] npm 包内部 src/ 模块划分（安装器、状态机、机检、备料、定稿）——首个代码任务时定
+- [ ] 测试目录与命名约定
+- [ ] 题材模板与知识库在包内的存放位置

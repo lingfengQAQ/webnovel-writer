@@ -1,51 +1,38 @@
-# Logging Guidelines
+# 输出与日志规范
 
-> How logging is done in this project.
-
----
-
-## Overview
-
-<!--
-Document your project's logging conventions here.
-
-Questions to answer:
-- What logging library do you use?
-- What are the log levels and when to use each?
-- What should be logged?
-- What should NOT be logged (PII, secrets)?
--->
-
-(To be filled by the team)
+> 版本：基线 1.0（2026-06-12）。依据：PRD §1.4 产品原则 6、§8 术语表；story-repo-spec 0.6 §8（commit 约定）。
 
 ---
 
-## Log Levels
+## 1. 两个域，严格分离
 
-<!-- When to use each level: debug, info, warn, error -->
+1.1 **作者界面域**（作者会看到的一切输出：对话文案、报告、文件名、front matter 字段名、提醒）：
 
-(To be filled by the team)
+- 必须全中文、零机器味；术语必须遵守 PRD §8 术语表，废止词（承诺/节奏债/棘轮/盘面/上下文包/合同/决策卡/验收卡 等）禁止出现。
+- 命名原则：网文圈原生词优先；圈内没有的用自然措辞；财务/工程/数据库隐喻禁止；禁止自造两字精简词。文案以自然流畅为准，不强求口语化。
+- 条目编号一律中文全称（伏笔-031、悬念-008、感情线-012、信息差-021），禁止缩写（伏-031）与 ASCII 编号（P-031）。
+- 禁止出现：堆栈、日志级别字样（ERROR/WARN）、英文报错、git 命令原文。
 
----
+1.2 **机器域**（作者看不到、供脚本与诊断使用）：
 
-## Structured Logging
+- commit message 前缀固定 ASCII：`ch` / `vol` / `retcon` / `fix`（便于 `git log --grep`）。
+- `book.yaml` 的 `spec_version`、`.cache` 表名、`books.jsonl` 字段名等机器协议用英文，禁止为"全中文"目标改动机器协议。
 
-<!-- Log format, required fields -->
+## 2. 诊断信息
 
-(To be filled by the team)
+2.1 可诊断性依赖统一目录结构（强制项目级安装）：诊断输出应引导用户提供**目录清单**，而非日志文件。
 
----
+2.2 脚本内部诊断输出（stderr/调试信息）允许英文，但禁止混入作者界面域。
 
-## What to Log
+2.3 开发期调试日志禁止留在发布路径上；发布版脚本对作者的全部输出都属于作者界面域，受 1.1 约束。
 
-<!-- Important events to log -->
+## 3. 报告类输出的文风
 
-(To be filled by the team)
+3.1 全书近况、迁移报告、体检报告等必须先结论后细节，用作者的语言描述（"第 31 个伏笔从第 12 章埋下，悬了 140 章了"），禁止罗列原始数据。
 
----
+3.2 提醒不是错误（"悬了太久"是提醒）；报告中禁止用命令式或指责式语气。
 
-## What NOT to Log
+## 4. 待增量补充
 
-<!-- Sensitive data, PII, secrets -->
-
-(To be filled by the team)
+- [ ] 脚本 stdout/stderr 的用途划分与机器可读输出格式（JSON 行协议等，首个代码任务时定）
+- [ ] 调试开关的约定（环境变量名等）

@@ -1,51 +1,43 @@
-# Error Handling
+# 错误处理规范
 
-> How errors are handled in this project.
-
----
-
-## Overview
-
-<!--
-Document your project's error handling conventions here.
-
-Questions to answer:
-- What error types do you define?
-- How are errors propagated?
-- How are errors logged?
-- How are errors returned to clients?
--->
-
-(To be filled by the team)
+> 版本：基线 1.0（2026-06-12）。依据：PRD §1.4 产品原则 3/4、§3.5 状态机、§5 非功能需求（健壮性）；story-repo-spec 0.6 不变量 4、§10。
 
 ---
 
-## Error Types
+## 1. 总原则
 
-<!-- Custom error classes/types -->
+1.1 **永不带堆栈崩溃**：任何面向作者的执行路径都禁止抛出未捕获异常。所有可预见的失败必须落入"修复确认"或人话提示兜底。
 
-(To be filled by the team)
+1.2 **宁停勿崩**：无法安全继续时必须停下并说明状态，禁止带着不一致状态继续执行。
 
----
+1.3 **可靠性来自自愈，不来自门禁**：能自动修复的先修复再报告；hook 语义必须是 ask，禁止 deny（v6 #113 教训）。
 
-## Error Handling Patterns
+1.4 **系统适应作者，不报错拒绝**：作者手改源文件是合法操作。检测到未入账手改必须提议补登，禁止报错、禁止拒绝启动。
 
-<!-- Try-catch patterns, error propagation -->
+## 2. 错误分级与处理路径
 
-(To be filled by the team)
+| 级别 | 示例 | 必须采取的处理 |
+|---|---|---|
+| 可自愈 | `books.jsonl` 缺失/损坏；全角标点等结构性 YAML 错误 | 自动修复（扫描重建 / 预修复），只报不问 |
+| 需作者确认 | 源文件解析失败且涉及内容语义 | 修复确认：定位到行、提议保留作者意图的修复、作者确认后执行 |
+| 需作者决策 | git 异常（半提交/冲突/锁文件/网盘冲突副本） | 启动时 git 健康检查捕获，每种配自动修复或人话指引 |
+| 环境性 | Node 版本不足、不在工作目录启动 | 人话提示该做什么（升级 Node / 回工作目录），禁止英文报错 |
 
----
+## 3. 原子性
 
-## API Error Responses
+3.1 定稿必须原子：一次 git commit 要么完成，要么工作区原样保留，禁止中间态。所有多文件写入操作必须遵循同一模式——先全部准备好，再一次提交。
 
-<!-- Standard error response format -->
+3.2 中断恢复：状态机启动时必须能识别"工作区有未完成流程"并从中断的阶段继续，禁止要求作者重来。
 
-(To be filled by the team)
+## 4. 面向作者的错误文案
 
----
+4.1 必须全中文、自然流畅；禁止出现堆栈、错误码、英文术语，也不强求口语化。
 
-## Common Mistakes
+4.2 必须说清三件事：发生了什么、影响是什么、作者现在该做什么（或系统已替作者做了什么）。
 
-<!-- Error handling mistakes your team has made -->
+4.3 提醒与错误必须区分："悬了太久"等账面提醒不是错误，禁止用错误语气呈现。
 
-(To be filled by the team)
+## 5. 待增量补充
+
+- [ ] Node 脚本层的错误类型定义与退出码约定（首个代码任务时定）
+- [ ] git 健康检查的完整异常清单与修复动作映射
