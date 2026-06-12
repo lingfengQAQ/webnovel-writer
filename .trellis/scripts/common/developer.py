@@ -159,7 +159,7 @@ def ensure_developer(repo_root: Path | None = None) -> None:
 
     if not check_developer(repo_root):
         print("Error: Developer not initialized.", file=sys.stderr)
-        print(f"Run: python3 ./{DIR_WORKFLOW}/scripts/init_developer.py <your-name>", file=sys.stderr)
+        print(f"Run: python ./{DIR_WORKFLOW}/scripts/init_developer.py <your-name>", file=sys.stderr)
         sys.exit(1)
 
 

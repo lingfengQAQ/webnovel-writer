@@ -4,11 +4,11 @@
 Add a new session to journal file and update index.md.
 
 Usage:
-    python3 add_session.py --title "Title" --commit "hash" --summary "Summary" [--package cli]
-    python3 add_session.py --title "Title" --branch "feat/my-branch"
+    python add_session.py --title "Title" --commit "hash" --summary "Summary" [--package cli]
+    python add_session.py --title "Title" --branch "feat/my-branch"
 
     # Pipe detailed content via stdin (use --stdin to opt in):
-    cat << 'EOF' | python3 add_session.py --stdin --title "Title" --summary "Summary"
+    cat << 'EOF' | python add_session.py --stdin --title "Title" --summary "Summary"
     <session content here>
     EOF
 

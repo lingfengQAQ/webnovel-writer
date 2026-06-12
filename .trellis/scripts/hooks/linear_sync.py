@@ -4,12 +4,12 @@
 Syncs task events to Linear via the `linearis` CLI.
 
 Usage (called automatically by task.py hooks):
-    python3 .trellis/scripts/hooks/linear_sync.py create
-    python3 .trellis/scripts/hooks/linear_sync.py start
-    python3 .trellis/scripts/hooks/linear_sync.py archive
+    python .trellis/scripts/hooks/linear_sync.py create
+    python .trellis/scripts/hooks/linear_sync.py start
+    python .trellis/scripts/hooks/linear_sync.py archive
 
 Manual usage:
-    TASK_JSON_PATH=.trellis/tasks/<name>/task.json python3 .trellis/scripts/hooks/linear_sync.py sync
+    TASK_JSON_PATH=.trellis/tasks/<name>/task.json python .trellis/scripts/hooks/linear_sync.py sync
 
 Environment:
     TASK_JSON_PATH  - Absolute path to task.json (set by task.py)
