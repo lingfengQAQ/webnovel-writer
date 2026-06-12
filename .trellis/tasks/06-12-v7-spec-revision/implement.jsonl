@@ -1,0 +1,4 @@
+{"file": "docs/architecture/v7-prd.md", "reason": "需求真源——§10 修订指令清单 + §8 术语表 + §3 系统形态"}
+{"file": "docs/architecture/story-repo-spec-2026-06-10.md", "reason": "修订对象 0.5 → 0.6"}
+{"file": "docs/architecture/multi-agent-adaptation-spec-2026-06-05.md", "reason": "修订对象 v3.1 → v3.2"}
+{"file": ".trellis/tasks/archive/2026-06/06-11-v7-prd-webnovel-writer/prd.md", "reason": "27 条 ADR 决策过程，指令有歧义时回查"}
