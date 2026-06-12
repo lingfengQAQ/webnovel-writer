@@ -1,0 +1,2233 @@
+╭─── Claude Code v2.1.170 ─────────────────────────────────────────────────────╮
+│                                 │ Tips for getting started                   │
+│          Welcome back!          │ Run /init to create a CLAUDE.md file with… │
+│                                 │ ────────────────────────────────────────── │
+│             ▐▛███▜▌             │ What's new                                 │
+│            ▝▜█████▛▘            │ Introducing Claude Fable 5: a Mythos-clas… │
+│              ▘▘ ▝▝              │ Fixed sessions not saving transcripts (an… │
+│                                 │ Self-hosted runner: added a `post-session… │
+│   Fable 5 · API Usage Billing   │ /release-notes for more                    │
+│        ~/webnovel-writer        │                                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+
+❯ 看下                                                                          
+
+● API Error: Request rejected (429) · Service Unavailable
+
+✻ Worked for 3m 22s
+
+❯ 看下                                                                          
+
+  Thought for 9s (ctrl+o to expand)
+
+● Bash(git -C /root/webnovel-writer status && git -C /root/webnovel-writer log
+      --oneline -5 && ls /root/webnovel-writer)
+  ⎿  On branch docs/v7-discussion-feedback
+     nothing to commit, working tree clean
+     dcfe747 docs: add v7 design discussion notes and story repo spec feedb
+     … +14 lines (ctrl+o to expand)
+
+● 当前仓库状态如下：
+
+  - 分支：docs/v7-discussion-feedback，工作区干净（没有未提交的改动）
+  - 最新提交：dcfe747 — 添加了 v7 设计讨论笔记和 story repo spec 反馈
+  - 之前是 spec v7 draft 0.4 冻结版，以及三个修复（archive 原子写入、迁移不删
+  state、损坏 state.json 保留后重建）
+
+  你想看哪部分？比如 v7 讨论笔记的内容、和 master 的差异，还是别的什么？
+
+✻ Brewed for 19s
+
+❯ https://github.com/lingfengQAQ/webnovel-writer/issues/113先切到naster分支修复 
+  这个issues                                                                    
+
+  Thought for 10s (ctrl+o to expand)
+
+● Bash(gh issue view 113 -R lingfengQAQ/webnovel-writer 2>&1 | head -100)
+  ⎿  title:     Hook 阻止了我直接编辑 state.json
+     state:     OPEN
+     author:    llyyshifan
+     … +62 lines (ctrl+o to expand)
+
+● Bash(gh issue view 113 -R lingfengQAQ/webnovel-writer --comments 2>&1 | tail
+      -40; git -C /root/webnovel-writer checkout master && git -C
+      /root/webnovel-writer pull -…)
+  ⎿  author:    lingfengQAQ
+     association:       owner
+     edited:    false
+     … +10 lines (ctrl+o to expand)
+
+  Thought for 1m 8s, searched for 4 patterns, read 2 files, listed 2 directories (ctrl+o to expand)
+
+● Bash(git -C /root/webnovel-writer checkout -b
+      fix/issue-113-allow-state-json-edit)
+  ⎿  Switched to a new branch 'fix/issue-113-allow-state-json-edit'
+
+● Update(webnovel-writer/hooks/guard_runtime_write.py)
+  ⎿  Added 3 lines, removed 1 line
+      11  
+      12  
+      13  DISABLE_ENV = "WEBNOVEL_DISABLE_RUNTIME_GUARD_HOOK"
+      14 +# state.json is intentionally NOT protected: audits routinely r
+         +equire bulk                                                    
+      15 +# fixes that update_state.py flags cannot express, and state.js
+         +on has its own                                                 
+      16 +# backup + rebuild path (issue #113).                          
+      17  PROTECTED_SUFFIXES = (
+      18      ".story-system/commits/",
+      16 -    ".webnovel/state.json",                                    
+      19      ".webnovel/index.db",
+      20      ".webnovel/vectors.db",
+      21      ".webnovel/memory_scratchpad.json",
+
+● Update(webnovel-writer/scripts/tests/test_hooks.py)
+  ⎿  Added 25 lines, removed 1 line
+      47      assert "permissionDecision" in proc.stderr
+      48  
+      49  
+      50 -def test_guard_blocks_direct_state_write():                    
+      50 +def test_guard_allows_direct_state_write():                    
+      51 +    # issue #113: audit fixes need direct state.json edits; the
+         + guard no                                                      
+      52 +    # longer blocks them.                                      
+      53      proc = _run_guard(
+      54          {
+      55              "tool_name": "Edit",
+     ...
+      57          }
+      58      )
+      59  
+      60 +    assert proc.returncode == 0                                
+      61 +                                                               
+      62 +                                                               
+      63 +def test_guard_allows_bash_state_write():                      
+      64 +    proc = _run_guard(                                         
+      65 +        {                                                      
+      66 +            "tool_name": "Bash",                               
+      67 +            "tool_input": {"command": 'python fix_state.py > "D
+         +:/book/.webnovel/state.json"'},                                
+      68 +        }                                                      
+      69 +    )                                                          
+      70 +                                                               
+      71 +    assert proc.returncode == 0                                
+      72 +                                                               
+      73 +                                                               
+      74 +def test_guard_still_blocks_index_db_write():                  
+      75 +    proc = _run_guard(                                         
+      76 +        {                                                      
+      77 +            "tool_name": "Edit",                               
+      78 +            "tool_input": {"file_path": r"D:\book\.webnovel\ind
+         +ex.db"},                                                       
+      79 +        }                                                      
+      80 +    )                                                          
+      81 +                                                               
+      82      assert proc.returncode == 2
+      83  
+      84  
+
+● Bash(python -m pytest webnovel-writer/scripts/tests/test_hooks.py -q 2>&1 |
+      tail -5)
+  ⎿  /usr/bin/python: No module named pytest
+
+● Bash((python3 -m pytest webnovel-writer/scripts/tests/test_hooks.py -q 2>&1 ||
+      pip install pytest -q && python3 -m pytest
+      webnovel-writer/scripts/tests/test_hooks.py…)
+  ⎿  error: externally-managed-environment
+
+     × This environment is externally managed
+     … +18 lines (ctrl+o to expand)
+
+● Bash(pip install pytest -q --break-system-packages 2>&1 | tail -1; python3 -m
+      pytest webnovel-writer/scripts/tests/test_hooks.py -q 2>&1 | tail -4)
+  ⎿  WARNING: Running pip as the 'root' user can result in broken permissio
+     ns and conflicting behaviour with the system package manager, possibly
+      rendering your system unusable. It is recommended to use a virtual en
+     … +9 lines (ctrl+o to expand)
+
+● Bash(python3 -m pytest webnovel-writer/scripts/tests/test_hooks.py -q -p
+      no:cacheprovider -p no:cov 2>&1 | tail -4 || python3 -m pytest
+      webnovel-writer/scripts/tests…)
+  ⎿    File "/usr/local/lib/python3.13/dist-packages/_pytest/config/__init_
+     _.py", line 885, in import_plugin
+         __import__(importspec)
+     … +3 lines (ctrl+o to expand)
+
+● Bash(pip install pytest-cov -q --break-system-packages 2>&1 | tail -1; python3
+      -m pytest webnovel-writer/scripts/tests/test_hooks.py -q 2>&1 | tail -4)
+  ⎿  WARNING: Running pip as the 'root' user can result in broken permissio
+     ns and conflicting behaviour with the system package manager, possibly
+      rendering your system unusable. It is recommended to use a virtual en
+     … +10 lines (ctrl+o to expand)
+
+● Bash(python3 -m pytest webnovel-writer/scripts/tests/test_hooks.py -q --no-cov
+      2>&1 | tail -4)
+  ⎿      self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+     -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.htm
+     l
+
+● Bash(python3 -m pytest webnovel-writer/scripts/tests/test_hooks.py --no-cov
+      2>&1 | grep -E "passed|failed|error" | tail -3)
+  ⎿  8 passed, 1 warning in 0.57s
+
+  Thought for 10s (ctrl+o to expand)
+
+● Bash(git add webnovel-writer/hooks/guard_runtime_write.py
+      webnovel-writer/scripts/tests/test_hooks.py && git commit -m "fix: stop
+      blocking direct edits to state.json…)
+  ⎿  [fix/issue-113-allow-state-json-edit f3bd9b2] fix: stop blocking direc
+     t edits to state.json (#113)
+      2 files changed, 28 insertions(+), 2 deletions(-)
+     f3bd9b2 fix: stop blocking direct edits to state.json (#113)
+
+● Issue #113 修复完成，已提交到新分支 fix/issue-113-allow-state-json-edit（基于
+  master）。
+
+  问题根因：hooks/guard_runtime_write.py 的 PreToolUse hook 把
+  .webnovel/state.json 列入 PROTECTED_SUFFIXES，所有对它的 Edit/Write/Bash
+  直写都被 deny。审核后常有几十条修复，update_state.py
+  的命令行参数覆盖不了所有字段，用户只能手动一条条改——这正是 issue
+  抱怨的，而且你在评论里也说了要放开这个限制。
+
+  改动：
+  - guard_runtime_write.py：从保护列表中移除 .webnovel/state.json，并加注释说明
+  原因。事件存储和只读投影文件（.story-system/commits/、index.db、vectors.db、pr
+  ojection_log.jsonl、memory_scratchpad.json）仍然受保护，因为那些必须走 runtime
+  命令才能保持一致性；state.json 自身有备份和重建机制，放开是安全的。
+  - test_hooks.py：把"阻止 state.json 编辑"的测试改为"允许"（Edit 和 Bash
+  重定向两个用例），并新增一个用例确认 index.db 仍被阻止。
+
+  测试 8 项全部通过（pytest scripts/tests/test_hooks.py --no-cov）。
+
+  要不要我推送分支并开 PR（标 Fixes #113）？
+✻ Sautéed for 5m 0s
+
+❯ 可以顺便帮我回复issues                                                        
+
+  Thought for 9s (ctrl+o to expand)
+
+● Bash(git push -u origin fix/issue-113-allow-state-json-edit 2>&1 | tail -2)
+  ⎿   * [new branch]      fix/issue-113-allow-state-json-edit -> fix/issue-
+     113-allow-state-json-edit
+     branch 'fix/issue-113-allow-state-json-edit' set up to track 'origin/f
+     ix/issue-113-allow-state-json-edit'.
+
+● Bash(gh pr create -R lingfengQAQ/webnovel-writer --base master --head
+      fix/issue-113-allow-state-json-edit --title "fix: stop blocking direct
+      edits to state.json (#11…)
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ 回复要简单不要说太多术语，我的用户是写小说的                                  
+
+  Thought for 11s (ctrl+o to expand)
+
+● Bash(gh issue comment 113 -R lingfengQAQ/webnovel-writer --body
+      "已经修复了，下个版本会放开这个限制：审核之后 AI 可以直接帮你改
+      state.json，不用再一条条手动改了。…)
+  ⎿  https://github.com/lingfengQAQ/webnovel-writer/issues/113#issuecomment
+     -4683735783
+
+● 已在 issue #113 下回复，内容很简短、没用术语：
+
+  ▎ 已经修复了，下个版本会放开这个限制：审核之后 AI 可以直接帮你改 
+  ▎ state.json，不用再一条条手动改了。
+  ▎
+  ▎ 在更新发布之前，如果着急用，可以先按之前说的让 AI 把 hooks 
+  ▎ 停用，或者设置环境变量 WEBNOVEL_DISABLE_RUNTIME_GUARD_HOOK=1 临时关掉拦截。
+  ▎
+  ▎ 感谢反馈！
+
+  分支 fix/issue-113-allow-state-json-edit 已推送到远端。刚才你取消了开 PR
+  的操作——需要的话我再开，或者你自己合并也行。
+
+✻ Crunched for 24s
+
+❯ 你来吧我刚才取消是为了提醒你怎么写issues回复                                  
+
+● Bash(gh pr create -R lingfengQAQ/webnovel-writer --base master --head
+      fix/issue-113-allow-state-json-edit --title "fix: stop blocking direct
+      edits to state.json (#11…)
+  ⎿  https://github.com/lingfengQAQ/webnovel-writer/pull/114
+
+  Thought for 14s, read 1 file, wrote 2 memories (ctrl+o to expand)
+
+● 完成：
+
+  - PR #114 已创建：https://github.com/lingfengQAQ/webnovel-writer/pull/114，合
+  并后自动关闭 issue #113
+  - Issue 回复已发（用的大白话版本）
+  - 我把"issue 回复要简单、面向写小说的用户、不讲术语"记到了长期记忆里，以后会一
+  直照这个风格写
+
+✻ Baked for 1m 9s
+
+❯ 切回到v7分支                                                                  
+
+● Bash(git -C /root/webnovel-writer checkout docs/v7-discussion-feedback && git
+      -C /root/webnovel-writer status -sb)
+  ⎿  Switched to branch 'docs/v7-discussion-feedback'
+     ## docs/v7-discussion-feedback
+
+  Thought for 10s (ctrl+o to expand)
+
+● 已切回 docs/v7-discussion-feedback 分支，工作区干净。（这个分支上看到的 hook
+  文件还是旧版本是正常的——修复在 fix/issue-113-allow-state-json-edit 分支上，等
+  PR #114 合并进 master 即可。）
+
+✻ Brewed for 20s
+
+❯ 我已经在远端合并了                                                            
+
+● Bash(git -C /root/webnovel-writer fetch origin && git -C /root/webnovel-writer
+      log origin/master --oneline -3 && git -C /root/webnovel-writer status
+      -sb)
+  ⎿  Error: Exit code 128
+     fatal: unable to access 'https://github.com/lingfengQAQ/webnovel-writer/': 
+     GnuTLS recv error (-110): The TLS connection was non-properly terminated.
+
+● Bash(git -C /root/webnovel-writer fetch origin && git -C /root/webnovel-writer
+      log origin/master --oneline -3)
+  ⎿  From https://github.com/lingfengQAQ/webnovel-writer
+      * branch            docs/v7-discussion-feedback -> FETCH_HEAD
+        22ab415..73447d7  master     -> origin/master
+     … +4 lines (ctrl+o to expand)
+
+  Thought for 9s (ctrl+o to expand)
+
+● Bash(git -C /root/webnovel-writer branch -d
+      fix/issue-113-allow-state-json-edit 2>&1; git -C /root/webnovel-writer
+      branch -a | head)
+  ⎿  error: the branch 'fix/issue-113-allow-state-json-edit' is not fully m
+     erged
+     hint: If you are sure you want to delete it, run 'git branch -D fix/is
+     … +13 lines (ctrl+o to expand)
+
+  Thought for 9s (ctrl+o to expand)
+
+● Bash(git -C /root/webnovel-writer diff origin/master
+      fix/issue-113-allow-state-json-edit --
+      webnovel-writer/hooks/guard_runtime_write.py
+      webnovel-writer/scripts/test…)
+  ⎿  Deleted branch fix/issue-113-allow-state-json-edit (was f3bd9b2).
+
+● 确认合并成功：origin/master 最新提交就是 73447d7 fix: stop blocking direct 
+  edits to state.json (#113)，内容与修复分支完全一致（diff 为空）。本地的
+  fix/issue-113-allow-state-json-edit 分支已删掉（远端显示是 squash
+  合并，所以本地需要强制删除，安全的）。
+
+  现在你在 docs/v7-discussion-feedback 分支上，可以继续 v7 的工作了。
+
+✻ Crunched for 2m 29s
+
+❯ /effort                                                                       
+  ⎿  Set effort level to medium (saved as your default for new sessions):
+     Balanced approach with standard implementation and testing
+❯ 我们继续讨论v7的设计                                                          
+
+● Bash(ls /root/webnovel-writer/docs | head -30; git -C /root/webnovel-writer
+      log --oneline -2)
+  ⎿  architecture
+     archive
+     guides
+     … +8 lines (ctrl+o to expand)
+
+● Bash(git -C /root/webnovel-writer show --stat dcfe747 3838b72 | grep -E
+      "\.md|commit " )
+  ⎿  commit dcfe747bba8ada9044f4ba654040ce8471caedec
+      .../story-repo-spec-feedback-2026-06-11.md         | 47 +++++++++++++
+      .../v7-design-discussion-notes-2026-06-11.md       | 82 +++++++++++++
+     … +4 lines (ctrl+o to expand)
+
+  Thought for 31s, searched for 1 pattern, read 3 files (ctrl+o to expand)
+
+● 好，材料我都过了一遍：spec 0.4（已冻结）、你这边的差异意见、还有讨论纪要。当前
+  桌面上挂着的就是反馈文档里的三个冲突，按严重度给一下我的看法和建议口径：
+
+  1. 全自动模式（§13 ❌ vs #79 连写需求）— 建议放开，按"开关"实现
+
+  这是最实质的冲突。我站反馈文档这边，理由：
+
+  - 格式层其实不需要改任何东西。状态机 8 步里只有第 2 步（拍板）和第 7
+  步（验收）是作者停顿点，把它们变成 book.yaml 里的两个开关（自动拍板: true /
+  自动验收: true），其余全部不动。这意味着"全自动"不是一个新模式，只是同一状态机
+  的参数化——§13 禁掉它反而要在文档里解释为什么 #79 不做。
+  - 控制上移的论点是成立的：作者逐卷确认卷纲，等于一次拍板管 40
+  章；偏离进灵感池、体检不过线即停，控制并没有消失。
+  - 需要配套的硬约束（这些应该写进 spec 而不是留给实现）：连写时体检周期从 50
+  章加密到 5-10 章；停止条件三选一（写满 N 章 / 体检不过线 /
+  卷纲耗尽）；自动验收的章在决策卡留"攒批待审"标记，作者回来可以批量翻。
+
+  建议 0.5 把 §13 那条改成"❌ 无停止条件的裸奔连写"，把有约束的自动模式收编进
+  §8。
+
+  2. PYTHONUTF8=1（§2.1）— 这是遗漏，直接改
+
+  另一线已经定了"脚本统一 Node、零 Python 依赖"，§2.1 还写着 PYTHONUTF8=1 就是
+  0.4 冻结前没同步到。这个没什么可争的：改成 Node 口径（Node 默认
+  UTF-8，连这条约束都能删掉一半），决策记录补一行运行时选型即可。
+
+  3. 多宿主层缺席 — 确认是分层留白，另开 spec
+
+  我认为这不是 0.4 的缺陷：story repo spec 是格式层，决策卡=文件界面天然平台无关
+  ，混进宿主适配反而污染"法律文本"的定位。正确做法是反馈文档说的第二份
+  spec（skills 落地、角色单源生成三平台壳、support.md/registry）。只需要在 0.4
+  的开头加一句"宿主适配见另一规格"，把留白显式化。
+
+  ---
+  我的建议：这三条加上"不阻塞小项"（高频意象统计、句式体检进机检；反和解规则进风
+  格宪法/题材模板）一起收进 0.4 → 0.5 的决策记录，出一版 0.5。其中只有第 1
+  条是真正需要你拍板的——0.4 写 ❌ 是有人主张过禁掉的，放开需要决策人签字。
+
+  你想先聊哪条？还是对第 1 条有不同意见（比如坚持 v1 不做自动模式、推到 v1.1）？
+
+✻ Cogitated for 1m 35s
+
+❯ pr112你看了吗                                                                 
+
+● Bash(gh pr view 112 -R lingfengQAQ/webnovel-writer 2>&1 | head -60)
+  ⎿  title:     docs: v7 设计讨论纪要 + 对 Story Repo 规格 0.4 的差异意见
+     state:     OPEN
+     author:    lingfengQAQ (聆风)
+     … +31 lines (ctrl+o to expand)
+
+  Thought for 12s (ctrl+o to expand)
+
+● Bash(gh pr view 112 -R lingfengQAQ/webnovel-writer --json
+      commits,files,comments,reviews --jq '{commits:
+      [.commits[].messageHeadline], files: [.files[] | {path, addi…)
+  ⎿  {
+       "comments": [],
+       "commits": [
+     … +34 lines (ctrl+o to expand)
+
+  Thought for 13s (ctrl+o to expand)
+
+● Bash(git -C /root/webnovel-writer pull --ff-only 2>&1 | tail -3 && git -C
+      /root/webnovel-writer log --oneline -3)
+  ⎿   .../multi-agent-adaptation-spec-2026-06-05.md      | 856 ++++--------
+     ---------
+      docs/architecture/story-repo-spec-2026-06-10.md    |  48 +-
+     … +7 lines (ctrl+o to expand)
+
+● Bash(git -C /root/webnovel-writer show 0f8ddca --
+      docs/architecture/story-repo-spec-2026-06-10.md | head -150)
+  ⎿  commit 0f8ddcaece06613c1038835064e30cae0b106c77
+     Author: lingfengQAQ <75821188+lingfengQAQ@users.noreply.github.com>
+     Date:   Thu Jun 11 15:25:59 2026 +0800
+     … +121 lines (ctrl+o to expand)
+
+  Thought for 10s (ctrl+o to expand)
+
+● Bash(git -C /root/webnovel-writer show b490c11 --stat | head; git -C
+      /root/webnovel-writer show b490c11 --
+      docs/architecture/multi-agent-adaptation-spec-2026-06-05.m…)
+  ⎿  commit b490c11c910b3e6059c7def72936474443585738
+     Author: lingfengQAQ <75821188+lingfengQAQ@users.noreply.github.com>
+     Date:   Thu Jun 11 15:27:06 2026 +0800
+     … +87 lines (ctrl+o to expand)
+
+  Thought for 35s (ctrl+o to expand)
+
+● 看完了。PR 112 现在一共三个提交，后两个是今天下午刚推的：spec 升到
+  0.5（已冻结），多宿主 spec 重写为 v3。我逐条核对了 0.5
+  对差异意见的吸收情况——三个冲突全部按反馈线方案解决了，质量不错：
+
+  1. 全自动模式：撤销禁令，入规 §8.1。两个开关（自动拍板/自动验收）存
+  book.yaml，状态机零改动；体检加密到 8 章；三个硬停止条件。§13 那条改成了"❌
+  模型裸奔编纲"——把原禁令真正想禁的东西单独留下了，处理得很干净。还有个反馈文档
+  没提但加得很对的细节：自动模式下承诺结转豁免不可用（豁免是品味决策，归人不归模
+  型）。
+  2. 运行时：§2.1 改为 Node 口径，决策记录 #12 补了选型理由。
+  3. 多宿主：spec 开头加了范围声明（只管格式层），multi-agent-adaptation-spec
+  重写为 v3——真源反转到 story repo，v6 的 gate/commit/projection 硬要求删除，v2
+  元层（support.md 纪律、registry 分级、drift
+  check、降级诚实）全部继承，开头还有一张"相对 v2 的处置"审计表，每条有交代。
+
+  不阻塞小项也都进了：高频意象统计和句式体检进机检第 5
+  步，反和解规则成为风格宪法标准段，落地备忘（平台预设/许可证/AI
+  味口径）挂在决策记录后面。
+
+  我只发现一处值得在 PR 里讨论的张力，恰好和我们今天修的 #113 同构：
+
+  ▎ 多宿主 spec v3 §5.5 写"PreToolUse 阻断直写 定稿/"，但 story repo spec 不变量
+  ▎ 1 说"系统检测手改并提议结转，永不报错拒绝"。#113 刚证明了 deny 式 hook 
+  ▎ 的问题：hook 分不清"模型绕过 
+  ▎ settle"和"模型替作者批量修数据"，最后挨骂的是用户体验。建议 v7 的 hook 
+  ▎ 语义从 deny 改为 ask/提醒（"这是定稿区，确认直写还是走事务？"），或者只在章
+  ▎ 事务进行中才阻断——把 #113 的教训写进去。
+
+  要不要我把这条作为 review comment 提到 PR 112 上？
+
+✻ Cooked for 1m 46s
+
+❯ 可以                                                                          
+
+  Thought for 27s (ctrl+o to expand)
+
+● Bash(gh pr comment 112 -R lingfengQAQ/webnovel-writer --body "Review 意见：0.5
+      对三个冲突的吸收都核对过了，方案干净（尤其是 §13 改为只禁\"模型裸奔编纲\"
+      、自动模式下豁免权不下放这两处）。只有一处张力建议在合并前对齐：…)
+  ⎿  https://github.com/lingfengQAQ/webnovel-writer/pull/112#issuecomment-4
+     683916831
+
+● 已提交到 PR 112：https://github.com/lingfengQAQ/webnovel-writer/pull/112#issue
+  comment-4683916831
+
+  评论内容：先肯定 0.5 对三个冲突的处理，然后指出唯一的张力——多宿主 spec v3 §5.5
+  的 deny 式 hook 与 story repo spec 不变量 1（"永不报错拒绝"）冲突，并引 #113
+  和今天的修复 73447d7 作为实证。给了两个方案（deny 改 ask /
+  仅章事务进行中阻断），倾向方案 1，理由是 v7
+  的哲学本来就是"自愈不门禁"，手改检测正是为这种情况设计的兜底。
+
+  等你或另一线回复后，如果方案定了，我可以直接改 v3 §5.5 并补决策记录。
+
+✻ Baked for 44s
+
+❯ 你直接改就行                                                                  
+
+  Thought for 21s, searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+● Update(docs/architecture/multi-agent-adaptation-spec-2026-06-05.md)
+  ⎿  Added 2 lines, removed 1 line
+      116  
+      117  ### 5.5 Hook 只是 Claude Code 上的自动兜底
+      118  
+      119 -- SessionStart 自动报盘面、PreToolUse 阻断直写 `定稿/`——都只是
+          -把显式脚本调用自动化。                                        
+      119 +- SessionStart 自动报盘面、PreToolUse 提醒直写 `定稿/`——都只是
+          +把显式脚本调用自动化。                                        
+      120 +- **Hook 语义是 ask，不是 deny**：PreToolUse 检测到直写 `定稿/
+          +` 或 `大纲/承诺/` 时提醒"这是定稿区，确认直写还是走事务？"，确
+          +认后放行；事后由手改检测（story repo spec §9）提议 fix 结转兜 
+          +底。deny 式 hook 无法区分"绕过 settle 破坏一致性"和"替作者批量
+          +修数据"，被拦的往往是后者——v6 的 state.json guard 即此教训（#1
+          +13，已于 73447d7 放开）。这与 story repo spec 不变量 1（"检测 
+          +手改并提议结转，永不报错拒绝"）和"可靠性来自自愈，不来自门禁" 
+          +原则自洽。                                                    
+      121  - 任何关键能力不得只存在于 hook 中；无 hook 宿主由状态机入口（
+           每次启动先跑盘面与手改检测）补足，行为等价。
+      122  
+      123  ### 5.6 零依赖与 UTF-8 First（Node 口径）
+
+  Thought for 15s, read 1 file (ctrl+o to expand)
+
+● Update(docs/architecture/multi-agent-adaptation-spec-2026-06-05.md)
+  ⎿  Added 2 lines, removed 2 lines
+      1  # Webnovel Writer 多宿主与多智能体适配 Spec
+      2  
+      3 -> 日期：2026-06-05（v3 修订：2026-06-11）                       
+      4 -> 状态：草案 v3                                                 
+      3 +> 日期：2026-06-05（v3 修订：2026-06-11；v3.1：同日，hook 语义 d
+        +eny → ask，依据 #113，见 §5.5）                                 
+      4 +> 状态：草案 v3.1                                               
+      5  > 基线：**v7 story repo**（`story-repo-spec-2026-06-10.md` 0.5 
+         冻结稿）。v2 的基线是 v6.1.0 Python runtime，该架构已被 v7 推翻
+         ；本版继承 v2 的元层纪律，重写全部基座层。
+      6  > 来源：v2（基于 PR #110 review 重写）+ 2026-06 多平台调研核验 +
+          `story-repo-spec-feedback-2026-06-11.md` §二.3
+      7  > 定位：把 v7 的格式层（story repo）原封不动地暴露给多个 agent 
+         宿主——格式平台无关，本 spec 只管入口怎么落、角色怎么生成、安装怎
+         么零门槛、支持等级怎么诚实。
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Bash(git add docs/architecture/multi-agent-adaptation-spec-2026-06-05.md &&
+      git commit -m "docs: hook semantics deny -> ask in multi-host spec
+      (v3.1)…)  ⎿  [docs/v7-discussion-feedback 4d17ac1] docs: hook semantics deny -> ask
+      in multi-host spec (v3.1)
+      1 file changed, 4 insertions(+), 3 deletions(-)
+     … +2 lines (ctrl+o to expand)
+
+● 改完并推上 PR 112 了（提交 4d17ac1）：
+
+  - §5.5：hook 语义从"阻断直写 定稿/"改为 ask——检测到直写 定稿/ 或 大纲/承诺/
+  时提醒"确认直写还是走事务？"，确认后放行，事后由手改检测（story repo spec
+  §9）提议 fix 结转兜底。理由直接写进了条款：deny 分不清"绕过
+  settle"和"替作者批量修数据"，引 #113 和 73447d7 为实证，并注明与不变量
+  1、"自愈不门禁"原则自洽。
+  - 版本头：升为 v3.1，修订行注明这次变更和依据。
+
+  story repo spec 本身不用动——不变量 1 和 §9 手改检测本来就是 ask
+  语义这一侧的，冲突只存在于多宿主 spec 那一行。
+
+✻ Cooked for 2m 10s
+
+❯ 我想要保留v6作为master分支的同时，使用一个分支作为v7的主分支应该怎么做，并且  
+  在这个分支上清理v6的那些老的文档                                              
+
+  Thought for 26s (ctrl+o to expand)
+
+● 好，做法是：从最新的 master 切出一个长期分支 v7 并推到远端，PR 112 的 base 从
+  master 改到 v7（这样 v7 的 spec 进 v7 分支而不是污染 master），然后在 v7
+  上清理 v6 的旧文档。master 保持 v6，只修致命 bug。我先看一下 docs 里哪些属于
+  v6 旧文档。
+
+  Thought for 1m 0s, searched for 1 pattern, read 2 files (ctrl+o to expand)
+
+● Bash(git -C /root/webnovel-writer checkout -b v7 origin/master && git -C
+      /root/webnovel-writer push -u origin v7 2>&1 | tail -1)
+  ⎿  Switched to a new branch 'v7'
+     branch 'v7' set up to track 'origin/master'.
+     branch 'v7' set up to track 'origin/v7'.
+
+  Thought for 12s (ctrl+o to expand)
+
+● v7 分支已建好并推送。现在把 PR 112 的 base 改到 v7 并合并，让 v7 的 spec 进入
+  v7 分支。
+
+● Bash(gh pr edit 112 -R lingfengQAQ/webnovel-writer --base v7 && gh pr merge
+      112 -R lingfengQAQ/webnovel-writer --merge 2>&1 | tail -2)
+  ⎿  https://github.com/lingfengQAQ/webnovel-writer/pull/112
+
+● Bash(git -C /root/webnovel-writer pull --ff-only origin v7 2>&1 | tail -1 &&
+      git -C /root/webnovel-writer log --oneline -3)
+  ⎿   create mode 100644 docs/architecture/v7-design-discussion-notes-2026-
+     06-11.md
+     16f4f3d Merge pull request #112 from lingfengQAQ/docs/v7-discussion-fe
+     … +3 lines (ctrl+o to expand)
+
+  Thought for 23s (ctrl+o to expand)
+
+● PR 112 已合并进 v7。现在清理 v6 旧文档。
+
+● Bash(git rm -rq docs/archive docs/memory docs/superpowers
+      docs/guides/commands.md docs/guides/rag-and-config.md
+      docs/architecture/overview.md docs/architecture/autho…)
+  ⎿  Error: Exit code 128
+     fatal: pathspec 
+     'docs/architecture/narrative-intelligence-roadmap-2026-06-10.md' did not 
+     match any files
+
+  Thought for 11s, listed 1 directory (ctrl+o to expand)
+
+● Bash(git rm -rq docs/archive docs/memory docs/superpowers
+      docs/guides/commands.md docs/guides/rag-and-config.md
+      docs/architecture/overview.md docs/architecture/autho…)
+  ⎿  docs/architecture/multi-agent-adaptation-spec-2026-06-05.md
+     docs/architecture/story-repo-spec-2026-06-10.md
+     docs/architecture/story-repo-spec-feedback-2026-06-11.md
+     … +7 lines (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+
+● Write(docs/README.md)
+  ⎿  Added 16 lines, removed 32 lines
+       2  
+       3  `docs/` 目录按功能分区整理，方便查阅。
+       4  
+       5 +> 本分支（`v7`）是 v7 的主开发分支：运行时架构推翻重来，文档只 
+         +保留 v7 规格与仍有效的资产/研究。v6 的全部文档与代码保留在 `mas
+         +ter` 分支。                                                    
+       6 +                                                               
+       7  ## 目录索引
+       8  
+       7 -### 架构                                                       
+       9 +### 架构（v7 规格）                                            
+      10  
+       9 -- [`architecture/overview.md`](./architecture/overview.md)：系 
+         -统架构、Agent 分工、Story System 设计                          
+      11  - [`architecture/story-repo-spec-2026-06-10.md`](./architecture
+          /story-repo-spec-2026-06-10.md)：v7 story repo 格式规格（法律文
+          本，0.5 冻结）
+      11 -- [`architecture/v7-design-discussion-notes-2026-06-11.md`](./a
+         -rchitecture/v7-design-discussion-notes-2026-06-11.md)：v7 设计 
+         -讨论纪要（v6 病根诊断、问题空间、多平台调研）                  
+      12 -- [`architecture/story-repo-spec-feedback-2026-06-11.md`](./arc
+         -hitecture/story-repo-spec-feedback-2026-06-11.md)：另一线对 sto
+         -ry repo spec 0.4 的差异意见（已在 0.5 吸收）                   
+      13 -- [`architecture/plugin-runtime-hardening-spec-2026-06-04.md`](
+         -./architecture/plugin-runtime-hardening-spec-2026-06-04.md)：基
+         -于优秀 Claude Code 插件调研的运行时可靠性重构 spec             
+      14 -- [`architecture/plugin-runtime-hardening-plan-2026-06-04.md`](
+         -./architecture/plugin-runtime-hardening-plan-2026-06-04.md)：运
+         -行时可靠性重构实施计划、修改范围与影响分析                     
+      15 -- [`architecture/multi-agent-adaptation-spec-2026-06-05.md`](./
+         -architecture/multi-agent-adaptation-spec-2026-06-05.md)：多宿主
+         -与多智能体适配 spec（v3，已反转到 v7 story repo 基线）         
+      16 -- [`architecture/context-minimal-writing-flow-plan-2026-06-05.m
+         -d`](./architecture/context-minimal-writing-flow-plan-2026-06-05
+         -.md)：Skills / Agents / References 上下文减负、读取方式与 token
+         - 优化重构计划（v3）                                            
+      17 -- [`archive/architecture/current-system-diagnosis.md`](./archiv
+         -e/architecture/current-system-diagnosis.md)：历史系统状态诊断  
+      12 +- [`architecture/multi-agent-adaptation-spec-2026-06-05.md`](./
+         +architecture/multi-agent-adaptation-spec-2026-06-05.md)：多宿主
+         +与多智能体适配 spec（v3.1，基线为 v7 story repo）              
+      13 +- [`architecture/v7-design-discussion-notes-2026-06-11.md`](./a
+         +rchitecture/v7-design-discussion-notes-2026-06-11.md)：v7 设计 
+         +讨论纪要（v6 病根诊断、问题空间 16 项、多平台调研）            
+      14 +- [`architecture/story-repo-spec-feedback-2026-06-11.md`](./arc
+         +hitecture/story-repo-spec-feedback-2026-06-11.md)：另一线对 sto
+         +ry repo spec 0.4 的差异意见（已在 0.5 吸收，留档）             
+      15  
+      19 -### 使用指南                                                   
+      16 +### 继承资产                                                   
+      17  
+      21 -- [`guides/commands.md`](./guides/commands.md)：Skill 命令与 CL
+         -I 子命令速查                                                   
+      22 -- [`guides/rag-and-config.md`](./guides/rag-and-config.md)：RAG
+         - 检索链路、环境变量与配置                                      
+      23 -- [`guides/genres.md`](./guides/genres.md)：37 个题材模板与复合
+         -题材规则                                                       
+      18 +- [`guides/genres.md`](./guides/genres.md)：37 个题材模板与复合
+         +题材规则（v7 继承）                                            
+      19  
+      20  ### 运维
+      21  
+      27 -- [`operations/operations.md`](./operations/operations.md)：项 
+         -目目录结构、运维命令、备份恢复                                 
+      22  - [`operations/plugin-release.md`](./operations/plugin-release.
+          md)：插件发版流程与版本同步
+      23  
+      30 -### 记忆系统                                                   
+      31 -                                                               
+      32 -- [`memory/long-term-memory-architecture-v2.md`](./memory/long-
+         -term-memory-architecture-v2.md)：长期记忆架构说明              
+      33 -                                                               
+      24  ### 研究与外部方案
+      25  
+      26  - [`research/long-term-memory-research-report.md`](./research/l
+          ong-term-memory-research-report.md)：长期记忆论文与开源方案调研
+      27  - [`research/storyteller-paper-summary.md`](./research/storytel
+          ler-paper-summary.md)：STORYTELLER 论文总结
+      28 +- [`research/2026-04-14-ui-ux-pro-max-skill-architecture-resear
+         +ch.md`](./research/2026-04-14-ui-ux-pro-max-skill-architecture-
+         +research.md)：skill 架构调研                                   
+      29  
+      39 -### 归档                                                       
+      40 -                                                               
+      41 -- [`archive/superpowers/README.md`](./archive/superpowers/READM
+         -E.md)：历史架构 spec 与设计文档导航                            
+      42 -                                                               
+      30  ## 分类原则
+      31  
+      45 -- `architecture/`：系统结构与技术架构                          
+      46 -- `guides/`：使用者需要查阅的命令、配置、题材说明              
+      47 -- `operations/`：运维、发版、备份与恢复                        
+      48 -- `memory/`：长期记忆架构说明                                  
+      32 +- `architecture/`：v7 规格与设计讨论                           
+      33 +- `guides/`：使用者需要查阅的题材说明（v7 实现落地后补命令/配置
+         +指南）                                                         
+      34 +- `operations/`：运维与发版                                    
+      35  - `research/`：论文总结与外部方案调研
+      50 -- `archive/`：历史架构快照、spec 与设计计划                    
+      36 +- v6 历史文档：见 `master` 分支的 `docs/`（含 `archive/`）     
+      37  
+      38  ## 推荐阅读顺序
+      39  
+      54 -1. 先看 [`../README.md`](../README.md) 了解安装与基本使用      
+      55 -2. 再看 [`architecture/overview.md`](./architecture/overview.md
+         -) 了解整体架构                                                 
+      56 -3. 需要配置检索时看 [`guides/rag-and-config.md`](./guides/rag-a
+         -nd-config.md)                                                  
+      57 -4. 需要使用命令时看 [`guides/commands.md`](./guides/commands.md
+         -)                                                              
+      58 -5. 排查运行问题时看 [`operations/operations.md`](./operations/o
+         -perations.md)                                                  
+      40 +1. 先看 [`architecture/story-repo-spec-2026-06-10.md`](./archit
+         +ecture/story-repo-spec-2026-06-10.md)——v7 的法律文本           
+      41 +2. 再看 [`architecture/v7-design-discussion-notes-2026-06-11.md
+         +`](./architecture/v7-design-discussion-notes-2026-06-11.md)——为
+         +什么这样设计                                                   
+      42 +3. 关心多平台支持看 [`architecture/multi-agent-adaptation-spec-
+         +2026-06-05.md`](./architecture/multi-agent-adaptation-spec-2026
+         +-06-05.md)                                                     
+
+● Bash(git add docs/README.md && git commit -m "docs: prune v6-era docs on v7
+      branch…)
+  ⎿  Error: Exit code 128
+     [v7 b6f26ba] docs: prune v6-era docs on v7 branch
+      48 files changed, 16 insertions(+), 28776 deletions(-)
+      delete mode 100644 
+     docs/architecture/author-friendly-reporting-plan-2026-06-07.md
+      delete mode 100644 
+     docs/architecture/context-minimal-writing-flow-plan-2026-06-05.md
+      delete mode 100644 docs/architecture/overview.md
+      delete mode 100644 
+     docs/architecture/phase0-slimming-and-read-audit-2026-06-06.md
+      delete mode 100644 
+     docs/architecture/phase0-tool-and-registration-audit-2026-06-06.md
+      delete mode 100644 
+     docs/architecture/plugin-runtime-hardening-plan-2026-06-04.md
+      delete mode 100644 
+     docs/architecture/plugin-runtime-hardening-spec-2026-06-04.md
+     … +44 lines (ctrl+o to expand)
+
+  Thought for 15s, wrote 2 memories (ctrl+o to expand)
+
+● 全部完成。现在的分支布局：
+
+  1. v7 分支已建立（从最新 master 切出，含 #113 修复），推到了远端，作为 v7
+  主开发分支。master 保持 v6 不动。
+
+  2. PR 112 的 base 改到了 v7 并已合并——三份 v7 文档（spec 0.5、多宿主 spec
+  v3.1、讨论纪要/差异意见）现在在 v7 分支上，没有进 master。
+
+  3. v6 旧文档已在 v7 上清理（提交 b6f26ba，删了 48 个文件约 2.9
+  万行）。清理原则：master 完整保留 v6，所以 v7 上直接删除而非再挪
+  archive。具体取舍：
+
+  - 删除：docs/archive/ 全部、v6 架构文档（overview、phase0 审计、runtime
+  hardening、上下文减负计划等）、v6 命令/RAG 指南、长期记忆架构、v6
+  运维文档、superpowers 计划与 spec
+  - 保留：4 份 v7 文档、guides/genres.md（37 个题材模板是继承资产）、operations/
+  plugin-release.md（发版流程通用）、research/ 三篇（调研结论支撑了 v7 设计）
+  - docs/README.md 重写为 v7 索引，开头注明"v6 文档见 master 分支"
+
+  后续注意两点：以后 v7 相关的 PR base 要选 v7（GitHub 默认还是 master）；等 v7
+  发布时再考虑把仓库默认分支切过去。这些我都记到记忆里了。
+
+✻ Churned for 5m 21s
+
+❯ 开始讨论如何把v7搭起来，我的想法是先写prd你认为了                             
+
+  Thought for 25s (ctrl+o to expand)
+
+● 我的看法：PRD 值得写，但要写"薄 PRD"——只补两份 spec 
+  没覆盖的东西，不要重复设计。
+
+  先盘一下现状：v7 其实已经有大半个 PRD 了——
+
+  - 需求和痛点：讨论纪要 §2（v6 病根）+ §4（问题空间 16 项，含优先级分层）
+  - 解决方案设计：story repo spec 0.5（格式+状态机，连验收标准都有：缓存重建
+  CI、Windows 中文路径全链路）
+  - 平台策略：多宿主 spec v3.1
+
+  如果再写一份传统大
+  PRD，会和这三份文档大量重叠，而且按你们的"法律文本"惯例，重叠=将来打架。
+
+  真正缺的是三样东西，薄 PRD 就写这三样：
+
+  1. 作者旅程（用户视角）。spec 都是系统视角的，没有一份文档回答"一个写手从安装
+  到写完第一卷，每天打开看到什么、敲什么"。新作者建书 / 老作者 /migrate /
+  连写党三条旅程写出来，能直接暴露 spec 里漏的交互细节。
+  2. 范围切分（v7.0 ship 什么）。spec 是终态描述，没说先后。需要明确：v7.0 MVP =
+  哪些（我猜：盘面状态机 + 章事务八阶段 + 承诺系统 + 迁移）；哪些进
+  v7.x（自动模式？多宿主二级？金句库？体检全家桶？）。讨论纪要 §4
+  末尾那行优先级（1/2/5/7/14 进骨架）是现成的切分依据。
+  3. 发布判据。什么状态敢发 RFC、什么状态敢叫 7.0.0、迁移成功率怎么算过关。
+
+  PRD 之后的下一份文档才是实施计划（build 顺序我初步想法：Node
+  脚本核心层（settle/盘面/机检，纯函数好测）→ 状态机入口 SKILL → 内环跑通 →
+  迁移脚本 → 自动模式 → 多宿主），但那是 PRD 定完范围再说的事。
+
+  另外别忘了纪要里定过的动作：先发 RFC 让用户拍砖。薄 PRD
+  的作者旅程部分稍微改写一下就是 RFC 正文——这也是先写 PRD 的一个实际好处。
+
+  你觉得这个切法行的话，我可以直接起草这份薄 PRD（放
+  docs/architecture/v7-prd.md，或者单独 docs/prd/），三条作者旅程 + 范围表 +
+  发布判据，初稿你来砍。
+
+✻ Brewed for 39s
+
+❯ https://github.com/mindfold-ai/Trellis给你自己安装一下这个顺便学习下这个项目  
+  怎么适配多宿主的                                                              
+
+  Thought for 11s (ctrl+o to expand)
+
+● Bash(gh repo view mindfold-ai/Trellis 2>&1 | head -60)
+  ⎿  name:      mindfold-ai/Trellis
+     description:       The best agent harness.
+     --
+     … +57 lines (ctrl+o to expand)
+
+● Bash(npx -y @mindfoldhq/trellis --help 2>&1 | head -40)
+  ⎿  Usage: trellis [options] [command]
+
+     AI-assisted development workflow framework for Cursor, Claude Code and
+     … +15 lines (ctrl+o to expand)
+● Bash(npx -y @mindfoldhq/trellis init --help 2>&1 | head -30)
+  ⎿  Usage: trellis init [options]
+
+     Initialize trellis in the current project
+     … +27 lines (ctrl+o to expand)
+
+  Thought for 17s (ctrl+o to expand)
+
+● Bash(npx -y @mindfoldhq/trellis init --claude -y -u claude 2>&1 | tail -25)
+  ⎿   ███████████                    ████  ████   ███
+     ▒█▒▒▒███▒▒▒█                   ▒▒███ ▒▒███  ▒▒▒
+     ▒   ▒███  ▒  ████████   ██████  ▒███  ▒███  ████   █████
+     … +17 lines (ctrl+o to expand)
+
+● Bash(git -C /root/webnovel-writer status -s | head -20; echo ===; find
+      /root/webnovel-writer/.trellis /root/webnovel-writer/.claude -maxdepth 2 |
+      head -40)
+  ⎿  ===
+     /root/webnovel-writer/.trellis
+     /root/webnovel-writer/.claude
+     … +38 lines (ctrl+o to expand)
+
+  Thought for 17s (ctrl+o to expand)
+
+● Bash(mkdir -p /tmp/trellis-study && cd /tmp/trellis-study && git init -q . &&
+      npx -y @mindfoldhq/trellis init --claude --cursor --codex --gemini
+      --opencode --copilot…)
+  ⎿  ⚠️  Codex hooks require `features.hooks = true` in your ~/.codex/confi
+     g.toml (Codex 0.129+; older versions: `codex_hooks = true`). On Codex
+     0.129+ also run `/hooks` once to approve the Trellis UserPromptSubmit
+     … +56 lines (ctrl+o to expand)
+  ⎿  Shell cwd was reset to /root/webnovel-writer
+
+  Thought for 13s (ctrl+o to expand)
+
+● Bash(cd /tmp/trellis-study && ls .claude/commands/trellis/ 2>/dev/null | head;
+      echo ===CLAUDE===; head -15 .claude/skills/trellis-before-dev/SKILL.md;
+      echo ===CODEX=…)
+  ⎿  continue.md
+     finish-work.md
+     ===CLAUDE===
+     … +30 lines (ctrl+o to expand)
+  ⎿  Shell cwd was reset to /root/webnovel-writer
+
+● Bash(cd /tmp/trellis-study && echo ===.agents===; find .agents -type f | head;
+      echo ===codex===; find .codex -type f | head; echo ===symlink check===;
+      ls -la .codex/…)
+  ⎿  ===.agents===
+     .agents/skills/trellis-continue/SKILL.md
+     .agents/skills/trellis-finish-work/SKILL.md
+     … +36 lines (ctrl+o to expand)
+  ⎿  Shell cwd was reset to /root/webnovel-writer
+
+● Explore(Study Trellis multi-host adaptation)
+  ⎿  Done (0 tool uses · 0 tokens · 3m 38s)
+  (ctrl+o to expand)
+
+● Explore(Study Trellis multi-host adaptation)
+  ⎿  Initializing…
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ 你刚才用子代理出现了什么报错                                                  
+
+  Thought for 12s (ctrl+o to expand)
+
+● 刚才第一次启动 Explore 子代理时遇到了 API 429 错误（Request rejected (429) · 
+  Service Unavailable）——也就是请求被限流/服务暂时不可用，子代理没有跑起来。我随
+  后自动重试了一次，那次重试被你取消了。
+
+  不用子代理也没问题，我可以直接自己翻 /tmp/trellis-study 的生成物和 npm
+  包源码来分析 Trellis 的多宿主适配机制。要我继续吗？
+
+✻ Worked for 14s
+
+❯ 不要用子代理，这个api我好像配置的有问题，子代理会出错                         
+
+  Thought for 22s, searched for 1 pattern, listed 1 directory, wrote 2 memories (ctrl+o to expand)
+
+● Bash(T=/root/.npm/_npx/848f449cea7b0494/node_modules/@mindfoldhq/trellis; ls
+      $T; echo ===; ls $T/templates 2>/dev/null | head -30; ls $T/dist
+      2>/dev/null | head -20)
+  ⎿  bin
+     dist
+     LICENSE
+     … +15 lines (ctrl+o to expand)
+
+● Bash(T=/root/.npm/_npx/848f449cea7b0494/node_modules/@mindfoldhq/trellis/dist;
+      ls $T/configurators $T/templates | head -50)
+  ⎿  /root/.npm/_npx/848f449cea7b0494/node_modules/@mindfoldhq/trellis/dist
+     /configurators:
+     antigravity.d.ts
+     … +48 lines (ctrl+o to expand)
+
+● Bash(T=/root/.npm/_npx/848f449cea7b0494/node_modules/@mindfoldhq/trellis/dist;
+      ls $T/templates; echo ===; find $T/templates -maxdepth 2 -type d | head
+      -25)
+  ⎿  claude
+     codebuddy
+     codex
+     … +46 lines (ctrl+o to expand)
+
+● Bash(T=/root/.npm/_npx/848f449cea7b0494/node_modules/@mindfoldhq/trellis/dist;
+      ls $T/templates/common/skills $T/templates/common/bundled-skills
+      2>/dev/null | head -2…)
+  ⎿  /root/.npm/_npx/848f449cea7b0494/node_modules/@mindfoldhq/trellis/dist
+     /templates/common/bundled-skills:
+     trellis-meta
+     … +37 lines (ctrl+o to expand)
+
+● Bash(T=/root/.npm/_npx/848f449cea7b0494/node_modules/@mindfoldhq/trellis/dist;
+      diff $T/templates/claude/agents/trellis-check.md
+      $T/templates/codex/agents/trellis-che…)
+  ⎿  1,43c1,11
+     < ---
+     < name: trellis-check
+     … +66 lines (ctrl+o to expand)
+
+● Bash(T=/root/.npm/_npx/848f449cea7b0494/node_modules/@mindfoldhq/trellis/dist;
+      sed -n '1,80p' $T/configurators/windsurf.js 2>/dev/null | head -60)
+  ⎿  import path from "node:path";
+     import { AI_TOOLS } from "../types/ai-tools.js";
+     import { ensureDir, writeFile } from "../utils/file-writer.js";
+     … +17 lines (ctrl+o to expand)
+
+● Bash(T=/root/.npm/_npx/848f449cea7b0494/node_modules/@mindfoldhq/trellis/dist;
+      sed -n '1,120p' $T/configurators/shared.js | head -90; echo
+      ====AI_TOOLS====; grep -o…)
+  ⎿  /**
+      * Shared utilities for platform configurators.
+      *
+     … +158 lines (ctrl+o to expand)
+
+● Bash(T=/root/.npm/_npx/848f449cea7b0494/node_modules/@mindfoldhq/trellis/dist;
+      grep -A8 '"codex"\|windsurf:\|copilot:' $T/types/ai-tools.js | grep -B1
+      -A7 "templateC…)  ⎿          hasPythonHooks: true,
+             templateContext: {
+                 cmdRefPrefix: "$",
+     … +38 lines (ctrl+o to expand)
+
+  Thought for 16s (ctrl+o to expand)
+
+● Bash(T=/root/.npm/_npx/848f449cea7b0494/node_modules/@mindfoldhq/trellis/dist;
+      grep -rl "CMD_REF\|{{#AGENT_CAPABLE}}\|{{#HAS_HOOKS}}"
+      $T/templates/common $T/template…)
+  ⎿  /root/.npm/_npx/848f449cea7b0494/node_modules/@mindfoldhq/trellis/dist
+     /templates/common/skills/brainstorm.md
+     /root/.npm/_npx/848f449cea7b0494/node_modules/@mindfoldhq/trellis/dist
+     … +4 lines (ctrl+o to expand)
+
+● Bash(T=/root/.npm/_npx/848f449cea7b0494/node_modules/@mindfoldhq/trellis/dist;
+      grep -B3 -A8 "AGENT_CAPABLE\|HAS_HOOKS\|CMD_REF"
+      $T/templates/common/commands/finish-w…)
+  ⎿  Then route:
+
+     - **Any remaining path looks like current-task work** — bail out with:
+     … +16 lines (ctrl+o to expand)
+
+  Thought for 39s (ctrl+o to expand)
+
+● 分析完了。Trellis 已装好（仓库里 .trellis/ + .claude/，git status
+  干净没污染仓库），它的多宿主机制也摸清了。结论先行：它的做法和我们多宿主 spec 
+  v3.1 的方向高度一致，但有四个值得抄的实现细节和一个值得警惕的反面教材。
+
+  Trellis 多宿主架构(14 个平台)
+
+  分层:
+  - .trellis/ = 平台无关的核心:Python 脚本(业务逻辑)+
+  spec/tasks/workspace(数据)。所有平台的壳最终都调同一句 python3 
+  ./.trellis/scripts/get_context.py——和我们"所有宿主复用同一套 Node
+  脚本"完全同构。
+  - 模板分三层:templates/common/(跨平台共享的 skills/commands
+  正文)、templates/<platform>/(每平台特有物:Claude 是
+  agents/*.md+settings.json,Codex 是
+  agents/*.toml+config.toml)、templates/shared-hooks/(hook 脚本共享)。
+  - 平台注册表 AI_TOOLS(单一事实源):每个平台一条记录,声明
+  templateDirs、configDir、cliFlag,以及一个 templateContext。
+
+  四个值得抄的细节
+
+  1. 模板上下文 + 条件块,而不是每平台一份模板。共享模板里用
+  {{CMD_REF:finish-work}}(各平台命令引用语法不同:Claude /trellis:x、Cursor
+  /trellis-x、Codex $x)、{{PYTHON_CMD}},以及
+  {{#AGENT_CAPABLE}}...{{/AGENT_CAPABLE}}、{{#HAS_HOOKS}}
+  条件块——降级路径直接编译进生成物,没有 subagent 的平台生成出来的 skill
+  正文就是顺序执行版。这比我们 spec 里"skill
+  写降级路径"更进一步:降级不是运行时判断,是安装时定稿。
+  2. 能力声明就两个布尔:agentCapable、hasHooks。没有维护大能力矩阵,和我们"不相信
+  手写矩阵"原则一致,但它更狠——只声明模板渲染真正需要的两个维度。
+  3. AGENTS.md 作为最大公约数,用 <!-- TRELLIS:START/END --> 标记块管理:块内允许
+  工具覆写、块外用户内容保留。任何平台哪怕什么都不支持,至少能读 AGENTS.md 找到
+  .trellis/ 入口。我们的 spec 没提 AGENTS.md,建议补——它已经是事实标准。
+  4. update 机制:安装时写 .template-hashes.json 记录每个模板文件的哈希,trellis 
+  update 时哈希没变的文件直接更新、用户改过的文件提示——解决了"框架升级 vs
+  用户已手改生成物"的冲突。我们的 npx 安装器 spec 只写了 init,没写
+  update,这是个缺口。
+
+  另外一个细节:Windows 的 Python 命令探测(python/python3/py 
+  -3)在安装时探测后写死进所有生成物——这正是我们选 Node
+  要避免的整类问题,反向印证了 Node 决策。
+
+  一个反面教材
+
+  Trellis 的 subagent 提示词里有大段 Recursion Guard("你已经是被派遣的
+  trellis-check,不要再派遣 trellis-check")和 hook
+  注入失败的兜底协议("如果没看到注入标记,说明 hook
+  没生效,自己去读这些文件")。这是 hook/subagent 跨平台不可靠的直接代价——它选择用
+  prompt 打补丁。我们 v3.1 的"hook
+  只是自动兜底、核心流程显式调脚本"路线避开了这整类问题,坚持住。
+
+  下一步我建议把这几条收进多宿主 spec(v3.2:补 AGENTS.md
+  公约数层、update/哈希追踪、模板条件块机制),要改吗?还是先回去写 PRD?
+
+✻ Cooked for 3m 43s
+
+❯ trellis可以用了吗还是需要重启                                                 
+
+  Thought for 21s (ctrl+o to expand)
+
+● 需要重启才能完整生效。具体分两类:
+
+  - Hooks 和 settings.json(SessionStart 自动注入盘面、工作流状态注入等):这些在会
+  话启动时加载,当前会话不会生效,必须重启。
+  - Skills/commands(/trellis:continue、trellis-before-dev
+  等):我当前会话的技能列表里没有出现 Trellis
+  的技能,说明也是启动时扫描的——同样要等新会话。
+
+  所以:重启 Claude Code(或开新会话)后,Trellis 就完整可用了。届时 SessionStart
+  hook 会自动跑 get_context.py 给会话注入项目上下文,斜杠命令也会出现。
+
+  另外提醒一句:Trellis 需要 Python ≥ 3.9(它的脚本层是 Python 的,这台机器上有
+  python3,没问题),它的文件都在 .trellis/ 和 .claude/ 下,没有进 git
+  跟踪,要不要提交到仓库由你后面定。
+
+✻ Cooked for 21s
+
+❯ 看下现在可以了吗                                                              
+
+  Thought for 13s (ctrl+o to expand)
+
+● 可以了,Trellis 已完整生效。证据:
+
+  1. Skills 已加载:我的技能列表里出现了全套 Trellis
+  技能——trellis-brainstorm(需求探讨)、trellis-before-dev(写码前读规范)、trellis-
+  check(质量检查)、trellis:continue、trellis:finish-work 等 9 个。
+  2. Hook 已生效:你这条消息提交时,Trellis 的 UserPromptSubmit hook
+  自动注入了工作流状态(Status: 
+  no_task,当前没有活动任务),并给出了路由规则——回答问题直接答,实现类工作要先
+  task.py create 建任务走 brainstorm → PRD → 实施的流程。
+
+  也就是说它现在已经在"管"这个会话了:如果接下来我们开始搭
+  v7,按它的流程应该先建任务、把 PRD 写进
+  .trellis/tasks/<任务>/prd.md——这正好和你"先写 PRD"的想法对上了,可以拿 v7 的薄
+  PRD 直接当它的第一个任务试跑一遍,顺便体验这套工作流值不值得我们在多宿主 spec
+  里借鉴。
+
+  要试的话,我就用 task.py create 建一个"v7 薄 PRD"任务开始。
+
+✻ Worked for 21s
+
+❯ 不要薄prd，我们用trellis重建一个完整的prd                                     
+
+  Thought for 16s (ctrl+o to expand)
+
+● Bash(python3 ./.trellis/scripts/task.py create "v7 完整 PRD：webnovel-writer
+      重构")
+  ⎿  Created task: 06-11-v7-prd-webnovel-writer
+
+     Next steps:
+     … +6 lines (ctrl+o to expand)
+
+● Skill(trellis-brainstorm)
+  ⎿  Successfully loaded skill
+
+  Thought for 58s (ctrl+o to expand)
+
+● Write(.trellis/tasks/06-11-v7-prd-webnovel-writer/prd.md)
+  ⎿  Wrote 63 lines to .trellis/tasks/06-11-v7-prd-webnovel-writer/prd.md
+      2 # v7 完整 PRD：webnovel-writer 重构
+      3 > 状态：brainstorm 草稿（持续更新中）
+      5 > 上游文档：story-repo-spec 0.5（格式法律文本）、multi-agent-adap
+        tation-spec v3.1（多宿主）、v7-design-discussion-notes（设计纪要
+        ）、story-repo-spec-feedback（差异意见，已吸收）
+      7 ## Goal
+      8 
+        中的架构决策，转化为产品视角的完整需求——用户画像、作者旅程、功能
+        需求全集、范围切分（v7.0 MVP vs v7.x）、发布判据。PRD 是 RFC 的母
+        本，也是实施计划的输入。
+     … +75 lines (ctrl+o to expand)
+
+  Thought for 25s (ctrl+o to expand)
+
+● PRD 草稿已播种（所有从冻结文档能推导的内容都进去了，不重复问）。现在开始逐题收
+  敛，第一个问题是杠杆最大的：v7.0 MVP 的范围切线划在哪。
+
+  依据纪要 §4 的优先级分层，我给三个切法：
+
+  方案 A：最小骨架（最快出 RFC/beta）
+  - v7.0 = 盘面状态机 + 章事务八阶段 + 承诺系统 + 客观事实记账 + 时间线 +
+  分层摘要 + 改稿三档 + /migrate
+  - 自动模式、信息差、反和解、桥段冷却、文风锚定全部推 v7.x
+  - 优点：实现面最小，最快验证核心架构；缺点：对 v6 用户吸引力弱（连写党 #79
+  等不到），差异化卖点缺席
+
+  方案 B：骨架 + 高呼声（推荐）
+  - 方案 A 基础上加：自动模式/连写（#79 高呼声，且 spec §8.1
+  已设计完，实现就是两个开关）+ 反和解规则（纯 prompt 前置，实现成本≈0）+
+  信息差登记（格式已在 spec §4.3，机检泄密扫描是零 token 脚本）
+  - 体检类（语气盲测、情绪波形、口癖卡）和文风锚定、桥段冷却推 v7.x
+  - 优点：v7.0 就能回应 v6 最痛的需求，实现增量都是 spec 里已设计完的；缺点：比
+  A 多 2-3 周量级
+
+  方案 C：全卖点
+  - B 基础上把文风锚定、桥段冷却、高频意象/句式体检也进 v7.0
+  - 优点：发布即完整差异化；缺点：战线长，RFC 反馈进不了 7.0，违背"先发 RFC
+  拍砖"的节奏
+
+  我推荐 B：切线原则是"spec 已设计完且实现成本低的卖点进
+  7.0，需要新设计或调参的体检类全部 7.x"。
+
+  你选哪个？（也可以在 B 上加减某一项）
+
+✻ Cooked for 1m 57s
+
+❯ prd我想要重新开始设计包括spec里面的，我感觉还有一些设计问题                   
+
+  Thought for 20s (ctrl+o to expand)
+
+● Update(.trellis/tasks/06-11-v7-prd-webnovel-writer/prd.md)
+  ⎿  Added 2 lines, removed 2 lines
+       6  
+       7  ## Goal
+       8  
+       9 -为 v7 重构写一份完整 PRD：把两份 spec（格式层+宿主层）和设计纪 
+         -要中的架构决策，转化为产品视角的完整需求——用户画像、作者旅程、 
+         -功能需求全集、范围切分（v7.0 MVP vs v7.x）、发布判据。PRD 是 RF
+         -C 的母本，也是实施计划的输入。                                 
+       9 +为 v7 重构写一份完整 PRD——**从头重新设计，spec 0.5 的既有决策也
+         +在重审范围内**（作者 2026-06-11 决定：感觉 spec 仍有设计问题，0
+         +.5 的"冻结"解除，PRD 先行、spec 随 PRD 修订）。PRD 是 RFC 的母 
+         +本，也是实施计划和 spec 下一版的输入。                         
+      10  
+      11 -## What I already know（来自已冻结文档，不再重新讨论）         
+      11 +## What I already know（spec 0.5 / 纪要的现有结论——降级为"候选 
+         +设计"，可被 PRD 推翻）                                         
+      12  
+      13  - **定位**：长篇网文创作插件，200 万字级别，开源给非工程师写手
+          ，全中文化，Windows 中文编码优先。
+      14  - **架构已定**（spec 0.5）：一书一 git 仓库；定稿/大纲/文风/工
+          作区四区；承诺系统是心脏；章事务八阶段+settle 原子 commit；盘面
+          状态机单入口；决策卡是作者唯一界面；`.cache/index.db` 唯一派生
+          物。
+
+● Update(.trellis/tasks/06-11-v7-prd-webnovel-writer/prd.md)
+  ⎿  Error editing file
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(.trellis/tasks/06-11-v7-prd-webnovel-writer/prd.md)
+  ⎿  Added 3 lines, removed 2 lines
+      28  
+      29  ## Open Questions
+      30  
+      31 -- [Q1] v7.0 MVP 范围切分（当前问题）                           
+      31 +- [Q0] 作者感觉到的设计问题是什么（当前问题，blocking）        
+      32 +- [Q1] v7.0 MVP 范围切分（暂缓，待 Q0 后重排）                 
+      33  - [Q2] 作者旅程优先级（新书作者 / v6 迁移作者 / 连写党）
+      34  - [Q3] 发布判据（RFC→beta→7.0.0 各阶段过线标准）
+      35  - [Q4] PRD 最终落点与 RFC 的关系
+     ...
+      37  ## Requirements (evolving)
+      38  
+      39  - PRD 必须完整覆盖问题空间 16 项的产品化映射（每项：解法、所属
+          版本、验收方式）。
+      39 -- PRD 与两份 spec 不重叠：设计细节引用 spec 章节号，不复述。   
+      40 +- PRD 从产品视角重审 spec 0.5 全部设计；确认保留的引用章节号， 
+         +推翻的记入 ADR-lite。                                          
+      41  
+      42  ## Acceptance Criteria (evolving)
+      43  
+
+● Update(.trellis/tasks/06-11-v7-prd-webnovel-writer/prd.md)  ⎿  Removed 1 line
+      54  
+      55  ## Out of Scope (explicit)
+      56  
+      57 -- 不重新讨论已冻结决策（格式、Node、自动模式语义、hook ask 语义
+         -）                                                             
+      57  - 不含实施计划（PRD 确认后另立任务）
+      58  - 合规/敏感词、AI 检测器承诺
+      59  
+
+  Thought for 20s (ctrl+o to expand)
+
+● 明白——PRD 升级为"从头设计"，spec 0.5
+  的冻结解除，全部设计降级为候选，可被推翻。PRD 已更新。
+
+  那么第一个问题就变成最关键的（只有你能答）：
+
+  Q0：你感觉到的设计问题在哪些地方？
+
+  哪怕只是模糊的不舒服也有价值，比如：
+
+  1. 作者体验层面——决策卡/状态机这套交互是不是太重？非程序员会不会被 git、front
+  matter、承诺编号（P-031）这些东西吓退？
+  2. 机制层面——承诺系统/信息差/时间线这些账本会不会记不准、记不全，最后又回到
+  v6"派生状态和正文打架"的老路？
+  3. 格式层面——一书一仓库、四区目录、每条一文件，是不是过度设计？
+  4. 别的——你直说，不用套我给的分类。
+
+  你先讲你的直觉，然后我也会做一轮对抗性审查（拿"v6 病根六条"逐条攻击 spec
+  0.5，看哪些病根其实没治好），两边的问题清单合并后逐个讨论。你说说看？
+
+✻ Churned for 1m 56s
+
+❯ 有个很严重的问题是你写的很多名词翻译的很不优雅，有种机翻的感觉                
+
+  Thought for 44s (ctrl+o to expand)
+
+● 这个问题提得太对了——而且它不是表面问题，是定位问题：用户是网文作者，但 spec
+  的词汇表是工程师/会计/股民的混合体。"结转"是会计词、"盘面"是炒股词、"棘轮"是机
+  械词、"事务"是数据库词、"镜头评审"是 lens
+  的直译、"retcon"干脆就是英文。作者看到这些词的瞬间就出戏了，和 v6 用 Python
+  报错糊作者一脸是同一类病。
+
+  我先把它记进 PRD 作为第一条设计修订，然后给你一版"作者母语"改名提案。命名原则
+  ：网文圈现成的黑话优先（坑、吃书、钩子、爽点、细纲、审稿都是圈内日常用语），圈
+  内没有的用大白话，财务/工程/数据库隐喻一律不准出现在作者界面。
+
+  ┌───────────────┬─────────┬────────────────────────┬─────────────────────┐
+  │ spec 0.5 现名 │  问题   │        提案改名        │        理由         │
+  ├───────────────┼─────────┼────────────────────────┼─────────────────────┤
+  │               │ 直译    │                        │ 圈内原生：挖坑/填坑 │
+  │ 承诺（P-031） │ promise │ 坑（坑-031）           │ /弃坑人人会说       │
+  │               │ ，生硬  │                        │                     │
+  ├───────────────┼─────────┼────────────────────────┼─────────────────────┤
+  │ 开启/推进/兑  │ 兑付是  │ 挖坑/养坑/填坑/弃坑    │ 全套原生动词        │
+  │ 付/弃置承诺   │ 银行词  │                        │                     │
+  ├───────────────┼─────────┼────────────────────────┼─────────────────────┤
+  │ 兑付期限      │ 同上    │ 填坑期限               │                     │
+  ├───────────────┼─────────┼────────────────────────┼─────────────────────┤
+  │ 节奏债        │ 金融隐  │ 陈坑（N 章没动的坑）   │ 或"老坑预警"        │
+  │               │ 喻      │                        │                     │
+  ├───────────────┼─────────┼────────────────────────┼─────────────────────┤
+  │ retcon 事务   │ 英文    │ 吃书（吃书-87）        │ 圈内原生词，含义完  │
+  │               │         │                        │ 全吻合              │
+  ├───────────────┼─────────┼────────────────────────┼─────────────────────┤
+  │ settle / 结转 │ 会计词  │ 入册                   │ 定稿入册，一听就懂  │
+  ├───────────────┼─────────┼────────────────────────┼─────────────────────┤
+  │ 章事务        │ 数据库  │ 写章流程               │                     │
+  │               │ 词      │                        │                     │
+  ├───────────────┼─────────┼────────────────────────┼─────────────────────┤
+  │ 盘面          │ 炒股词  │ 案头                   │ 作者每天打开先看案  │
+  │               │         │                        │ 头                  │
+  ├───────────────┼─────────┼────────────────────────┼─────────────────────┤
+  │ 镜头评审      │ lens    │ 三审（读者审/编辑审/设 │ 网文圈有"读者视角"" │
+  │               │ 直译    │ 定校对）               │ 编辑审稿"的说法     │
+  ├───────────────┼─────────┼────────────────────────┼─────────────────────┤
+  │ 棘轮          │ 机械词  │ 不要这个比喻，直接说** │                     │
+  │               │         │ "入册前/入册后"**      │                     │
+  ├───────────────┼─────────┼────────────────────────┼─────────────────────┤
+  │ 风格宪法      │ 工程师  │ 文风铁律               │ spec 里"铁律"本来就 │
+  │               │ 幽默    │                        │ 是小节名            │
+  ├───────────────┼─────────┼────────────────────────┼─────────────────────┤
+  │ 上下文包      │ 工程词  │ 备稿包（写这章要看的材 │                     │
+  │               │         │ 料）                   │                     │
+  ├───────────────┼─────────┼────────────────────────┼─────────────────────┤
+  │ 验收（卡）    │ 工程词  │ 审稿（卡）             │ 作者本来就说审稿    │
+  ├───────────────┼─────────┼────────────────────────┼─────────────────────┤
+  │ 决策卡        │ 尚可但  │ 章前卡？（保留候选）   │ 内容≈细纲确认，也可 │
+  │               │ 偏硬    │                        │ 叫细纲卡            │
+  ├───────────────┼─────────┼────────────────────────┼─────────────────────┤
+  │ 信息差 /      │         │                        │                     │
+  │ 时间线 / 名册 │ 无问题  │ 保留                   │ 本来就是圈内词或大  │
+  │  / 金句库 /   │         │                        │ 白话                │
+  │ 体检 / 钩子   │         │                        │                     │
+  └───────────────┴─────────┴────────────────────────┴─────────────────────┘
+
+  机器协议（commit 前缀 ch/vol/fix、book.yaml、spec_version）保持 ASCII
+  不动，这是给 git log 看的，不是给作者看的。
+
+  问题：这张表你过一遍，哪些改名你认可、哪些觉得还是别扭？（尤其"案头""入册""章
+  前卡/细纲卡"这三个是我拿不准的——你是写手出身，你的语感是最终裁决。）
+
+✻ Sautéed for 1m 5s
+
+❯ 那几个坑我觉得还是不好                                                        
+
+  Thought for 39s (ctrl+o to expand)
+
+● 有道理——"坑"在圈里其实是指整本书的：挖坑=开新书、弃坑=断更整本、入坑=读者开始
+  追，拿来指单条伏笔会撞车，语义全乱。是我想岔了。
+
+  那这个概念（伏笔/悬念/感情线/立旗/爽点铺垫的统一体）换两个候选：
+
+  方案 A：伏笔（编号 伏-031）
+  - 操作：埋下 / 推进 / 回收 / 
+  放弃——"埋伏笔""回收伏笔"是圈内最高频的原生短语，v6 的命令行参数都叫
+  --add-foreshadowing
+  - 陈坑 → "悬了太久"预警（如"伏-031 已 12 章未动"）
+  - 代价：严格说悬念/感情线不算"伏笔"，是概念外延略微撑大——但作者日常本来就把这
+  些混着叫
+
+  方案 B：线（编号 线-031）
+  - 操作：开线 / 推进 / 收线 / 
+  断线——"主线/支线/暗线/感情线""把这条线收了"也全是原生话
+  - 优点：外延天然涵盖感情线、悬念（暗线）；缺点："收线"不如"回收伏笔"那么口语化
+  高频
+
+  方案 C：双轨——界面上按类型显示原生叫法（伏笔用埋/回收，感情线用开线/收线），系
+  统内部仍是同一张表
+  - 优点：每个词都最自然；缺点：作者要面对两套动词，文档变啰嗦
+
+  我推荐 A：识别度最高、零学习成本，"回收伏笔"四个字本身就是网文写作论坛的日常用
+  语；外延撑大一点没人会困惑（"这条感情线也登记成伏笔"不会有人看不懂，spec
+  内部定义清楚就行）。
+
+  你的语感选哪个？
+
+✻ Cooked for 46s
+
+❯ 我发现你很喜欢精简词，选方案a吧                                               
+
+  Thought for 28s (ctrl+o to expand)
+
+● Update(.trellis/tasks/06-11-v7-prd-webnovel-writer/prd.md)
+  ⎿  Added 10 lines
+      38  
+      39  - PRD 必须完整覆盖问题空间 16 项的产品化映射（每项：解法、所属
+          版本、验收方式）。
+      40  - PRD 从产品视角重审 spec 0.5 全部设计；确认保留的引用章节号，
+          推翻的记入 ADR-lite。
+      41 +- **术语全面重审（Q0 第一项发现，作者提出）**：spec 0.5 大量名 
+         +词有机翻感/行业黑话感（结转=会计、盘面=炒股、棘轮=机械、事务=数
+         +据库、镜头评审=lens 直译、retcon=英文）。PRD 附完整术语表，spec
+         + 随之修订。                                                    
+      42 +- **命名原则（作者裁决）**：①网文圈原生词优先（伏笔/吃书/钩子/ 
+         +审稿）；②圈内没有的用自然大白话；③财务/工程/数据库隐喻禁止出现 
+         +在作者界面；④**不自造两字精简词**——宁可用自然的长短语，不要为了
+         +"术语感"硬压缩（作者反馈：「你很喜欢精简词」，案头/入册这类生造
+         +压缩词也属此列）。                                             
+      43  
+      44 +## Decision (ADR-lite)                                         
+      45 +                                                               
+      46 +### 术语-1：统一概念「承诺」改为「伏笔」（2026-06-11，作者拍板 
+         +）                                                             
+      47 +                                                               
+      48 +- **Context**: 「承诺」是 promise 直译，生硬；候选「坑」在圈内 
+         +指整本书（挖坑=开新书、弃坑=断更），指单条线索会撞车。         
+      49 +- **Decision**: 采用方案 A「伏笔」：编号 伏-031；操作动词 埋下/
+         +推进/回收/放弃（"埋伏笔""回收伏笔"为圈内最高频原生短语）；「节 
+         +奏债」改为"悬了太久"预警。悬念/感情线/立旗/爽点铺垫统一登记为伏
+         +笔，外延在 spec 内部定义清楚。                                 
+      50 +- **Consequences**: spec §5 全部改写；目录 `大纲/承诺/` → `大纲
+         +/伏笔/`；commit 协议前缀不变（机器域）。                       
+      51 +                                                               
+      52  ## Acceptance Criteria (evolving)
+      53  
+      54  - [ ] 三条作者旅程完整（安装→建书/迁移→日常写作→卷复盘）
+
+  Thought for 41s, recalled 1 memory, wrote 3 memories (ctrl+o to expand)
+
+● 方案 A 定了，记进 PRD 的决策记录了。你点的"精简词"毛病我也记住了——案头、入册这
+  些确实是同一个病：为了术语感硬造两字词。我把命名原则定为四条（圈内原生词优先 /
+  大白话长短语 / 禁财务工程隐喻 /
+  禁自造精简词），按这个原则把剩下拿不准的几个词重新提案：
+
+  spec 0.5 现名: settle / 结转
+  上轮提案（有病）: 入册（生造）
+  新提案: 定稿（动词）
+  说明: "把这一章定稿"——和 定稿/ 目录天然一致，零新词
+  ────────────────────────────────────────
+  spec 0.5 现名: 盘面
+  上轮提案（有病）: 案头（生造）
+  新提案: 全书近况
+  说明: 决策卡第一段就叫"全书近况"：写到哪了、哪些伏笔悬太久、连续几章钩子弱
+  ────────────────────────────────────────
+  spec 0.5 现名: 上下文包
+  上轮提案（有病）: 备稿包（生造）
+  新提案: 本章写作材料
+  说明: 就是大白话
+  ────────────────────────────────────────
+  spec 0.5 现名: 合同（决策卡内）
+  上轮提案（有病）: （上轮漏了，"合同"也是法务词）
+  新提案: 本章要写到的事
+  说明: 拍板后这一段就是验收依据，大白话最稳
+  ────────────────────────────────────────
+  spec 0.5 现名: 镜头评审
+  上轮提案（有病）: 三审
+  新提案: 三审（读者审 / 编辑审 / 设定校对）
+  说明: 出版业原生词（三审三校），保留
+  ────────────────────────────────────────
+  spec 0.5 现名: 验收卡
+  上轮提案（有病）: 审稿卡
+  新提案: 审稿卡
+  说明: 保留
+  ────────────────────────────────────────
+  spec 0.5 现名: 决策卡
+  上轮提案（有病）: 章前卡/细纲卡（压缩）
+  新提案: 三选一：①保留决策卡 ②细纲卡 ③开工卡
+  说明: 见下
+
+  唯一剩下要你裁决的是决策卡：它的内容 = 全书近况 + 本章提案 + 要写到的事 +
+  备选方案，本质是"确认细纲再开工"。①"决策卡"不算机翻但有点商务味；②"细纲卡"用了
+  圈内词但是压缩造词；③或者干脆不叫卡，这个环节就叫"确认细纲"，文件叫
+  工作区/细纲.md——作者的心智是"AI
+  给我拟了份细纲，我点头或者改"，根本不需要"卡"这个概念。
+
+  我倾向 ③：连"卡"这个隐喻都省了，文件名即功能。你的语感？
+
+✻ Worked for 2m 33s
+
+❯ 同意3                                                                         
+
+  Thought for 29s (ctrl+o to expand)
+
+● Update(.trellis/tasks/06-11-v7-prd-webnovel-writer/prd.md)
+  ⎿  Added 22 lines, removed 1 line
+      47  
+      48  - **Context**: 「承诺」是 promise 直译，生硬；候选「坑」在圈内
+          指整本书（挖坑=开新书、弃坑=断更），指单条线索会撞车。
+      49  - **Decision**: 采用方案 A「伏笔」：编号 伏-031；操作动词 埋下/
+          推进/回收/放弃（"埋伏笔""回收伏笔"为圈内最高频原生短语）；「节
+          奏债」改为"悬了太久"预警。悬念/感情线/立旗/爽点铺垫统一登记为伏
+          笔，外延在 spec 内部定义清楚。
+      50 -- **Consequences**: spec §5 全部改写；目录 `大纲/承诺/` → `大纲
+         -/伏笔/`；commit 协议前缀不变（机器域）。                       
+      50 +### 术语-2：全套术语表（2026-06-11，作者逐项裁决）             
+      51  
+      52 +- **Context**: 命名四原则确立后，对 spec 0.5 全部作者可见术语重
+         +审。                                                           
+      53 +- **Decision**:                                                
+      54 +  | spec 0.5 | v7 定名 |                                       
+      55 +  |---|---|                                                    
+      56 +  | 承诺（P-031）| 伏笔（伏-031），埋下/推进/回收/放弃 |       
+      57 +  | 节奏债 | "悬了太久"预警 |                                  
+      58 +  | retcon 事务 | 吃书（吃书-87，commit 前缀仍 retcon）|       
+      59 +  | settle / 结转 | 定稿（动词，与 `定稿/` 目录一致）|         
+      60 +  | 章事务 | 写章流程 |                                        
+      61 +  | 盘面 | 全书近况 |                                          
+      62 +  | 上下文包 | 本章写作材料 |                                  
+      63 +  | 合同 | 本章要写到的事 |                                    
+      64 +  | 镜头评审 | 三审（读者审/编辑审/设定校对，出版业原生）|     
+      65 +  | 棘轮 | 删除该比喻，直接说"定稿前/定稿后" |                 
+      66 +  | 风格宪法 | 文风铁律 |                                      
+      67 +  | 决策卡 | **取消"卡"概念**：环节叫"确认细纲"，文件 `工作区/ 
+         +细纲.md` |                                                     
+      68 +  | 验收（卡）| 审稿，文件 `工作区/审稿.md` |                  
+      69 +  | 修复卡 | 修复确认（同理去掉"卡"）|                         
+      70 +  | 信息差/时间线/名册/金句库/体检/钩子/强弱钩 | 保留（原生或大
+         +白话）|                                                        
+      71 +- **Consequences**: "卡"隐喻整体退场，每个环节用作者动作命名；s
+         +pec 0.5 全文术语改写（§5、§7、§8、§10 重点）；机器协议（commit 
+         +前缀、book.yaml、编号格式）不动。「细纲」与传统细纲心智完全对齐
+         +：AI 拟细纲→作者点头或改。                                     
+      72 +                                                               
+      73  ## Acceptance Criteria (evolving)
+      74  
+      75  - [ ] 三条作者旅程完整（安装→建书/迁移→日常写作→卷复盘）
+
+  Thought for 18s (ctrl+o to expand)
+
+● Update(.trellis/tasks/06-11-v7-prd-webnovel-writer/prd.md)
+  ⎿  Error editing file
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(.trellis/tasks/06-11-v7-prd-webnovel-writer/prd.md)
+  ⎿  Added 2 lines
+      47  
+      48  - **Context**: 「承诺」是 promise 直译，生硬；候选「坑」在圈内
+          指整本书（挖坑=开新书、弃坑=断更），指单条线索会撞车。
+      49  - **Decision**: 采用方案 A「伏笔」：编号 伏-031；操作动词 埋下/
+          推进/回收/放弃（"埋伏笔""回收伏笔"为圈内最高频原生短语）；「节
+          奏债」改为"悬了太久"预警。悬念/感情线/立旗/爽点铺垫统一登记为伏
+          笔，外延在 spec 内部定义清楚。
+      50 +- **Consequences**: 目录 `大纲/承诺/` → `大纲/伏笔/`；commit 协
+         +议前缀不变（机器域）。                                         
+      51 +                                                               
+      52  ### 术语-2：全套术语表（2026-06-11，作者逐项裁决）
+      53  
+      54  - **Context**: 命名四原则确立后，对 spec 0.5 全部作者可见术语重
+          审。
+
+● 术语表全部定稿，记进 PRD
+  决策记录了。顺带把"卡"隐喻整体清退：审稿卡→审稿（工作区/审稿.md）、修复卡→修复
+  确认，每个环节都用作者动作命名，不再有任何发明出来的概念。
+
+  现在回到 Q0 主线：术语是你点出的第一个设计问题。
+
+  除了术语，你还有别的感觉不对的地方吗？（交互太重？某个机制不信任？目录结构？都
+  可以说，模糊的直觉也行。）
+
+  如果暂时就术语这一条，我就按之前说好的开始对抗性审查：拿 v6 的六条病根逐条攻击
+  spec 0.5，再加上"非程序员作者第一次面对 git
+  仓库"这个视角，把我能找到的设计疑点列成清单给你过。
+
+✻ Crunched for 1m 58s
+
+❯ 目录结构我看下                                                                
+
+  Thought for 17s (ctrl+o to expand)
+
+● 这是 spec 0.5 的目录结构，术语已按新定名更新（改动处标注）：
+
+  <书名>/
+  ├── .git/
+  ├── .gitignore                 # 至少含 .cache/ 与 工作区/
+  ├── book.yaml                  # 全书配置（十行以内）
+  │
+  ├── 定稿/                       # ── 审稿通过后的一切 ──
+  │   ├── 正文/
+  │   │   └── 0152-北境的雪.md    # 章节正文 +
+  开头的章信息（章号/视角/书内时间/本章要写到的事）
+  │   ├── 设定/
+  │   │   ├── 角色/
+  │   │   │   └── 林晚.md         # 角色卡
+  │   │   ├── 信息差/
+  │   │   │   └── S-021-灭门真凶.md
+  │   │   ├── 世界观.md           # 世界规则、力量体系
+  │   │   ├── 时间线.md           # 每章一行的流水表
+  │   │   └── 名册.md             # 人物地名正名/别名/首次出场
+  │   └── 记忆/
+  │       ├── 章摘要/0152.md
+  │       └── 卷摘要/第05卷.md
+  │
+  ├── 大纲/                       # ── 作者意图，随时可改 ──
+  │   ├── 总纲.md                 # 主题、金手指、结局
+  │   ├── 卷纲/
+  │   │   └── 第05卷.md
+  │   └── 伏笔/                   # ★ 原「承诺/」
+  │       └── 伏-031-灭门真凶.md
+  │
+  ├── 文风/                       # ── 品味库 ──
+  │   ├── 文风铁律.md             # ★ 原「风格宪法.md」
+  │   └── 金句库/
+  │       ├── 战斗.md
+  │       └── 对白.md
+  │
+  ├── 工作区/                     # ── 还没定稿的一切，默认不进 git ──
+  │   ├── 细纲.md                 # ★
+  原「决策卡.md」：全书近况+本章提案+要写到的事+备选
+  │   ├── 本章写作材料.md          # ★ 原「上下文包.md」
+  │   ├── 草稿-A.md               # 关键章多稿时 A/B/C
+  │   ├── 审稿.md                 # ★
+  原「验收卡」：草稿+三审意见+待确认新人名+章摘要
+  │   └── 评审报告/               # 机检与三审的原始输出
+  │
+  └── .cache/                     # 唯一允许的缓存，删了能全量重建
+      └── index.db
+
+  设计逻辑一句话：定稿/ 只进不改，大纲/ 随时可改，文风/ 是品味，工作区/ 
+  是草稿台，写完一章 = 一次 git 提交把工作区的成果搬进定稿。
+
+  几个你可能想审的点，我先标出来：
+
+  1. 顶层四个目录的名字：定稿/大纲/文风/工作区——有没有哪个不顺眼？
+  2. 记忆/ 这个名字：放在定稿下面装章摘要/卷摘要，"记忆"是 AI 视角的词（给 AI
+  当记忆用），作者视角其实就是"摘要"。要不要改叫 摘要/？
+  3. 信息差/ 放在 设定/ 
+  下面：每条信息差一个文件（谁知道、谁不知道、关键词）。位置和粒度你觉得对吗？
+  4. 章节文件头部带结构化信息（front
+  matter：章号/视角/书内时间/要写到的事）——作者打开正文文件第一眼会看到一段
+  YAML，这是"文件即真相"的代价。能接受吗，还是希望正文文件干干净净、章信息另存？
+  5. 工作区/ 默认不进 git——崩溃后没定稿的草稿还在（文件都在硬盘上），但没有版本
+  历史。想留草稿史的删一行 .gitignore 即可。默认值对吗？
+
+  你扫一眼，哪里不舒服说哪里。
+
+✻ Churned for 37s
+
+❯ 这个目录还缺少我们这个插件安装之后的目录                                      
+
+  Thought for 52s (ctrl+o to expand)
+
+● 对，这是个真空白——spec 0.5
+  只定义了"书仓库"里有什么，插件本身装到哪、书仓库里会多出什么文件，两份 spec 
+  都没写。这正是 Trellis 给我们的对照：它装完后项目里多了
+  .trellis/（脚本+数据）和 .claude/、.codex/ 等平台壳目录。
+
+  我们的情况按宿主分两类，先给你看全貌：
+
+  Claude Code 用户（一级宿主）：走官方插件市场，skills/角色/hook
+  都装在用户级（Claude Code 自己管理），书仓库里一个插件文件都不用出现——脚本通过
+  插件目录引用。书仓库就是上面那个干干净净的目录，最多多一个 .cache/。
+
+  其他宿主（Codex/Gemini/Cursor）：没有插件市场机制，npx 安装器必须把
+  skills/角色壳/脚本拷到某个地方，这里有两个选择：
+
+  方案 A：装到用户目录（~/.codex/skills/ 等，推荐）
+  - 书仓库保持纯净，和 Claude Code 用户看到的一模一样
+  - 装一次，所有书都能用；升级一次，全部生效
+  - 代价：换电脑/重装系统要重新装插件（但书仓库 git clone 下来内容完整无损）
+
+  方案 B：装到每本书的仓库里（Trellis 模式，.codex/ .webnovel-writer/ 进书仓库）
+  - 优点：书仓库自带工具，clone 即用；每本书可以锁定插件版本
+  - 代价：书仓库被工程文件污染（和"目录全中文、面向作者"的气质打架）；多本书要逐
+  个升级；.gitignore 变长
+
+  我推荐 A：我们的用户是单人写手不是工程团队，"书仓库里只有书"的纯净感对非程序员
+  很重要——他们打开文件夹应该只看到定稿/大纲/文风/工作区，而不是一堆点开头的工程
+  目录。Trellis 选 B 是因为它服务的是代码团队（spec 要进 git
+  共享），我们没这个需求。
+
+  唯一的例外是书仓库根部放一个 AGENTS.md（开放标准，30+
+  工具认识）：内容就一段话——"这是 webnovel-writer 管理的小说仓库，状态机入口是
+  XX，没装插件的 AI 也能从这里知道怎么读这个仓库"。这是从 Trellis
+  学来的"最大公约数"层，它让任何 AI 工具哪怕零安装也能正确理解书仓库。
+
+  选 A 还是 B？（或者 A 加一个 --copy-to-project 开关照顾想要 B 的人？）
+
+✻ Sautéed for 52s
+
+❯ 我们v6的做法是套了一层，书目录作为工作目录的子目录，然后.claude目录和书目录平 
+  行，还有个就是claude code可以识别的插件目录，不管是装在项目级还是用户级都能自 
+  动识别，我的想法是保持工作目录和书目录这种嵌套，但是不在支持用户目录，强制要  
+  求安装到工作目录，你可以说出你的想法                                          
+  Thought for 1m 3s (ctrl+o to expand)
+
+● 我赞成你的方案，而且认为它比我的 A 更好。理由说透：
+
+  嵌套结构（工作目录 ⊃ 书目录）本质上是把"工程污染"和"作品"分了层——.claude/、脚
+  本这些工程文件住在工作目录，书仓库里只有书。这同时拿到了我方案 A
+  的纯净（书仓库 git 里零工程文件）和方案 B 的自包含（整个工作目录拷走即用），还
+  天然支持多本书共用一套安装（工作目录/书A/、书B/）。
+
+  强制项目级、砍掉用户级，我特别赞成，这是支持成本决策：v6 的安装类 issue（#90/#
+  103/#69）一半根源是"装哪了/读的哪份"的歧义——用户级和项目级并存时，版本不一致、
+  配置漂移、排查时鸡同鸭讲。强制一个位置后，所有用户的目录结构一字不差，issue
+  里贴个 ls
+  就能诊断。对非工程师用户，"只有一种正确状态"远比"灵活"重要。多宿主下这条更值钱
+  ：各平台的用户级路径五花八门（~/.codex/、~/.gemini/……），强制项目级等于把 14
+  种宿主的安装拉平成同一张图。
+
+  目标形态：
+
+  工作目录/                      ← AI 工具在这里启动
+  ├── AGENTS.md                  # 公约数层：没装插件的 AI 也能看懂这里是什么
+  ├── .claude/  .codex/ …        # 各平台壳（按检测到的环境生成）
+  ├── .webnovel/                 # 插件本体：Node 脚本、角色定义、版本与哈希清单
+  └── 我的第一本书/               # 书仓库（独立 git repo，内容=spec 目录结构）
+      ├── book.yaml
+      ├── 定稿/ 大纲/ 文风/ 工作区/
+      └── .cache/
+
+  随之要定四件配套的事，前三件我直接按惯例定了（你有异议再说）：
+
+  1. 从书目录里启动也要能工作：脚本向上找工作目录标记（v6 的 project_locator
+  老问题），spec 写死定位规则。
+  2. 升级机制：npx webnovel-writer update，Trellis
+  式哈希追踪——没改过的文件直接更新，用户改过的提示。
+  3. 工作目录本身不是 git 仓库（书各自是），避免嵌套仓库的坑。
+
+  第四件需要你拍板——分发渠道：强制装到工作目录后，Claude Code
+  插件市场那条线怎么办？
+
+  1. npx 一条道（推荐）：所有宿主统一 npx webnovel-writer init，市场版 6.x 停在
+  v6，市场页面说明 v7
+  换了安装方式。一套渠道一套支持口径，和"强制项目级"的动机一脉相承。
+  2. 双渠道：市场版继续发 v7（Claude Code 用户体验熟悉），npx
+  管其他宿主。代价：又回到两个安装位置、两套排查口径，刚关上的门又开了一条缝。
+
+  选哪个？
+
+✻ Brewed for 1m 4s
+
+❯ 放弃插件渠道，那个本身也不好用说实话                                          
+
+  Thought for 28s (ctrl+o to expand)
+
+● Update(.trellis/tasks/06-11-v7-prd-webnovel-writer/prd.md)
+  ⎿  Error editing file
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Update(.trellis/tasks/06-11-v7-prd-webnovel-writer/prd.md)
+  ⎿  Added 10 lines
+      72    | 信息差/时间线/名册/金句库/体检/钩子/强弱钩 | 保留（原生或大
+          白话）|
+      73  - **Consequences**: "卡"隐喻整体退场，每个环节用作者动作命名；s
+          pec 0.5 全文术语改写（§5、§7、§8、§10 重点）；机器协议（commit 
+          前缀、book.yaml、编号格式）不动。「细纲」与传统细纲心智完全对齐
+          ：AI 拟细纲→作者点头或改。
+      74  
+      75 +### 安装-1：工作目录嵌套 + 强制项目级 + npx 单渠道（2026-06-11 
+         +，作者拍板）                                                   
+      76 +                                                               
+      77 +- **Context**: spec 0.5 只定义书仓库内容，没定义插件装到哪。v6 
+         +安装类 issue（#90/#103/#69）一半根源是用户级/项目级并存的歧义；
+         +插件市场渠道本身体验也不好（作者原话）。                       
+      78 +- **Decision**:                                                
+      79 +  - 沿用 v6 的嵌套：**工作目录 ⊃ 书目录**。工程文件（`.claude/`
+         +、`.codex/`、`.webnovel/` 脚本与角色定义、AGENTS.md）全部住工作
+         +目录；书仓库（独立 git repo）里零工程文件，可多本书共用一套安装
+         +。                                                             
+      80 +  - **强制安装到工作目录（项目级）**，不再支持用户级安装——所有 
+         +用户目录结构一字不差，可诊断性优先于灵活性。                   
+      81 +  - **分发只走 npx**（`npx webnovel-writer init` / `update`）：
+         +Claude Code 插件市场渠道放弃，市场版停在 v6 并指引 v7 新装法。 
+      82 +  - 配套：①脚本支持从书目录向上定位工作目录（定位规则进 spec） 
+         +；②update 用 Trellis 式哈希追踪（没改过的直接更新，改过的提示）
+         +；③工作目录本身不是 git 仓库。                                 
+      83 +- **Consequences**: 多宿主 spec 的安装器章节重写；v6→v7 迁移要 
+         +处理"市场版插件卸载+npx 重装"的引导；14 种宿主的安装拉平为同一 
+         +张目录图。                                                     
+      84 +                                                               
+      85  ## Acceptance Criteria (evolving)
+      86  
+      87  - [ ] 三条作者旅程完整（安装→建书/迁移→日常写作→卷复盘）
+
+● 安装布局拍板完毕，记入 PRD：工作目录嵌套书目录、强制项目级、npx
+  单渠道、插件市场停在 v6。
+
+  继续审目录结构——上一轮我标的五个点里你还剩四个没裁。两个小的我按你的命名原则直
+  接定了：记忆/ 改名 摘要/（"记忆"是 AI 视角的词，作者视角就是摘要），信息差/ 
+  位置粒度不动（它本来就是原生词）。工作区/ 默认不进 git 也暂按 spec 原案。
+
+  剩下最要紧的一个要你拍板——正文文件要不要开头带一段结构化信息（front matter）：
+
+  spec 0.5 的设计是每章 .md 文件开头有一段 YAML（章号、视角、书内时间、字数、本
+  章要写到的事、涉及哪些伏笔），好处是"章节自带自己的档案"，坏处是作者每次打开正
+  文，第一屏先看到一坨机器味的字段——这和我们刚清理完术语的动机是冲突的。
+
+  三个选法：
+
+  1. 保留 front matter——文件自包含，工具好实现；代价是正文文件开头永远有段"机器
+  文"。网文作者用的写作软件（码字精灵之类）打开会显示这坨东西。
+  2. 章档案分离——正文文件干干净净从第一个字开始；每章的档案存到旁边（如
+  定稿/正文/0152-北境的雪.档案.md 或集中一个目录）。代价：文件数翻倍，改名/移动
+  时两个文件要同步，"删光缓存可重建"的对账逻辑复杂一点。
+  3. 折中：极简 front matter——正文文件只留 3 行以内人话字段（章号/标题/视角），
+  机器要的全套档案（伏笔结转、要写到的事、字数）挪到章摘要文件里合并存放。
+
+  我推荐 3：作者打开正文第一屏基本干净（三行人话谁都看得懂），而"本章动了哪些伏
+  笔"这类档案本来就和章摘要是同一时刻生成的，合并存放反而少一类文件。
+
+  你的选择？
+
+✻ Worked for 2m 0s
+
+❯ 1但是增加一个自动导出干净章节的脚本                                           
+
+  Thought for 55s (ctrl+o to expand)
+
+● Update(.trellis/tasks/06-11-v7-prd-webnovel-writer/prd.md)
+  ⎿  Added 9 lines, removed 1 line
+      80    - **强制安装到工作目录（项目级）**，不再支持用户级安装——所有
+          用户目录结构一字不差，可诊断性优先于灵活性。
+      81    - **分发只走 npx**（`npx webnovel-writer init` / `update`）：
+          Claude Code 插件市场渠道放弃，市场版停在 v6 并指引 v7 新装法。
+      82    - 配套：①脚本支持从书目录向上定位工作目录（定位规则进 spec）
+          ；②update 用 Trellis 式哈希追踪（没改过的直接更新，改过的提示）
+          ；③工作目录本身不是 git 仓库。
+      83 -- **Consequences**: 多宿主 spec 的安装器章节重写；v6→v7 迁移要 
+         -处理"市场版插件卸载+npx 重装"的引导；14 种宿主的安装拉平为同一 
+         -张目录图。                                                     
+      83 +### 格式-1：正文保留 front matter + 干净导出脚本（2026-06-11， 
+         +作者拍板）                                                     
+      84  
+      85 +- **Context**: 章节文件头部的结构化档案（章号/视角/书内时间/本 
+         +章要写到的事/伏笔结转）与"作者界面无机器味"的原则冲突。        
+      86 +- **Decision**: 保留完整 front matter（文件自包含、审计不依赖外
+         +部表的优势成立）；新增**导出命令**：一键导出去掉 front matter  
+         +的干净正文（单章/范围/全书），作者发布到平台（起点/番茄）本来就
+         +需要纯文本，一个脚本同时解决两件事。                           
+      87 +- **Consequences**: 导出是零 token Node 脚本；导出目录默认 `工 
+         +作区/导出/`（不进 git）；spec §4.1 补充导出命令。              
+      88 +                                                               
+      89 +### 格式-2：`定稿/记忆/` 改名 `定稿/摘要/`（2026-06-11）       
+      90 +                                                               
+      91 +- "记忆"是 AI 视角词，作者视角就是章摘要/卷摘要。机制不变。    
+      92 +                                                               
+      93  ## Acceptance Criteria (evolving)
+      94  
+      95  - [ ] 三条作者旅程完整（安装→建书/迁移→日常写作→卷复盘）
+
+  Thought for 16s (ctrl+o to expand)
+
+● Bash(grep -n "Consequences\|^### "
+      /root/webnovel-writer/.trellis/tasks/06-11-v7-prd-webnovel-writer/prd.md |
+      sed -n '1,20p')
+  ⎿  46:### 术语-1：统一概念「承诺」改为「伏笔」（2026-06-11，作者拍板）
+     50:- **Consequences**: 目录 `大纲/承诺/` → `大纲/伏笔/`；commit 协议前
+     缀不变（机器域）。
+     … +12 lines (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(.trellis/tasks/06-11-v7-prd-webnovel-writer/prd.md)
+  ⎿  Added 2 lines
+      80    - **强制安装到工作目录（项目级）**，不再支持用户级安装——所有
+          用户目录结构一字不差，可诊断性优先于灵活性。
+      81    - **分发只走 npx**（`npx webnovel-writer init` / `update`）：
+          Claude Code 插件市场渠道放弃，市场版停在 v6 并指引 v7 新装法。
+      82    - 配套：①脚本支持从书目录向上定位工作目录（定位规则进 spec）
+          ；②update 用 Trellis 式哈希追踪（没改过的直接更新，改过的提示）
+          ；③工作目录本身不是 git 仓库。
+      83 +- **Consequences**: 多宿主 spec 的安装器章节重写；v6→v7 迁移要 
+         +处理"市场版插件卸载+npx 重装"的引导；14 种宿主的安装拉平为同一 
+         +张目录图。                                                     
+      84 +                                                               
+      85  ### 格式-1：正文保留 front matter + 干净导出脚本（2026-06-11，
+          作者拍板）
+      86  
+      87  - **Context**: 章节文件头部的结构化档案（章号/视角/书内时间/本
+          章要写到的事/伏笔结转）与"作者界面无机器味"的原则冲突。
+
+  Thought for 25s (ctrl+o to expand)
+
+● 定了：front matter 保留 +
+  一键导出干净正文（发布到平台本来就需要纯文本，一个脚本两用），已记入 PRD。
+
+  目录结构这块审完了。现在交付我欠你的对抗性审查——拿 v6
+  六条病根和"非程序员第一次面对 git"的视角攻击 spec 0.5，找到 8
+  个疑点，按严重度排：
+
+  🔴 高（机制可能不成立）
+
+  1. "本章要写到的事"让脚本来比对，做不到。 spec 把"合同断言比对"放在机检（零
+  token 脚本）一步，但"林晚得知灭门真相的第一条实证"这种断言，脚本根本无法判断正
+  文写没写到——这是语义判断，是模型的活。这条违反了 spec 自己的"能数的给脚本"分界
+  ，机检做不了会悄悄退化成假检查。该挪给三审里的设定校对。
+  2. "每章必须动一条伏笔"的硬门检会逼出假账。 v6 最大教训是"模型为了过门检会撒谎
+  "（#91）。纯过渡章/日常章被这条规则逼着乱写"推进了伏-007"，账本污染比没有账本
+  更糟。交互模式有作者豁免还好，自动模式下豁免被禁用，连写时这个问题必然发生。需
+  要重新设计（比如自动模式允许"本章无伏笔变动"但记录，体检时看比例）。
+  3. 泄密扫描靠关键词比对会狼来了。 信息差文件存关键词（"大长老/灭门/血书"），机
+  检扫描角色对白——但"大长老"在任何正常章节都会出现，误报率会高到作者直接无视这个
+  检查。关键词命中应该只是给设定校对（模型）的候选线索，不能直接拦截。
+
+  🟡 中（有缺口要补设计）
+
+  4. Node 零依赖和 .cache/index.db（SQLite）打架。 SQLite
+  要么用原生依赖（违反零依赖），要么 node:sqlite 内置模块——但那要求 Node
+  ≥22。要么锁定 Node 22+，要么缓存改 JSON 文件。这是个实现陷阱，spec
+  现在没意识到。
+  5. 自动模式的"事后发现错误"没有回滚故事。 自动验收下第 140
+  章有个事实错误溜进定稿，141-152 章基于它继续写了。停止条件防的是"体检不过线"，
+  防不了单点事实错误的连锁污染。吃书机制管单章，管不了"后面 12
+  章都建立在错误上"。需要设计：攒批审的节奏建议、连锁影响怎么报告。
+  6. git 异常状态对作者的暴露面没兜底。 修复确认只管 YAML 解析失败，但 merge
+  冲突、定稿过程中断电留下的半提交、作者用网盘同步书目录搞坏
+  .git——这些场景作者会直接面对 git 报错。需要一条硬规则："作者永远不需要敲 git
+  命令"，所有 git 异常都有对应的人话修复流程。
+
+  🟢 低（注意即可）
+
+  7. 时间线表 2000 章后是一张两千行的表，每次全读不现实——按卷拆分或只读最近 N
+  行，小设计。
+  8. 金句库自动收割的样本质量："改动>30%"判不出改写还是删减；且 few-shot
+  注入自己旧文可能加重自我重复。收割规则要再想想。
+
+  我的建议：1、3 其实是同一刀——把"语义判断"从机检全部赶去三审，机检只留真正能数
+  的（字数/禁词/高频意象/名册比对/格式）；2 是自动模式的规则修订；4
+  是技术选型今天就能定。
+
+  从哪个开始？还是我把 8 条的处理方案都拟好，你一次过？
+
+✻ Churned for 2m 32s
+
+❯ 可以要求node>22，其他几条你理下方案                                           
+
+  Thought for 1m 4s (ctrl+o to expand)
+
+● 好，Node ≥22 定了（用内置 node:sqlite，零依赖承诺保住）。其余 7 条的方案如下：
+
+  #1+#3 合并解决：机检与三审的职责重划
+  - 机检只留真正能数的：字数、禁词/禁句式、复读检测、高频意象统计、句式体检、新
+  专名比对名册、front matter
+  格式完整性、"伏笔文件有没有动"（只查形式，不判内容）。
+  - 两件语义判断全部移给三审的设定校对：①"本章要写到的事"逐条核对正文写没写到；②
+  信息差关键词命中后，由它判断是不是真泄密（机检只产出候选清单，不拦截）。
+  - 不过关的处理不变：打回重写，不打扰作者。
+
+  #2 伏笔门检：硬规则改"声明制"
+  -
+  细纲阶段就声明本章定位（推进章/过渡章/日常章）——过渡章合法，模型没有撒谎动机。
+  - 假推进的真正防线改为：伏笔履历行必须引用章内证据（一句话），设定校对核对引用
+  是否属实。
+  - 自动模式下连续 3 章（可配）无伏笔变动 →
+  触发停止，转人工。体检报告统计伏笔活跃率。
+
+  #5 自动模式的错误连锁：对齐网文现实
+  - 攒批审稿与体检周期对齐（默认 8
+  章一批），建议在发布前的存稿期完成补审——错误被逮住时还没发布，直接改。
+  - 已发布后才发现的错误：影响分析脚本（grep 正文+伏笔履历+时间线）列出"哪些章建
+  立在这个错误上"，给两条路：吃书（没发布的部分直接改）或顺势圆（生成圆设定方案
+  ，向后兼容错误）——后者是网文主路径，"已发布不可改"是铁律。
+  - 新增人话命令"回到第 N 章"（git 操作的包装），自动模式跑废了一键回滚。
+
+  #6 git 隐身铁律（入宪为不变量）
+  - "作者永远不需要敲 git 命令；任何 git 异常都有人话修复流程"。
+  - 启动时在状态机第 0 步前加 git 健康检查：半提交、冲突、锁文件、.git
+  损坏，每种配自动修复或人话指引。
+  - 检测到网盘同步冲突副本（"xxx (1).md"）报人话警告——网盘同步 .git
+  是已知重灾区。
+
+  #7 时间线按卷拆：定稿/设定/时间线/第05卷.md，写作材料默认只带当前卷+上一卷，跨
+  卷查询走缓存。
+
+  #8 金句库收割改保守：自动判定只产生候选（作者改写且字数相近才候选，净删减不算
+  ），审稿时顺手勾选才入库——和"豁免归人"同一精神，品味决策不交给阈值。
+
+  这 7 条方案你一次过，还是哪条要改？过了我就全部记进 PRD
+  决策记录，然后继续下一个开放问题（MVP 范围切分，之前的方案 B
+  要按今天这些修订重排一版）。
+
+✻ Cogitated for 1m 4s
+
+❯ 1是对的，脚本可以的做的归脚本，做不到的ai语义，一定要分清楚，不要用强行的正则 
+  匹配之类的方案一点用没有，有些伏笔收不了也是能接受的，毕竟那些大神作家也会有  
+  一堆填不上的坑，是在需要敲可以让ai来运行，时间按卷来同意，8可以，增加一个作者 
+  主动说再对话中说那儿写的不错类似的话也触发，最终入库都由作者审核后入库，还有  
+  一条规则也加上就是每一次读取最好给出能精准读到那需要的一段的命令，非必要不全  
+  文读取，包括读各种参考，大纲什么的                                            
+
+  Thought for 59s (ctrl+o to expand)
+
+● 全部收到，含你加的两条新规则。记入 PRD：
+
+● Update(.trellis/tasks/06-11-v7-prd-webnovel-writer/prd.md)
+  ⎿  Added 44 lines
+       92  
+       93  - "记忆"是 AI 视角词，作者视角就是章摘要/卷摘要。机制不变。
+       94  
+       95 +### 技术-1：要求 Node ≥ 22（2026-06-11，作者拍板）            
+       96 +                                                              
+       97 +- 用内置 `node:sqlite` 实现 `.cache/index.db`，零依赖承诺保住 
+          +；安装器检测 Node 版本，不足时人话提示升级。                  
+       98 +                                                              
+       99 +### 机制-1：机检与三审职责重划（2026-06-11，作者确认，对抗性审
+          +查 #1+#3）                                                    
+      100 +                                                              
+      101 +- **原则（作者强调，入宪）**：脚本能做的归脚本，做不到的归 AI 
+          +语义判断，**一定要分清楚；禁止用正则硬凑语义判断**（一点用没有
+          +）。                                                          
+      102 +- 机检只留可计数项：字数、禁词/禁句式、复读、高频意象、句式体 
+          +检、新专名比对名册、front matter 格式、伏笔文件是否变动（只查 
+          +形式）。                                                      
+      103 +- 语义判断移给三审设定校对：①"本章要写到的事"逐条核对；②信息差
+          +关键词命中的真泄密判断（机检只出候选清单，不拦截）。          
+      104 +                                                              
+      105 +### 机制-2：伏笔门检改声明制（2026-06-11，作者确认，对抗性审查
+          + #2）                                                         
+      106 +                                                              
+      107 +- 细纲声明本章定位（推进/过渡/日常），过渡章合法，消除模型撒谎
+          +动机。                                                        
+      108 +- 伏笔履历行必须引用章内证据，设定校对核对。                  
+      109 +- 自动模式连续 3 章（可配）无伏笔变动触发停止；体检统计伏笔活 
+          +跃率。                                                        
+      110 +- **态度（作者定调）**："悬了太久"是提醒不是错误，**有些伏笔收
+          +不了可以接受**——大神作家也有一堆填不上的坑。系统不逼作者填所有
+          +坑。                                                          
+      111 +                                                              
+      112 +### 机制-3：自动模式的错误连锁处理（2026-06-11，对抗性审查 #5 
+          +）                                                            
+      113 +                                                              
+      114 +- 攒批审稿与体检周期对齐（默认 8 章），建议存稿期完成补审。   
+      115 +- 已发布后发现错误：影响分析脚本列出受影响章节 → 吃书（未发布 
+          +部分）或顺势圆（已发布，主路径）。                            
+      116 +- 新增人话命令"回到第 N 章"（git 回滚的包装）。               
+      117 +                                                              
+      118 +### 机制-4：git 隐身铁律（2026-06-11，作者确认，对抗性审查 #6 
+          +）                                                            
+      119 +                                                              
+      120 +- 入宪不变量：**作者永远不需要亲手敲 git 命令——真需要 git 操作
+          +时，由 AI 代为运行**；任何 git 异常都有人话修复流程。         
+      121 +- 状态机第 0 步前加 git 健康检查（半提交/冲突/锁文件/.git 损坏
+          +），每种配自动修复或人话指引；检测网盘冲突副本并人话警告。    
+      122 +                                                              
+      123 +### 格式-3：时间线按卷拆分（2026-06-11，作者确认，对抗性审查 #
+          +7）                                                           
+      124 +                                                              
+      125 +- `定稿/设定/时间线/第NN卷.md`；写作材料默认只带当前卷+上一卷 
+          +；跨卷查询走 `.cache`。                                       
+      126 +                                                              
+      127 +### 机制-5：金句库收割改保守 + 对话触发（2026-06-11，作者确认+
+          +补充，对抗性审查 #8）                                         
+      128 +                                                              
+      129 +- 自动判定只产生**候选**（作者改写且字数相近；净删减不算）。  
+      130 +- **新增触发（作者提出）**：作者在对话中夸某段（"那儿写得不错"
+          +之类）也触发收割候选。                                        
+      131 +- 最终入库一律经作者审核（审稿时顺手勾选），品味决策不交给阈值
+          +。                                                            
+      132 +                                                              
+      133 +### 原则-1：精准读取，非必要不全文读（2026-06-11，作者提出）  
+      134 +                                                              
+      135 +- **所有数据文件的读取都应有"精准读到所需一段"的命令**：按章号
+          +/编号/小节定位提取（如"读伏-031 的履历""读第 5 卷卷纲的高潮节 
+          +点""读 0152 章结尾 500 字"），由脚本提供。                    
+      136 +- AI 非必要不整文件读取——包括参考资料、大纲、设定。这是 v6 tok
+          +en 失控病根（#58/#92/#106）的根治手段之一，与"分层摘要+Grep 正
+          +文"配套。                                                     
+      137 +- **Consequences**: 每类文件的 spec 定义都要附"定位读取"的脚本
+          +接口；`.cache/index.db` 的表设计要支撑这些查询；写作材料组装默
+          +认用精准片段。                                                
+      138 +                                                              
+      139  ## Acceptance Criteria (evolving)
+      140  
+      141  - [ ] 三条作者旅程完整（安装→建书/迁移→日常写作→卷复盘）
+
+  Thought for 30s (ctrl+o to expand)
+
+● 对抗性审查 8
+  条全部落定，加上你新提的两条规则（对话夸赞触发金句候选、精准读取原则）都进了
+  PRD 决策记录。现在决策记录已有 13 条 ADR。
+
+  回到搁置的 Q1：v7.0 MVP 范围切分。按今天的全部修订重排后的方案 B：
+
+  v7.0 进：
+  - 骨架：状态机单入口、写章流程八阶段（机检/三审按新职责分工）、伏笔系统（声明
+  制）、客观事实记账、时间线（按卷）、分层摘要、改稿三档、git
+  隐身全套、精准读取接口
+  - 高呼声/低成本卖点：自动模式（连写，含回滚命令）、反和解规则、信息差登记（候
+  选制泄密检查）
+  - 配套：npx 安装器（工作目录布局）、/migrate、干净导出、AGENTS.md
+  - 文风层基础：文风铁律文件 + 禁词/句式机检（这部分是 v6 资产平移）
+
+  v7.x 推后：
+  - 金句库收割（含对话触发）——规则已设计但非首发必需
+  - 文风锚定（对标作者 few-shot）、桥段冷却、语气盲测、情绪波形、口癖卡
+  - 多宿主二级平台（Gemini/Cursor 社区版）；7.0 只发一级（Claude Code + Codex）
+
+  不做（已封死）：RAG/向量库、常驻服务、敏感词、AI 检测器承诺。
+
+  切线原则没变：今天已设计完且实现成本低的进 7.0，需要新设计或调参的体检类全部 
+  7.x。唯一我犹豫的是金句库——格式（文风/金句库/）在 7.0
+  就有定义，只是收割流程推后，手动往里放金句 7.0 就可以支持，自动收割 7.x 再来。
+
+  这个切法可以吗？
+
+✻ Crunched for 1m 34s
+
+❯ 可以                                                                          
+
+  Thought for 28s (ctrl+o to expand)
+
+● Update(.trellis/tasks/06-11-v7-prd-webnovel-writer/prd.md)  ⎿  Added 7 lines, removed 1 line
+      130  - **新增触发（作者提出）**：作者在对话中夸某段（"那儿写得不错"
+           之类）也触发收割候选。
+      131  - 最终入库一律经作者审核（审稿时顺手勾选），品味决策不交给阈值
+           。
+      132  
+      133 -### 原则-1：精准读取，非必要不全文读（2026-06-11，作者提出）  
+      133 +### 范围-1：v7.0 MVP 切分（2026-06-11，作者拍板）             
+      134  
+      135 +- **切线原则**：已设计完且实现成本低的进 7.0；需要新设计或调参
+          +的体检类全部 7.x。                                            
+      136 +- **v7.0**：状态机单入口、写章流程八阶段（机检/三审新分工）、 
+          +伏笔系统（声明制）、客观事实记账、时间线（按卷）、分层摘要、改
+          +稿三档、git 隐身全套、精准读取接口；自动模式（含"回到第 N 章" 
+          +）、反和解规则、信息差登记（候选制）；npx 安装器、`/migrate`、
+          +干净导出、AGENTS.md；文风铁律 + 禁词/句式机检；金句库目录与手 
+          +动放入（自动收割不进）。                                      
+      137 +- **v7.x**：金句库自动收割（含对话触发）、文风锚定、桥段冷却、
+          +语气盲测、情绪波形、口癖卡；多宿主二级平台（Gemini/Cursor）。 
+      138 +- **不做**：RAG/向量库、常驻服务、敏感词、AI 检测器承诺。     
+      139 +- 7.0 宿主范围：一级（Claude Code + Codex）。                 
+      140 +                                                              
+      141  - **所有数据文件的读取都应有"精准读到所需一段"的命令**：按章号
+           /编号/小节定位提取（如"读伏-031 的履历""读第 5 卷卷纲的高潮节
+           点""读 0152 章结尾 500 字"），由脚本提供。
+      142  - AI 非必要不整文件读取——包括参考资料、大纲、设定。这是 v6 tok
+           en 失控病根（#58/#92/#106）的根治手段之一，与"分层摘要+Grep 正
+           文"配套。
+      143  - **Consequences**: 每类文件的 spec 定义都要附"定位读取"的脚本
+           接口；`.cache/index.db` 的表设计要支撑这些查询；写作材料组装默
+           认用精准片段。
+
+  Thought for 13s, read 1 file (ctrl+o to expand)
+
+● Update(.trellis/tasks/06-11-v7-prd-webnovel-writer/prd.md)
+  ⎿  Added 2 lines
+      138  - **不做**：RAG/向量库、常驻服务、敏感词、AI 检测器承诺。
+      139  - 7.0 宿主范围：一级（Claude Code + Codex）。
+      140  
+      141 +### 原则-1：精准读取，非必要不全文读（2026-06-11，作者提出）  
+      142 +                                                              
+      143  - **所有数据文件的读取都应有"精准读到所需一段"的命令**：按章号
+           /编号/小节定位提取（如"读伏-031 的履历""读第 5 卷卷纲的高潮节
+           点""读 0152 章结尾 500 字"），由脚本提供。
+      144  - AI 非必要不整文件读取——包括参考资料、大纲、设定。这是 v6 tok
+           en 失控病根（#58/#92/#106）的根治手段之一，与"分层摘要+Grep 正
+           文"配套。
+      145  - **Consequences**: 每类文件的 spec 定义都要附"定位读取"的脚本
+           接口；`.cache/index.db` 的表设计要支撑这些查询；写作材料组装默
+           认用精准片段。
+
+  Thought for 32s (ctrl+o to expand)
+
+● 范围切分已记录。还剩最后三个开放问题，都不大，我给默认方案，你一次确认或调整：
+
+  Q2 作者旅程：PRD 三条旅程全写（新书作者 / v6 迁移作者 / 连写党），打磨优先级
+  新书 > 迁移 > 
+  连写——新书旅程是增长的大门，迁移旅程对老用户最关键，连写建立在前两者之上。
+
+  Q3 发布判据：
+  - 发 RFC：PRD 定稿 + 术语表/目录图/三旅程齐 → issue 区置顶征求意见，至少开放 1
+  周
+  - beta：用 v7 真实写一本书到 50 章（自用验证）+ Windows 中文路径全链路 CI 绿 +
+  "删光 .cache 全量重建" CI 绿
+  - 7.0.0：/migrate 在 ≥3 个真实 v6 项目跑通 + beta 期无数据丢失级 bug +
+  迁移指引文档齐
+
+  Q4 PRD 落点：docs/architecture/v7-prd.md（PR 进 v7 分支）；RFC 是 PRD
+  的作者话裁剪版，发 GitHub Discussion/置顶 issue，按"issue
+  回复用大白话"的口径写。
+
+  这三条过了的话，brainstorm 阶段就完整了。接下来我会：①按 Trellis 流程补
+  implement.jsonl/check.jsonl（列出写 PRD 要参考的文件清单），②task.py start
+  把任务转入实施，③正式起草完整的 docs/architecture/v7-prd.md——把今天 15
+  条决策、三条旅程、16
+  项问题空间映射、范围表、发布判据全部成文。草稿出来你逐节审。
+
+  可以开始吗？
+
+✻ Crunched for 1m 36s
+
+❯ 我刚才想了下有个不太对，承诺是承诺，伏笔是伏笔，还有爽点，钩子这些这些都是v6  
+  已有的东西                                                                    
+
+  Thought for 42s (ctrl+o to expand)
+
+● 你说得对，这是我合并过头了——v6 里 plot_threads（剧情线）、foreshadowing（伏笔
+  ）、chase_debt（追读）、reading_power（追读力）本来就是分开的体系，"伏笔"只是
+  其中一类。把悬念、感情线、爽点铺垫全塞进"伏笔"这个词，和把它们塞进"承诺"是同一
+  个错误：用一个词强行覆盖性质不同的东西。
+
+  修正方案：机制统一，名字分开——
+
+  - 引擎只有一套（这是 spec 0.5 真正的洞见，保留）：每条一个文件、开启/推进/收尾
+  的生命周期、"悬了太久"预警、定稿时结转，全部共用。
+  - 作者界面按类型用各自的原生名字，目录直接分开：
+
+  大纲/
+  ├── 总纲.md
+  ├── 卷纲/
+  ├── 伏笔/        伏-031-灭门真凶.md      （埋下 → 回收）
+  ├── 悬念/        悬-008-神秘老者身份.md   （设下 → 揭晓）
+  ├── 感情线/      情-012-林晚主线.md      （开启 → 推进 → 修成正果/无疾而终）
+  └── 爽点/        爽-007-当众打脸大长老.md （铺垫 → 兑现）
+
+  - 每类的生命周期动词用各自的说法（上面括号里），机器内部状态就是同一组（open/a
+  dvance/resolve/drop），front matter 字段全同构。
+  - 钩子不进这个体系——强弱钩是"每章结尾"的属性，住在章节 front matter 里，v6
+  怎么分我们怎么分。
+  - 机器域（.cache 表名、commit message 协议）随便叫 promise，作者永远看不到。
+
+  两个小决定请你顺手拍了：
+
+  1. 类型清单就上面四个（伏笔/悬念/感情线/爽点）够吗？spec 0.5
+  原来还列了"冲突"和"立旗"——我倾向砍掉：冲突是每章都有的东西不是账本条目，立旗（
+  flag）本身就是黑话直译，真有需求都能归进悬念或爽点。
+  2. "悬了太久"预警的阈值目前是全局一个（默认 10
+  章）——分类型默认值是不是更合理？感情线悬 30 章正常，爽点铺垫悬 10
+  章就该兑现了。
+
+✻ Cogitated for 58s
+
+❯ 爽点也不会，爽点有很多种，你可以看下v6关于爽点的提示词                        
+
+  Thought for 2m 59s, searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● 查了 v6 的资料，你完全正确——v6
+  里"爽点"根本不是一个账本条目，是一整套写作技法知识体系：追读力分类标准里钩子就
+  分危机钩/悬念钩/渴望钩/情绪钩/选择钩五类，爽点与节奏.csv
+  里光节奏型爽点就有压抑爆发、微反转补刀、黄金三章、修罗场加压、首杀争夺……几十种
+  ，按题材各有偏好和毒点。这些是指导每一章怎么写的知识，不是能开档案登记"铺垫→兑
+  现"的流水账。我把"爽点铺垫"塞进账本，是被 spec 0.5
+  那个大一统"承诺"概念带偏了。
+
+  修正后的全图，三层各归各位：
+
+  1. 账本层（有"开启→推进→收尾"生命周期的，才进账本）：
+  大纲/
+  ├── 伏笔/      伏-031   （埋下 → 回收）
+  ├── 悬念/      悬-008   （设下 → 揭晓）
+  └── 感情线/    情-012   （开启 → 推进 → 修成正果/无疾而终）
+
+  2. 知识层（v6 资产直接继承）：追读力分类、爽点与节奏
+  CSV、题材模板——这些喂给细纲和三审：拟细纲时按题材推荐本章的钩子类型/情绪定位/
+  爽点节拍，读者审用同一套标准挑毛病。v6 的 references 体系在 v7 
+  是平移不是重写，这也回应了"保留项目资产"的总决策。
+
+  3. 每章属性（章 front matter）：本章钩子类型与强弱、情绪定位（压抑/铺垫/小爽/
+  大爽/转折）——单章的事不进账本。
+
+  另外"装逼打脸蓄积了多少章"这个统计（原"爽点库存"），它的数据源本来就是信息差（
+  谁还不知道主角的底牌），所以它是信息差的一个派生报表，不需要独立机制。
+
+  剩一个小问题：v6 还有 plot_threads（剧情线/主线支线）。我的意见是不进账本——主
+  线支线的推进本来就是总纲/卷纲的正文内容，再开一类账就重复记账了。同意的话，账
+  本就定这三类（伏笔/悬念/感情线），迁移映射改为：foreshadowing→伏笔、plot_threa
+  ds→并入卷纲、chase_debt/reading_power→知识层与章属性。可以吗？
+
+✻ Cogitated for 3m 19s

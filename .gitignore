@@ -2,7 +2,6 @@
 .agents/
 .codex/
 .gemini/
-.trellis/
 AGENTS.md
 
 # Python caches & virtualenv
