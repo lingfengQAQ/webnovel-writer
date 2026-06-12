@@ -1,1 +1,5 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "docs/architecture/story-repo-spec-2026-06-10.md", "reason": "spec 0.5 全文——PRD 重审对象，保留项引用章节号，推翻项记 ADR"}
+{"file": "docs/architecture/multi-agent-adaptation-spec-2026-06-05.md", "reason": "多宿主 v3.1——安装器/AGENTS.md/hook ask 语义，PRD 安装与多宿主章节的输入"}
+{"file": "docs/architecture/v7-design-discussion-notes-2026-06-11.md", "reason": "设计纪要——v6 病根六条与问题空间 16 项，PRD 功能需求映射的母本"}
+{"file": "docs/architecture/story-repo-spec-feedback-2026-06-11.md", "reason": "差异意见（已吸收）——自动模式/Node 运行时的论证背景"}
+{"file": ".trellis/tasks/06-11-v7-prd-webnovel-writer/prd.md", "reason": "brainstorm 收口的 20 条 ADR——PRD 的全部已拍板决策，PRD 必须逐条落实"}
