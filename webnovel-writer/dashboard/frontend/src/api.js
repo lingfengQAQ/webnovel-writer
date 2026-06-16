@@ -15,6 +15,83 @@ export async function fetchJSON(path, params = {}) {
     return response.json()
 }
 
+export async function sendJSON(path, payload = {}, options = {}) {
+    const response = await fetch(`${BASE}${path}`, {
+        method: options.method || 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload),
+    })
+
+    const text = await response.text()
+    let data = null
+    if (text) {
+        try {
+            data = JSON.parse(text)
+        } catch {
+            data = { detail: text }
+        }
+    }
+
+    if (!response.ok) {
+        const detail = data?.detail || data?.error || `${response.status} ${response.statusText}`
+        throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail))
+    }
+    return data
+}
+
+export function fetchPlatformStatus() {
+    return fetchJSON('/api/platform/status')
+}
+
+export function fetchCurrentUser() {
+    return fetchJSON('/api/auth/me')
+}
+
+export function loginUser(payload) {
+    return sendJSON('/api/auth/login', payload)
+}
+
+export function registerUser(payload) {
+    return sendJSON('/api/auth/register', payload)
+}
+
+export function loginWithSubrouter(payload) {
+    return sendJSON('/api/auth/subrouter-login', payload)
+}
+
+export function loginWithSubrouterKey(payload) {
+    return sendJSON('/api/auth/subrouter-key-login', payload)
+}
+
+export function logoutUser() {
+    return sendJSON('/api/auth/logout')
+}
+
+export function saveSubrouterSettings(payload) {
+    return sendJSON('/api/user/subrouter', payload, { method: 'PUT' })
+}
+
+export function fetchProjects() {
+    return fetchJSON('/api/projects')
+}
+
+export function createProject(payload) {
+    return sendJSON('/api/projects', payload)
+}
+
+export function activateProject(projectId) {
+    return sendJSON(`/api/projects/${encodeURIComponent(projectId)}/activate`)
+}
+
+export function fetchSubrouterModels() {
+    return fetchJSON('/api/subrouter/models')
+}
+
+export function sendSubrouterChat(payload) {
+    return sendJSON('/api/subrouter/chat', payload)
+}
+
 export function fetchProjectInfo() {
     return fetchJSON('/api/project/info')
 }

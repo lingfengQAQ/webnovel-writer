@@ -4,6 +4,8 @@ Webnovel Dashboard - FastAPI 主应用
 仅提供 GET 接口（严格只读）；所有文件读取经过 path_guard 防穿越校验。
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import sqlite3
@@ -13,12 +15,20 @@ from contextlib import asynccontextmanager, closing
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Body, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from .path_guard import safe_resolve
+from .platform import (
+    attach_platform_context,
+    default_subrouter_base_url,
+    get_store,
+    platform_enabled,
+    request_project_root,
+    require_user_id,
+)
 from .watcher import FileWatcher
 
 # ---------------------------------------------------------------------------
@@ -39,6 +49,11 @@ LOCAL_CORS_ORIGINS = [
 
 
 def _get_project_root() -> Path:
+    contextual_root = request_project_root.get()
+    if contextual_root is not None:
+        return contextual_root
+    if platform_enabled():
+        require_user_id()
     if _project_root is None:
         raise HTTPException(status_code=500, detail="项目根目录未配置")
     return _project_root
@@ -263,6 +278,9 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def _lifespan(_: FastAPI):
+        if platform_enabled():
+            yield
+            return
         webnovel = _webnovel_dir()
         story_system = _story_system_dir()
         if webnovel.is_dir() or story_system.is_dir():
@@ -281,9 +299,128 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=LOCAL_CORS_ORIGINS,
-        allow_methods=["GET"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def platform_context_middleware(request: Request, call_next):
+        await attach_platform_context(request)
+        return await call_next(request)
+
+    # ===========================================================
+    # API：在线平台 / SubRouter 账户
+    # ===========================================================
+
+    @app.get("/api/platform/status")
+    def platform_status():
+        return {
+            **get_store().health(),
+            "default_subrouter_base_url": default_subrouter_base_url(),
+        }
+
+    @app.post("/api/auth/register")
+    def auth_register(response: Response, payload: dict = Body(default={})):
+        user = get_store().register(
+            username=str(payload.get("username") or ""),
+            password=str(payload.get("password") or ""),
+            email=str(payload.get("email") or ""),
+            subrouter_api_key=str(payload.get("subrouter_api_key") or payload.get("subrouterApiKey") or ""),
+            subrouter_base_url=str(payload.get("subrouter_base_url") or payload.get("subrouterBaseUrl") or ""),
+        )
+        token = get_store().create_session(user["id"])
+        get_store().set_session_cookie(response, token)
+        return {"user": get_store().get_user(user["id"]), "projects": get_store().list_projects(user["id"])}
+
+    @app.post("/api/auth/login")
+    def auth_login(response: Response, payload: dict = Body(default={})):
+        user = get_store().login(
+            username=str(payload.get("username") or ""),
+            password=str(payload.get("password") or ""),
+        )
+        token = get_store().create_session(user["id"])
+        get_store().set_session_cookie(response, token)
+        return {"user": user, "projects": get_store().list_projects(user["id"])}
+
+    @app.post("/api/auth/subrouter-login")
+    async def auth_subrouter_login(response: Response, payload: dict = Body(default={})):
+        user = await get_store().subrouter_password_login(
+            username=str(payload.get("username") or ""),
+            password=str(payload.get("password") or ""),
+            base_url=str(payload.get("base_url") or payload.get("baseUrl") or ""),
+        )
+        token = get_store().create_session(user["id"])
+        get_store().set_session_cookie(response, token)
+        return {"user": get_store().get_user(user["id"]), "projects": get_store().list_projects(user["id"])}
+
+    @app.post("/api/auth/subrouter-key-login")
+    def auth_subrouter_key_login(response: Response, payload: dict = Body(default={})):
+        user = get_store().subrouter_login(
+            api_key=str(payload.get("api_key") or payload.get("apiKey") or ""),
+            base_url=str(payload.get("base_url") or payload.get("baseUrl") or ""),
+            display_name=str(payload.get("display_name") or payload.get("displayName") or ""),
+        )
+        token = get_store().create_session(user["id"])
+        get_store().set_session_cookie(response, token)
+        return {"user": get_store().get_user(user["id"]), "projects": get_store().list_projects(user["id"])}
+
+    @app.post("/api/auth/logout")
+    def auth_logout(request: Request, response: Response):
+        get_store().delete_session(request.cookies.get("ww_session"))
+        get_store().clear_session_cookie(response)
+        return {"ok": True}
+
+    @app.get("/api/auth/me")
+    def auth_me():
+        user_id = require_user_id()
+        return {
+            "user": get_store().get_user(user_id),
+            "projects": get_store().list_projects(user_id),
+            "current_project": get_store().current_project(user_id),
+        }
+
+    @app.put("/api/user/subrouter")
+    def save_subrouter_settings(payload: dict = Body(default={})):
+        user_id = require_user_id()
+        user = get_store().update_subrouter_settings(
+            user_id,
+            api_key=payload.get("api_key") if "api_key" in payload else payload.get("apiKey"),
+            base_url=payload.get("base_url") if "base_url" in payload else payload.get("baseUrl"),
+            default_model=payload.get("default_model") if "default_model" in payload else payload.get("defaultModel"),
+        )
+        return {"user": user}
+
+    @app.get("/api/projects")
+    def list_platform_projects():
+        user_id = require_user_id()
+        return {
+            "projects": get_store().list_projects(user_id),
+            "current_project": get_store().current_project(user_id),
+        }
+
+    @app.post("/api/projects")
+    def create_platform_project(payload: dict = Body(default={})):
+        user_id = require_user_id()
+        project = get_store().create_project(
+            user_id,
+            name=str(payload.get("name") or ""),
+            genre=str(payload.get("genre") or ""),
+        )
+        return {"project": project, "projects": get_store().list_projects(user_id)}
+
+    @app.post("/api/projects/{project_id}/activate")
+    def activate_platform_project(project_id: str):
+        user_id = require_user_id()
+        project = get_store().activate_project(user_id, project_id)
+        return {"project": project, "projects": get_store().list_projects(user_id)}
+
+    @app.get("/api/subrouter/models")
+    async def subrouter_models():
+        return await get_store().fetch_models(require_user_id())
+
+    @app.post("/api/subrouter/chat")
+    async def subrouter_chat(payload: dict = Body(default={})):
+        return await get_store().chat_completion(require_user_id(), payload)
 
     # ===========================================================
     # API：项目元信息

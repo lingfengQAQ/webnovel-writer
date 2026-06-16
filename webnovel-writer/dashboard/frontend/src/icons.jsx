@@ -163,3 +163,34 @@ export function SearchIcon(props) {
         </IconBase>
     )
 }
+
+export function SparkIcon(props) {
+    return (
+        <IconBase {...props}>
+            <rect x="11" y="2" width="2" height="6" />
+            <rect x="11" y="16" width="2" height="6" />
+            <rect x="2" y="11" width="6" height="2" />
+            <rect x="16" y="11" width="6" height="2" />
+            <rect x="8" y="8" width="8" height="8" transform="rotate(45 12 12)" />
+        </IconBase>
+    )
+}
+
+export function UserIcon(props) {
+    return (
+        <IconBase {...props}>
+            <rect x="8" y="4" width="8" height="8" />
+            <rect x="5" y="14" width="14" height="6" />
+        </IconBase>
+    )
+}
+
+export function LogOutIcon(props) {
+    return (
+        <IconBase {...props}>
+            <rect x="3" y="4" width="10" height="16" />
+            <rect x="11" y="11" width="9" height="2" />
+            <polygon points="17,7 22,12 17,17" />
+        </IconBase>
+    )
+}

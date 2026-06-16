@@ -153,6 +153,70 @@ pre {
   font-weight: 600;
 }
 
+.project-switcher {
+  display: grid;
+  gap: 8px;
+  border-bottom: 3px solid var(--border-main);
+  padding: 12px;
+}
+
+.project-switcher select,
+.project-switcher input,
+.form-field input,
+.form-field select,
+.writer-prompt {
+  width: 100%;
+  border: 2px solid var(--border-main);
+  background: #fffef8;
+  color: var(--text-main);
+  padding: 8px 10px;
+}
+
+.account-row,
+.new-project-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.icon-btn,
+.new-project-form button,
+.primary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border-main);
+  background: #dff3ff;
+  color: var(--text-main);
+  cursor: pointer;
+  font-weight: 700;
+  box-shadow: var(--shadow-soft);
+}
+
+.icon-btn {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+}
+
+.new-project-form input {
+  min-width: 0;
+}
+
+.new-project-form button {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+}
+
 .main-content {
   min-width: 0;
   overflow-y: auto;
@@ -163,6 +227,121 @@ pre {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+}
+
+.auth-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(360px, 1.05fr);
+  gap: 18px;
+  width: min(980px, 100%);
+  align-items: stretch;
+}
+
+.auth-copy,
+.auth-card {
+  border: 3px solid var(--border-main);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-main);
+  padding: 20px;
+}
+
+.auth-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.auth-copy h1 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.auth-copy p {
+  color: var(--text-sub);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.auth-endpoint {
+  display: grid;
+  gap: 6px;
+  border: 2px solid var(--border-soft);
+  background: #fffef8;
+  padding: 12px;
+}
+
+.auth-endpoint span {
+  color: var(--text-mute);
+  font-weight: 700;
+}
+
+.auth-endpoint code {
+  word-break: break-all;
+}
+
+.auth-card,
+.settings-form {
+  display: grid;
+  gap: 12px;
+}
+
+.segmented-control {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.segmented-control button {
+  min-height: 38px;
+  border: 2px solid var(--border-main);
+  background: #fff8e6;
+  color: var(--text-main);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.segmented-control button.active {
+  background: #dff3ff;
+  border-color: var(--accent-blue);
+}
+
+.form-field {
+  display: grid;
+  gap: 6px;
+}
+
+.form-field span {
+  color: var(--text-sub);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.form-error {
+  border: 2px solid var(--accent-red);
+  background: #ffe0e5;
+  color: #8f1d30;
+  padding: 8px 10px;
+  font-weight: 700;
+}
+
+.primary-btn {
+  min-height: 42px;
+  padding: 8px 12px;
+  background: #dcfce7;
+}
+
+.primary-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .page-header {
@@ -327,6 +506,43 @@ pre {
 .content-grid {
   display: grid;
   gap: 16px;
+}
+
+.writer-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  align-items: start;
+}
+
+.writer-main,
+.writer-settings {
+  min-width: 0;
+}
+
+.writer-prompt {
+  min-height: 220px;
+  resize: vertical;
+}
+
+.writer-output {
+  margin-top: 12px;
+}
+
+.writer-output pre {
+  overflow: auto;
+  min-height: 320px;
+  max-height: 680px;
+  border: 2px solid var(--border-soft);
+  background: #fffef8;
+  padding: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.writer-settings {
+  position: sticky;
+  top: 22px;
+  display: grid;
+  gap: 12px;
 }
 
 .content-grid.two-columns {
@@ -723,11 +939,14 @@ pre {
 @media (max-width: 1180px) {
   .content-grid.two-columns,
   .split-layout,
-  .files-layout {
+  .files-layout,
+  .writer-grid,
+  .auth-panel {
     grid-template-columns: 1fr;
   }
 
-  .sticky-card {
+  .sticky-card,
+  .writer-settings {
     position: static;
   }
 }

@@ -5,6 +5,7 @@ import App from './App.jsx'
 import './index.css'
 
 const OverviewPage = lazy(() => import('./pages/OverviewPage.jsx'))
+const WriterPage = lazy(() => import('./pages/WriterPage.jsx'))
 const CharactersPage = lazy(() => import('./pages/CharactersPage.jsx'))
 const PacingPage = lazy(() => import('./pages/PacingPage.jsx'))
 const ForeshadowingPage = lazy(() => import('./pages/ForeshadowingPage.jsx'))
@@ -28,6 +29,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Suspense fallback={<LoadingScreen />}>
                 <Routes>
                     <Route path="/" element={<App />}>
+                        <Route path="writer" element={<WriterPage />} />
                         <Route index element={<OverviewPage />} />
                         <Route path="characters" element={<CharactersPage />} />
                         <Route path="pacing" element={<PacingPage />} />

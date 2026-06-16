@@ -5,6 +5,8 @@ Watchdog 文件变更监听器 + SSE 推送
 通过 SSE 通知所有已连接的前端客户端刷新数据。
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import time

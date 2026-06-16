@@ -14,6 +14,33 @@
 
 一句话定位：这是一套面向长篇连载的一致性系统，不是写完就忘的一次性生成器。
 
+## Hosted Platform / Railway
+
+本分支额外提供一个可部署的在线平台模式：
+
+- 多用户账号：支持 SubRouter 主站/分站账号密码登录，也保留平台用户名密码。
+- SubRouter 模型：后端复用 SubRouter 登录会话，自动创建或复用用户调用密钥，再调用 OpenAI 兼容接口；前端读取模型后直接选择使用。
+- 多项目隔离：每个用户可以创建多个网文项目，项目文件独立存放。
+- 单目录持久化：Railway 只需要挂载一个 `/data` volume，`platform.sqlite3` 和所有用户项目都在 `/data` 下。
+
+Railway 部署时使用仓库根目录的 `Dockerfile` 和 `railway.toml`。关键环境变量：
+
+```bash
+WEBNOVEL_PLATFORM_ENABLED=true
+WEBNOVEL_DATA_DIR=/data
+SUBROUTER_BASE_URL=http://subrouter.railway.internal:8080
+```
+
+`SUBROUTER_BASE_URL` 是 SubRouter 管理/API 服务地址，不需要手动加 `/v1`；本平台在模型列表和生成请求时会自动调用 `${SUBROUTER_BASE_URL}/v1/...`。
+
+如果不走 Railway 私网，也可以使用公网地址：
+
+```bash
+SUBROUTER_BASE_URL=https://api.subrouter.com
+```
+
+把 `subrouter` 换成你的 Railway SubRouter 服务名（如果不同）。这个 `.railway.internal` 地址只能由后端服务访问，浏览器不能直连；本平台所有登录、模型列表和生成请求都会从后端代理出去。
+
 > **v7 重构 RFC 公示中**
 >
 > 下一代 v7 设计已经进入公开意见征集期，欢迎阅读 [Discussions #118：v7 设计公示](https://github.com/lingfengQAQ/webnovel-writer/discussions/118) 并留下反馈。只看 Issue 区的用户也可以从 [Issue #119：v7 公示指引帖](https://github.com/lingfengQAQ/webnovel-writer/issues/119) 进入；原“下一步方向投票”已结束，后续优先级将以 RFC 反馈和实施计划为准。
