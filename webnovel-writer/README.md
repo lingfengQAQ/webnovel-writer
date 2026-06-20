@@ -64,20 +64,18 @@ claude plugin install webnovel-writer@webnovel-writer-marketplace --scope user
    cp -r <plugin_dir>/skills/* ~/.config/opencode/skills/
    ```
 
-3. 设置环境变量（在 `opencode.json` 或 shell profile 中）：
-   ```json
-   {
-     "rule": [
-       {
-         "pattern": "**",
-         "env": {
-           "OPENCODE_PLUGIN_ROOT": "/path/to/plugin/dir",
-           "OPENCODE_PROJECT_DIR": "/path/to/your/novel/project"
-         }
-       }
-     ]
-   }
+3. 设置环境变量（在 shell profile 或系统环境变量中）：
+   ```bash
+   # Linux/Mac（添加到 ~/.bashrc 或 ~/.zshrc）
+   export OPENCODE_PLUGIN_ROOT="/path/to/plugin/dir"
+   export OPENCODE_PROJECT_DIR="/path/to/your/novel/project"
+   
+   # Windows（管理员 PowerShell）
+   setx OPENCODE_PLUGIN_ROOT "D:\\path\\to\\plugin"
+   setx OPENCODE_PROJECT_DIR "D:\\path\\to\\novel"
    ```
+   
+   > **注意**：OpenCode 的配置文件 (`opencode.json`) 不支持设置环境变量。环境变量须通过操作系统或 shell profile 设置。插件自带的 `opencode.json` 仅用于配置技能权限，非必需。
 
 4. Python 依赖：
    ```bash
