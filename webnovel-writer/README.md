@@ -38,14 +38,55 @@
 
 ## 依赖与安装
 
-通过 Claude Code Marketplace 安装（推荐）：
+### Claude Code（推荐）
+
+通过 Claude Code Marketplace 安装：
 
 ```bash
 claude plugin marketplace add lingfengQAQ/webnovel-writer --scope user
 claude plugin install webnovel-writer@webnovel-writer-marketplace --scope user
 ```
 
-Python 依赖：
+### OpenCode
+
+本项目同时兼容 [OpenCode](https://opencode.ai)。安装步骤：
+
+1. 将 `skills/`、`agents/`、`scripts/`、`dashboard/`、`references/`、`templates/` 和 `hooks/` 拷贝到本地目录（例如 `~/.opencode/plugins/webnovel-writer/`）。
+
+2. 将 skills 链接到 OpenCode 可发现的位置：
+   ```bash
+   # 项目级：在书项目根目录下
+   mkdir -p .opencode/skills
+   cp -r <plugin_dir>/skills/* .opencode/skills/
+   
+   # 或全局：
+   mkdir -p ~/.config/opencode/skills
+   cp -r <plugin_dir>/skills/* ~/.config/opencode/skills/
+   ```
+
+3. 设置环境变量（在 `opencode.json` 或 shell profile 中）：
+   ```json
+   {
+     "rule": [
+       {
+         "pattern": "**",
+         "env": {
+           "OPENCODE_PLUGIN_ROOT": "/path/to/plugin/dir",
+           "OPENCODE_PROJECT_DIR": "/path/to/your/novel/project"
+         }
+       }
+     ]
+   }
+   ```
+
+4. Python 依赖：
+   ```bash
+   python -m pip install -r scripts/requirements.txt
+   ```
+
+> **环境变量说明**：OpenCode 不设置 `CLAUDE_*` 变量。本项目同时识别 `OPENCODE_PLUGIN_ROOT`（等价于 `CLAUDE_PLUGIN_ROOT`）和 `OPENCODE_PROJECT_DIR`（等价于 `CLAUDE_PROJECT_DIR`）。设置其中任一即可，两者都不设置时脚本会尝试从当前目录推断项目根。
+
+### Python 依赖（通用）
 
 ```bash
 python -m pip install -r scripts/requirements.txt

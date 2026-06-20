@@ -2,6 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 Runtime compatibility helpers.
+
+OpenCode adaptation notes:
+- OpenCode does not set CLAUDE_PLUGIN_ROOT / CLAUDE_PROJECT_DIR.
+- Users should set OPENCODE_PLUGIN_ROOT and OPENCODE_PROJECT_DIR.
+- Python code checks both, preferring CLAUDE_* when set, falling back to OPENCODE_*.
 """
 
 from __future__ import annotations
