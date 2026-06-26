@@ -1,7 +1,7 @@
 # webnovel-writer v7 实施计划（里程碑路线图）
 
-> 状态：草案 0.2（2026-06-26，反映 RFC 后续决策）
-> 上游：`v7-prd.md` 1.0、`story-repo-spec-2026-06-10.md` 0.7、`multi-agent-adaptation-spec-2026-06-05.md` v3.3、`.trellis/spec/backend/` 基线 1.0
+> 状态：草案 0.2（2026-06-26，反映 RFC 后续决策；2026-06-27 同步 D3/D4）
+> 上游：`v7-prd.md` 1.0、`story-repo-spec-2026-06-10.md` 0.8、`multi-agent-adaptation-spec-2026-06-05.md` v3.4、`.trellis/spec/backend/` 基线 1.0
 > 地位：本文档管**实施排程**——把 PRD §6 的 v7.0 范围切成有依赖顺序、有出口判据的里程碑。范围与行为以 PRD/spec 为准，两者冲突时改本文档。
 
 ---
@@ -11,8 +11,8 @@
 | 事项 | 状态 |
 |---|---|
 | PRD 1.0 | ✅ 定稿（06-12，作者逐项确认） |
-| story-repo-spec 0.7 / multi-agent-spec v3.3 | ✅ 按 PRD §10 修订指令完成，RFC 后续决策已落地（06-26） |
-| RFC | ✅ 已发 Discussions（06-12），~06-19 收口，06-26 完成后续决策（A1/A2/A3/D1/D2） |
+| story-repo-spec 0.8 / multi-agent-spec v3.4 | ✅ 按 PRD §10 修订指令完成，RFC 后续决策已落地（06-26）+ RFC 深度核验 D3/D4（06-27） |
+| RFC | ✅ 已发 Discussions（06-12），~06-19 收口，06-26 完成后续决策（A1/A2/A3/D1/D2），06-27 深度核验补 D3/D4 |
 | 后端开发规范基线 1.0 | ✅ `.trellis/spec/backend/` |
 | v7 代码 | ❌ 0 行（`webnovel-writer/` 目录是 v6 遗产，冻结） |
 | PRD 开放问题 | O2/O3 已消解；**O4（精准读取接口完整清单 + `.cache` 表设计）归 M1 第一步**（不在 RFC 后续任务范围，需单独任务） |
@@ -135,14 +135,15 @@ steps:
 
 ### M4 AI 角色层 + 一级宿主壳（可与 M2/M3 部分并行）
 
-- SKILL.md 入口、角色单源生成三平台壳 + drift check（multi-agent-spec v3.3）
+- SKILL.md 入口、角色单源生成三平台壳 + drift check（multi-agent-spec v3.4）
 - 两审任务书单源（事实审查/编辑审，RFC 决策 D1/D2）、写评分离的上下文编排、降级模式（无 subagent 顺序执行，诚实声明隔离度下降）
 - 两审输出格式：结构化问题清单（severity + category + blocking），参考 v6 review schema
+- **D3 未登记伏笔检测**：事实审查搭整章通读，反查"正文疑似伏笔但无条目"，产 `unregistered_thread` 候选，恒非阻断，作者裁决（spec 0.8 §8 第 6 步）
 - SessionStart 注入（读 `books.jsonl`）；无 hook 宿主状态机入口等价路径
 - 知识层平移：37 题材模板、追读力分类、爽点节奏库（纯搬运，可提前并行做）
 - **架构实施**（§1.5 原则）：AI 只吃 DTO（CharacterContext、ChapterBrief、ReviewInput），只吐结构化输出
 - **出口**：Claude Code + Codex 各跑一次真模型 smoke（建书引导→写 1 章→定稿→导出）
-- **出口**：Claude Code 与 Codex 各跑一次真模型 smoke——建书 → 写 1 章 → 三审 → 定稿
+- **出口**：Claude Code 与 Codex 各跑一次真模型 smoke——建书 → 写 1 章 → 两审 → 定稿
 
 ### M5 安装器与多本书
 

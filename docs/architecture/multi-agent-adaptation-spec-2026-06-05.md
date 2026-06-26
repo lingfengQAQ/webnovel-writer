@@ -1,9 +1,9 @@
 # Webnovel Writer 多宿主与多智能体适配 Spec
 
-> 日期：2026-06-05（v3 修订：2026-06-11；v3.1：同日，hook 语义 deny → ask，依据 #113；v3.2：2026-06-12，按 PRD 1.0 §10.2 修订——安装器重写为工作目录布局、AGENTS.md 公约数层、SessionStart 注入、模板条件块、放弃插件市场；v3.3：2026-06-26，RFC 后续决策——两审模式、审稿清单定义）
-> 状态：草案 v3.3
-> 基线：**v7 story repo**（`story-repo-spec-2026-06-10.md` 0.7）+ **PRD**（`v7-prd.md` 1.0，产品法律文本，冲突时以 PRD 为准）。v2 的基线是 v6.1.0 Python runtime，该架构已被 v7 推翻；本版继承 v2 的元层纪律，重写全部基座层。
-> 来源：v2（基于 PR #110 review 重写）+ 2026-06 多平台调研核验 + Trellis 多宿主机制调研（2026-06-11）+ PRD 1.0 + RFC 后续决策（2026-06-26）
+> 日期：2026-06-05（v3 修订：2026-06-11；v3.1：同日，hook 语义 deny → ask，依据 #113；v3.2：2026-06-12，按 PRD 1.0 §10.2 修订——安装器重写为工作目录布局、AGENTS.md 公约数层、SessionStart 注入、模板条件块、放弃插件市场；v3.3：2026-06-26，RFC 后续决策——两审模式、审稿清单定义；v3.4：2026-06-27，RFC 深度核验——事实审查增 D3 未登记伏笔检测 category）
+> 状态：草案 v3.4
+> 基线：**v7 story repo**（`story-repo-spec-2026-06-10.md` 0.8）+ **PRD**（`v7-prd.md` 1.0，产品法律文本，冲突时以 PRD 为准）。v2 的基线是 v6.1.0 Python runtime，该架构已被 v7 推翻；本版继承 v2 的元层纪律，重写全部基座层。
+> 来源：v2（基于 PR #110 review 重写）+ 2026-06 多平台调研核验 + Trellis 多宿主机制调研（2026-06-11）+ PRD 1.0 + RFC 后续决策（2026-06-26）+ RFC 深度核验（2026-06-27）
 > 定位：把 v7 的格式层（story repo）原封不动地暴露给多个 agent 宿主——格式平台无关，本 spec 只管入口怎么落、角色怎么生成、安装怎么零门槛、支持等级怎么诚实。
 
 ---
@@ -110,11 +110,11 @@ Claude Code 的使用体验是其他宿主的对照基准。**插件市场渠道
 
 ### 5.4 Subagent 只做增强，不做依赖
 
-### 5.4 两审模式与降级诚实（RFC 决策 D1/D2）
+### 5.4 两审模式与降级诚实（RFC 决策 D1/D2/D3）
 
 **完整模式**（推荐）：
 - 两审（story repo spec §8 第 6 步：事实审查/编辑审）在支持 subagent 的宿主上用独立 subagent 保证"各自新鲜上下文"。
-- 事实审查：v6 的 5 维度（设定一致性、时间线、叙事连贯、角色一致性、逻辑）+ v7 特有项（"要写到的事"核对、泄密候选判断、履历证据验证）
+- 事实审查：v6 的 5 维度（设定一致性、时间线、叙事连贯、角色一致性、逻辑）+ v7 特有项（"要写到的事"核对、泄密候选判断、履历证据验证、未登记伏笔检测 `unregistered_thread` 候选）
 - 编辑审：结构、节奏、商业性、主角动机
 - 输出格式：结构化问题清单（severity + category + blocking），参考 v6 review schema
 
@@ -130,7 +130,7 @@ Claude Code 的使用体验是其他宿主的对照基准。**插件市场渠道
   "issues": [
     {
       "severity": "critical | high | medium | low",
-      "category": "setting | timeline | continuity | character | logic | requirement | leak | evidence | structure | pacing | commercial | motivation",
+      "category": "setting | timeline | continuity | character | logic | requirement | leak | evidence | unregistered_thread | structure | pacing | commercial | motivation",
       "location": "第N段 或 具体引用",
       "description": "问题描述",
       "evidence": "原文引用 vs 数据记录",
@@ -148,6 +148,7 @@ Claude Code 的使用体验是其他宿主的对照基准。**插件市场渠道
 **阻断规则**：
 - `severity=critical` 自动 `blocking=true`
 - 其他 severity 由 AI 根据上下文判断是否 blocking
+- `category=unregistered_thread`（D3 未登记伏笔候选）**恒为 `blocking=false`**——即兴伏笔可能是神来之笔，非缺陷；判定门槛保守，只出候选交作者裁决（登记成条目/忽略/删掉），详见 story repo spec §8
 - 存在 `blocking=true` 的问题 → 作者审稿时看到明确标识
 - 作者可选择：接受当前版本（即使有非阻断问题）/ 改完接受 / 打回重写
 
