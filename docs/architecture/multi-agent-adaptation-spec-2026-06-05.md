@@ -1,9 +1,9 @@
 # Webnovel Writer 多宿主与多智能体适配 Spec
 
-> 日期：2026-06-05（v3 修订：2026-06-11；v3.1：同日，hook 语义 deny → ask，依据 #113；v3.2：2026-06-12，按 PRD 1.0 §10.2 修订——安装器重写为工作目录布局、AGENTS.md 公约数层、SessionStart 注入、模板条件块、放弃插件市场）
-> 状态：草案 v3.2
-> 基线：**v7 story repo**（`story-repo-spec-2026-06-10.md` 0.6）+ **PRD**（`v7-prd.md` 1.0，产品法律文本，冲突时以 PRD 为准）。v2 的基线是 v6.1.0 Python runtime，该架构已被 v7 推翻；本版继承 v2 的元层纪律，重写全部基座层。
-> 来源：v2（基于 PR #110 review 重写）+ 2026-06 多平台调研核验 + Trellis 多宿主机制调研（2026-06-11）+ PRD 1.0
+> 日期：2026-06-05（v3 修订：2026-06-11；v3.1：同日，hook 语义 deny → ask，依据 #113；v3.2：2026-06-12，按 PRD 1.0 §10.2 修订——安装器重写为工作目录布局、AGENTS.md 公约数层、SessionStart 注入、模板条件块、放弃插件市场；v3.3：2026-06-26，RFC 后续决策——两审模式、审稿清单定义）
+> 状态：草案 v3.3
+> 基线：**v7 story repo**（`story-repo-spec-2026-06-10.md` 0.7）+ **PRD**（`v7-prd.md` 1.0，产品法律文本，冲突时以 PRD 为准）。v2 的基线是 v6.1.0 Python runtime，该架构已被 v7 推翻；本版继承 v2 的元层纪律，重写全部基座层。
+> 来源：v2（基于 PR #110 review 重写）+ 2026-06 多平台调研核验 + Trellis 多宿主机制调研（2026-06-11）+ PRD 1.0 + RFC 后续决策（2026-06-26）
 > 定位：把 v7 的格式层（story repo）原封不动地暴露给多个 agent 宿主——格式平台无关，本 spec 只管入口怎么落、角色怎么生成、安装怎么零门槛、支持等级怎么诚实。
 
 ---
@@ -63,7 +63,7 @@ Codex 跑 GPT、Cursor 什么模型都有。"流程薄 + 脚本确定性"不是�
 ### 3.2 具体目标
 
 1. 状态机单入口落成标准 SKILL.md，在所有支持 SKILL.md 的宿主上可发现、可执行。
-2. 角色（三审：读者审/编辑审/设定校对）单源定义，构建时生成各平台壳。
+2. 角色（两审：事实审查/编辑审）单源定义，构建时生成各平台壳。
 3. 所有宿主复用同一套 Node 脚本（机检、定稿、全书近况、体检），零业务逻辑复制。
 4. `npx` 安装器一条命令完成环境检测与 skills 分发（根治 v6 #90/#103/#69 安装类 issue）。
 5. 每个宿主的支持状态可验证：support.md + smoke + 分级 registry，不承诺未核验的能力。
@@ -110,9 +110,48 @@ Claude Code 的使用体验是其他宿主的对照基准。**插件市场渠道
 
 ### 5.4 Subagent 只做增强，不做依赖
 
-- 三审（story repo spec §8 第 6 步：读者审/编辑审/设定校对）在支持 subagent 的宿主上用独立 subagent 保证"各自新鲜上下文"。
-- 不支持的宿主降级：主 agent 按同一份三审任务书顺序执行，输出必须明确声明"未调用 subagent，使用兼容模式"。
-- **降级诚实条款（继承 v2）**：不允许声称调用了不存在的能力；机检与定稿是脚本，不参与降级。
+### 5.4 两审模式与降级诚实（RFC 决策 D1/D2）
+
+**完整模式**（推荐）：
+- 两审（story repo spec §8 第 6 步：事实审查/编辑审）在支持 subagent 的宿主上用独立 subagent 保证"各自新鲜上下文"。
+- 事实审查：v6 的 5 维度（设定一致性、时间线、叙事连贯、角色一致性、逻辑）+ v7 特有项（"要写到的事"核对、泄密候选判断、履历证据验证）
+- 编辑审：结构、节奏、商业性、主角动机
+- 输出格式：结构化问题清单（severity + category + blocking），参考 v6 review schema
+
+**兼容模式**（降级）：
+- 不支持 subagent 的宿主：主 agent 按同一份两审任务书顺序执行
+- 输出必须明确声明："本次使用兼容模式（单上下文顺序审稿），审稿隔离度低于完整两审模式"
+- 审稿报告中标注使用的模式
+
+**审稿清单输出格式**：
+```json
+{
+  "chapter": 100,
+  "issues": [
+    {
+      "severity": "critical | high | medium | low",
+      "category": "setting | timeline | continuity | character | logic | requirement | leak | evidence | structure | pacing | commercial | motivation",
+      "location": "第N段 或 具体引用",
+      "description": "问题描述",
+      "evidence": "原文引用 vs 数据记录",
+      "fix_hint": "修复方向",
+      "blocking": true
+    }
+  ],
+  "issues_count": 1,
+  "blocking_count": 1,
+  "has_blocking": true,
+  "summary": "N个问题：X个阻断，Y个高优"
+}
+```
+
+**阻断规则**：
+- `severity=critical` 自动 `blocking=true`
+- 其他 severity 由 AI 根据上下文判断是否 blocking
+- 存在 `blocking=true` 的问题 → 作者审稿时看到明确标识
+- 作者可选择：接受当前版本（即使有非阻断问题）/ 改完接受 / 打回重写
+
+**降级诚实条款（继承 v2）**：不允许声称调用了不存在的能力；机检与定稿是脚本，不参与降级。
 
 ### 5.5 Hook 只是 Claude Code 上的自动兜底
 
@@ -244,7 +283,7 @@ node scripts/build-host-shells.mjs --check     # drift check，CI 必跑
 - **drift check**：`build-host-shells.mjs --check`，验证生成器输出确定性（同输入必同输出），CI 必跑。
 - **package validator**：registry schema、逐宿主 support.md 存在性、smoke 命令声明、生成物无本机绝对路径、skill description 长度（Codex 8k 预算）。
 - **行为 smoke**（每个一级宿主）：discover（skill 可发现）→ npx init → 建书 → 全书近况 → 写一章全流程（细纲→定稿）→ 删 `.cache/` 重建。Windows 中文路径全链路必测。
-- **降级验收**：至少一个无 subagent 环境跑通三审兼容模式，且输出含兼容模式声明。
+- **降级验收**：至少一个无 subagent 环境跑通两审兼容模式，且输出含兼容模式声明。
 
 ---
 
@@ -267,7 +306,7 @@ node scripts/build-host-shells.mjs --check     # drift check，CI 必跑
 |---|---|
 | 宿主能力描述过期 | support.md 核验日期纪律；无核验不进一二级 |
 | 角色壳三平台漂移 | 单源 `roles/` + 生成器，禁止手改生成物，drift check 兜底 |
-| 弱模型宿主上流程失守 | 机检与定稿全是脚本；模型只做写稿与三审 |
+| 弱模型宿主上流程失守 | 机检与定稿全是脚本；模型只做写稿与两审 |
 | Codex skill 预算超限 | validator 检查 description 长度 |
 | 降级模式被冒充 | 降级诚实条款进行为 smoke 验收 |
 | Windows 中文路径 | Node 默认 UTF-8 + CI 全链路测试 |
@@ -280,7 +319,7 @@ node scripts/build-host-shells.mjs --check     # drift check，CI 必跑
 - [ ] npx 安装器在 Windows 中文环境一条命令完成工作目录布局（含 AGENTS.md、books.jsonl、平台壳）。
 - [ ] update 哈希追踪：改过的文件不被静默覆盖。
 - [ ] registry 三级分级，一级宿主有 support.md + 过 smoke。
-- [ ] 无 subagent 宿主跑通三审兼容模式且如实声明。
+- [ ] 无 subagent 宿主跑通两审兼容模式且如实声明。
 - [ ] hook 缺席的宿主核心流程行为等价（含 books.jsonl 上下文注入的等价路径）。
 
 ## 13. 简短结论

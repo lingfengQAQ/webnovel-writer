@@ -1,21 +1,21 @@
 # webnovel-writer v7 实施计划（里程碑路线图）
 
-> 状态：草案 0.1（2026-06-13，待作者确认）
-> 上游：`v7-prd.md` 1.0（产品法律文本）、`story-repo-spec-2026-06-10.md` 0.6（格式法律文本）、`multi-agent-adaptation-spec-2026-06-05.md` v3.2（宿主适配）、`.trellis/spec/backend/` 基线 1.0（开发规范）
+> 状态：草案 0.2（2026-06-26，反映 RFC 后续决策）
+> 上游：`v7-prd.md` 1.0、`story-repo-spec-2026-06-10.md` 0.7、`multi-agent-adaptation-spec-2026-06-05.md` v3.3、`.trellis/spec/backend/` 基线 1.0
 > 地位：本文档管**实施排程**——把 PRD §6 的 v7.0 范围切成有依赖顺序、有出口判据的里程碑。范围与行为以 PRD/spec 为准，两者冲突时改本文档。
 
 ---
 
-## 0. 现状盘点（2026-06-13）
+## 0. 现状盘点（2026-06-26）
 
 | 事项 | 状态 |
 |---|---|
 | PRD 1.0 | ✅ 定稿（06-12，作者逐项确认） |
-| story-repo-spec 0.6 / multi-agent-spec v3.2 | ✅ 按 PRD §10 修订指令完成 |
-| RFC | ✅ 已发 Discussions（06-12），开放至少 1 周 → **~06-19 收口** |
+| story-repo-spec 0.7 / multi-agent-spec v3.3 | ✅ 按 PRD §10 修订指令完成，RFC 后续决策已落地（06-26） |
+| RFC | ✅ 已发 Discussions（06-12），~06-19 收口，06-26 完成后续决策（A1/A2/A3/D1/D2） |
 | 后端开发规范基线 1.0 | ✅ `.trellis/spec/backend/` |
 | v7 代码 | ❌ 0 行（`webnovel-writer/` 目录是 v6 遗产，冻结） |
-| PRD 开放问题 | O2（开关定名）、O3（灵感池落点）已被 spec 0.6 消解；**O4（精准读取接口完整清单 + `.cache` 表设计）归 M1 第一步** |
+| PRD 开放问题 | O2/O3 已消解；**O4（精准读取接口完整清单 + `.cache` 表设计）归 M1 第一步**（不在 RFC 后续任务范围，需单独任务） |
 
 ## 1. 排程原则
 
@@ -24,6 +24,77 @@
 3. **验收前置**：beta 判据里的两条 CI（Windows 中文路径全链路、删 `.cache` 全量重建）分别在 M0、M1 就建起来，全程绿着往前走，不留到发布前补。
 4. **每个里程碑出口判据可验证**——对应 PRD §4 验收方式或 §7 发布判据的具体条目，不接受"做完了"。
 5. 里程碑是依赖序不是严格串行：M4 的知识层平移（纯搬运 v6 资产）、M5 安装器骨架可与 M2/M3 并行。
+
+## 1.5 v7 架构原则（指导实施）
+
+v7 的架构目标是**降低变化影响面**，通过清晰分层和显式用例，避免 v6 "动一个地方其他地方都受影响"的问题。
+
+### 核心原则
+
+1. **AI 永远不接触文件结构**
+   - AI 只看到整理好的上下文 DTO（`CharacterContext`、`ChapterBrief`、`ReviewInput`）
+   - AI 不知道 `定稿/设定/角色/林晚.md` 在哪里，只知道"当前角色是林晚，境界是金丹"
+   - 改文件结构不影响 AI 层
+
+2. **状态机永远不做业务判断**
+   - 状态机只负责流程编排：下一步是备料/写稿/机检/两审/定稿
+   - 不判断伏笔真假，不解析 Markdown，不拼上下文
+
+3. **脚本层按 Use Case 拆，不按技术动作拆**
+   - 显式用例：`prepareChapterMaterials`、`runMechanicalChecks`、`finalizeChapter`、`rebuildCache`、`analyzeRetconImpact`
+   - 不做通用工具函数到处调用
+
+4. **Markdown 格式变化只影响 Storage Adapter**
+   - front matter 字段、目录命名、履历格式这些变化，收敛在 `MarkdownStoryStore` / parser / serializer
+
+5. **跨层通信用稳定 DTO**
+   - 例如 `Chapter`、`ThreadEntry`、`ReviewIssue`、`ContextPack`
+   - 不跨层传 Markdown 字符串、文件路径、半解析 YAML
+
+### 接口设计：拆小端口，不做大接口
+
+**避免上帝对象**：
+- ❌ 不做 `StoryRepo` 大接口（20 个方法，谁都能干任何事）
+- ✅ 拆成小端口：`ChapterReader`、`ChapterWriter`、`ThreadLedgerReader`、`GitPublisher`
+- 每个 use case 只依赖需要的端口（权限最小化）
+
+### 配置化边界：只调策略，不定义流程
+
+**可以配置**（策略参数）：
+```yaml
+review:
+  max_iterations: 3
+  enable_fact_check: true
+
+auto_mode:
+  batch_size: 8
+```
+
+**不要配置**（自定义流程语言）：
+```yaml
+steps:
+  - id: custom_step
+    command: my_script.js
+```
+
+理由：v7.0 的目标是"可预测"，不是"无限可扩展"。配置化流程会让调试成本暴涨。
+
+### 变化影响面
+
+- ✅ 改格式（front matter 字段）→ 只改 Storage Adapter
+- ✅ 改流程策略（批次大小、审稿轮数）→ 只改配置
+- ✅ 改 AI prompt → 只改 AI 层模板
+- ✅ 换模型 → AI 层封装，对外接口不变
+- ✅ 加新宿主 → 只动 Host Adapter
+- ⚠️ 改领域模型（如伏笔/悬念/感情线概念）→ 合理的跨层影响
+
+### 里程碑对应
+
+- **M1 格式层**：实现 Storage Adapter 接口（ChapterReader/Writer 等）
+- **M2 脚本层**：实现 Use Case（prepareChapterMaterials、finalizeChapter 等）
+- **M3 状态机**：只管流程编排，不管业务逻辑
+- **M4 AI 层**：只吃 DTO，只吐结构化输出
+- **M5 安装器**：Host Adapter 层
 
 ## 2. 里程碑
 
@@ -34,14 +105,16 @@
 - npm 包骨架：包名、`bin` 入口、`src/` 模块划分（安装器/状态机/机检/备料/定稿/缓存）——定稿后回填 `.trellis/spec/backend/directory-structure.md` §4 待补项
 - 测试骨架：`node:test`，零第三方依赖纪律从第一行代码生效；测试目录与命名约定回填规范
 - CI：Linux + Windows 双矩阵，Windows 跑**中文路径**用例（先空壳，用例随里程碑长）
-- **出口**：CI 双平台绿；`node --version` 门槛检查（≥22）与人话提示可跑
+- **Node 版本门槛**（RFC 决策 A2）：≥ 22.13.0（`node:sqlite` 无需 flag 的最低版本）
+- **出口**：CI 双平台绿；`node --version` 门槛检查（≥ 22.13.0）与人话提示可跑
 
 ### M1 格式层核心库 + 派生缓存（RFC 收口后第一批）
 
-- **第一步消解 O4（设计文档，可在 RFC 开放期内先行起草）**：`.cache/index.db` 五表（chapters/threads/secrets/entities/fingerprints）DDL + 精准读取接口完整清单（spec 0.6 §11.1 初版清单的补全），成稿后补进 spec §11
+- **第一步消解 O4（设计文档，需单独任务）**：`.cache/index.db` 五表（chapters/threads/secrets/entities/fingerprints）DDL + 精准读取接口完整清单（spec 0.7 §11.1 初版清单的补全），成稿后补进 spec §11
 - 容错读写库：front matter / 平铺 YAML / 三类条目文件 / book.yaml；未知字段保留原样写回（不变量 9）；写出防呆（平铺、块列表、危险值加引号）
-- 重建器：只读 定稿/大纲/文风 全量重建缓存——**重建器即格式的参考实现**
+- 重建器：只读 定稿/大纲/文风 全量重建缓存——**重建器即格式的参考实现**；履历证据引用验证章节文件存在（RFC 决策 A3）
 - 精准读取接口 CLI 全套（条目/大纲/正文/时间线/设定/全文检索/报表）
+- **架构实施**（§1.5 原则）：实现 Storage Adapter 接口（ChapterReader/Writer、ThreadLedgerReader/Writer 等小端口）
 - **出口**：「删光 `.cache` 全量重建」CI 绿（beta 判据之一提前达成）；精准读取清单逐条有测试
 
 ### M2 写章流程脚本面（零 AI 全通）
@@ -62,10 +135,13 @@
 
 ### M4 AI 角色层 + 一级宿主壳（可与 M2/M3 部分并行）
 
-- SKILL.md 入口、角色单源生成三平台壳 + drift check（multi-agent-spec v3.2）
-- 三审任务书单源（读者审/编辑审/设定校对）、写评分离的上下文编排、降级模式（无 subagent 顺序执行，如实声明）
+- SKILL.md 入口、角色单源生成三平台壳 + drift check（multi-agent-spec v3.3）
+- 两审任务书单源（事实审查/编辑审，RFC 决策 D1/D2）、写评分离的上下文编排、降级模式（无 subagent 顺序执行，诚实声明隔离度下降）
+- 两审输出格式：结构化问题清单（severity + category + blocking），参考 v6 review schema
 - SessionStart 注入（读 `books.jsonl`）；无 hook 宿主状态机入口等价路径
-- 知识层平移：37 题材模板、追读力分类、爽点节奏库（纯搬运，可提前并行做)
+- 知识层平移：37 题材模板、追读力分类、爽点节奏库（纯搬运，可提前并行做）
+- **架构实施**（§1.5 原则）：AI 只吃 DTO（CharacterContext、ChapterBrief、ReviewInput），只吐结构化输出
+- **出口**：Claude Code + Codex 各跑一次真模型 smoke（建书引导→写 1 章→定稿→导出）
 - **出口**：Claude Code 与 Codex 各跑一次真模型 smoke——建书 → 写 1 章 → 三审 → 定稿
 
 ### M5 安装器与多本书
@@ -76,9 +152,11 @@
 
 ### M6 自动模式（按批次定稿）
 
-- `工作区/待定稿/` 批次结构、"定稿+待定稿批次"叠加组装视图
+- `工作区/待定稿/` 批次结构、"定稿+待定稿批次"叠加组装视图（**支持批次内依赖**，RFC 决策 A1）
+- 版本链与污染传播：第 K 章打回 → 标记 K+1 到 N 章"受影响"，作者确认重审/重写
 - 停止条件四件套（写满/体检不过线/卷纲耗尽/连续 3 章无账本变动）
 - 批量审稿、作者敲定后逐章按序定稿、整批回滚（"回到第 N 章"复用 M3）
+- **架构实施**（§1.5 原则）：叠加视图通过 Storage Adapter 组装，状态机只管编排
 - **出口**：PRD §4 #15 验收——自动模式端到端 + 注入错误的恢复演练（批内污染不出批次）
 
 ### M7 导出 + /migrate + beta 入口
@@ -106,6 +184,6 @@
 
 ## 5. 下一个可立即开工的任务
 
-1. **M0 仓库骨架**（今天可起）：格式无关，不等 RFC。
-2. **O4 设计文档**（与 M0 并行）：表 DDL + 精准读取接口清单，纸面工作，RFC 改格式时修订成本低。
-3. RFC 意见跟进（持续，到 06-19 收口）。
+1. **M0 仓库骨架**（立即可起）：格式无关，不等 RFC。Node 版本门槛 ≥ 22.13.0（RFC 决策 A2）。
+2. **O4 设计文档**（与 M0 并行，需单独任务）：表 DDL + 精准读取接口清单，纸面工作，RFC 改格式时修订成本低。
+3. spec 0.7 / multi-agent-spec v3.3 已完成（RFC 后续任务），M1 可依据新 spec 开工。
