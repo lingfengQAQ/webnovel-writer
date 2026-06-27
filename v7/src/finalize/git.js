@@ -45,5 +45,46 @@ export function createGit(repoPath) {
       const { stdout } = await run(['log', '--oneline', '--no-color'])
       return stdout
     },
+    /** 仓库是否可正常 git status（false = .git 损坏等） */
+    async health() {
+      try {
+        await run(['status', '--porcelain'])
+        return { ok: true, error: '' }
+      } catch (err) {
+        return { ok: false, error: err.message }
+      }
+    },
+    async status() {
+      const { stdout } = await run(['status', '--porcelain'])
+      return stdout
+    },
+    /** 是否处于未完成合并（存在 MERGE_HEAD） */
+    async isMerging() {
+      try {
+        await run(['rev-parse', '-q', '--verify', 'MERGE_HEAD'])
+        return true
+      } catch {
+        return false
+      }
+    },
+    /** 暂存区是否有残留改动（半提交迹象） */
+    async hasStagedChanges() {
+      try {
+        await run(['diff', '--cached', '--quiet'])
+        return false
+      } catch {
+        return true
+      }
+    },
+    async stash(message) {
+      await run(['stash', 'push', '-m', message])
+    },
+    async mergeAbort() {
+      await run(['merge', '--abort'])
+    },
+    /** 建救援 ref：refs/<name> 指向 source（默认 HEAD），用于回滚前备份 */
+    async createBackupRef(name, source = 'HEAD') {
+      await run(['update-ref', `refs/${name}`, source])
+    },
   }
 }
