@@ -2,12 +2,27 @@
 
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readFileSync } from 'node:fs'
 import { CacheManager } from '../src/cache/index.js'
+import { checkNodeVersion } from '../src/runtime/node-version.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+// 版本门槛先行（M0 起的不变量；纯比较在 node-version.js，副作用留这里）
+const gate = checkNodeVersion(process.version)
+if (!gate.ok) {
+  console.error(gate.message)
+  process.exit(1)
+}
+
 const argv = process.argv.slice(2)
 const command = argv[0]
+
+if (command === '--version' || command === '-v') {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  console.log(pkg.version)
+  process.exit(0)
+}
 
 if (!command || command === '--help') {
   console.log('用法：webnovel-writer <命令> [选项]')

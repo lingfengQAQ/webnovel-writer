@@ -22,6 +22,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+      - name: 安装依赖（js-yaml 等，零依赖铁律下的唯一例外）
+        run: npm ci
       - name: 单元测试（含中文路径用例）
         run: node --test
       - name: 版本门槛冒烟
