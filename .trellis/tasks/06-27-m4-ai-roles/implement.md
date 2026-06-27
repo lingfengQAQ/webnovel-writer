@@ -43,10 +43,10 @@ P5 AC 复核 + CI 双平台;真模型 smoke 推迟文档
 
 ## P2 角色单源 + 宿主壳源（R4 撰写面）
 
-- [ ] P2.1 `roles/事实审查.md`:吃 ReviewInput DTO,五维 + v7 四项(requirement/leak/evidence/unregistered_thread),输出 §8 schema;**无 python/脚本/文件路径**(对照 AC6)。
-- [ ] P2.2 `roles/编辑审.md`:structure/pacing/commercial/motivation;排除"评文笔好坏"。
-- [ ] P2.3 `skills/webnovel-writer/SKILL.md`:状态机单入口 + 平台条件块(agentCapable/hasHooks)+ 降级顺序版编译块;description ≤ Codex 8k。
-- [ ] P2.4 `templates/AGENTS.md`(标记块)、`adapters/registry.json`(三级)、`adapters/{claude-code,codex}/support.md`(官方链接+核验日期+支持情况+降级+smoke 命令)。
+- [x] P2.1 `roles/事实审查.md`:吃 ReviewInput,五维 + v7 四项(requirement/leak/evidence/unregistered_thread),输出 §8 schema;category/severity/schema 用占位符 `{{categories.factCheck}}`/`{{severities}}`/`{{schema.example}}`(P3 从 schema.js 注入,单源不双表)。grep 确认无 python/路径。
+- [x] P2.2 `roles/编辑审.md`:structure/pacing/commercial/motivation;评结构与商业性不替作者重写。
+- [x] P2.3 `skills/webnovel-writer/SKILL.md`:状态机单入口 + `{{#if agentCapable}}`/`{{#if hasHooks}}` 条件块(两审完整/兼容、SessionStart 有无)+ 降级声明;description 精简。
+- [x] P2.4 `templates/AGENTS.md`(标记块)、`adapters/registry.json`(三级 + agentCapable/hasHooks/smoke_status)、`adapters/{claude-code,codex}/support.md`(诚实标注 smoke 推迟 beta)。
 
 **验证 P2**:人工评审 + grep 断言(roles 无 `python`/路径);留给 P3 生成器/validator 机检
 **提交 P2**:`feat(v7): M4 P2——两审角色单源(DTO 化重构)+ SKILL.md 单入口 + registry/support`

@@ -1,0 +1,39 @@
+{
+  "schema_version": "webnovel-host-registry/v2",
+  "hosts": {
+    "claude-code": {
+      "tier": 1,
+      "verified": "结构就绪，真模型 smoke 推迟 beta",
+      "agentCapable": true,
+      "hasHooks": true,
+      "smoke": "node scripts/smoke.mjs --host claude-code",
+      "smoke_status": "deferred-beta"
+    },
+    "codex": {
+      "tier": 1,
+      "verified": "结构就绪，真模型 smoke 推迟 beta",
+      "agentCapable": true,
+      "hasHooks": false,
+      "smoke": "node scripts/smoke.mjs --host codex",
+      "smoke_status": "deferred-beta"
+    },
+    "gemini-cli": {
+      "tier": 2,
+      "verified": "社区反馈",
+      "agentCapable": true,
+      "hasHooks": false
+    },
+    "cursor": {
+      "tier": 2,
+      "verified": "社区反馈",
+      "agentCapable": true,
+      "hasHooks": false
+    },
+    "_default": {
+      "tier": 3,
+      "verified": "标准 SKILL.md 理论可用",
+      "agentCapable": false,
+      "hasHooks": false
+    }
+  }
+}
