@@ -82,8 +82,10 @@ P4 CLI 接口 wire + 全量 AC 复核
 
 ## 出口判据（对齐 prd Acceptance）
 
-- [ ] 伪造草稿+细纲，一章 备料→机检→定稿 全程脚本跑通、零 AI
-- [ ] 定稿中断注入后工作区原样保留（要么完成要么原样）
-- [ ] 定稿后删 `.cache` 全量重建一致（不变量 2）
-- [ ] CI 双平台绿（git 操作在 Windows 验证）
-- [ ] 6 Writer 端口 + prep/check/finalize 各有镜像测试
+> 重建后状态（2026-06-27，全量 `node --test` 172 绿）：
+
+- [x] 伪造草稿+细纲，备料→机检→定稿 全程脚本跑通、零 AI（test/prep + test/mechanical-check + test/finalize）
+- [x] 定稿中断注入后工作区原样保留（test/finalize 断电注入：无新 commit + 工作区原样 + 定稿净恢复）
+- [x] 定稿后删 `.cache` 全量重建一致（test/finalize 不变量 2 用例）
+- [ ] CI 双平台绿（git 操作在 Windows 验证）：**待推送验证**
+- [x] 6 Writer 端口 + prep/check/finalize 各有镜像测试
