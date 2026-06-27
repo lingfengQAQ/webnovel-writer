@@ -49,6 +49,11 @@ if (!command || command === '--help') {
   console.log('写章流程（M2，零 AI 脚本面）：')
   console.log('  prepare-chapter <章号>                  备料：写出 工作区/本章写作材料.md')
   console.log('  mechanical-check <章号> [--draft=<路径>]  机检：字数/禁词/禁句式/复读/新专名/信息差候选')
+  console.log('')
+  console.log('状态机 / 例外流程（M3）：')
+  console.log('  next                                    继续：状态机判定下一步（git 健康检查先行）')
+  console.log('  impact <关键词>                          影响分析：哪些章建立在这个事实上（已发布/未发布）')
+  console.log('  goto-chapter <章号> [--confirm]          回到第N章（先备份再回滚，作者不碰 git）')
   process.exit(0)
 }
 
