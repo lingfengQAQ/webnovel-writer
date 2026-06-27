@@ -260,9 +260,18 @@ async function scanEntities(repoPath, db) {
 async function scanCharacters(repoPath, db) {
   const charDir = path.join(repoPath, '定稿', '设定', '角色')
 
-  const updateStmt = db.prepare(`
-    UPDATE entities SET status = ?, location = ?, realm = ?, possessions = ?, last_changed_chapter = ?
-    WHERE id = ?
+  // upsert：角色卡可能不在名册里（名册非强制全覆盖），只 UPDATE 会丢这些角色。
+  // 在名册里则补全字段并把 file_path 指向更详细的角色卡。
+  const upsertStmt = db.prepare(`
+    INSERT INTO entities (id, type, status, location, realm, possessions, last_changed_chapter, file_path)
+    VALUES (?, 'character', ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      status = excluded.status,
+      location = excluded.location,
+      realm = excluded.realm,
+      possessions = excluded.possessions,
+      last_changed_chapter = excluded.last_changed_chapter,
+      file_path = excluded.file_path
   `)
 
   try {
@@ -278,13 +287,14 @@ async function scanCharacters(repoPath, db) {
 
       if (parsed.ok) {
         const fm = parsed.data
-        updateStmt.run(
+        upsertStmt.run(
+          name,
           fm.状态 || null,
           fm.位置 || null,
           fm.境界 || null,
           JSON.stringify(fm.持有 || []),
           fm.最后变更章 || 1,
-          name
+          filePath
         )
       }
     }

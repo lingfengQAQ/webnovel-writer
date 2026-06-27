@@ -6,12 +6,10 @@ import os from 'node:os'
 import { CacheManager } from '../../src/cache/index.js'
 import { ChapterReader } from '../../src/storage/adapters/ChapterReader.js'
 
-test('Windows 中文路径全链路', async (t) => {
-  if (process.platform !== 'win32') {
-    t.skip('Windows 专用测试')
-    return
-  }
-
+// 守护不变量：中文目录名/文件名/中文内容在任何平台都必须 UTF-8 正确往返过我们的全栈
+// （重建缓存 + 读取）。Windows 是一等公民（story-repo-spec §2.2），但 Linux CI 也跑，
+// 双平台都覆盖，不依赖系统 locale。
+test('中文路径全链路（重建缓存 + 读取，跨平台）', async (t) => {
   const tmpDir = path.join(os.tmpdir(), '测试书仓库', `test-${Date.now()}`)
 
   try {

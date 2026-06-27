@@ -67,6 +67,9 @@ export class CacheManager {
       // 文件不存在，忽略
     }
 
+    // 确保 .cache 目录存在：rebuildFromSource 可被直接调用，不保证先过 ensureReady
+    await fs.mkdir(path.dirname(this.dbPath), { recursive: true })
+
     // 创建新数据库
     this.db = new DatabaseSync(this.dbPath)
 
