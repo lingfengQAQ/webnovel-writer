@@ -1,7 +1,7 @@
 import path from 'node:path'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, rm, cp } from 'node:fs/promises'
 import { CacheManager } from '../../src/cache/index.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -43,6 +43,26 @@ export async function repoCtx(repoPath, files) {
       await cache.close()
       await rm(dbDir, { recursive: true, force: true })
       if (tmpRepo) await rm(tmpRepo, { recursive: true, force: true })
+    },
+  }
+}
+
+/**
+ * 把 sample-book fixture 整体拷到临时目录（可写），建 ctx。
+ * 用于会写入书仓库的流程（备料写本章写作材料、定稿写定稿/git），避免污染 committed fixture。
+ */
+export async function tempBookCtx() {
+  const tmpRepo = await mkdtemp(path.join(os.tmpdir(), 'wnw-book-'))
+  await cp(fixtureRoot, tmpRepo, { recursive: true })
+  const dbDir = await mkdtemp(path.join(os.tmpdir(), 'wnw-book-db-'))
+  const cache = new CacheManager(path.join(dbDir, 'index.db'))
+  await cache.ensureReady(tmpRepo)
+  return {
+    ctx: { repoPath: tmpRepo, cache },
+    cleanup: async () => {
+      await cache.close()
+      await rm(dbDir, { recursive: true, force: true })
+      await rm(tmpRepo, { recursive: true, force: true })
     },
   }
 }
