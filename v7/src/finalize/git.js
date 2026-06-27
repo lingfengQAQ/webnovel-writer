@@ -87,5 +87,26 @@ export function createGit(repoPath) {
     async createBackupRef(name, source = 'HEAD') {
       await run(['update-ref', `refs/${name}`, source])
     },
+    /** 找某章定稿提交（ch(N): …）的最近 hash；无则 null */
+    async findChapterCommit(n) {
+      try {
+        const { stdout } = await run(['log', `--grep=ch(${n}):`, '--format=%H', '-1'])
+        return stdout.trim() || null
+      } catch {
+        return null
+      }
+    },
+    /** ref..HEAD 之间提交的标题列表（影响范围） */
+    async commitsAfter(ref) {
+      try {
+        const { stdout } = await run(['log', '--format=%s', `${ref}..HEAD`])
+        return stdout.split('\n').map((s) => s.trim()).filter(Boolean)
+      } catch {
+        return []
+      }
+    },
+    async resetHard(ref) {
+      await run(['reset', '--hard', ref])
+    },
   }
 }
