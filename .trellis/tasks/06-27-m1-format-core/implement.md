@@ -13,12 +13,12 @@
 **修正后契约**（design §6.2 已改）：命令导出 `run(args, options, ctx)` 只返回 `{ok, output?, error?}`，**不碰 process/console/cache 生命周期**；bin 唯一负责打印、退出码、`cache.ensureReady/close`。命令因此可单测，AC2 才成立。
 
 **重建顺序**（覆盖原 D.0–D.3，全部真实现 + 每接口 test/commands 测试）：
-- [ ] R0 卫生：`v7/.gitignore` 忽略 `.cache/`；删冗余 `test/chinese-path.test.js`（保留 `test/integration/chinese-path.test.js`）；rebuilder `scanCharacters` 改 upsert（修角色卡丢数据 bug）
-- [ ] R1 契约重构：bin 改 `run`+ctx 分发；6 个 P0 命令（read-chapter/read-thread/read-timeline/read-character/resolve-alias/report-overdue-threads）改 `run` 契约 + 补 `test/commands/*.test.js`
-- [ ] R2 fixture 扩充：补 `大纲/总纲.md`、`大纲/第01卷.md`、`定稿/设定/世界观.md`、`定稿/摘要/章摘要/0002.md`、悬念/感情线各一条目（design §7.1）
-- [ ] R3 P1 真实现 + 测试：list-chapters、list-secrets、grep-story（关键词）、report-book-stats、report-weak-hook-streak、read-chapter `--front-matter`（已在 P0 文件内）
-- [ ] R4 P2 真实现 + 测试：read-chapters（新建）、read-worldview（新建）、read-outline、list-volumes、list-threads、list-characters、read-secret、grep-story `--regex`、report-secret-accumulation、report-thread-activity、report-style-drift（边界占位：读指纹对比基线、不做特征提取）
-- [ ] R5 补齐 6 个缺失 adapter 测试 + 全量 AC1-AC12 复核
+- [x] R0 卫生：`v7/.gitignore` 忽略 `.cache/`；删冗余 `test/chinese-path.test.js`（保留 `test/integration/chinese-path.test.js`）；rebuilder `scanCharacters` 改 upsert（修角色卡丢数据 bug）
+- [x] R1 契约重构：bin 改 `run`+ctx 分发；6 个 P0 命令（read-chapter/read-thread/read-timeline/read-character/resolve-alias/report-overdue-threads）改 `run` 契约 + 补 `test/commands/*.test.js`
+- [x] R2 fixture 扩充：补 `大纲/总纲.md`、`大纲/第01卷.md`、`定稿/设定/世界观.md`、`定稿/摘要/章摘要/0002.md`、悬念/感情线各一条目（design §7.1）
+- [x] R3 P1 真实现 + 测试：list-chapters、list-secrets、grep-story（关键词）、report-book-stats、report-weak-hook-streak、read-chapter `--front-matter`（已在 P0 文件内）
+- [x] R4 P2 真实现 + 测试：read-chapters（新建）、read-worldview（新建）、read-outline、list-volumes、list-threads、list-characters、read-secret、grep-story `--regex`、report-secret-accumulation、report-thread-activity、report-style-drift（边界占位：读指纹对比基线、不做特征提取）
+- [x] R5 补齐 6 个缺失 adapter 测试 + 全量 AC1-AC12 复核
 
 **41 接口权威清单**见 prd.md AC2 表（21 命令文件承载）。下方原始 A–E checklist 保留作历史参考。
 
@@ -44,7 +44,7 @@
 
 ### A1 YAML 依赖与基础工具
 
-- [ ] A1.1 安装 `js-yaml`：`cd v7 && npm install js-yaml`（MIT、零传递依赖）
+- [ ] A1.1 安装 `js-yaml`：`cd v7 && npm install js-yaml`（MIT、依赖树仅含 argparse）
 - [ ] A1.2 建 `v7/src/storage/parsers/` 与 `v7/src/storage/serializers/` 目录
 
 ### A2 Front Matter 解析
@@ -343,13 +343,15 @@
 
 ## 出口判据复核（对齐 prd Acceptance）
 
-- [ ] AC1：删 `.cache` 全量重建测试绿（test/cache/rebuild-integration.test.js）
-- [ ] AC2：41 接口逐条测试绿（test/commands/*.test.js）
-- [ ] AC3：容错读取保留未知字段测试绿（test/storage/parsers/yaml-safe.test.js）
-- [ ] AC4：防呆写出测试绿（test/storage/serializers/yaml-dialect.test.js）
-- [ ] AC5：Windows 中文路径测试绿（test/integration/chinese-path.test.js）
-- [ ] AC6-AC10：接口行为验收（各自测试覆盖）
-- [ ] AC11：小端口分离（storage/adapters/ 至少 8 个独立 Reader）
-- [ ] AC12：测试镜像 src（test/storage/、test/cache/、test/commands/ 与 src 对应）
-- [ ] CI 双平台绿（ubuntu + windows）
-- [ ] `v7/package.json` dependencies 仅 `js-yaml`（零传递依赖）
+> 重建后状态（2026-06-27，全量 `node --test` 143 绿）：
+
+- [x] AC1：删 `.cache` 全量重建测试绿（test/cache/CacheManager.test.js「删除缓存后全量重建」+ test/cache/rebuilder.test.js）
+- [x] AC2：41 接口逐条测试绿（test/commands/*.test.js，21 个命令文件覆盖全 41 接口）
+- [x] AC3：容错读取保留未知字段测试绿（test/storage/parsers/yaml-safe.test.js）
+- [x] AC4：防呆写出测试绿（test/storage/serializers/yaml-dialect.test.js）
+- [x] AC5：中文路径全链路测试绿（test/integration/chinese-path.test.js，已改跨平台）
+- [x] AC6-AC10：接口行为 + 重建校验验收（命令测试 + rebuilder.test.js 的 AC10 履历 warning/别名冲突 error）
+- [x] AC11：小端口分离（storage/adapters/ 8 Reader + 2 Writer 占位，各有独立测试，可单独 import）
+- [x] AC12：测试镜像 src（test/storage/{parsers,serializers,adapters}、test/cache/、test/commands/ 与 src 对应）
+- [ ] CI 双平台绿（ubuntu + windows）：R5a 已修 `npm ci` 缺失 + bin `--version`，**待推送验证**
+- [x] `v7/package.json` dependencies 仅 `js-yaml`（直接依赖唯一；传递依赖 argparse 同 nodeca 维护）
