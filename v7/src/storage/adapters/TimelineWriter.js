@@ -1,0 +1,48 @@
+import { promises as fs } from 'node:fs'
+import path from 'node:path'
+import { parseMarkdownTable } from '../parsers/markdown-table.js'
+import { serializeMarkdownTable } from '../serializers/markdown-table.js'
+
+const TIMELINE_HEADERS = ['章', '书内时间', '一句话事件', '在场']
+
+/**
+ * TimelineWriter：向卷时间线表格追加行（M2 定稿流程调用）。
+ */
+export class TimelineWriter {
+  constructor(repoPath, cache = null) {
+    this.repoPath = repoPath
+    this.cache = cache
+  }
+
+  /**
+   * 向 定稿/设定/时间线/第NN卷.md 追加一行（文件不存在则建表头）。
+   * @param {number} volumeNum
+   * @param {object} row { 章, 书内时间, 一句话事件, 在场 }
+   * @returns {Promise<{ok: boolean, filePath: string, error: string}>}
+   */
+  async appendRow(volumeNum, row) {
+    try {
+      const dir = path.join(this.repoPath, '定稿', '设定', '时间线')
+      await fs.mkdir(dir, { recursive: true })
+      const filePath = path.join(dir, `第${String(volumeNum).padStart(2, '0')}卷.md`)
+
+      let headers = TIMELINE_HEADERS
+      let rows = []
+      try {
+        const parsed = parseMarkdownTable(await fs.readFile(filePath, 'utf8'))
+        if (parsed.ok && parsed.headers.length) {
+          headers = parsed.headers
+          rows = parsed.rows
+        }
+      } catch {
+        // 文件不存在，用默认表头
+      }
+
+      rows.push(row)
+      await fs.writeFile(filePath, serializeMarkdownTable(headers, rows), 'utf8')
+      return { ok: true, filePath, error: '' }
+    } catch (err) {
+      return { ok: false, filePath: '', error: `写时间线第${volumeNum}卷失败：${err.message}` }
+    }
+  }
+}
