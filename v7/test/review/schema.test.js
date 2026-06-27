@@ -1,0 +1,68 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { validateReviewReport } from '../../src/review/schema.js'
+
+const issue = (over = {}) => ({
+  severity: 'high',
+  category: 'setting',
+  location: '第3段',
+  description: '境界矛盾',
+  evidence: '正文"金丹" vs 角色卡"练气"',
+  fix_hint: '改回练气',
+  blocking: false,
+  ...over,
+})
+
+test('合法事实审查报告：通过 + 计数复算', async () => {
+  const r = validateReviewReport({ chapter: 5, issues: [issue(), issue({ category: 'timeline' })], issues_count: 99 }, { reviewType: 'factCheck' })
+  assert.equal(r.ok, true)
+  assert.equal(r.errors.length, 0)
+  assert.equal(r.report.issues_count, 2, '计数应被复算覆盖伪造的 99')
+})
+
+test('critical → 强制 blocking=true（即便 AI 报 false）', async () => {
+  const r = validateReviewReport({ chapter: 5, issues: [issue({ severity: 'critical', blocking: false })] }, { reviewType: 'factCheck' })
+  assert.equal(r.report.issues[0].blocking, true)
+  assert.equal(r.report.has_blocking, true)
+})
+
+test('unregistered_thread（D3）→ 强制 blocking=false（即便 AI 报 true）', async () => {
+  const r = validateReviewReport(
+    { chapter: 5, issues: [issue({ category: 'unregistered_thread', severity: 'high', blocking: true })] },
+    { reviewType: 'factCheck' }
+  )
+  assert.equal(r.report.issues[0].blocking, false, 'D3 即兴伏笔候选恒非阻断')
+  assert.equal(r.report.blocking_count, 0)
+})
+
+test('category 分域：编辑审 category 出现在事实审查 → 报错', async () => {
+  const r = validateReviewReport({ chapter: 5, issues: [issue({ category: 'pacing' })] }, { reviewType: 'factCheck' })
+  assert.equal(r.ok, false)
+  assert.ok(r.errors.some((e) => e.includes('越界')))
+})
+
+test('category 分域：事实审查 category 出现在编辑审 → 报错', async () => {
+  const r = validateReviewReport({ chapter: 5, issues: [issue({ category: 'setting' })] }, { reviewType: 'editorial' })
+  assert.equal(r.ok, false)
+})
+
+test('编辑审合法 category 通过', async () => {
+  const r = validateReviewReport({ chapter: 5, issues: [issue({ category: 'structure' })] }, { reviewType: 'editorial' })
+  assert.equal(r.ok, true)
+})
+
+test('缺字段 / 非法 severity → 报错', async () => {
+  const r = validateReviewReport(
+    { chapter: 5, issues: [{ severity: 'fatal', category: 'setting', description: '' }] },
+    { reviewType: 'factCheck' }
+  )
+  assert.equal(r.ok, false)
+  assert.ok(r.errors.some((e) => e.includes('severity')))
+  assert.ok(r.errors.some((e) => e.includes('evidence') || e.includes('location') || e.includes('fix_hint')))
+})
+
+test('issues 非数组 → ok=false 不抛', async () => {
+  const r = validateReviewReport({ chapter: 5 }, { reviewType: 'factCheck' })
+  assert.equal(r.ok, false)
+  assert.equal(r.report, null)
+})
