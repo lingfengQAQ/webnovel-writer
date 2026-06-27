@@ -26,6 +26,12 @@ test('read-character 默认返回完整（frontMatter + body）', async () => {
   assert.ok(data.body.includes('设定'))
 })
 
+test('read-character --section=设定 返回该小节', async () => {
+  const r = await run(['林晚'], { section: '设定' }, ctx)
+  assert.equal(r.ok, true)
+  assert.ok(r.output.includes('外门弟子'))
+})
+
 test('read-character 缺正名 → ok=false', async () => {
   const r = await run([], {}, ctx)
   assert.equal(r.ok, false)

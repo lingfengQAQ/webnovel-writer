@@ -26,6 +26,19 @@ test('grep-story 无命中 → ok 且空数组', async () => {
   assert.deepEqual(JSON.parse(r.output), [])
 })
 
+test('grep-story --regex 正则检索命中', async () => {
+  const r = await run([], { regex: '玉佩|藏书' }, ctx)
+  assert.equal(r.ok, true)
+  const hits = JSON.parse(r.output)
+  assert.ok(hits.length >= 1)
+  assert.ok(hits.every((h) => /玉佩|藏书/.test(h.匹配行)))
+})
+
+test('grep-story --regex 非法正则 → ok=false（不崩）', async () => {
+  const r = await run([], { regex: '[invalid(' }, ctx)
+  assert.equal(r.ok, false)
+})
+
 test('grep-story 缺关键词 → ok=false', async () => {
   const r = await run([], {}, ctx)
   assert.equal(r.ok, false)

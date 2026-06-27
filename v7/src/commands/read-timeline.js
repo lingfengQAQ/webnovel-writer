@@ -11,7 +11,7 @@ async function currentVolume(ctx) {
 }
 
 /**
- * read-timeline [--current-and-prev]（R4 再补 --current-volume|--卷=N|--在场=名）
+ * read-timeline [--current-and-prev|--current-volume|--卷=N|--在场=名]
  * 契约：纯返回 {ok, output?, error?}（见 design §6.2）。
  */
 export async function run(args, options, ctx) {
@@ -21,6 +21,24 @@ export async function run(args, options, ctx) {
     const cur = await currentVolume(ctx)
     const r = await reader.readVolumeRange(Math.max(1, cur - 1), cur)
     return r.ok ? { ok: true, output: JSON.stringify(r.timeline, null, 2) } : { ok: false, error: r.error }
+  }
+
+  if (options['current-volume']) {
+    const cur = await currentVolume(ctx)
+    const r = await reader.readCurrentVolume(cur)
+    return r.ok ? { ok: true, output: JSON.stringify(r.timeline, null, 2) } : { ok: false, error: r.error }
+  }
+
+  if (options['卷'] !== undefined && options['卷'] !== true) {
+    const vol = parseInt(options['卷'], 10)
+    const r = await reader.readVolumeRange(vol, vol)
+    return r.ok ? { ok: true, output: JSON.stringify(r.timeline, null, 2) } : { ok: false, error: r.error }
+  }
+
+  if (options['在场'] && options['在场'] !== true) {
+    const cur = await currentVolume(ctx)
+    const rows = await reader.readByParticipant(cur, options['在场'])
+    return { ok: true, output: JSON.stringify(rows, null, 2) }
   }
 
   return {

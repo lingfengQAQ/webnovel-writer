@@ -104,7 +104,7 @@ export class EntityReader {
   async listCharacters(filter = {}) {
     if (this.cache) {
       try {
-        let query = 'SELECT * FROM entities WHERE type = "character"'
+        let query = "SELECT * FROM entities WHERE type = 'character'"
         const params = []
 
         if (filter.status) {
