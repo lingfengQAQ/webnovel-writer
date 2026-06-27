@@ -33,10 +33,10 @@ P5 AC 复核 + CI 双平台;真模型 smoke 推迟文档
 
 ## P1 AI 态落盘契约 + SessionStart（R2/R3）
 
-- [ ] P1.1 `src/state-machine/persist.js`:`persistRepair/persistCreateBook/persistVolumeReview/persistDraftOutline`——吃 AI 结构化 DTO,只经 M2 Writer 落盘。先红:断言落盘文件内容 + 零路径泄漏给 AI。
-- [ ] P1.2 `src/session/index.js`:`readBooksRegistry`(损坏行跳过)、`scanRebuildBooks`(扫 book.yaml 重建)、`assembleSessionContext`(注入文本)。
-- [ ] P1.3 无 hook 等价:状态机入口调 `assembleSessionContext` 与 hook 注入逐字一致(测试断言)。
-- [ ] P1.4 `test/state-machine/persist.test.js`、`test/session/`:各 AI 态落盘、books.jsonl 读/重建/缺当前书、等价路径。
+- [x] P1.1 `src/state-machine/persist.js`:`persistRepair/persistCreateBook/persistVolumeReview/persistDraftOutline`——吃 AI 结构化 DTO 落盘。序0 安全网:只写失败清单内文件 + 修复内容须能解析。(book.yaml/总纲/卷纲/卷摘要无对应 Writer,用 serializeYAML/fs;伏笔条目用 serializeFrontMatter)
+- [x] P1.2 `src/session/index.js`:`readBooksRegistry`(损坏行跳过计数)、`scanRebuildBooks`(扫 book.yaml 重建,需作者选当前书)、`assembleSessionContext`(注入文本,缺登记自动重建)。
+- [x] P1.3 无 hook 等价:两入口调同一 `assembleSessionContext` → 注入逐字一致(测试断言)。实际 hook/CLI 接线属 M5 安装器。
+- [x] P1.4 `test/state-machine/persist.test.js`(6)、`test/session/session.test.js`(6):各 AI 态落盘 + 安全网、books.jsonl 读/重建/等价。全量 229 绿。
 
 **验证 P1**:`node --test test/state-machine/ test/session/` 全绿
 **提交 P1**:`feat(v7): M4 P1——AI 态产物落盘契约 + SessionStart 注入与书单自愈`
