@@ -55,7 +55,8 @@ export function createGit(repoPath) {
       }
     },
     async status() {
-      const { stdout } = await run(['status', '--porcelain'])
+      // core.quotePath=false：中文路径不转义成 \xxx，便于按前缀匹配
+      const { stdout } = await run(['-c', 'core.quotePath=false', 'status', '--porcelain'])
       return stdout
     },
     /** 是否处于未完成合并（存在 MERGE_HEAD） */

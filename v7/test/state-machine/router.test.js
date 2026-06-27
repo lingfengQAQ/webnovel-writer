@@ -1,0 +1,159 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import path from 'node:path'
+import os from 'node:os'
+import { promises as fs } from 'node:fs'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { CacheManager } from '../../src/cache/index.js'
+import { determineNextState } from '../../src/state-machine/index.js'
+
+const execFileAsync = promisify(execFile)
+
+// 造 git 书仓库 + 缓存。files = {相对路径: 内容}；committed=true 时初始全部提交
+async function makeGitBook(files, { commit = true } = {}) {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'wnw-sm-'))
+  const git = (a) => execFileAsync('git', a, { cwd: root })
+  await git(['init', '-q'])
+  await git(['config', 'user.email', 't@example.com'])
+  await git(['config', 'user.name', 'test'])
+  await fs.writeFile(path.join(root, '.gitignore'), '.cache/\n工作区/\n', 'utf8')
+  for (const [rel, content] of Object.entries(files)) {
+    const full = path.join(root, rel)
+    await fs.mkdir(path.dirname(full), { recursive: true })
+    await fs.writeFile(full, content, 'utf8')
+  }
+  if (commit) {
+    await git(['add', '-A'])
+    await git(['commit', '-q', '-m', 'init'])
+  }
+  const dbDir = await fs.mkdtemp(path.join(os.tmpdir(), 'wnw-sm-db-'))
+  const cache = new CacheManager(path.join(dbDir, 'index.db'))
+  await cache.ensureReady(root)
+  return {
+    root,
+    git,
+    ctx: { repoPath: root, cache },
+    cleanup: async () => {
+      await cache.close()
+      await fs.rm(root, { recursive: true, force: true })
+      await fs.rm(dbDir, { recursive: true, force: true })
+    },
+  }
+}
+
+const ch = (n, vol = 1, pos = '推进') =>
+  `---\n章号: ${n}\n标题: 第${n}章\n卷: ${vol}\n字数: 100\n章定位: ${pos}\n钩子: 危机钩-强\n情绪定位: 铺垫\n---\n正文。`
+
+const healthyBook = (extra = {}) => ({
+  'book.yaml': 'spec_version: "7.0"\n书名: 测\n卷规模: 40\n体检周期: 50\n',
+  '大纲/总纲.md': '# 总纲\n## 结局\nx',
+  '定稿/正文/0001-第1章.md': ch(1),
+  ...extra,
+})
+
+test('序1：无 book.yaml → 建书引导', async () => {
+  const { ctx, cleanup } = await makeGitBook({ '大纲/占位.md': 'x' })
+  try {
+    const r = await determineNextState(ctx)
+    assert.equal(r.序, 1)
+    assert.equal(r.state, 'create-book')
+  } finally {
+    await cleanup()
+  }
+})
+
+test('序6：健康书、无异常 → 起草新章细纲', async () => {
+  const { ctx, cleanup } = await makeGitBook(healthyBook())
+  try {
+    const r = await determineNextState(ctx)
+    assert.equal(r.序, 6, `实际：${JSON.stringify(r)}`)
+    assert.equal(r.state, 'draft-outline')
+  } finally {
+    await cleanup()
+  }
+})
+
+test('序0：源文件解析失败 → 修复确认', async () => {
+  const { ctx, cleanup } = await makeGitBook(
+    healthyBook({ '定稿/正文/0002-坏章.md': '---\n章号: 2\n标题: [未闭合\n卷: : :\n---\n正文' })
+  )
+  try {
+    const r = await determineNextState(ctx)
+    assert.equal(r.序, 0)
+    assert.equal(r.state, 'repair-confirm')
+  } finally {
+    await cleanup()
+  }
+})
+
+test('序2：定稿有未登记手改 → 提议补登', async () => {
+  const { ctx, root, cleanup } = await makeGitBook(healthyBook())
+  try {
+    // 提交后手改一个已跟踪文件（不提交）
+    await fs.writeFile(path.join(root, '定稿/正文/0001-第1章.md'), ch(1) + '\n手改了一句。', 'utf8')
+    const r = await determineNextState(ctx)
+    assert.equal(r.序, 2)
+    assert.equal(r.state, 'relink-manual-edits')
+  } finally {
+    await cleanup()
+  }
+})
+
+test('序3：工作区有未完成草稿 → 断点续跑', async () => {
+  const { ctx, root, cleanup } = await makeGitBook(healthyBook())
+  try {
+    await fs.mkdir(path.join(root, '工作区'), { recursive: true })
+    await fs.writeFile(path.join(root, '工作区/草稿-A.md'), '半成品草稿', 'utf8')
+    const r = await determineNextState(ctx)
+    assert.equal(r.序, 3)
+    assert.equal(r.state, 'resume')
+  } finally {
+    await cleanup()
+  }
+})
+
+test('序4：卷末章 → 卷复盘', async () => {
+  const { ctx, cleanup } = await makeGitBook({
+    'book.yaml': 'spec_version: "7.0"\n书名: 测\n卷规模: 2\n体检周期: 50\n',
+    '大纲/总纲.md': '# 总纲',
+    '定稿/正文/0001-第1章.md': ch(1),
+    '定稿/正文/0002-第2章.md': ch(2),
+  })
+  try {
+    const r = await determineNextState(ctx)
+    assert.equal(r.序, 4, `实际：${JSON.stringify(r)}`)
+    assert.equal(r.state, 'volume-review')
+  } finally {
+    await cleanup()
+  }
+})
+
+test('序5：到体检周期 → 体检', async () => {
+  const { ctx, cleanup } = await makeGitBook({
+    'book.yaml': 'spec_version: "7.0"\n书名: 测\n卷规模: 3\n体检周期: 2\n',
+    '大纲/总纲.md': '# 总纲',
+    '定稿/正文/0001-第1章.md': ch(1),
+    '定稿/正文/0002-第2章.md': ch(2),
+  })
+  try {
+    const r = await determineNextState(ctx)
+    assert.equal(r.序, 5, `实际：${JSON.stringify(r)}`)
+    assert.equal(r.state, 'health-check')
+  } finally {
+    await cleanup()
+  }
+})
+
+test('命中即停：手改(序2) + 工作区草稿(序3) 同时存在 → 先报序2', async () => {
+  const { ctx, root, cleanup } = await makeGitBook(healthyBook())
+  try {
+    await fs.writeFile(path.join(root, '定稿/正文/0001-第1章.md'), ch(1) + '\n手改。', 'utf8')
+    await fs.mkdir(path.join(root, '工作区'), { recursive: true })
+    await fs.writeFile(path.join(root, '工作区/草稿-A.md'), '草稿', 'utf8')
+    const r = await determineNextState(ctx)
+    assert.equal(r.序, 2)
+  } finally {
+    await cleanup()
+  }
+})
