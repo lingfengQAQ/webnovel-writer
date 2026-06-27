@@ -353,5 +353,5 @@
 - [x] AC6-AC10：接口行为 + 重建校验验收（命令测试 + rebuilder.test.js 的 AC10 履历 warning/别名冲突 error）
 - [x] AC11：小端口分离（storage/adapters/ 8 Reader + 2 Writer 占位，各有独立测试，可单独 import）
 - [x] AC12：测试镜像 src（test/storage/{parsers,serializers,adapters}、test/cache/、test/commands/ 与 src 对应）
-- [ ] CI 双平台绿（ubuntu + windows）：R5a 已修 `npm ci` 缺失 + bin `--version`，**待推送验证**
+- [x] CI 双平台绿（ubuntu + windows）：4 个矩阵 job（双平台 × node 22.13.0/lts）全绿（run 28285105417；R5a 修复后验证）
 - [x] `v7/package.json` dependencies 仅 `js-yaml`（直接依赖唯一；传递依赖 argparse 同 nodeca 维护）
