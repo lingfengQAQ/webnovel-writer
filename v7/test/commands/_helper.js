@@ -2,7 +2,11 @@ import path from 'node:path'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { mkdtemp, mkdir, writeFile, rm, cp } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { CacheManager } from '../../src/cache/index.js'
+
+const execFileAsync = promisify(execFile)
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -65,4 +69,18 @@ export async function tempBookCtx() {
       await rm(tmpRepo, { recursive: true, force: true })
     },
   }
+}
+
+/**
+ * 同 tempBookCtx，但额外 git init + 首提交（定稿/git 流程测试用）。
+ */
+export async function gitBookCtx() {
+  const { ctx, cleanup } = await tempBookCtx()
+  const git = (args) => execFileAsync('git', args, { cwd: ctx.repoPath })
+  await git(['init', '-q'])
+  await git(['config', 'user.email', 't@example.com'])
+  await git(['config', 'user.name', 'test'])
+  await git(['add', '-A'])
+  await git(['commit', '-q', '-m', 'init'])
+  return { ctx, cleanup }
 }
