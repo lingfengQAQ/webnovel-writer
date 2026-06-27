@@ -75,18 +75,18 @@ P5 AC 复核 + CI 双平台;真模型 smoke 推迟文档
 
 ## P5 AC 复核 + CI（R6）
 
-- [ ] P5.1 全量 `node --test` 绿;过 prd AC1-AC8。
-- [ ] P5.2 不变量回归:删缓存重建、定稿原子、git 隐身仍绿。
-- [ ] P5.3 推送验证 CI 双平台(drift check + validator 在 Windows 跑)。
-- [ ] P5.4 真模型 smoke **推迟**:在 `adapters/*/support.md` 标注 smoke 命令 + 在 prd/memory 记为 beta 手测门(Claude Code + Codex 建书→写1章→两审→定稿),不阻断本任务。
+- [x] P5.1 全量 `node --test` 246 绿;过 prd AC1-AC8(自审通过)。
+- [x] P5.2 不变量回归:M1-M3 测试(删缓存重建/定稿原子/git 隐身)在全量套内仍绿。
+- [x] P5.3 推送验证 CI 双平台:run 28292073367，4 job 全绿，drift check + validator 在 Windows 跑通。
+- [x] P5.4 真模型 smoke **推迟**:`adapters/*/support.md` 标 smoke 命令 + `smoke_status: deferred-beta`;不阻断本任务。
 
 **提交 P5**:`feat(v7): M4 P5——AC 复核 + CI 双平台(真模型 smoke 推迟 beta)`
 
 ## 出口判据（对齐 prd Acceptance）
 
-- [ ] AC1-AC8 全绿(两审编排/schema 阻断/AI 态落盘/SessionStart/生成器 drift/角色 DTO 化/知识净化/不破坏 M1-M3)
-- [ ] CI 双平台绿
-- [ ] 真模型 smoke 推迟项已文档化
+- [x] AC1-AC8 全绿(两审编排/schema 阻断/AI 态落盘+安全网/SessionStart 等价/生成器 drift/角色 DTO 化/知识净化消双表/M1-M3 零回归)
+- [x] CI 双平台绿:run 28292073367(含两个 windows-latest)
+- [x] 真模型 smoke 推迟项已文档化(support.md + registry smoke_status)
 
 ## 后续（M4 完成后,单独任务）
 
