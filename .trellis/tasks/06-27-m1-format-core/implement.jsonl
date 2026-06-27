@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "零依赖铁律、职责分界（脚本/AI）、精准读取要求"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "五表 DDL、重建器即格式参考实现、容错读取保留未知字段"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "永不带栈崩溃、中文错误文案、可自愈优先"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "v7/ 包内布局（src/storage、src/cache）、测试镜像约定"}
+{"file": "docs/architecture/story-repo-spec-2026-06-10.md", "reason": "格式法律文本（§1 不变量、§2-6 文件格式、§11 缓存与精准读取）"}
+{"file": "docs/architecture/cache-design-2026-06-26.md", "reason": "五表 DDL 完整版、41 接口清单、派生值不物化策略、重建器职责"}
+{"file": "docs/architecture/v7-implementation-plan.md", "reason": "§1.5 架构原则（拆小端口、AI 不碰文件、状态机不判业务）"}

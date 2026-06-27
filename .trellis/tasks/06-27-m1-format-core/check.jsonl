@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "评审清单 §5（零依赖/术语表/错误处理/职责分界/文档先行）"}
+{"file": "docs/architecture/story-repo-spec-2026-06-10.md", "reason": "不变量 2（删缓存可重建）、不变量 9（保留未知字段）、§2.3 防呆方言"}
+{"file": "docs/architecture/cache-design-2026-06-26.md", "reason": "§7 实施检查清单（五表 DDL 可执行、41 接口完整、重建器逻辑明确）"}
+{"file": ".trellis/tasks/06-27-m1-format-core/prd.md", "reason": "验收标准 AC1-AC12（删缓存重建、41 接口测试、容错读取、防呆写出、Windows 中文路径、小端口分离）"}
