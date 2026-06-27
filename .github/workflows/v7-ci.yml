@@ -1,0 +1,28 @@
+name: v7 CI
+
+on:
+  push:
+    branches: [v7]
+  pull_request:
+    branches: [v7]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: ['22.13.0', 'lts/*']
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: v7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: 单元测试（含中文路径用例）
+        run: node --test
+      - name: 版本门槛冒烟
+        run: node bin/webnovel-writer.js --version

@@ -1,0 +1,16 @@
+{
+  "name": "webnovel-writer",
+  "version": "0.0.0",
+  "description": "AI 网文写作工作流（v7 重写，M0 骨架）",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "bin": {
+    "webnovel-writer": "bin/webnovel-writer.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {}
+}
