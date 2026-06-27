@@ -86,4 +86,4 @@ P4 全量 AC 复核 + 推送验证 CI（git 异常在 Windows 跑）
 - [x] git 异常样本库逐个演练（陈旧锁/网盘副本/半提交/合并冲突/.git 损坏），零英文堆栈，安全网可恢复（git-health.test）
 - [x] 影响分析/回到第N章/吃书 纯脚本流程有测试（flows/*.test）
 - [x] 不破坏 M1/M2 不变量（删缓存重建、定稿原子；M1/M2 测试仍全绿）
-- [ ] CI 双平台绿（git 异常处理在 Windows 验证）：**待推送验证**
+- [x] CI 双平台绿（git 异常处理在 Windows 验证）：4 矩阵 job 全绿（run 28289468867，含两个 windows-latest）
