@@ -65,10 +65,10 @@ P5 AC 复核 + CI 双平台;真模型 smoke 推迟文档
 
 ## P4 知识层平移（R5,真源选定 + 逐文件审查）
 
-- [ ] P4.1 **真源选定表**(design §6):为题材/爽点节奏/追读力各定唯一真源——题材取 `genre-index.csv`+`题材与调性推理.csv`(弃 `genre-profiles.md`/老 `genre-tropes.md`/`anti-trope-*.md`),爽点节奏取 `爽点与节奏.csv`,追读力取 `reading-power-taxonomy.md`;写进 `references/迁移报告.md`(选谁/弃谁/为什么)。
-- [ ] P4.2 **逐份真源**:清 v6 双表/旧路径/退场术语/v6 机制(含 CSV `适用技能`/`大模型指令`/`推荐检索表` 列)/反模式(design §6 表),markdown 独有内容折叠进 CSV → 入 `v7/references/<分类>/` → 报告记"改了什么+为什么"。
-- [ ] P4.3 核对 `genre-index.csv` 的 `template_file` 引用:引用的 `templates/genres/*.md` 要么迁入要么清列,不留悬空。
-- [ ] P4.4 `test/references/migration.test.js`:grep 断言迁移文件零 `python webnovel.py`/`设定集/`/`state.json`/v6 skill 名/"评文笔"/CSV v6 运行时列;**断言题材在 v7 仅一份真源(无并行 markdown 题材表)**;迁移报告覆盖每个迁入文件 + 含真源选定表。
+- [x] P4.1 **真源选定表**（写入 `references/迁移报告.md`）:题材取 `genre-index.csv`+`题材与调性推理.csv`+`genres/*.md`、爽点节奏取 `爽点与节奏.csv`、追读力取 `reading-power-taxonomy.md`;弃 `genre-profiles.md`/`genre-tropes.md`/`anti-trope-*` 双表。
+- [x] P4.2 **逐源清洗**(`scripts/migrate-v6-knowledge.mjs` 确定性转换):CSV 删 适用技能/推荐检索表 列;37 模板全剥创意约束(Pack)段、系统流.md 修 `/webnovel-write`;reading-power 删 v6 skill 头。
+- [x] P4.3 `template_file` 引用:37 模板已全迁入 `genres/`,引用解析无悬空。
+- [x] P4.4 `test/references/migration.test.js`(5):全树 grep 零 v6 遗毒(报告除外)、题材单源无双表、CSV 删列、模板剥段、报告含真源选定表。全量 246 绿。
 
 **验证 P4**:`node --test test/references/` 全绿 + 人工复读迁入文件
 **提交 P4**:`feat(v7): M4 P4——知识层平移(题材CSV单源/追读力/爽点节奏,清 v6 遗毒+消双表)`
