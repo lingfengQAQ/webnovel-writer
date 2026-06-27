@@ -10,6 +10,26 @@ export const FACT_CATEGORIES = [
 export const EDIT_CATEGORIES = ['structure', 'pacing', 'commercial', 'motivation']
 export const SEVERITIES = ['critical', 'high', 'medium', 'low']
 
+/** 审稿单 JSON 形态范例（单源:生成器注入角色任务书,角色与校验器不双表） */
+export const SCHEMA_EXAMPLE = {
+  chapter: 100,
+  issues: [
+    {
+      severity: 'critical',
+      category: 'setting',
+      location: '第3段',
+      description: '问题描述',
+      evidence: '草稿引用 vs 输入数据',
+      fix_hint: '修复方向',
+      blocking: true,
+    },
+  ],
+  issues_count: 1,
+  blocking_count: 1,
+  has_blocking: true,
+  summary: 'N个问题：X个阻断，Y个高优',
+}
+
 const REQUIRED_FIELDS = ['location', 'description', 'evidence', 'fix_hint']
 
 /**

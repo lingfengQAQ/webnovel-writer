@@ -53,12 +53,12 @@ P5 AC 复核 + CI 双平台;真模型 smoke 推迟文档
 
 ## P3 生成器 + drift check + validator（R4 JS 面）
 
-- [ ] P3.1 `src/host-shells/generate.js`:读 roles/skills/registry → 各平台壳;手写条件块渲染器(零依赖)。先红:fixture 源 → 期望产物。
-- [ ] P3.2 drift check:`--check` 同输入连跑两次逐字节一致 + 生成物过 validator。
-- [ ] P3.3 `src/host-shells/validator.js`:registry schema / support.md 存在 / description 长度 / 无绝对路径 / roles frontmatter。
-- [ ] P3.4 `scripts/build-host-shells.mjs`:薄 CLI(`--target all|<host>`、`--check`)。
-- [ ] P3.5 `test/host-shells/`:生成 Claude Code/Codex 壳、降级编译、drift 确定性、validator 各拒绝项。
-- [ ] P3.6 CI:`.github/workflows/v7-ci.yml` 加 `build-host-shells --check` + validator 步骤(双平台)。
+- [x] P3.1 `src/host-shells/generate.js`:零依赖条件块渲染器(`{{#if}}`/`{{#unless}}`/`{{a.b}}`)+ 多平台壳(codex→TOML,余→md)+ schema 从 schema.js 单源注入。
+- [x] P3.2 drift check:`driftCheck` 同输入连跑两次逐字节一致 + validator 通过。
+- [x] P3.3 `src/host-shells/validator.js`:registry schema / 一级宿主 support.md 存在 / SKILL description ≤ 8k / 角色 frontmatter / 无本机绝对路径(源 + 生成物)。
+- [x] P3.4 `scripts/build-host-shells.mjs`:薄 CLI(`--target all|<host>`、`--check`);dist/ 入 .gitignore。
+- [x] P3.5 `test/host-shells/{generate,validator}.test.js`(12):条件块、TOML、占位符注入、drift 确定性、validator 各拒绝项 + 真实资产过。
+- [x] P3.6 CI:`v7-ci.yml` 加「drift check」步骤(双平台)。全量 241 绿;CLI 冒烟 4 平台壳生成、codex TOML、dist 被忽略。
 
 **验证 P3**:`node --test test/host-shells/` + `node scripts/build-host-shells.mjs --check` 全绿
 **提交 P3**:`feat(v7): M4 P3——宿主壳生成器 + drift check(确定性)+ package validator + CI`

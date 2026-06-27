@@ -26,5 +26,7 @@ jobs:
         run: npm ci
       - name: 单元测试（含中文路径用例）
         run: node --test
+      - name: 宿主壳 drift check（生成器确定性 + package validator）
+        run: node scripts/build-host-shells.mjs --check
       - name: 版本门槛冒烟
         run: node bin/webnovel-writer.js --version
