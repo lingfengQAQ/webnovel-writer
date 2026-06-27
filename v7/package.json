@@ -12,5 +12,7 @@
   "scripts": {
     "test": "node --test"
   },
-  "dependencies": {}
+  "dependencies": {
+    "js-yaml": "^5.2.0"
+  }
 }
