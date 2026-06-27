@@ -45,6 +45,10 @@ if (!command || command === '--help') {
   console.log('  grep-story <关键词> [--regex=<pattern>]')
   console.log('  report-overdue-threads | report-secret-accumulation | report-thread-activity --卷=N')
   console.log('  report-weak-hook-streak | report-book-stats | report-style-drift')
+  console.log('')
+  console.log('写章流程（M2，零 AI 脚本面）：')
+  console.log('  prepare-chapter <章号>                  备料：写出 工作区/本章写作材料.md')
+  console.log('  mechanical-check <章号> [--draft=<路径>]  机检：字数/禁词/禁句式/复读/新专名/信息差候选')
   process.exit(0)
 }
 
