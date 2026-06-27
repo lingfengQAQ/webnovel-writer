@@ -1,72 +1,51 @@
 import { ChapterReader } from '../storage/adapters/ChapterReader.js'
-import { CacheManager } from '../cache/index.js'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 
 /**
  * read-chapter <章号> [--front-matter|--tail=N|--head=N|--摘要]
+ * 契约：纯返回 {ok, output?, error?}，不碰 console/process/cache 生命周期（见 design §6.2）。
  */
-export async function execute(args, options) {
+export async function run(args, options, ctx) {
   const chapterNum = parseInt(args[0], 10)
   if (isNaN(chapterNum)) {
-    console.error('章号必须是数字')
-    process.exit(1)
+    return { ok: false, error: '章号必须是数字' }
   }
 
-  const repoPath = process.cwd()
-  const cache = new CacheManager(path.join(repoPath, '.cache', 'index.db'))
-  await cache.ensureReady(repoPath)
+  const reader = new ChapterReader(ctx.repoPath, ctx.cache)
 
-  const reader = new ChapterReader(repoPath, cache)
+  if (options['front-matter']) {
+    const r = await reader.readFrontMatter(chapterNum)
+    return r.ok ? { ok: true, output: JSON.stringify(r.data, null, 2) } : { ok: false, error: r.error }
+  }
 
-  try {
-    if (options['front-matter']) {
-      const result = await reader.readFrontMatter(chapterNum)
-      if (result.ok) {
-        console.log(JSON.stringify(result.data, null, 2))
-      } else {
-        console.error(result.error)
-        process.exit(1)
-      }
-    } else if (options.tail) {
-      const wordCount = parseInt(options.tail, 10)
-      const result = await reader.readTail(chapterNum, wordCount)
-      if (result.ok) {
-        console.log(result.text)
-      } else {
-        console.error(result.error)
-        process.exit(1)
-      }
-    } else if (options.head) {
-      const wordCount = parseInt(options.head, 10)
-      const result = await reader.readHead(chapterNum, wordCount)
-      if (result.ok) {
-        console.log(result.text)
-      } else {
-        console.error(result.error)
-        process.exit(1)
-      }
-    } else if (options['摘要']) {
-      // 读摘要文件
-      const summaryPath = path.join(repoPath, '定稿', '摘要', '章摘要', `${String(chapterNum).padStart(4, '0')}.md`)
-      try {
-        const summary = await fs.readFile(summaryPath, 'utf8')
-        console.log(summary.trim())
-      } catch (err) {
-        console.error(`章节 ${chapterNum} 摘要不存在`)
-        process.exit(1)
-      }
-    } else {
-      // 默认：读正文
-      const result = await reader.readBody(chapterNum)
-      if (result.ok) {
-        console.log(result.body)
-      } else {
-        console.error(result.error)
-        process.exit(1)
-      }
+  if (options.tail) {
+    const r = await reader.readTail(chapterNum, parseInt(options.tail, 10))
+    return r.ok ? { ok: true, output: r.text } : { ok: false, error: r.error }
+  }
+
+  if (options.head) {
+    const r = await reader.readHead(chapterNum, parseInt(options.head, 10))
+    return r.ok ? { ok: true, output: r.text } : { ok: false, error: r.error }
+  }
+
+  if (options['摘要']) {
+    const summaryPath = path.join(
+      ctx.repoPath,
+      '定稿',
+      '摘要',
+      '章摘要',
+      `${String(chapterNum).padStart(4, '0')}.md`
+    )
+    try {
+      const summary = await fs.readFile(summaryPath, 'utf8')
+      return { ok: true, output: summary.trim() }
+    } catch {
+      return { ok: false, error: `章节 ${chapterNum} 摘要不存在` }
     }
-  } finally {
-    await cache.close()
   }
+
+  // 默认：读正文
+  const r = await reader.readBody(chapterNum)
+  return r.ok ? { ok: true, output: r.body } : { ok: false, error: r.error }
 }

@@ -1,21 +1,30 @@
 import { TimelineReader } from '../storage/adapters/TimelineReader.js'
-import path from 'node:path'
 
-export async function execute(args, options) {
-  const repoPath = process.cwd()
-  const reader = new TimelineReader(repoPath)
+// M1 无状态机：当前卷 = chapters 表里最大的卷号（无章则默认第 1 卷）
+async function currentVolume(ctx) {
+  try {
+    const rows = await ctx.cache.query('SELECT MAX(volume_num) AS v FROM chapters')
+    return rows[0]?.v || 1
+  } catch {
+    return 1
+  }
+}
+
+/**
+ * read-timeline [--current-and-prev]（R4 再补 --current-volume|--卷=N|--在场=名）
+ * 契约：纯返回 {ok, output?, error?}（见 design §6.2）。
+ */
+export async function run(args, options, ctx) {
+  const reader = new TimelineReader(ctx.repoPath, ctx.cache)
 
   if (options['current-and-prev']) {
-    // 简化：假设当前卷=1，读第1卷
-    const result = await reader.readVolumeRange(1, 1)
-    if (result.ok) {
-      console.log(JSON.stringify(result.timeline, null, 2))
-    } else {
-      console.error(result.error)
-      process.exit(1)
-    }
-  } else {
-    console.error('请指定选项（如 --current-and-prev）')
-    process.exit(1)
+    const cur = await currentVolume(ctx)
+    const r = await reader.readVolumeRange(Math.max(1, cur - 1), cur)
+    return r.ok ? { ok: true, output: JSON.stringify(r.timeline, null, 2) } : { ok: false, error: r.error }
+  }
+
+  return {
+    ok: false,
+    error: '请指定选项（如 --current-and-prev、--current-volume、--卷=N、--在场=名）',
   }
 }
