@@ -1,0 +1,57 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { determineNextState } from '../../src/state-machine/index.js'
+import { buildDto } from '../../src/state-machine/dto.js'
+import { makeGitBook, chapter } from './_helper.js'
+
+test('序6 起草细纲：dto 含全书近况 + nextChapter，needsAI=true', async () => {
+  const { ctx, cleanup } = await makeGitBook({
+    'book.yaml': 'spec_version: "7.0"\n书名: 测\n卷规模: 40\n体检周期: 50\n',
+    '大纲/总纲.md': '# 总纲',
+    '定稿/正文/0001-起.md': chapter(1),
+  })
+  try {
+    const r = await determineNextState(ctx)
+    assert.equal(r.序, 6)
+    assert.equal(r.needsAI, true)
+    assert.equal(r.dto.nextChapter, 2)
+    assert.match(r.dto.全书近况, /第\s*1\s*卷/)
+    assert.ok(r.dto.期望产物.includes('细纲'))
+  } finally {
+    await cleanup()
+  }
+})
+
+test('序1 建书引导：dto.缺 含 book.yaml，needsAI=true', async () => {
+  const { ctx, cleanup } = await makeGitBook({ '大纲/占位.md': 'x' })
+  try {
+    const r = await determineNextState(ctx)
+    assert.equal(r.序, 1)
+    assert.equal(r.needsAI, true)
+    assert.ok(r.dto.缺.includes('book.yaml'))
+  } finally {
+    await cleanup()
+  }
+})
+
+test('序0 修复确认：dto.failures 指向坏文件', async () => {
+  const { ctx, cleanup } = await makeGitBook({
+    'book.yaml': '书名: 测\n',
+    '大纲/总纲.md': '# 总纲',
+    '定稿/正文/0001-起.md': chapter(1),
+    '定稿/正文/0002-坏.md': '---\n章号: 2\n标题: [未闭合\n---\nx',
+  })
+  try {
+    const r = await determineNextState(ctx)
+    assert.equal(r.序, 0)
+    assert.ok(r.dto.failures.length >= 1)
+    assert.ok(r.dto.failures.some((f) => f.file.includes('0002')))
+  } finally {
+    await cleanup()
+  }
+})
+
+test('buildDto 默认分支：非 AI 态返回最简 dto', async () => {
+  const dto = await buildDto({}, 2, { state: 'relink-manual-edits' })
+  assert.equal(dto.state, 'relink-manual-edits')
+})

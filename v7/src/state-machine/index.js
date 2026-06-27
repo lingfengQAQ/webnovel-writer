@@ -1,5 +1,6 @@
 import { checkGitHealth } from './git-health.js'
 import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
+import { buildDto } from './dto.js'
 import * as d from './detectors.js'
 
 /**
@@ -15,12 +16,12 @@ export async function determineNextState(ctx) {
   // 序0 修复确认（检测=脚本，提议=AI）
   const failures = await d.detectParseFailures(repoPath)
   if (failures.length) {
-    return mk(0, 'repair-confirm', true, `检测到 ${failures.length} 个源文件解析失败，需逐个修复确认。`, gitHealth, { failures })
+    return mk(0, 'repair-confirm', true, `检测到 ${failures.length} 个源文件解析失败，需逐个修复确认。`, gitHealth, await buildDto(ctx, 0, { failures }))
   }
 
   // 序1 建书引导
   if (await d.bookMissing(repoPath)) {
-    return mk(1, 'create-book', true, '当前目录还没有书，进入建书引导。', gitHealth, {})
+    return mk(1, 'create-book', true, '当前目录还没有书，进入建书引导。', gitHealth, await buildDto(ctx, 1, {}))
   }
 
   // 序2 手改补登
@@ -42,9 +43,9 @@ export async function determineNextState(ctx) {
 
   // 序4 卷复盘（卷末章；对谈=AI）
   if (maxChapter > 0 && maxChapter % 卷规模 === 0) {
-    return mk(4, 'volume-review', true, `第 ${maxChapter} 章是卷末，进入卷复盘。`, gitHealth, {
+    return mk(4, 'volume-review', true, `第 ${maxChapter} 章是卷末，进入卷复盘。`, gitHealth, await buildDto(ctx, 4, {
       卷: Math.floor(maxChapter / 卷规模),
-    })
+    }))
   }
 
   // 序5 体检（脚本项；指纹推 M3+）
@@ -53,9 +54,9 @@ export async function determineNextState(ctx) {
   }
 
   // 序6 起草新章细纲（近况=脚本，拟提案=AI）
-  return mk(6, 'draft-outline', true, `起草第 ${maxChapter + 1} 章细纲。`, gitHealth, {
+  return mk(6, 'draft-outline', true, `起草第 ${maxChapter + 1} 章细纲。`, gitHealth, await buildDto(ctx, 6, {
     nextChapter: maxChapter + 1,
-  })
+  }))
 }
 
 function mk(序, state, needsAI, message, gitHealth, dto) {
