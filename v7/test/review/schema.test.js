@@ -66,3 +66,30 @@ test('issues 非数组 → ok=false 不抛', async () => {
   assert.equal(r.ok, false)
   assert.equal(r.report, null)
 })
+
+test('P1-2：issues 元素为 null/字符串/数组 → 报错不抛', () => {
+  const r = validateReviewReport(
+    { chapter: 5, issues: [null, '字符串', [1, 2], issue()] },
+    { reviewType: 'factCheck' }
+  )
+  assert.equal(r.ok, false)
+  assert.ok(r.errors.some((e) => e.includes('issues[0]')), '应报 issues[0] 非对象')
+  assert.ok(r.errors.some((e) => e.includes('issues[1]')), '应报 issues[1] 非对象')
+  assert.ok(r.errors.some((e) => e.includes('issues[2]')), '应报 issues[2] 非对象')
+})
+
+test('P1-2：blocking 只认严格布尔 true,字符串 "true"/"false" 不当真', () => {
+  const r = validateReviewReport(
+    { chapter: 5, issues: [issue({ severity: 'high', blocking: 'true' })] },
+    { reviewType: 'factCheck' }
+  )
+  assert.equal(r.ok, true)
+  assert.equal(r.report.issues[0].blocking, false, '字符串 "true" 不应转为阻断')
+  assert.equal(r.report.blocking_count, 0)
+
+  const rc = validateReviewReport(
+    { chapter: 5, issues: [issue({ severity: 'critical', blocking: 'false' })] },
+    { reviewType: 'factCheck' }
+  )
+  assert.equal(rc.report.issues[0].blocking, true, 'critical 强制阻断覆盖')
+})

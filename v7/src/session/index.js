@@ -31,6 +31,19 @@ export async function readBooksRegistry(workdir) {
   return { ok: true, missing: false, books, corrupt }
 }
 
+/**
+ * 自愈回写：把有效书单写回 .webnovel/books.jsonl（P1-4）。
+ * 仅用于丢坏行 / 落扫描重建结果,不是 M5 的登记/换书写侧——那归 M5。
+ * 失败不阻断会话（best-effort）。
+ */
+export async function writeBooksRegistry(workdir, books) {
+  const dir = path.join(workdir, '.webnovel')
+  await fs.mkdir(dir, { recursive: true })
+  const p = path.join(dir, 'books.jsonl')
+  const content = books.map((b) => JSON.stringify(b)).join('\n') + '\n'
+  await fs.writeFile(p, content, 'utf8')
+}
+
 /** 扫工作目录子目录,含 book.yaml 的重建书单（spec §0 可重建）。当前书标记缺失 → 需作者选一次 */
 export async function scanRebuildBooks(workdir) {
   let entries
@@ -58,12 +71,28 @@ export async function assembleSessionContext(workdir) {
   let reg = await readBooksRegistry(workdir)
   let rebuilt = false
   let needsAuthorPick = false
+  let toWrite = null // P1-4：自愈回写载体
+
   if (!reg.ok || reg.missing || reg.books.length === 0) {
     const scan = await scanRebuildBooks(workdir)
-    reg = { books: scan.books }
+    reg = { ok: true, missing: false, books: scan.books, corrupt: 0 }
     rebuilt = true
     needsAuthorPick = scan.needsAuthorPick
+    // 扫描重建结果回写,下个会话不必再扫
+    if (scan.books.length) toWrite = scan.books
+  } else if (reg.corrupt > 0) {
+    // 部分损坏：丢坏行,把好行回写（自愈,不再长期半坏）
+    toWrite = reg.books
   }
+
+  if (toWrite) {
+    try {
+      await writeBooksRegistry(workdir, toWrite)
+    } catch {
+      // 回写失败不阻断会话（best-effort）
+    }
+  }
+
   const current = reg.books.find((b) => b.当前) || null
   const names = reg.books.map((b) => b.书名).join('、')
   const text = [

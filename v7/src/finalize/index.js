@@ -117,10 +117,15 @@ export async function finalizeChapter(ctx, payload, opts = {}) {
 
     return { ok: true, commitHash, error: '' }
   } catch (err) {
-    // commit 前中断：回滚未提交写入（仅 定稿/大纲），工作区原样保留
+    // commit 前中断：回滚本次 written 集合（非整棵 定稿/大纲 子树,避免误伤同子树其他章手改）。
+    // written 在 try 外声明,catch 可见。逐文件 restore:新章文件未跟踪会让整条 restore
+    // 报错被吞,逐个跑才能精确复原已跟踪文件;clean 删本次新建的未跟踪文件。
+    const relFiles = [...new Set(written)].map((f) => path.relative(repoPath, f))
     try {
-      await git.restore(['定稿/', '大纲/'])
-      await git.clean(['定稿/', '大纲/'])
+      for (const rel of relFiles) {
+        await git.restore([rel])
+      }
+      await git.clean(relFiles)
     } catch {
       // 回滚尽力而为；M3 git 健康检查兜底
     }

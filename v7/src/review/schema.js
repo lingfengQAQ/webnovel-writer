@@ -49,6 +49,11 @@ export function validateReviewReport(report, { reviewType } = {}) {
 
   const normalized = report.issues.map((issue, i) => {
     const where = `issues[${i}]`
+    // P1-2：坏输入（null/字符串/非对象）先判类型,别直接读字段抛异常
+    if (issue == null || typeof issue !== 'object' || Array.isArray(issue)) {
+      errors.push(`${where} 必须是对象,实际：${issue === null ? 'null' : Array.isArray(issue) ? 'array' : typeof issue}`)
+      return { ...issue, severity: '', category: '', location: '', description: '', evidence: '', fix_hint: '', blocking: false }
+    }
     if (!SEVERITIES.includes(issue.severity)) errors.push(`${where} severity 非法：${issue.severity}`)
     if (allowed && !allowed.includes(issue.category)) {
       errors.push(`${where} category「${issue.category}」越界（${reviewType}）`)
@@ -56,8 +61,8 @@ export function validateReviewReport(report, { reviewType } = {}) {
     for (const f of REQUIRED_FIELDS) {
       if (issue[f] == null || issue[f] === '') errors.push(`${where} 缺字段 ${f}`)
     }
-    // 阻断规则
-    let blocking = !!issue.blocking
+    // 阻断规则：只认严格布尔 true,字符串 "false" 不当真（P1-2）
+    let blocking = issue.blocking === true
     if (issue.severity === 'critical') blocking = true
     if (issue.category === 'unregistered_thread') blocking = false
     return { ...issue, blocking }

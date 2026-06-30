@@ -104,3 +104,50 @@ test('runReviews：审稿单越界 category → ok=false 带错', async () => {
     assert.ok(r.errors.length > 0)
   } finally { await cleanup() }
 })
+
+test('P1-1：草稿用别名命中角色 + 名册/相关条目进 DTO', async () => {
+  // 名册有 林晚(正名)/晚晚(别名);草稿只用别名「晚晚」→ 旧逻辑漏,新逻辑应纳入
+  const { ctx, cleanup } = await makeGitBook({
+    'book.yaml': 'spec_version: "7.0"\n书名: 测\n卷规模: 40\n',
+    '定稿/正文/0001-起.md': chapter(1, '过去的事。'),
+    '定稿/设定/名册.md': '| 正名 | 别名 | 类型 | 首现章 |\n|------|------|------|--------|\n| 林晚 | 晚晚 | character | 1 |\n',
+    '定稿/设定/角色/林晚.md': charCard('林晚', '练气三层'),
+    '大纲/伏笔/伏笔-001-x.md': '---\n强度: 高\n状态: 进行\n开启章: 1\n---\n## 履历\n- 第1章：推进\n',
+    '工作区/细纲.md': '## 本章要写到的事\n晚晚突破。\n',
+    '工作区/草稿.md': '晚晚运转功法，突破到练气四层。她握紧青霜剑。',
+  })
+  try {
+    const r = await assembleReviewInput(ctx, { chapterNum: 2, draftPath: '工作区/草稿.md' })
+    assert.equal(r.ok, true, r.error)
+    // 草稿只用别名「晚晚」,正名「林晚」没出现 → 必须靠别名命中
+    assert.ok(!r.input.草稿全文.includes('林晚'), '前置:草稿确实不含正名')
+    assert.ok(r.input.相关角色.some((c) => c.正名 === '林晚'), '别名命中应纳入林晚')
+    assert.ok(r.input.名册.some((m) => m.正名 === '林晚' && m.别名.includes('晚晚')), '名册带别名')
+    assert.ok(r.input.相关条目.some((t) => t.id?.startsWith('伏笔-001')), '相关条目带进行中的伏笔')
+    // 不泄漏路径
+    const json = JSON.stringify(r.input)
+    assert.ok(!json.includes(ctx.repoPath) && !json.includes('定稿/设定'))
+  } finally { await cleanup() }
+})
+
+test('P1-3：原始输出与归一化结果分存（.raw.json 保留模型原话）', async () => {
+  const { ctx, cleanup, root } = await makeReviewBook()
+  try {
+    // stub 返回 critical+blocking:false;归一化会把 blocking 改 true,raw 保留 false
+    const reviewers = {
+      factCheck: async (input) => ({
+        chapter: input.章号,
+        ai_meta: 'raw-marker',
+        issues: [fcIssue({ severity: 'critical', blocking: false })],
+      }),
+      editorial: async () => ({ issues: [] }),
+    }
+    const r = await runReviews(ctx, { chapterNum: 2, draftPath: '工作区/草稿.md', mode: 'complete', reviewers })
+    assert.equal(r.ok, true)
+    const raw = JSON.parse(await fs.readFile(path.join(root, '工作区', '评审报告', '事实审查.raw.json'), 'utf8'))
+    const norm = JSON.parse(await fs.readFile(path.join(root, '工作区', '评审报告', '事实审查.json'), 'utf8'))
+    assert.equal(raw.issues[0].blocking, false, 'raw 保留 AI 原话 blocking:false')
+    assert.equal(norm.issues[0].blocking, true, '归一化把 critical 改 blocking:true')
+    assert.equal(raw.ai_meta, 'raw-marker', 'raw 保留 AI 额外字段')
+  } finally { await cleanup() }
+})

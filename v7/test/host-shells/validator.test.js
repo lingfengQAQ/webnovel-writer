@@ -67,6 +67,35 @@ test('validatePackage：含本机绝对路径 → 报错', async () => {
   } finally { await cleanup() }
 })
 
+test('validatePackage（P1-5）：扩展绝对路径检测 /tmp /opt /root UNC C:/ 都算', async () => {
+  const cases = [
+    '见 /tmp/draft.md',
+    '落在 /opt/webnovel/x',
+    '备份在 /root/book',
+    '挂载 /mnt/d/book',
+    'UNC \\\\nas\\\\share\\\\b.md',
+    '正斜杠盘符 C:/Users/x/a.md',
+  ]
+  for (const c of cases) {
+    const { root, w, cleanup } = await makePkg()
+    try {
+      await w('roles/事实审查.md', `---\nname: 事实审查\ndescription: d\n---\n${c}`)
+      const r = await validatePackage(root)
+      assert.equal(r.ok, false, `应检出绝对路径：${c}`)
+      assert.ok(r.errors.some((e) => e.includes('绝对路径')), c)
+    } finally { await cleanup() }
+  }
+})
+
+test('validatePackage（P1-5）：URL scheme 与 prose 不误报', async () => {
+  const { root, w, cleanup } = await makePkg()
+  try {
+    await w('roles/事实审查.md', '---\nname: 事实审查\ndescription: d\n---\n参见 https://example.com/a/b 与 http://x.io 和 and/or 及 §3/4 节,无绝对路径。')
+    const r = await validatePackage(root)
+    assert.equal(r.ok, true, `URL/prose 不应误报绝对路径：${r.errors.join('；')}`)
+  } finally { await cleanup() }
+})
+
 test('driftCheck：真实 v7 确定性 + validator 通过', async () => {
   const r = await driftCheck(V7)
   assert.equal(r.ok, true, r.error)

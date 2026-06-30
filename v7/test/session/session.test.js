@@ -7,6 +7,7 @@ import {
   readBooksRegistry,
   scanRebuildBooks,
   assembleSessionContext,
+  writeBooksRegistry,
 } from '../../src/session/index.js'
 
 async function tmpWorkdir() {
@@ -82,6 +83,52 @@ test('assembleSessionContext：登记缺失 → 扫描重建并标记', async ()
     assert.equal(r.ok, true)
     assert.equal(r.rebuilt, true)
     assert.match(r.text, /剑起青云/)
+  } finally { await cleanup() }
+})
+
+test('assembleSessionContext（P1-4）：部分损坏 → 丢坏行回写,下读 corrupt=0', async () => {
+  const { root, cleanup } = await tmpWorkdir()
+  try {
+    await writeRegistry(root, [
+      JSON.stringify({ 书名: '剑起青云', 目录: '剑起青云', 当前: true }),
+      '{坏的 json',
+      JSON.stringify({ 书名: '星海', 目录: '星海', 当前: false }),
+    ])
+    const r = await assembleSessionContext(root)
+    assert.equal(r.ok, true)
+    assert.equal(r.current.书名, '剑起青云')
+    // 回写后坏行已丢
+    const reread = await readBooksRegistry(root)
+    assert.equal(reread.corrupt, 0, '自愈回写应丢掉坏行')
+    assert.equal(reread.books.length, 2)
+  } finally { await cleanup() }
+})
+
+test('assembleSessionContext（P1-4）：登记缺失重建后回写,下读不再 missing', async () => {
+  const { root, cleanup } = await tmpWorkdir()
+  try {
+    await makeBookDir(root, '剑起青云')
+    await makeBookDir(root, '星海')
+    const r = await assembleSessionContext(root)
+    assert.equal(r.rebuilt, true)
+    assert.equal(r.books.length, 2)
+    // 回写后下个会话直接读登记,不必再扫
+    const reread = await readBooksRegistry(root)
+    assert.equal(reread.missing, false)
+    assert.equal(reread.books.length, 2)
+  } finally { await cleanup() }
+})
+
+test('writeBooksRegistry：写 JSONL 逐行,可被 readBooksRegistry 读回', async () => {
+  const { root, cleanup } = await tmpWorkdir()
+  try {
+    await writeBooksRegistry(root, [
+      { 书名: 'A', 目录: 'A', 当前: true },
+      { 书名: 'B', 目录: 'B', 当前: false },
+    ])
+    const r = await readBooksRegistry(root)
+    assert.equal(r.books.length, 2)
+    assert.equal(r.corrupt, 0)
   } finally { await cleanup() }
 })
 

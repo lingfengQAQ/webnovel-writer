@@ -105,13 +105,13 @@ merged 收敛版之外的 deep 报告独有项（作者手改丢失、回滚范�
 
 ### P1 两审 / 会话 / 校验
 
-- [ ] P1-1 `src/review/index.js` + `src/dto/character-context.js`:补全 ReviewInput,把相关条目、新专名、别名命中的角色都带进去。
-- [ ] P1-2 `src/review/schema.js`:坏输入先判类型,`blocking` 只收明确布尔,别靠真值强转。
-- [ ] P1-3 `src/review/index.js`:原始审稿结果和归一化结果分开保存,方便回溯模型原话。
-- [ ] P1-4 `src/session/index.js`:`books.jsonl` 部分损坏也触发自愈,必要时回写修复结果。
-- [ ] P1-5 `src/host-shells/validator.js`:扩展绝对路径检测,把常见 Windows / Linux / UNC 形式都算进去。
-- [ ] P1-6 (deep) `src/state-machine/flows/goto-chapter.js`:`--confirm` 走 `reset --hard` 前先 `git stash` 或拒绝脏树;现有 rescue ref 只存 HEAD 指针不含工作树,作者未登记手改会被静默抹掉且无法找回。该 flow 也不跑 `checkGitHealth`。
-- [ ] P1-7 (deep) `src/finalize/index.js` + `src/finalize/git.js`:回滚范围从 `定稿/`+`大纲/` 整棵子树收窄到本次 `written` 文件集合,避免误伤同子树其他章的手改;`git.clean` 包 try/catch(Windows 文件锁抛错会逃出 catch 破坏 `{ok,error}` 契约,`restore` 已有 try)。
+- [x] P1-1 `src/review/index.js` + `src/dto/character-context.js`:补全 ReviewInput,把相关条目、新专名、别名命中的角色都带进去。✅ assembleReviewInput 加 相关条目(进行中条目)+ 名册快照 + aliasMap(名册 entity_aliases 规范源+角色卡 fm.别名),草稿用别名也命中。
+- [x] P1-2 `src/review/schema.js`:坏输入先判类型,`blocking` 只收明确布尔,别靠真值强转。✅ issues 元素 null/字符串/数组先报错不抛;`blocking === true` 严格布尔(critical/unregistered_thread 覆盖规则不变)。
+- [x] P1-3 `src/review/index.js`:原始审稿结果和归一化结果分开保存,方便回溯模型原话。✅ runReviews 传 raw,persistReviewReport 额外落 `事实审查.raw.json`/`编辑审.raw.json`(原子批)。
+- [x] P1-4 `src/session/index.js`:`books.jsonl` 部分损坏也触发自愈,必要时回写修复结果。✅ 新增 writeBooksRegistry;部分损坏丢坏行回写、缺失重建回写(best-effort,不阻断会话)。
+- [x] P1-5 `src/host-shells/validator.js`:扩展绝对路径检测,把常见 Windows / Linux / UNC 形式都算进去。✅ ABS_PATH 覆盖盘符(C:\ C:/)+UNC(\\host)+Unix 绝对路径(/tmp /opt /root /mnt ...),避开 URL scheme 与 and/or 误判。
+- [x] P1-6 (deep) `src/state-machine/flows/goto-chapter.js`:`--confirm` 走 `reset --hard` 前先 `git stash` 或拒绝脏树;现有 rescue ref 只存 HEAD 指针不含工作树,作者未登记手改会被静默抹掉且无法找回。该 flow 也不跑 `checkGitHealth`。✅ 入口加 checkGitHealth;confirm 前 status 查脏树(定稿/大纲)→ 拒绝并提示先 commit/stash,手改不丢。
+- [x] P1-7 (deep) `src/finalize/index.js` + `src/finalize/git.js`:回滚范围从 `定稿/`+`大纲/` 整棵子树收窄到本次 `written` 文件集合,避免误伤同子树其他章的手改;`git.clean` 包 try/catch(Windows 文件锁抛错会逃出 catch 破坏 `{ok,error}` 契约,`restore` 已有 try)。✅ 回滚逐文件 restore(未跟踪新章静默失败)+ clean 删未跟踪;clean 内包 try。测试:第1章手改在 finalize 第3章断电回滚后保留。
 
 ### P2 spec 回填
 

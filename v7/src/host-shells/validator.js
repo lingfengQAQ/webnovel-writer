@@ -5,8 +5,9 @@ import { generateHostShells } from './generate.js'
 
 /** package validator（多智能体 spec v3.4 §9）:registry/support.md/description 预算/无本机绝对路径 */
 
-// windows 盘符路径 或 unix 用户目录绝对路径
-const ABS_PATH = /(?:[A-Za-z]:\\)|(?:\/(?:Users|home)\/)/
+// 本机绝对路径：Windows 盘符(C:\ / C:/) | UNC(\\host) | Unix 绝对路径(/tmp/x /opt/foo /root/bar /mnt/d ...)
+// 盘符前加 (?<![A-Za-z]) 避开 URL scheme(https://)误判;Unix 段以字母起、2+ 段,避开 and/or 这类
+const ABS_PATH = /(?<![A-Za-z])[A-Za-z]:[\\/]|\\{2}[^\\]|(?<![\w/])\/[A-Za-z][\w-]*(?:\/[A-Za-z][\w-]*)+/
 const CODEX_DESC_BUDGET = 8192
 
 export async function validatePackage(baseDir) {

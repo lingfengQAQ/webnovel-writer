@@ -34,17 +34,39 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
     const status = await assembleBookStatus(ctx)
     const 当前卷 = status.ok ? status.data.当前卷 : 1
 
-    // 相关角色:扫角色目录,正名出现在草稿里的纳入(不依赖缓存 schema)
+    // P1-1：名册快照（正名+别名）,供 AI 判新专名,不泄漏路径;同时建 aliasMap 供角色别名命中
+    let 名册 = []
+    const aliasMap = new Map() // 正名 → 别名[]
+    try {
+      const rows = await cache.query(
+        "SELECT e.id AS 正名, group_concat(a.alias, ',') AS 别名从句 FROM entities e LEFT JOIN entity_aliases a ON a.entity_id = e.id WHERE e.type = 'character' GROUP BY e.id"
+      )
+      名册 = rows.map((r) => {
+        const 别名 = r.别名从句 ? r.别名从句.split(',').map((s) => s.trim()).filter(Boolean) : []
+        if (别名.length) aliasMap.set(r.正名, 别名)
+        return { 正名: r.正名, 别名 }
+      })
+    } catch {
+      // 缓存不可用则略
+    }
+
+    // 相关角色:扫角色目录,正名或别名出现在草稿里的纳入（P1-1:别名也要命中）
     const 相关角色 = []
     try {
       const dir = path.join(repoPath, '定稿', '设定', '角色')
       for (const f of await fs.readdir(dir)) {
         if (!f.endsWith('.md')) continue
         const name = f.replace(/\.md$/, '')
-        if (草稿全文.includes(name)) {
-          const cc = await assembleCharacterContext(ctx, name)
-          if (cc.ok) 相关角色.push(cc.context)
-        }
+        const cc = await assembleCharacterContext(ctx, name)
+        if (!cc.ok) continue
+        // 别名合集:名册 entity_aliases（规范源）+ 角色卡 fm.别名
+        const aliases = new Set(aliasMap.get(name) || [])
+        const fmAliases = cc.context.别名
+        if (Array.isArray(fmAliases)) fmAliases.forEach((a) => a && aliases.add(a))
+        else if (typeof fmAliases === 'string')
+          fmAliases.split(',').forEach((a) => a.trim() && aliases.add(a.trim()))
+        const hit = 草稿全文.includes(name) || [...aliases].some((a) => a && 草稿全文.includes(a))
+        if (hit) 相关角色.push(cc.context)
       }
     } catch {
       // 无角色目录
@@ -56,6 +78,25 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
     const secrets = await new SecretReader(repoPath, cache).listUnrevealed()
     const 信息差候选 = secrets.map((s) => ({ id: s.id, 关键词: s.关键词 ?? s.keyword ?? '' }))
 
+    // P1-1：相关条目 = 仍在进行、且在本章前开启的条目（不泄漏 file_path）
+    let 相关条目 = []
+    try {
+      const rows = await cache.query(
+        "SELECT id, type, short_title, status, opened_chapter, last_advanced_chapter FROM threads WHERE status = '进行' AND opened_chapter <= ? ORDER BY opened_chapter",
+        [chapterNum]
+      )
+      相关条目 = rows.map((r) => ({
+        id: r.id,
+        type: r.type,
+        简述: r.short_title,
+        状态: r.status,
+        开启章: r.opened_chapter,
+        最后推进章: r.last_advanced_chapter,
+      }))
+    } catch {
+      // 缓存不可用则略
+    }
+
     return {
       ok: true,
       input: {
@@ -64,6 +105,8 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
         本章要写到的事,
         全书近况: status.ok ? status.markdown : '',
         相关角色,
+        相关条目,
+        名册,
         时间线片段,
         信息差候选,
       },
@@ -102,7 +145,7 @@ export function mergeReviews({ factCheck, editorial }, { mode, chapterNum }) {
  * @param {{repoPath}} ctx
  * @param {{chapterNum, merged, draft, 待确认新专名?: string[], 章摘要?: string}} args
  */
-export async function persistReviewReport(ctx, { chapterNum, merged, draft, 待确认新专名 = [], 章摘要 = '' }) {
+export async function persistReviewReport(ctx, { chapterNum, merged, draft, 待确认新专名 = [], 章摘要 = '', raw = null }) {
   const { repoPath } = ctx
 
   const issueLines = merged.issues.length
@@ -131,12 +174,18 @@ export async function persistReviewReport(ctx, { chapterNum, merged, draft, 待�
     '',
   ].join('\n')
 
-  // P0-3：多文件原子落盘（事实审查/编辑审/审稿单要么全成要么原样）
-  await writeAtomicBatch(repoPath, [
+  // P0-3：多文件原子落盘;P1-3：原始输出与归一化结果分存,便于回溯模型原话
+  const files = [
     { path: path.join('工作区', '评审报告', '事实审查.json'), content: JSON.stringify(merged.事实审查 ?? {}, null, 2) },
     { path: path.join('工作区', '评审报告', '编辑审.json'), content: JSON.stringify(merged.编辑审 ?? {}, null, 2) },
-    { path: path.join('工作区', '审稿.md'), content: md },
-  ])
+  ]
+  if (raw) {
+    files.push({ path: path.join('工作区', '评审报告', '事实审查.raw.json'), content: JSON.stringify(raw.factCheck ?? {}, null, 2) })
+    files.push({ path: path.join('工作区', '评审报告', '编辑审.raw.json'), content: JSON.stringify(raw.editorial ?? {}, null, 2) })
+  }
+  files.push({ path: path.join('工作区', '审稿.md'), content: md })
+
+  await writeAtomicBatch(repoPath, files)
 
   const 审稿路径 = path.join(repoPath, '工作区', '审稿.md')
   return { ok: true, 审稿路径, error: '' }
@@ -166,6 +215,7 @@ export async function runReviews(ctx, { chapterNum, draftPath, mode = 'complete'
     draft: inp.input.草稿全文,
     待确认新专名,
     章摘要,
+    raw: { factCheck: rawFact, editorial: rawEdit },
   })
   return { ok: true, merged, 审稿路径: saved.审稿路径, errors: [] }
 }

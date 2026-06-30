@@ -101,3 +101,22 @@ test('finalizeChapter 定稿后删 .cache 全量重建一致（不变量 2）', 
     await cleanup()
   }
 })
+
+test('finalizeChapter 断电回滚（P1-7）：不误伤同子树其他章的未提交手改', async () => {
+  const { ctx, cleanup } = await gitBookCtx()
+  try {
+    // 在已跟踪的第1章上手改（不提交）——不在本次 written 集合里
+    const ch1 = path.join(ctx.repoPath, '定稿/正文/0001-开局.md')
+    await fs.writeFile(ch1, (await fs.readFile(ch1, 'utf8')) + '\n第1章手改。', 'utf8')
+
+    const r = await finalizeChapter(ctx, payload(), { faultAfterWrite: true })
+    assert.equal(r.ok, false)
+
+    // 本次新写的第3章被清（未跟踪 → clean）
+    await assert.rejects(() => fs.access(path.join(ctx.repoPath, '定稿/正文/0003-初露.md')))
+    // 第1章手改保留（回滚范围收窄到 written,不再整棵 定稿/ 子树）
+    assert.ok((await fs.readFile(ch1, 'utf8')).includes('第1章手改。'), '第1章手改不应被回滚抹掉')
+  } finally {
+    await cleanup()
+  }
+})

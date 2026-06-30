@@ -39,7 +39,11 @@ export function createGit(repoPath) {
     },
     /** 删除 paths 下未跟踪的新文件（scoped，绝不触及 工作区/） */
     async clean(paths) {
-      await run(['clean', '-fd', '--', ...paths])
+      try {
+        await run(['clean', '-fd', '--', ...paths])
+      } catch {
+        // 文件锁等致 clean 失败：尽力而为,不破坏 {ok,error} 契约（M3 git 健康检查兜底）
+      }
     },
     async revCount() {
       try {
