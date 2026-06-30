@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import path from 'node:path'
 import os from 'node:os'
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { access, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { CacheManager } from '../../src/cache/index.js'
 
 // 在临时目录构造一个最小书仓库，files 是 { 相对路径: 内容 }
@@ -116,11 +116,62 @@ test('别名冲突 → ROLLBACK 不留半库（P1-1：已写 chapters 也回滚�
   try {
     const result = await cache.rebuildFromSource(root)
     assert.equal(result.ok, false, '别名冲突应拒绝重建')
-    // 事务回滚：chapters 不应残留半填数据
-    const ch = await cache.query('SELECT COUNT(*) AS c FROM chapters')
-    assert.equal(ch[0].c, 0, '别名冲突应 ROLLBACK，chapters 不留半填数据')
-    const th = await cache.query('SELECT COUNT(*) AS c FROM threads')
-    assert.equal(th[0].c, 0, 'threads 同样回滚')
+    // 事务回滚且失败临时库不应被提升为可用缓存
+    await assert.rejects(() => cache.query('SELECT COUNT(*) AS c FROM chapters'))
+  } finally {
+    await cache.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('重建失败保留上一份可用缓存，不替换成空库', async () => {
+  const root = await makeRepo({
+    'book.yaml': 'spec_version: "7.0"\n书名: 测试\n',
+    '定稿/正文/0001-开局.md': '---\n章号: 1\n标题: 开局\n卷: 1\n字数: 100\n章定位: 推进\n---\n正文。',
+    '定稿/设定/名册.md': 名册仅林晚,
+  })
+  const cache = new CacheManager(path.join(root, '.cache', 'index.db'))
+  try {
+    await cache.ensureReady(root)
+    const before = await cache.query('SELECT COUNT(*) AS c FROM chapters')
+    assert.equal(before[0].c, 1)
+
+    await writeFile(
+      path.join(root, '定稿/设定/名册.md'),
+      '| 正名 | 别名 | 类型 | 首现章 |\n|------|------|------|--------|\n' +
+        '| 林晚 | 影 | character | 1 |\n| 老者 | 影 | character | 1 |\n',
+      'utf8'
+    )
+    const result = await cache.rebuildFromSource(root)
+    assert.equal(result.ok, false, '坏源文件应让本次重建失败')
+    const after = await cache.query('SELECT COUNT(*) AS c FROM chapters')
+    assert.equal(after[0].c, 1, '失败重建不应把旧缓存替换成空库')
+  } finally {
+    await cache.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('重建失败可选择移除旧缓存，避免继续读取陈旧数据', async () => {
+  const root = await makeRepo({
+    'book.yaml': 'spec_version: "7.0"\n书名: 测试\n',
+    '定稿/正文/0001-开局.md': '---\n章号: 1\n标题: 开局\n卷: 1\n字数: 100\n章定位: 推进\n---\n正文。',
+    '定稿/设定/名册.md': 名册仅林晚,
+  })
+  const dbPath = path.join(root, '.cache', 'index.db')
+  const cache = new CacheManager(dbPath)
+  try {
+    await cache.ensureReady(root)
+    await writeFile(
+      path.join(root, '定稿/设定/名册.md'),
+      '| 正名 | 别名 | 类型 | 首现章 |\n|------|------|------|--------|\n' +
+        '| 林晚 | 影 | character | 1 |\n| 老者 | 影 | character | 1 |\n',
+      'utf8'
+    )
+    const result = await cache.rebuildFromSource(root, { keepExistingOnFailure: false })
+    assert.equal(result.ok, false)
+    await assert.rejects(() => cache.query('SELECT COUNT(*) AS c FROM chapters'))
+    await assert.rejects(() => access(dbPath))
   } finally {
     await cache.close()
     await rm(root, { recursive: true, force: true })

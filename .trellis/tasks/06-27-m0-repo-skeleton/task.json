@@ -21,6 +21,6 @@
   "children": [],
   "parent": null,
   "relatedFiles": [],
-  "notes": "",
+  "notes": "实现完成，Windows 原生 + Linux/WSL 双平台本地 node --test 各 4 绿；唯一挂起项：GitHub 真 CI（作者暂不 push）。commit c53bf63/dbcb322/779854c。",
   "meta": {}
 }

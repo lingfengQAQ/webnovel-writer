@@ -200,8 +200,19 @@ export async function runReviews(ctx, { chapterNum, draftPath, mode = 'complete'
   const inp = await assembleReviewInput(ctx, { chapterNum, draftPath })
   if (!inp.ok) return { ok: false, errors: [inp.error] }
 
-  const rawFact = await reviewers.factCheck(inp.input)
-  const rawEdit = await reviewers.editorial(inp.input)
+  let rawFact
+  let rawEdit
+  if (mode === 'degraded') {
+    if (typeof reviewers.degraded !== 'function') {
+      return { ok: false, errors: ['兼容模式需要注入 degraded reviewer（单次 AI 调用）'] }
+    }
+    const raw = await reviewers.degraded(inp.input)
+    rawFact = raw.factCheck ?? raw.事实审查 ?? { issues: [] }
+    rawEdit = raw.editorial ?? raw.编辑审 ?? { issues: [] }
+  } else {
+    rawFact = await reviewers.factCheck(inp.input)
+    rawEdit = await reviewers.editorial(inp.input)
+  }
 
   const vFact = validateReviewReport(rawFact, { reviewType: 'factCheck' })
   const vEdit = validateReviewReport(rawEdit, { reviewType: 'editorial' })

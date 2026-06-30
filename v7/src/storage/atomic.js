@@ -4,30 +4,67 @@ import path from 'node:path'
 let counter = 0
 
 /**
- * 原子批量写：全部先落 .tmp 再 rename，任一失败回滚（删 tmp）。
+ * 原子批量写：全部先落 .tmp，再备份旧文件并 rename，任一失败回滚。
  * 同目录 rename 原子（同卷），保证多文件"要么全成要么原样"（spec error-handling §3.1）。
  * @param {string} repoPath
  * @param {Array<{path: string, content: string}>} files 相对路径
  * @returns {Promise<string[]>} 已写的相对路径
  */
 export async function writeAtomicBatch(repoPath, files) {
+  const seen = new Set()
   const plans = []
-  for (const f of files) {
-    const full = path.join(repoPath, f.path)
-    await fs.mkdir(path.dirname(full), { recursive: true })
-    const tmp = `${full}.wnwtmp.${process.pid}.${counter++}`
-    await fs.writeFile(tmp, f.content, 'utf8')
-    plans.push({ tmp, final: full, rel: f.path })
-  }
   try {
+    for (const f of files) {
+      if (seen.has(f.path)) throw new Error(`批量写入包含重复路径：${f.path}`)
+      seen.add(f.path)
+      const full = path.join(repoPath, f.path)
+      await fs.mkdir(path.dirname(full), { recursive: true })
+      const n = counter++
+      const tmp = `${full}.wnwtmp.${process.pid}.${n}`
+      const backup = `${full}.wnwbackup.${process.pid}.${n}`
+      const plan = { tmp, final: full, backup, existed: false, rel: f.path }
+      plans.push(plan)
+      await fs.writeFile(tmp, f.content, 'utf8')
+
+      try {
+        const stat = await fs.stat(full)
+        if (stat.isDirectory()) throw new Error(`目标路径是目录，不能写入文件：${f.path}`)
+        await fs.rename(full, backup)
+        plan.existed = true
+      } catch (err) {
+        if (err.code !== 'ENOENT') throw err
+      }
+    }
+
     for (const p of plans) {
       await fs.rename(p.tmp, p.final)
     }
-  } catch (err) {
     for (const p of plans) {
-      await fs.rm(p.tmp, { force: true })
+      if (p.existed) await fs.rm(p.backup, { force: true })
+    }
+  } catch (err) {
+    for (const p of plans.toReversed()) {
+      await restorePlan(p)
     }
     throw err
   }
   return plans.map((p) => p.rel)
+}
+
+async function restorePlan(plan) {
+  try {
+    await fs.rm(plan.tmp, { force: true })
+  } catch {
+    // 尽力回滚
+  }
+  try {
+    if (plan.existed) {
+      await fs.rm(plan.final, { force: true })
+      await fs.rename(plan.backup, plan.final)
+    } else {
+      await fs.rm(plan.final, { force: true })
+    }
+  } catch {
+    // 尽力回滚；调用方会收到原始错误
+  }
 }

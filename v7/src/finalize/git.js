@@ -45,6 +45,15 @@ export function createGit(repoPath) {
         // 文件锁等致 clean 失败：尽力而为,不破坏 {ok,error} 契约（M3 git 健康检查兜底）
       }
     },
+    /** 工作树内容是否真的有 diff（不含纯 stat/换行刷新噪声） */
+    async hasDiff(paths) {
+      try {
+        await run(['diff', '--quiet', '--', ...paths])
+        return false
+      } catch {
+        return true
+      }
+    },
     async revCount() {
       try {
         const { stdout } = await run(['rev-list', '--count', 'HEAD'])

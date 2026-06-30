@@ -84,9 +84,22 @@ test('runReviews：DI 注入两审 → 校验+合并+落盘审稿单与评审报
 test('runReviews：降级模式 → 审稿单含兼容声明', async () => {
   const { ctx, cleanup, root } = await makeReviewBook()
   try {
-    const reviewers = { factCheck: async () => ({ issues: [] }), editorial: async () => ({ issues: [] }) }
+    let calls = 0
+    const reviewers = {
+      degraded: async () => {
+        calls++
+        return { factCheck: { issues: [] }, editorial: { issues: [] } }
+      },
+      factCheck: async () => {
+        throw new Error('降级模式不应单独调用事实审查')
+      },
+      editorial: async () => {
+        throw new Error('降级模式不应单独调用编辑审')
+      },
+    }
     const r = await runReviews(ctx, { chapterNum: 2, draftPath: '工作区/草稿.md', mode: 'degraded', reviewers })
     assert.equal(r.ok, true)
+    assert.equal(calls, 1, '降级模式预算应为单次 AI 调用')
     const 审稿 = await fs.readFile(path.join(root, '工作区', '审稿.md'), 'utf8')
     assert.match(审稿, /兼容模式/)
   } finally { await cleanup() }

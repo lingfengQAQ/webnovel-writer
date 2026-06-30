@@ -4,6 +4,8 @@ import path from 'node:path'
 import { SCHEMA_SQL } from './schema.js'
 import { rebuildCache } from './rebuilder.js'
 
+let rebuildCounter = 0
+
 /**
  * CacheManager：管理 .cache/index.db 五表。
  */
@@ -19,67 +21,118 @@ export class CacheManager {
    * @returns {Promise<void>}
    */
   async ensureReady(repoPath) {
-    // 检查 db 文件是否存在
+    let needsRebuild = false
+
     try {
       await fs.access(this.dbPath)
     } catch (err) {
-      // 不存在，先创建目录
       const dir = path.dirname(this.dbPath)
       await fs.mkdir(dir, { recursive: true })
-      // 重建
-      return this.rebuildFromSource(repoPath)
+      needsRebuild = true
     }
 
-    // 打开现有数据库
-    try {
-      this.db = new DatabaseSync(this.dbPath)
-      // 验证表是否存在
-      const tables = this.db
-        .prepare("SELECT name FROM sqlite_master WHERE type='table'")
-        .all()
-      if (tables.length === 0) {
-        // 空数据库，重建
-        this.db.close()
-        return this.rebuildFromSource(repoPath)
+    if (!needsRebuild) {
+      try {
+        this.db = new DatabaseSync(this.dbPath)
+        const tables = this.db
+          .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+          .all()
+        if (tables.length === 0) {
+          this.db.close()
+          this.db = null
+          needsRebuild = true
+        }
+      } catch (err) {
+        if (this.db) {
+          try {
+            this.db.close()
+          } catch {
+            // 忽略关闭失败
+          }
+        }
+        this.db = null
+        needsRebuild = true
       }
-    } catch (err) {
-      // 损坏，重建
-      return this.rebuildFromSource(repoPath)
     }
+
+    if (needsRebuild) {
+      const result = await this.rebuildFromSource(repoPath)
+      if (!result.ok) throw new Error(`缓存重建失败：${result.errors.join('；')}`)
+      return result
+    }
+
+    return { ok: true, warnings: [], errors: [] }
   }
 
   /**
    * 全量重建缓存。
    * @param {string} repoPath
+   * @param {{keepExistingOnFailure?: boolean}} [opts]
    * @returns {Promise<{ok: boolean, warnings: string[], errors: string[]}>}
    */
-  async rebuildFromSource(repoPath) {
+  async rebuildFromSource(repoPath, opts = {}) {
+    const { keepExistingOnFailure = true } = opts
+    let hadExisting = false
+    try {
+      await fs.access(this.dbPath)
+      hadExisting = true
+    } catch {
+      hadExisting = false
+    }
+
     // 关闭现有连接
     if (this.db) {
       this.db.close()
       this.db = null
     }
 
-    // 删除旧数据库
-    try {
-      await fs.unlink(this.dbPath)
-    } catch (err) {
-      // 文件不存在，忽略
-    }
-
     // 确保 .cache 目录存在：rebuildFromSource 可被直接调用，不保证先过 ensureReady
     await fs.mkdir(path.dirname(this.dbPath), { recursive: true })
 
-    // 创建新数据库
-    this.db = new DatabaseSync(this.dbPath)
+    const tmpPath = `${this.dbPath}.rebuild.${process.pid}.${rebuildCounter++}`
+    let tmpDb = null
+    try {
+      tmpDb = new DatabaseSync(tmpPath)
+      tmpDb.exec(SCHEMA_SQL)
+      const result = await rebuildCache(repoPath, tmpDb)
+      tmpDb.close()
+      tmpDb = null
 
-    // 执行 DDL
-    this.db.exec(SCHEMA_SQL)
+      if (!result.ok) {
+        await fs.rm(tmpPath, { force: true })
+        await this._handleFailedRebuild(hadExisting, keepExistingOnFailure)
+        return result
+      }
 
-    // 调用重建器
-    const result = await rebuildCache(repoPath, this.db)
+      await fs.rm(this.dbPath, { force: true })
+      await fs.rename(tmpPath, this.dbPath)
+      this.db = new DatabaseSync(this.dbPath)
+      return result
+    } catch (err) {
+      if (tmpDb) {
+        try {
+          tmpDb.close()
+        } catch {
+          // 忽略关闭失败
+        }
+      }
+      await fs.rm(tmpPath, { force: true })
+      await this._handleFailedRebuild(hadExisting, keepExistingOnFailure)
+      return { ok: false, warnings: [], errors: [`重建失败：${err.message}`] }
+    }
+  }
 
-    return result
+  async _handleFailedRebuild(hadExisting, keepExistingOnFailure) {
+    if (!hadExisting) return
+    if (keepExistingOnFailure) {
+      this.db = new DatabaseSync(this.dbPath)
+      return
+    }
+    try {
+      await fs.rm(this.dbPath, { force: true })
+    } catch {
+      // 删除失败时保持关闭状态，后续 git 健康/缓存重建路径会兜底
+    }
   }
 
   /**

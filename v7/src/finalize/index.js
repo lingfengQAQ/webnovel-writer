@@ -39,17 +39,25 @@ export async function finalizeChapter(ctx, payload, opts = {}) {
   if (!Number.isInteger(chapterNum)) return { ok: false, error: '章号必须是整数' }
   if (!frontMatter || !frontMatter.标题) return { ok: false, error: '缺少章档案或标题' }
 
-  const written = []
+  const stageFiles = []
+  const rollbackFiles = []
+  const chapterBackups = []
+  let cacheRefresh = null
   try {
     // 2. 写工作树（全部落 定稿/大纲，非 工作区）
-    const cw = await new ChapterWriter(repoPath).writeChapter(chapterNum, frontMatter, body)
+    const cw = await new ChapterWriter(repoPath).writeChapter(chapterNum, frontMatter, body, {
+      preserveBackups: true,
+    })
     if (!cw.ok) throw new Error(cw.error)
-    written.push(cw.filePath)
+    stageFiles.push(cw.filePath, ...(cw.removedPaths || []))
+    rollbackFiles.push(cw.filePath)
+    chapterBackups.push(...(cw.backups || []))
 
     if (summary != null) {
       const sw = await new SummaryWriter(repoPath).writeChapterSummary(chapterNum, summary)
       if (!sw.ok) throw new Error(sw.error)
-      written.push(sw.filePath)
+      stageFiles.push(sw.filePath)
+      rollbackFiles.push(sw.filePath)
     }
 
     const tlw = new ThreadLedgerWriter(repoPath)
@@ -63,50 +71,67 @@ export async function finalizeChapter(ctx, payload, opts = {}) {
         if (!r.ok) throw new Error(r.error)
       }
       const f = await tlw._findThreadFile(t.id)
-      if (f) written.push(f)
+      if (f) {
+        stageFiles.push(f)
+        rollbackFiles.push(f)
+      }
     }
 
     const ew = new EntityWriter(repoPath)
     for (const c of characterUpdates) {
       const r = await ew.updateCharacter(c.name, c.updates)
       if (!r.ok) throw new Error(r.error)
-      written.push(path.join(repoPath, '定稿', '设定', '角色', `${c.name}.md`))
+      const filePath = path.join(repoPath, '定稿', '设定', '角色', `${c.name}.md`)
+      stageFiles.push(filePath)
+      rollbackFiles.push(filePath)
     }
     for (const row of rosterUpserts) {
       const r = await ew.upsertRosterRow(row)
       if (!r.ok) throw new Error(r.error)
-      written.push(path.join(repoPath, '定稿', '设定', '名册.md'))
+      const filePath = path.join(repoPath, '定稿', '设定', '名册.md')
+      stageFiles.push(filePath)
+      rollbackFiles.push(filePath)
     }
 
     const tw = new TimelineWriter(repoPath)
     for (const tr of timelineRows) {
       const r = await tw.appendRow(tr.volumeNum, tr.row)
       if (!r.ok) throw new Error(r.error)
-      written.push(r.filePath)
+      stageFiles.push(r.filePath)
+      rollbackFiles.push(r.filePath)
     }
 
     const secw = new SecretWriter(repoPath)
     for (const s of secretWrites) {
       const r = await secw.write(s.id, s.frontMatter, s.content)
       if (!r.ok) throw new Error(r.error)
-      written.push(r.filePath)
+      stageFiles.push(r.filePath)
+      rollbackFiles.push(r.filePath)
     }
 
     // 故障注入点（断电模拟，仅测试用）
     if (opts.faultAfterWrite) throw new Error('注入故障：写工作树后、commit 前中断')
 
     // 3. git add + commit（原子点）
-    const relFiles = [...new Set(written)].map((f) => path.relative(repoPath, f))
+    const relFiles = [...new Set(stageFiles)].map((f) => path.relative(repoPath, f))
     await git.add(relFiles)
     const commitHash = await git.commit(buildCommitMessage(chapterNum, frontMatter.标题, commitLines))
 
+    for (const b of chapterBackups) {
+      try {
+        await fs.rm(b.backup, { force: true })
+      } catch {
+        // 备份残留不影响已完成 commit；文件名不以 .md 结尾，不进缓存扫描
+      }
+    }
+
     // P0-1：定稿后同步刷新缓存，避免 next 读旧章号重抄本章。
-    // 重建失败不阻断定稿（已 commit 入档）；next 入口 ensureReady 会在 db 损坏时兜底重建。
+    // 重建失败不阻断定稿（已 commit 入档），但不能继续保留旧缓存，否则 next 会读旧章号。
     if (ctx.cache) {
       try {
-        await ctx.cache.rebuildFromSource(repoPath)
-      } catch {
-        // 缓存重建尽力而为
+        cacheRefresh = await ctx.cache.rebuildFromSource(repoPath, { keepExistingOnFailure: false })
+      } catch (err) {
+        cacheRefresh = { ok: false, warnings: [], errors: [`缓存刷新失败：${err.message}`] }
       }
     }
 
@@ -115,17 +140,25 @@ export async function finalizeChapter(ctx, payload, opts = {}) {
       await fs.rm(path.join(repoPath, '工作区', wf), { force: true })
     }
 
-    return { ok: true, commitHash, error: '' }
+    return { ok: true, commitHash, cacheRefresh, error: '' }
   } catch (err) {
-    // commit 前中断：回滚本次 written 集合（非整棵 定稿/大纲 子树,避免误伤同子树其他章手改）。
-    // written 在 try 外声明,catch 可见。逐文件 restore:新章文件未跟踪会让整条 restore
-    // 报错被吞,逐个跑才能精确复原已跟踪文件;clean 删本次新建的未跟踪文件。
-    const relFiles = [...new Set(written)].map((f) => path.relative(repoPath, f))
+    // commit 前中断：回滚本次 stage/rollback 集合（非整棵 定稿/大纲 子树,避免误伤同子树其他章手改）。
+    // 逐文件 restore:新章文件未跟踪会让整条 restore 报错被吞,逐个跑才能精确复原已跟踪文件。
+    const relStageFiles = [...new Set(stageFiles)].map((f) => path.relative(repoPath, f))
+    const relRollbackFiles = [...new Set(rollbackFiles)].map((f) => path.relative(repoPath, f))
     try {
-      for (const rel of relFiles) {
+      for (const rel of relStageFiles) {
         await git.restore([rel])
       }
-      await git.clean(relFiles)
+      await git.clean(relRollbackFiles)
+      for (const b of chapterBackups.toReversed()) {
+        await fs.rm(b.original, { force: true })
+        await fs.rename(b.backup, b.original)
+      }
+      for (const b of chapterBackups) {
+        const rel = path.relative(repoPath, b.original)
+        if (!(await git.hasDiff([rel]))) await git.restore([rel])
+      }
     } catch {
       // 回滚尽力而为；M3 git 健康检查兜底
     }

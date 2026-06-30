@@ -120,3 +120,38 @@ test('finalizeChapter 断电回滚（P1-7）：不误伤同子树其他章的未
     await cleanup()
   }
 })
+
+test('finalizeChapter 改同章标题后断电：旧章恢复，新章不残留', async () => {
+  const { ctx, cleanup } = await gitBookCtx()
+  try {
+    const oldPath = path.join(ctx.repoPath, '定稿/正文/0001-开局.md')
+    const oldContent = await fs.readFile(oldPath, 'utf8')
+    const r = await finalizeChapter(ctx, {
+      chapterNum: 1,
+      frontMatter: {
+        章号: 1,
+        标题: '改名',
+        卷: 1,
+        字数: 100,
+        章定位: '推进',
+      },
+      body: '新正文',
+    }, { faultAfterWrite: true })
+    assert.equal(r.ok, false)
+
+    assert.equal(
+      (await fs.readFile(oldPath, 'utf8')).replace(/\r\n/g, '\n'),
+      oldContent.replace(/\r\n/g, '\n'),
+      '旧标题章文件必须恢复同一内容'
+    )
+    await assert.rejects(() => fs.access(path.join(ctx.repoPath, '定稿/正文/0001-改名.md')))
+    const { stdout } = await execFileAsync(
+      'git',
+      ['status', '--porcelain', '--', '定稿/正文'],
+      { cwd: ctx.repoPath, encoding: 'utf8' }
+    )
+    assert.equal(stdout.trim(), '')
+  } finally {
+    await cleanup()
+  }
+})
