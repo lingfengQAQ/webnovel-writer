@@ -16,7 +16,7 @@
 
 2.1 **脚本能做的归脚本，做不到的归 AI 语义判断**：可计数项（字数、频次、格式校验、关键词命中）必须用脚本实现，禁止让模型估算；语义判断（是否真泄密、正文是否写到了某事）必须归 AI，**禁止用正则硬凑语义判断**。
 
-2.2 机检必须零 token；AI 调用次数每章有预算上限（实现时定数）。
+2.2 机检必须零 token；AI 调用每章预算：**完整两审 = 2 次**（事实审查 1 + 编辑审 1，各自独立上下文）；**降级模式 = 1 次**（单上下文顺序审）。超预算由宿主壳/编排层拒绝，不在 `runReviews` 内硬凑。
 
 2.3 **精准读取**：每类数据文件必须配"定位读到所需一段"的脚本接口；写作材料组装默认用片段，禁止默认整文件读取。
 
@@ -26,7 +26,7 @@
 
 3.2 Windows 中文环境是一等公民：CI 必须含 Windows 中文路径全链路测试（建库→写章→定稿→重建缓存）。中文路径、中文文件名在任何代码路径上都必须正确处理。
 
-3.3 书仓库初始化必须设置 `git config core.quotepath false`。
+3.3 书仓库工程化由**建书流程**（`persistCreateBook`，序1）负责：`git init` + `git config core.quotepath false` + `.gitignore`（必含 `.cache/` 与 `工作区/`）。`git init` 幂等可重复；`.gitignore` 追加不覆盖既有条目。M5 安装器只负责宿主侧环境，不再代行书仓库初始化。
 
 3.4 缩进两空格。
 
@@ -49,8 +49,14 @@
 - [ ] 可计数逻辑在脚本里，语义判断不在正则里
 - [ ] 行为变更先改了文档（PRD/spec），代码与文档一致
 
-## 6. 待增量补充
+## 6. 工具链与约定（已定）
 
-- [ ] lint / 格式化工具选型与配置（首个代码任务时定）
-- [ ] 测试框架选型（Node 内置 test runner 候选）与覆盖率要求
-- [ ] commit message 在开发仓库（本仓库）的前缀约定沿用现状：feat/fix/docs/chore
+6.1 测试框架：Node 内置 `node:test` + `node:assert/strict`（`npm test` = `node --test`）。无第三方测试依赖。
+
+6.2 lint / 格式化：**零依赖铁律下不引入 ESLint/Prettier**。语法用 `node --check` 兜底；确定性用宿主壳 drift check（`node scripts/build-host-shells.mjs --check`）+ package validator 兜底。缩进两空格、行尾 LF 由评审清单人工把关。
+
+6.3 退出码：`0` 成功 / `1` 失败（见错误处理规范 §5）。
+
+6.4 commit message 前缀沿用现状：`feat` / `fix` / `docs` / `chore`（本仓库开发用）。发布产物（marketplace/CHANGELOG）版本走 `docs/operations/plugin-release.md` 流程。
+
+6.5 版本号：`v7/package.json` 在 M5 发版前为预发版号（`7.0.0-alpha`）；发版时升 `7.0.0` 并与 README 徽章、`.claude-plugin/marketplace.json`、`plugin.json`、`CHANGELOG.md` 一致——README 版本表是 `plugin-version.yml` CI 硬约束，发版必须同步。

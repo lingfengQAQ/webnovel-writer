@@ -115,10 +115,11 @@ merged 收敛版之外的 deep 报告独有项（作者手改丢失、回滚范�
 
 ### P2 spec 回填
 
-- [ ] P2-1 `.trellis/spec/backend/database-guidelines.md`:补 `entity_aliases` 和表定义边界。
-- [ ] P2-2 `.trellis/spec/backend/error-handling.md`:补多文件原子性边界,以及未知字段保留和嵌套字段处理边界。
-- [ ] P2-3 `.trellis/spec/backend/quality-guidelines.md`:钉死 `core.quotepath` 责任方、AI 调用预算、退出码约定。
-- [ ] P2-4 (deep) 版本号对齐:README 版本徽章 6.2.0(v6/master)与 `v7/package.json` `0.0.0` 不一致;README 版本表是 CI 硬约束(Plugin Version Check),M5 发版前必须对齐,否则 CI 红。
+- [x] P2-1 `.trellis/spec/backend/database-guidelines.md`:补 `entity_aliases` 和表定义边界。✅ §2.4 列全六表含 `entity_aliases`;§4.5 钉死"未知字段保留"边界(仅平铺标量/列表,嵌套走修复确认);新增 §5 重建器事务性(单事务/硬错回滚/软失败跳过)。
+- [x] P2-2 `.trellis/spec/backend/error-handling.md`:补多文件原子性边界,以及未知字段保留和嵌套字段处理边界。✅ §3.3 多文件原子边界(writeAtomicBatch/事务/豁免);§3.4 回滚收窄到 written 集合;§5 退出码(0/1)+{ok,error}契约+回滚 try/catch。
+- [x] P2-3 `.trellis/spec/backend/quality-guidelines.md`:钉死 `core.quotepath` 责任方、AI 调用预算、退出码约定。✅ §2.2 AI 预算(完整两审2次/降级1次);§3.3 责任方=建书流程(git init+quotepath+.gitignore);§6 工具链(test runner/drift/退出码/commit 前缀/版本号)。
+- [x] P2-4 (deep) 版本号对齐:README 版本徽章 6.2.0(v6/master)与 `v7/package.json` `0.0.0` 不一致;README 版本表是 CI 硬约束(Plugin Version Check),M5 发版前必须对齐,否则 CI 红。✅ v7/package.json 设预发版号 `7.0.0-alpha`(version CI 不查此文件,安全);README/marketplace/CHANGELOG 留 M5 发版同步(quality §6.5 钉死流程)。
+- [x] (附) `.trellis/spec/backend/directory-structure.md` §3.3:补 `.gitignore` 归位与 `.cache/`+`工作区/` 必 ignore(S7),与 P0-2 紧耦合。
 
 ### P3 保留项
 

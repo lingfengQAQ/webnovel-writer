@@ -1,7 +1,7 @@
 {
   "name": "webnovel-writer",
-  "version": "0.0.0",
-  "description": "AI 网文写作工作流（v7 重写，M0 骨架）",
+  "version": "7.0.0-alpha",
+  "description": "AI 网文写作工作流（v7 重写，M5 发版前预发版号）",
   "type": "module",
   "engines": {
     "node": ">=22.13.0"
