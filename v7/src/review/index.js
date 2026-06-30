@@ -5,6 +5,7 @@ import { extractSection } from '../util/markdown.js'
 import { assembleCharacterContext } from '../dto/character-context.js'
 import { TimelineReader } from '../storage/adapters/TimelineReader.js'
 import { SecretReader } from '../storage/adapters/SecretReader.js'
+import { writeAtomicBatch } from '../storage/atomic.js'
 import { validateReviewReport } from './schema.js'
 
 const 兼容声明 = '本次使用兼容模式（单上下文顺序审稿），审稿隔离度低于完整两审模式。'
@@ -103,12 +104,6 @@ export function mergeReviews({ factCheck, editorial }, { mode, chapterNum }) {
  */
 export async function persistReviewReport(ctx, { chapterNum, merged, draft, 待确认新专名 = [], 章摘要 = '' }) {
   const { repoPath } = ctx
-  const 工作区 = path.join(repoPath, '工作区')
-  const 报告dir = path.join(工作区, '评审报告')
-  await fs.mkdir(报告dir, { recursive: true })
-
-  await fs.writeFile(path.join(报告dir, '事实审查.json'), JSON.stringify(merged.事实审查 ?? {}, null, 2), 'utf8')
-  await fs.writeFile(path.join(报告dir, '编辑审.json'), JSON.stringify(merged.编辑审 ?? {}, null, 2), 'utf8')
 
   const issueLines = merged.issues.length
     ? merged.issues
@@ -136,8 +131,14 @@ export async function persistReviewReport(ctx, { chapterNum, merged, draft, 待�
     '',
   ].join('\n')
 
-  const 审稿路径 = path.join(工作区, '审稿.md')
-  await fs.writeFile(审稿路径, md, 'utf8')
+  // P0-3：多文件原子落盘（事实审查/编辑审/审稿单要么全成要么原样）
+  await writeAtomicBatch(repoPath, [
+    { path: path.join('工作区', '评审报告', '事实审查.json'), content: JSON.stringify(merged.事实审查 ?? {}, null, 2) },
+    { path: path.join('工作区', '评审报告', '编辑审.json'), content: JSON.stringify(merged.编辑审 ?? {}, null, 2) },
+    { path: path.join('工作区', '审稿.md'), content: md },
+  ])
+
+  const 审稿路径 = path.join(repoPath, '工作区', '审稿.md')
   return { ok: true, 审稿路径, error: '' }
 }
 

@@ -101,3 +101,28 @@ test('别名冲突 → 报 error 并拒绝重建（AC10）', async () => {
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('别名冲突 → ROLLBACK 不留半库（P1-1：已写 chapters 也回滚）', async () => {
+  const root = await makeRepo({
+    'book.yaml': 'spec_version: "7.0"\n书名: 测试\n',
+    '定稿/正文/0001-开局.md': '---\n章号: 1\n标题: 开局\n卷: 1\n字数: 100\n章定位: 推进\n---\n正文。',
+    '定稿/正文/0002-承接.md': '---\n章号: 2\n标题: 承接\n卷: 1\n字数: 100\n章定位: 推进\n---\n正文。',
+    // 别名冲突：scanEntities 在 chapters/threads/secrets 已 INSERT 后才返回失败
+    '定稿/设定/名册.md':
+      '| 正名 | 别名 | 类型 | 首现章 |\n|------|------|------|--------|\n' +
+      '| 林晚 | 影 | character | 1 |\n| 老者 | 影 | character | 1 |\n',
+  })
+  const cache = new CacheManager(path.join(root, '.cache', 'index.db'))
+  try {
+    const result = await cache.rebuildFromSource(root)
+    assert.equal(result.ok, false, '别名冲突应拒绝重建')
+    // 事务回滚：chapters 不应残留半填数据
+    const ch = await cache.query('SELECT COUNT(*) AS c FROM chapters')
+    assert.equal(ch[0].c, 0, '别名冲突应 ROLLBACK，chapters 不留半填数据')
+    const th = await cache.query('SELECT COUNT(*) AS c FROM threads')
+    assert.equal(th[0].c, 0, 'threads 同样回滚')
+  } finally {
+    await cache.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})

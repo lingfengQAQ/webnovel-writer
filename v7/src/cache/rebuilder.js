@@ -4,7 +4,7 @@ import { parseFrontMatter } from '../storage/parsers/front-matter.js'
 import { parseMarkdownTable } from '../storage/parsers/markdown-table.js'
 
 /**
- * 全量重建缓存（DELETE 五表 → 扫描源文件 → INSERT）。
+ * 全量重建缓存（BEGIN → DELETE 六表 → 扫描源文件 INSERT → COMMIT，中途失败 ROLLBACK 不留半库）。
  * @param {string} repoPath - 书仓库根目录
  * @param {DatabaseSync} db - node:sqlite 数据库实例
  * @returns {Promise<{ok: boolean, warnings: string[], errors: string[]}>}
@@ -14,7 +14,10 @@ export async function rebuildCache(repoPath, db) {
   const errors = []
 
   try {
-    // 1. 清空五表
+    // P0-3/P1-1：整次重建包在一个事务里，别名冲突等中途失败 → ROLLBACK，不留半填库
+    db.exec('BEGIN')
+
+    // 1. 清空六表（chapters/threads/secrets/entities/entity_aliases/fingerprints）
     db.exec('DELETE FROM chapters')
     db.exec('DELETE FROM threads')
     db.exec('DELETE FROM secrets')
@@ -33,7 +36,9 @@ export async function rebuildCache(repoPath, db) {
 
     // 5. 解析名册 → 填充 entities + entity_aliases 表（验证别名唯一性）
     const aliasCheck = await scanEntities(repoPath, db)
+    if (aliasCheck.warnings) warnings.push(...aliasCheck.warnings)
     if (!aliasCheck.ok) {
+      db.exec('ROLLBACK')
       errors.push(...aliasCheck.errors)
       return { ok: false, warnings, errors }
     }
@@ -43,8 +48,14 @@ export async function rebuildCache(repoPath, db) {
 
     // 7. fingerprints 表留空（特征提取随 M3+ 体检补）
 
+    db.exec('COMMIT')
     return { ok: true, warnings, errors }
   } catch (err) {
+    try {
+      db.exec('ROLLBACK')
+    } catch {
+      // 未处于事务中，忽略
+    }
     errors.push(`重建失败：${err.message}`)
     return { ok: false, warnings, errors }
   }
@@ -205,17 +216,27 @@ async function scanSecrets(repoPath, db) {
 
 /**
  * 解析名册，填充 entities + entity_aliases 表（验证别名唯一性）。
+ * 名册非必需：缺失则跳过（角色卡可独立入 entities）；解析失败/别名冲突才算硬错。
  */
 async function scanEntities(repoPath, db) {
   const rosterPath = path.join(repoPath, '定稿', '设定', '名册.md')
   const aliasMap = new Map() // alias → entity_id
 
+  let content
   try {
-    const content = await fs.readFile(rosterPath, 'utf8')
+    content = await fs.readFile(rosterPath, 'utf8')
+  } catch {
+    // 无名册：跳过（角色卡 scanCharacters 仍会入档），不算失败
+    return { ok: true, errors: [] }
+  }
+
+  try {
     const table = parseMarkdownTable(content)
 
     if (!table.ok) {
-      return { ok: false, errors: ['名册解析失败'] }
+      // 名册格式解析不动 → 软跳过（不阻断重建；chapters/threads/secrets 不应因此回滚）。
+      // 别名冲突才是硬错（见下），走 ok:false 触发 ROLLBACK。
+      return { ok: true, errors: [], warnings: [`名册解析失败，已跳过实体/别名入库：${table.error}`] }
     }
 
     const entityStmt = db.prepare(`
@@ -250,7 +271,7 @@ async function scanEntities(repoPath, db) {
 
     return { ok: true, errors: [] }
   } catch (err) {
-    return { ok: false, errors: ['名册文件不存在或解析失败'] }
+    return { ok: false, errors: [`名册扫描失败：${err.message}`] }
   }
 }
 

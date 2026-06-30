@@ -100,6 +100,16 @@ export async function finalizeChapter(ctx, payload, opts = {}) {
     await git.add(relFiles)
     const commitHash = await git.commit(buildCommitMessage(chapterNum, frontMatter.标题, commitLines))
 
+    // P0-1：定稿后同步刷新缓存，避免 next 读旧章号重抄本章。
+    // 重建失败不阻断定稿（已 commit 入档）；next 入口 ensureReady 会在 db 损坏时兜底重建。
+    if (ctx.cache) {
+      try {
+        await ctx.cache.rebuildFromSource(repoPath)
+      } catch {
+        // 缓存重建尽力而为
+      }
+    }
+
     // 4. 清工作区（必须在 commit 成功之后）
     for (const wf of workspaceFiles) {
       await fs.rm(path.join(repoPath, '工作区', wf), { force: true })

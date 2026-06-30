@@ -5,6 +5,30 @@ import { serializeFrontMatter } from '../serializers/front-matter.js'
 /**
  * ChapterWriter：写新章到定稿（M2 定稿流程调用）。
  */
+
+/** 文件名净化：Windows 非法字符 <>:"/\|?* 与控制字符替成 _（标题本体不改,只净化文件名）。 */
+function sanitizeFileName(title) {
+  const s = String(title).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/\s+/g, ' ').trim()
+  return s || '未命名'
+}
+
+/** 删除同章旧文件（标题可能不同），避免 scanChapters 撞 PRIMARY KEY（P0-3a）。 */
+async function removeOldChapterFiles(dir, chapterNum, safeTitle) {
+  const prefix = `${String(chapterNum).padStart(4, '0')}-`
+  const target = `${prefix}${safeTitle}.md`
+  let files = []
+  try {
+    files = await fs.readdir(dir)
+  } catch {
+    return
+  }
+  for (const f of files) {
+    if (!f.startsWith(prefix) || !f.endsWith('.md')) continue
+    if (f === target) continue
+    await fs.rm(path.join(dir, f), { force: true })
+  }
+}
+
 export class ChapterWriter {
   constructor(repoPath, cache = null) {
     this.repoPath = repoPath
@@ -21,9 +45,11 @@ export class ChapterWriter {
   async writeChapter(chapterNum, frontMatter, body) {
     try {
       const title = frontMatter.标题 || '未命名'
-      const fileName = `${String(chapterNum).padStart(4, '0')}-${title}.md`
+      const safeTitle = sanitizeFileName(title)
       const dir = path.join(this.repoPath, '定稿', '正文')
       await fs.mkdir(dir, { recursive: true })
+      await removeOldChapterFiles(dir, chapterNum, safeTitle)
+      const fileName = `${String(chapterNum).padStart(4, '0')}-${safeTitle}.md`
       const filePath = path.join(dir, fileName)
       await fs.writeFile(filePath, serializeFrontMatter(frontMatter, body), 'utf8')
       return { ok: true, filePath, error: '' }

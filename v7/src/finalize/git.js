@@ -21,6 +21,14 @@ export function createGit(repoPath) {
       const { stdout } = await run(['rev-parse', 'HEAD'])
       return stdout.trim()
     },
+    /** 仓库初始化（幂等：已存在则 reinit，无害） */
+    async init() {
+      await run(['init', '-q'])
+    },
+    /** 中文路径不转义（spec quality §3.3：书仓库初始化必设） */
+    async setQuotepathFalse() {
+      await run(['config', 'core.quotepath', 'false'])
+    },
     /** 撤销 paths 下已跟踪文件的未提交修改（不碰其他路径如 工作区/） */
     async restore(paths) {
       try {

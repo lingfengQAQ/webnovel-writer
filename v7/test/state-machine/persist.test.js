@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import os from 'node:os'
 import path from 'node:path'
 import { promises as fs } from 'node:fs'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import {
   persistRepair,
   persistCreateBook,
@@ -15,6 +17,37 @@ async function tmpRepo() {
   return { ctx: { repoPath: root }, root, cleanup: () => fs.rm(root, { recursive: true, force: true }) }
 }
 const read = (root, rel) => fs.readFile(path.join(root, rel), 'utf8')
+const exec = promisify(execFile)
+
+test('persistCreateBook（P0-2）→ git init + core.quotepath=false + .gitignore（书仓库工程化）', async () => {
+  const { ctx, root, cleanup } = await tmpRepo()
+  try {
+    const r = await persistCreateBook(ctx, {
+      book: { spec_version: '7.0', 书名: '测' },
+      总纲: '# 总纲',
+      卷纲: '# 第1卷',
+    })
+    assert.equal(r.ok, true, r.error)
+    const { stdout: inside } = await exec('git', ['rev-parse', '--is-inside-work-tree'], { cwd: root })
+    assert.equal(inside.trim(), 'true', '建书应 git init 出一个仓库')
+    const { stdout: qp } = await exec('git', ['config', 'core.quotepath'], { cwd: root })
+    assert.equal(qp.trim(), 'false', '应设 core.quotepath=false（spec quality §3.3）')
+    const gi = await read(root, '.gitignore')
+    assert.ok(gi.includes('.cache/') && gi.includes('工作区/'), '.gitignore 应 ignore .cache 与 工作区')
+  } finally { await cleanup() }
+})
+
+test('persistCreateBook（P0-2）→ 已有 .gitignore 追加不覆盖', async () => {
+  const { ctx, root, cleanup } = await tmpRepo()
+  try {
+    await fs.writeFile(path.join(root, '.gitignore'), 'node_modules/\n', 'utf8')
+    const r = await persistCreateBook(ctx, { book: { 书名: '测' }, 总纲: '# 总纲', 卷纲: '# 第1卷' })
+    assert.equal(r.ok, true, r.error)
+    const gi = await read(root, '.gitignore')
+    assert.ok(gi.includes('node_modules/'), '不应覆盖既有条目')
+    assert.ok(gi.includes('.cache/') && gi.includes('工作区/'))
+  } finally { await cleanup() }
+})
 
 test('persistDraftOutline（序6）→ 写 工作区/细纲.md', async () => {
   const { ctx, root, cleanup } = await tmpRepo()
