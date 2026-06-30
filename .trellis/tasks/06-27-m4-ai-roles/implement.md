@@ -101,7 +101,7 @@ merged 收敛版之外的 deep 报告独有项（作者手改丢失、回滚范�
 - [x] P0-3 `src/state-machine/persist.js` + `src/review/index.js`:多文件写入改成原子落盘,中途失败不留半成品。✅ 新增 `src/storage/atomic.js`(`writeAtomicBatch` 先 .tmp 再 rename);persist 全家 + `persistReviewReport` 接入;`rebuildCache` 包 BEGIN/COMMIT/ROLLBACK 事务。
 - [x] P0-3a (deep) `src/storage/adapters/ChapterWriter.js` + `src/cache/rebuilder.js`:重写同章改标题时旧文件残留 → `scanChapters` 两条同 `chapter_num` → 重建 `PRIMARY KEY` 冲突。✅ `writeChapter` 写盘前 `removeOldChapterFiles` 清同章旧文件 + `sanitizeFileName` 净化 Windows 非法字符(顺带修 P2-1)。
 
-> 附带修:`scanEntities` 名册缺失/解析失败从硬错降为软跳过(warning),避免事务回滚把 chapters/threads/secrets 一起清了——这是事务化后暴露的过度严格。`parseMarkdownTable` 拒单字符分隔符 `|--|--|--|--|`(GFM 合法)是潜伏 parser bug,留作 follow-up(非报告项)。
+> 附带修:`scanEntities` 名册缺失/解析失败从硬错降为软跳过(warning),避免事务回滚把 chapters/threads/secrets 一起清了——这是事务化后暴露的过度严格。`parseMarkdownTable` 拒单字符分隔符 `|--|--|--|--|`(GFM 合法)已修(加 `isDelimiterRow` GFM 判定,接受 `|-|`/`|:--:|`/`|--:|`/`|:--|`)。
 
 ### P1 两审 / 会话 / 校验
 

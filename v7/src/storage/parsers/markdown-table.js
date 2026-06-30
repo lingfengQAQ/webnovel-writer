@@ -40,9 +40,9 @@ export function parseMarkdownTable(content) {
     .split('|')
     .map((h) => h.trim())
 
-  // 跳过分隔符行（第二行，形如 |---|---|）
+  // 跳过分隔符行（第二行，GFM：每格仅 - 与 :，至少一横；支持 |---| 与 |-| 与对齐 |:--:|--:|）
   const separatorLine = lines[1]
-  if (!separatorLine.includes('---')) {
+  if (!isDelimiterRow(separatorLine, headers.length)) {
     return {
       ok: false,
       headers: [],
@@ -91,4 +91,15 @@ export function parseMarkdownTable(content) {
     rows: rows,
     error: '',
   }
+}
+
+/**
+ * GFM 分隔符行判定：以 | 围栏,格数与表头一致,每格仅 - 与 : 且至少一横。
+ * 接受 |---|、|-|、|:--:|、|--:|、|:--| 等所有合法形态。
+ */
+function isDelimiterRow(line, expectedCount) {
+  if (typeof line !== 'string' || !line.startsWith('|') || !line.endsWith('|')) return false
+  const cells = line.slice(1, -1).split('|').map((c) => c.trim())
+  if (cells.length !== expectedCount) return false
+  return cells.every((c) => /^:?-+:?$/.test(c))
 }
