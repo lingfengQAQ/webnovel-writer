@@ -18,7 +18,7 @@ webnovel-writer/                # 仓库根
 ├── .trellis/                   # 开发流程层（任务/规范/日志），与产品代码无关
 ├── webnovel-writer/            # v6 插件本体（遗产，禁止改动）
 ├── requirements.txt pytest.ini # v6 Python 遗产（禁止改动；v7 禁止引入 Python）
-└── v7/                         # v7 产品代码（Node ESM 包，零依赖）：package.json / bin / src / test
+└── v7/                         # v7 产品代码（Node ESM 包，运行时直接依赖仅 js-yaml）：package.json / bin / src / test
 ```
 
 2.1 **文档先行**：`docs/architecture/v7-prd.md` 是产品决策真源，两份 spec 是格式与多宿主行为真源。代码与文档冲突时以文档为准；变更行为必须先修订文档（走任务流程），再改代码。
@@ -27,7 +27,7 @@ webnovel-writer/                # 仓库根
 
 3.1 分发渠道只有 npx（`npx webnovel-writer init` / `update`），即单一 npm 包；禁止恢复插件市场分发。
 
-3.2 运行时必须为 **Node ≥ 22，零第三方运行时依赖**；缓存必须使用内置 `node:sqlite`。任何引入运行时依赖的设计必须被驳回。
+3.2 运行时必须为 **Node ≥ 22，零第三方运行时依赖**（现行唯一例外：`js-yaml`，见质量规范 §1.1）；缓存必须使用内置 `node:sqlite`。任何引入运行时依赖的设计必须被驳回。
 
 3.3 用户侧安装产物布局（代码必须与之对齐）：
 
