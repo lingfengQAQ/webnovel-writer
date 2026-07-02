@@ -164,3 +164,39 @@ test('P1-3：原始输出与归一化结果分存（.raw.json 保留模型原话
     assert.equal(raw.ai_meta, 'raw-marker', 'raw 保留 AI 额外字段')
   } finally { await cleanup() }
 })
+
+test('拟条目变动进 DTO + 声明条目附履历尾部（未声明者不附）', async () => {
+  const { ctx, cleanup } = await makeGitBook({
+    'book.yaml': 'spec_version: "7.0"\n书名: 测\n卷规模: 40\n',
+    '定稿/正文/0001-起.md': chapter(1, '过去的事。'),
+    '大纲/伏笔/伏笔-001-旧案.md':
+      '---\n强度: 高\n状态: 进行\n开启章: 1\n---\n## 履历\n- 第1章：埋下——旧案线索（见结尾黑影段）\n- 第2章：推进——查到卷宗\n- 第3章：推进——找到人证\n- 第4章：推进——人证翻供\n',
+    '大纲/悬念/悬念-001-身世.md': '---\n强度: 中\n状态: 进行\n开启章: 1\n---\n## 履历\n- 第1章：设下\n',
+    '工作区/草稿.md':
+      '---\n章号: 5\n标题: 对质\n卷: 1\n字数: 20\n章定位: 推进\n钩子: 危机钩-强\n情绪定位: 铺垫\n伏笔:\n  - 推进 伏笔-001\n  - 埋下 伏笔-002\n---\n林晚当堂对质，人证再度翻供。',
+  })
+  try {
+    const r = await assembleReviewInput(ctx, { chapterNum: 5, draftPath: '工作区/草稿.md' })
+    assert.equal(r.ok, true, r.error)
+    assert.deepEqual(r.input.拟条目变动, [
+      { type: '伏笔', verb: '推进', id: '伏笔-001' },
+      { type: '伏笔', verb: '埋下', id: '伏笔-002' },
+    ])
+    const declared = r.input.相关条目.find((t) => t.id === '伏笔-001')
+    assert.ok(declared, JSON.stringify(r.input.相关条目))
+    assert.equal(declared.履历尾部.length, 3, '履历只取末 3 行')
+    assert.ok(!declared.履历尾部.some((l) => l.includes('第1章')), '开头行不进尾部')
+    assert.match(declared.履历尾部[2], /人证翻供/)
+    const undeclared = r.input.相关条目.find((t) => t.id === '悬念-001')
+    assert.equal(undeclared.履历尾部, undefined, '未声明条目维持纯元数据（控 token）')
+  } finally { await cleanup() }
+})
+
+test('草稿无 front matter → 拟条目变动为空数组（不崩）', async () => {
+  const { ctx, cleanup } = await makeReviewBook()
+  try {
+    const r = await assembleReviewInput(ctx, { chapterNum: 2, draftPath: '工作区/草稿.md' })
+    assert.equal(r.ok, true, r.error)
+    assert.deepEqual(r.input.拟条目变动, [])
+  } finally { await cleanup() }
+})

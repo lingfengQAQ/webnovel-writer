@@ -2,9 +2,12 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { assembleBookStatus } from '../prep/book-status.js'
 import { extractSection } from '../util/markdown.js'
+import { parseThreadDeclarations } from '../util/thread-declarations.js'
 import { assembleCharacterContext } from '../dto/character-context.js'
+import { parseFrontMatter } from '../storage/parsers/front-matter.js'
 import { TimelineReader } from '../storage/adapters/TimelineReader.js'
 import { SecretReader } from '../storage/adapters/SecretReader.js'
+import { ThreadLedgerReader } from '../storage/adapters/ThreadLedgerReader.js'
 import { writeAtomicBatch } from '../storage/atomic.js'
 import { validateReviewReport } from './schema.js'
 
@@ -22,6 +25,11 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
     const { repoPath, cache } = ctx
 
     const 草稿全文 = await fs.readFile(path.join(repoPath, draftPath), 'utf8')
+
+    // 拟条目变动：草稿 front matter 三数组声明（与机检共用同一解析，不双写）
+    const draftFm = parseFrontMatter(草稿全文)
+    const { declarations } = parseThreadDeclarations(draftFm.ok ? draftFm.data : null)
+    const 拟条目变动 = declarations.map(({ type, verb, id }) => ({ type, verb, id }))
 
     let 本章要写到的事 = '（无细纲）'
     try {
@@ -76,7 +84,7 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
     const 时间线片段 = tl.ok ? tl.timeline.map((row) => ({ 章: row.章 ?? '', 事件: row.一句话事件 ?? '' })) : []
 
     const secrets = await new SecretReader(repoPath, cache).listUnrevealed()
-    const 信息差候选 = secrets.map((s) => ({ id: s.id, 关键词: s.关键词 ?? s.keyword ?? '' }))
+    const 信息差候选 = secrets.map((s) => ({ id: s.id, 短题: s.短题, 关键词: s.关键词 }))
 
     // P1-1：相关条目 = 仍在进行、且在本章前开启的条目（不泄漏 file_path）
     let 相关条目 = []
@@ -97,6 +105,17 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
       // 缓存不可用则略
     }
 
+    // 草稿声明涉及的条目附履历尾部（末 3 行）；未声明的维持纯元数据（控 token）
+    const declaredIds = new Set(拟条目变动.map((d) => d.id))
+    if (declaredIds.size) {
+      const ledger = new ThreadLedgerReader(repoPath, cache)
+      for (const t of 相关条目) {
+        if (!declaredIds.has(t.id)) continue
+        const h = await ledger.readHistory(t.id)
+        if (h.ok && h.history.length) t.履历尾部 = h.history.slice(-3).map((x) => x.原文)
+      }
+    }
+
     return {
       ok: true,
       input: {
@@ -106,6 +125,7 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
         全书近况: status.ok ? status.markdown : '',
         相关角色,
         相关条目,
+        拟条目变动,
         名册,
         时间线片段,
         信息差候选,

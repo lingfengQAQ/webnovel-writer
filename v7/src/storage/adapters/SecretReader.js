@@ -2,6 +2,15 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { parseFrontMatter } from '../parsers/front-matter.js'
 
+function parseJSONArray(text) {
+  try {
+    const v = JSON.parse(text || '[]')
+    return Array.isArray(v) ? v : []
+  } catch {
+    return []
+  }
+}
+
 /**
  * SecretReader：读取信息差。
  */
@@ -64,17 +73,39 @@ export class SecretReader {
     }
   }
 
+  /**
+   * 列出未揭晓信息差（缓存直出，供备料"信息差边界"与两审"信息差候选"）。
+   * @returns {Promise<Array<{id: string, 短题: string, 知情人: string[], 关键词: string[], 登记章: number}>>}
+   */
   async listUnrevealed() {
     if (!this.cache) return []
 
     try {
       const rows = await this.cache.query(
-        'SELECT * FROM secrets WHERE reader_knows = 0'
+        'SELECT id, short_title, known_to, keywords, registered_chapter FROM secrets WHERE reader_knows = 0'
       )
-      return rows
+      return rows.map((r) => ({
+        id: r.id,
+        短题: r.short_title || r.id,
+        知情人: parseJSONArray(r.known_to),
+        关键词: parseJSONArray(r.keywords),
+        登记章: r.registered_chapter,
+      }))
     } catch (err) {
       return []
     }
+  }
+
+  /**
+   * 读「## 内容」段首行（精准片段，备料注入用）。
+   * @param {string} id
+   * @returns {Promise<{ok: boolean, line: string, error: string}>}
+   */
+  async readContentFirstLine(id) {
+    const r = await this.readContent(id)
+    if (!r.ok) return { ok: false, line: '', error: r.error }
+    const line = r.content.split('\n').map((s) => s.trim()).find(Boolean) || ''
+    return { ok: true, line, error: '' }
   }
 
   async _findSecretFile(id) {

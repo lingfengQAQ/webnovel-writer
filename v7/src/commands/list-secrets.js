@@ -14,8 +14,8 @@ export async function run(args, options, ctx) {
 
   const out = rows.map((s) => ({
     id: s.id,
-    short_title: s.short_title,
-    蓄积章数: max - s.registered_chapter,
+    short_title: s.短题,
+    蓄积章数: max - s.登记章,
   }))
   return { ok: true, output: JSON.stringify(out, null, 2) }
 }

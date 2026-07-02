@@ -39,11 +39,19 @@ export async function prepareChapterMaterials(ctx, { chapterNum }) {
         ? tl.timeline.map((row) => `- ${row.章 ?? ''} ${row.一句话事件 ?? ''}`).join('\n')
         : '（无）'
 
-    // 信息差边界（未揭晓，勿泄）
-    const secrets = await new SecretReader(repoPath, cache).listUnrevealed()
-    const 信息差md = secrets.length
-      ? secrets.map((s) => `- ${s.id}（读者未知，本章勿泄）`).join('\n')
-      : '（无）'
+    // 信息差边界（未揭晓，勿泄）：短题+知情人+关键词+内容首句——写稿 AI 知道秘密才守得住秘密
+    const secretReader = new SecretReader(repoPath, cache)
+    const secrets = await secretReader.listUnrevealed()
+    const 信息差行 = []
+    for (const s of secrets) {
+      const fl = await secretReader.readContentFirstLine(s.id)
+      const 知情人 = s.知情人.length ? s.知情人.join('、') : '（未登记）'
+      const 关键词 = s.关键词.length ? s.关键词.join('/') : '（无）'
+      信息差行.push(
+        `- ${s.id}（${s.短题}）：知情人=${知情人}；关键词=${关键词}；内容：${fl.line || '（未读到）'}——读者未知，除知情人的对话与视角外不得出现`
+      )
+    }
+    const 信息差md = 信息差行.length ? 信息差行.join('\n') : '（无）'
 
     // 近章结尾（近 2 章末尾 150 字，反复读防接不上）
     const recent = await cache.query(

@@ -2,13 +2,14 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { parseFrontMatter } from '../storage/parsers/front-matter.js'
 import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
+import { parseThreadDeclarations, VERBS, OPENING_VERBS } from '../util/thread-declarations.js'
 
 // front matter 章档案必填字段（§4.1 机器消费部分）
 const REQUIRED_FM = ['章号', '标题', '卷', '字数', '章定位', '钩子', '情绪定位']
 
 /**
- * 机检：零 token 可计数项（D2 七项）。不过关（pass=false）= 存在阻断 issue。
- * 新专名/信息差关键词只出候选（candidates），不拦截。
+ * 机检：零 token 可计数项（D2 七项 + 条目变动形式检查，spec 0.9 §8 第 5 步）。
+ * 不过关（pass=false）= 存在阻断 issue。新专名/信息差关键词只出候选（candidates），不拦截。
  * @param {{repoPath: string, cache: object}} ctx
  * @param {{chapterNum: number, draftPath: string}} args
  * @returns {Promise<{ok: boolean, pass: boolean, issues: object[], candidates: object[], error: string}>}
@@ -35,6 +36,7 @@ export async function mechanicalCheck(ctx, { chapterNum, draftPath }) {
     await checkNewProperNouns(body, cache, candidates) // 5（候选）
     checkFrontMatter(parsed, fm, issues) // 6
     await checkSecretKeywords(body, cache, candidates) // 7（候选）
+    await checkThreadDeclarations(fm, cache, issues) // 8（条目变动，只查形式）
 
     return { ok: true, pass: issues.length === 0, issues, candidates, error: '' }
   } catch (err) {
@@ -167,5 +169,43 @@ function checkFrontMatter(parsed, fm, issues) {
   )
   if (missing.length) {
     issues.push({ check: 'front matter', severity: 'high', blocking: true, description: `front matter 缺字段：${missing.join('、')}` })
+  }
+}
+
+// 条目变动形式检查（spec 0.9 §8 第 5 步；查 threads 表，零语义）：
+// ①类型一致 ②开启类动词不得撞已有编号 ③非开启动词要求条目存在且状态=进行
+async function checkThreadDeclarations(fm, cache, issues) {
+  const { declarations, malformed } = parseThreadDeclarations(fm)
+  for (const bad of malformed) {
+    issues.push({ check: '条目变动', severity: 'high', blocking: true, description: `条目声明格式应为「动词 编号」：${bad}` })
+  }
+  if (!declarations.length) return
+
+  const known = new Map()
+  try {
+    for (const t of await cache.query('SELECT id, status FROM threads')) known.set(t.id, t.status)
+  } catch {
+    return // 无缓存，跳过（形式检查依赖条目表）
+  }
+
+  for (const d of declarations) {
+    if (!d.id.startsWith(`${d.type}-`)) {
+      issues.push({ check: '条目变动', severity: 'high', blocking: true, description: `「${d.type}」清单里出现异类编号「${d.id}」` })
+      continue
+    }
+    if (!VERBS[d.type].includes(d.verb)) {
+      issues.push({ check: '条目变动', severity: 'high', blocking: true, description: `「${d.type}」没有动词「${d.verb}」（${d.raw}），合法动词：${VERBS[d.type].join('/')}` })
+      continue
+    }
+    const status = known.get(d.id)
+    if (OPENING_VERBS.has(d.verb)) {
+      if (status !== undefined) {
+        issues.push({ check: '条目变动', severity: 'high', blocking: true, description: `「${d.raw}」：${d.id} 已存在（状态：${status}），开新条目须用新编号` })
+      }
+    } else if (status === undefined) {
+      issues.push({ check: '条目变动', severity: 'high', blocking: true, description: `「${d.raw}」：${d.id} 不存在，疑似编号笔误` })
+    } else if (status !== '进行') {
+      issues.push({ check: '条目变动', severity: 'high', blocking: true, description: `「${d.raw}」：${d.id} 状态是「${status}」，不能再「${d.verb}」` })
+    }
   }
 }

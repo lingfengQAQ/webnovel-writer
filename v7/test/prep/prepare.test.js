@@ -15,7 +15,11 @@ test('prepareChapterMaterials 组装本章写作材料（八组件锚点）并�
     assert.match(c, /本章要写到的事/)
     assert.match(c, /查到玉佩/) // 来自细纲
     assert.match(c, /信息差边界/)
-    assert.match(c, /信息差-001/) // 未揭晓信息差，勿泄
+    // 边界行注入 短题/知情人/关键词/内容首句（AC7）——只给编号等于没给
+    assert.match(
+      c,
+      /- 信息差-001（灭门真凶）：知情人=林晚；关键词=玉佩\/宗门；内容：玉佩乃前代掌门封印邪灵之物，外人不可知。——读者未知，除知情人的对话与视角外不得出现/
+    )
     assert.match(c, /文风锚点/)
     assert.match(c, /节奏/) // 来自文风铁律
     assert.match(c, /反和解/)

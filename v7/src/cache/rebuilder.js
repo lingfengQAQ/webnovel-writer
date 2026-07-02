@@ -197,11 +197,13 @@ async function scanSecrets(repoPath, db) {
 
       if (parsed.ok) {
         const fm = parsed.data
-        const id = file.replace('.md', '').split('-').slice(0, 2).join('-')
+        const stem = file.replace('.md', '')
+        const id = stem.split('-').slice(0, 2).join('-')
+        const shortTitle = stem.split('-').slice(2).join('-') || id // 信息差-021-灭门真凶 → 灭门真凶
 
         insertStmt.run(
           id,
-          id,
+          shortTitle,
           JSON.stringify(fm.知情人 || []),
           fm.读者已知 ? 1 : 0,
           fm.登记章 || 1,
