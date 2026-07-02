@@ -11,11 +11,11 @@ after(async () => {
   await cleanup()
 })
 
-test('read-secret --基本信息 返回 JSON（含读者知道/关键词）', async () => {
+test('read-secret --基本信息 返回 JSON（含读者已知/关键词）', async () => {
   const r = await run(['信息差-001'], { 基本信息: true }, ctx)
   assert.equal(r.ok, true)
   const data = JSON.parse(r.output)
-  assert.equal(data.读者知道, false)
+  assert.equal(data.读者已知, false)
   assert.ok(Array.isArray(data.关键词))
 })
 

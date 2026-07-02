@@ -14,7 +14,7 @@ const 文风铁律 = `---
 节奏优先。
 `
 const 名册 = '| 正名 | 别名 | 类型 | 首现章 |\n|--|--|--|--|\n| 林晚 | 晚晚 | character | 1 |\n'
-const 信息差 = '---\n读者知道: false\n登记章: 1\n关键词:\n  - 玉佩\n---\n## 内容\n秘密。\n'
+const 信息差 = '---\n读者已知: false\n登记章: 1\n关键词:\n  - 玉佩\n---\n## 内容\n秘密。\n'
 
 // 组装一个含 front matter + 正文的草稿，并放进受控临时仓库
 function files(draftBody, { fm } = {}) {

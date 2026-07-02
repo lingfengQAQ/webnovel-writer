@@ -201,8 +201,8 @@ async function scanSecrets(repoPath, db) {
         insertStmt.run(
           id,
           id,
-          JSON.stringify(fm.谁知道 || []),
-          fm.读者知道 ? 1 : 0,
+          JSON.stringify(fm.知情人 || []),
+          fm.读者已知 ? 1 : 0,
           fm.登记章 || 1,
           JSON.stringify(fm.关键词 || []),
           filePath

@@ -34,7 +34,7 @@ export class OutlineReader {
    */
   async readVolumeOutline(volumeNum) {
     const volStr = String(volumeNum).padStart(2, '0')
-    const volumePath = path.join(this.repoPath, '大纲', `第${volStr}卷.md`)
+    const volumePath = path.join(this.repoPath, '大纲', '卷纲', `第${volStr}卷.md`)
 
     try {
       const content = await fs.readFile(volumePath, 'utf8')
@@ -49,7 +49,7 @@ export class OutlineReader {
    * @returns {Promise<number[]>}
    */
   async listVolumes() {
-    const outlineDir = path.join(this.repoPath, '大纲')
+    const outlineDir = path.join(this.repoPath, '大纲', '卷纲')
 
     try {
       const files = await fs.readdir(outlineDir)

@@ -14,7 +14,7 @@ export class SecretWriter {
   /**
    * 写信息差到 定稿/设定/信息差/<id>.md（front matter 走防呆序列化）。
    * @param {string} id - 文件名干（如 "信息差-021-血书真相"）
-   * @param {object} frontMatter - 强度/谁知道[]/读者知道/登记章/关键词[]
+   * @param {object} frontMatter - 强度/知情人[]/读者已知/登记章/关键词[]
    * @param {string} content - 正文（## 描述 / ## 内容 段）
    * @returns {Promise<{ok: boolean, filePath: string, error: string}>}
    */

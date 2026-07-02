@@ -10,7 +10,7 @@ const fixtureRoot = path.join(__dirname, '../../fixtures/sample-book')
 test('SecretReader.readBasicInfo 读信息差 front matter', async () => {
   const r = await new SecretReader(fixtureRoot).readBasicInfo('信息差-001')
   assert.equal(r.ok, true)
-  assert.equal(r.data.读者知道, false)
+  assert.equal(r.data.读者已知, false)
 })
 
 test('SecretReader.readContent 读 ## 内容 段', async () => {

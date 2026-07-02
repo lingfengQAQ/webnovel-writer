@@ -69,7 +69,7 @@ test('persistCreateBook（序1）→ 写 book.yaml + 总纲 + 第一卷卷纲', 
     assert.equal(r.ok, true)
     assert.match(await read(root, 'book.yaml'), /剑起青云/)
     assert.match(await read(root, '大纲/总纲.md'), /逆袭/)
-    assert.match(await read(root, '大纲/第01卷.md'), /入门/)
+    assert.match(await read(root, '大纲/卷纲/第01卷.md'), /入门/)
   } finally { await cleanup() }
 })
 
@@ -78,8 +78,8 @@ test('persistVolumeReview（序4）→ 写卷摘要 + 下卷卷纲', async () =>
   try {
     const r = await persistVolumeReview(ctx, { 卷号: 1, 卷摘要: '第一卷收束。', 下卷卷纲: '# 第2卷\n新地图。' })
     assert.equal(r.ok, true)
-    assert.match(await read(root, '定稿/摘要/卷摘要/01.md'), /收束/)
-    assert.match(await read(root, '大纲/第02卷.md'), /新地图/)
+    assert.match(await read(root, '定稿/摘要/卷摘要/第01卷.md'), /收束/)
+    assert.match(await read(root, '大纲/卷纲/第02卷.md'), /新地图/)
   } finally { await cleanup() }
 })
 
