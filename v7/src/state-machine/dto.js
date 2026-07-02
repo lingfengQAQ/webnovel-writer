@@ -39,7 +39,7 @@ export async function buildDto(ctx, 序, base = {}) {
         state: 'draft-outline',
         nextChapter: base.nextChapter,
         全书近况: status.ok ? status.markdown : '',
-        期望产物: '工作区/细纲.md（含本章定位声明 + 本章要写到的事 + 备选，由 M3 落盘）',
+        期望产物: '工作区/细纲.md（含本章定位声明 + 本章要写到的事 + 备选，由 M3 落盘）；卷近尾声时提案可含收卷提议（依据卷纲进度与卷规模参考值，作者确认后定稿写入 收卷: 是）',
       }
     }
     default:

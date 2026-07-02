@@ -1,6 +1,14 @@
-// 五表 DDL（O4 §1）
+// 六表 + meta DDL（O4 §1；spec 0.9 §11）
+// SCHEMA_VERSION 变更即触发全量重建（缓存是派生物，无迁移）——加列/加表时 +1。
+export const SCHEMA_VERSION = 2
 
 export const SCHEMA_SQL = `
+-- meta 表（schema 版本与运行标记，如上次体检章号；跨重建保留见 CacheManager）
+CREATE TABLE IF NOT EXISTS meta (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
 -- chapters 表
 CREATE TABLE IF NOT EXISTS chapters (
   chapter_num INTEGER PRIMARY KEY,
@@ -12,6 +20,7 @@ CREATE TABLE IF NOT EXISTS chapters (
   chapter_position TEXT NOT NULL,
   hook_type TEXT,
   mood_position TEXT,
+  is_volume_end BOOLEAN DEFAULT 0,
   file_path TEXT NOT NULL,
   is_key_chapter BOOLEAN DEFAULT 0
 );

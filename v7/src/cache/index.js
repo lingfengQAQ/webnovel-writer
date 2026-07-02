@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { SCHEMA_SQL } from './schema.js'
+import { SCHEMA_SQL, SCHEMA_VERSION } from './schema.js'
 import { rebuildCache } from './rebuilder.js'
 
 let rebuildCounter = 0
@@ -37,7 +37,7 @@ export class CacheManager {
         const tables = this.db
           .prepare("SELECT name FROM sqlite_master WHERE type='table'")
           .all()
-        if (tables.length === 0) {
+        if (tables.length === 0 || !this._schemaVersionMatches()) {
           this.db.close()
           this.db = null
           needsRebuild = true
@@ -80,6 +80,23 @@ export class CacheManager {
       hadExisting = false
     }
 
+    // 保留 meta 运行标记（如上次体检章号）跨重建：读不到就从零开始（体检重测无害）
+    let preservedMeta = []
+    if (hadExisting) {
+      try {
+        const src = this.db || new DatabaseSync(this.dbPath)
+        try {
+          preservedMeta = src
+            .prepare("SELECT key, value FROM meta WHERE key != 'schema_version'")
+            .all()
+        } finally {
+          if (!this.db) src.close()
+        }
+      } catch {
+        preservedMeta = []
+      }
+    }
+
     // 关闭现有连接
     if (this.db) {
       this.db.close()
@@ -94,6 +111,9 @@ export class CacheManager {
     try {
       tmpDb = new DatabaseSync(tmpPath)
       tmpDb.exec(SCHEMA_SQL)
+      const metaStmt = tmpDb.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)')
+      metaStmt.run('schema_version', String(SCHEMA_VERSION))
+      for (const row of preservedMeta) metaStmt.run(row.key, row.value)
       const result = await rebuildCache(repoPath, tmpDb)
       tmpDb.close()
       tmpDb = null
@@ -135,6 +155,17 @@ export class CacheManager {
     }
   }
 
+  _schemaVersionMatches() {
+    try {
+      const row = this.db
+        .prepare("SELECT value FROM meta WHERE key = 'schema_version'")
+        .get()
+      return row?.value === String(SCHEMA_VERSION)
+    } catch {
+      return false // 无 meta 表 = 旧 schema
+    }
+  }
+
   /**
    * 执行查询。
    * @param {string} sql
@@ -148,6 +179,18 @@ export class CacheManager {
 
     const stmt = this.db.prepare(sql)
     return stmt.all(...params)
+  }
+
+  /**
+   * 执行写语句（INSERT/UPDATE/DELETE）。
+   * @param {string} sql
+   * @param {any[]} params
+   */
+  async run(sql, params = []) {
+    if (!this.db) {
+      throw new Error('数据库未初始化')
+    }
+    return this.db.prepare(sql).run(...params)
   }
 
   /**

@@ -7,6 +7,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { CacheManager } from '../../src/cache/index.js'
 import { determineNextState } from '../../src/state-machine/index.js'
+import { runHealthCheck } from '../../src/health-check/index.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -42,8 +43,8 @@ async function makeGitBook(files, { commit = true } = {}) {
   }
 }
 
-const ch = (n, vol = 1, pos = '推进') =>
-  `---\n章号: ${n}\n标题: 第${n}章\n卷: ${vol}\n字数: 100\n章定位: ${pos}\n钩子: 危机钩-强\n情绪定位: 铺垫\n---\n正文。`
+const ch = (n, vol = 1, pos = '推进', 收卷 = false) =>
+  `---\n章号: ${n}\n标题: 第${n}章\n卷: ${vol}\n字数: 100\n章定位: ${pos}\n钩子: 危机钩-强\n情绪定位: 铺垫${收卷 ? '\n收卷: 是' : ''}\n---\n正文。`
 
 const healthyBook = (extra = {}) => ({
   'book.yaml': 'spec_version: "7.0"\n书名: 测\n卷规模: 40\n体检周期: 50\n',
@@ -113,7 +114,24 @@ test('序3：工作区有未完成草稿 → 断点续跑', async () => {
   }
 })
 
-test('序4：卷末章 → 卷复盘', async () => {
+test('序4：最新定稿章声明收卷 → 卷复盘（声明制）', async () => {
+  const { ctx, cleanup } = await makeGitBook({
+    'book.yaml': 'spec_version: "7.0"\n书名: 测\n卷规模: 40\n体检周期: 50\n',
+    '大纲/总纲.md': '# 总纲',
+    '定稿/正文/0001-第1章.md': ch(1),
+    '定稿/正文/0002-第2章.md': ch(2, 1, '推进', true),
+  })
+  try {
+    const r = await determineNextState(ctx)
+    assert.equal(r.序, 4, `实际：${JSON.stringify(r)}`)
+    assert.equal(r.state, 'volume-review')
+    assert.equal(r.dto.卷, 1)
+  } finally {
+    await cleanup()
+  }
+})
+
+test('序4 反例：章号为卷规模整数倍但未声明收卷 → 不触发卷复盘（旧整除行为消失）', async () => {
   const { ctx, cleanup } = await makeGitBook({
     'book.yaml': 'spec_version: "7.0"\n书名: 测\n卷规模: 2\n体检周期: 50\n',
     '大纲/总纲.md': '# 总纲',
@@ -122,14 +140,28 @@ test('序4：卷末章 → 卷复盘', async () => {
   })
   try {
     const r = await determineNextState(ctx)
-    assert.equal(r.序, 4, `实际：${JSON.stringify(r)}`)
-    assert.equal(r.state, 'volume-review')
+    assert.equal(r.序, 6, `实际：${JSON.stringify(r)}`)
   } finally {
     await cleanup()
   }
 })
 
-test('序5：到体检周期 → 体检', async () => {
+test('序4：收卷但该卷卷摘要已存在（复盘已做）→ 不再触发', async () => {
+  const { ctx, cleanup } = await makeGitBook({
+    'book.yaml': 'spec_version: "7.0"\n书名: 测\n卷规模: 40\n体检周期: 50\n',
+    '大纲/总纲.md': '# 总纲',
+    '定稿/正文/0001-第1章.md': ch(1, 1, '推进', true),
+    '定稿/摘要/卷摘要/第01卷.md': '# 第一卷摘要\n收束。',
+  })
+  try {
+    const r = await determineNextState(ctx)
+    assert.equal(r.序, 6, `实际：${JSON.stringify(r)}`)
+  } finally {
+    await cleanup()
+  }
+})
+
+test('序5：距上次体检满周期 → 体检', async () => {
   const { ctx, cleanup } = await makeGitBook({
     'book.yaml': 'spec_version: "7.0"\n书名: 测\n卷规模: 3\n体检周期: 2\n',
     '大纲/总纲.md': '# 总纲',
@@ -140,6 +172,84 @@ test('序5：到体检周期 → 体检', async () => {
     const r = await determineNextState(ctx)
     assert.equal(r.序, 5, `实际：${JSON.stringify(r)}`)
     assert.equal(r.state, 'health-check')
+  } finally {
+    await cleanup()
+  }
+})
+
+test('序5：体检执行后记录章号，未到下个周期不再触发（体检不卡主循环）', async () => {
+  const { ctx, cleanup } = await makeGitBook({
+    'book.yaml': 'spec_version: "7.0"\n书名: 测\n卷规模: 40\n体检周期: 2\n',
+    '大纲/总纲.md': '# 总纲',
+    '定稿/正文/0001-第1章.md': ch(1),
+    '定稿/正文/0002-第2章.md': ch(2),
+  })
+  try {
+    const first = await determineNextState(ctx)
+    assert.equal(first.序, 5)
+    const hc = await runHealthCheck(ctx)
+    assert.equal(hc.ok, true, hc.error)
+    const second = await determineNextState(ctx)
+    assert.equal(second.序, 6, `实际：${JSON.stringify(second)}`)
+  } finally {
+    await cleanup()
+  }
+})
+
+test('序0：book.yaml 解析失败 → 修复确认（不得静默用默认值）', async () => {
+  const { ctx, cleanup } = await makeGitBook(
+    healthyBook({ 'book.yaml': '书名: [未闭合\n卷规模: : :\n' })
+  )
+  try {
+    const r = await determineNextState(ctx)
+    assert.equal(r.序, 0, `实际：${JSON.stringify(r)}`)
+    assert.ok(r.dto.failures.some((f) => f.file === 'book.yaml'))
+  } finally {
+    await cleanup()
+  }
+})
+
+test('序0：文风铁律 front matter 解析失败 → 修复确认', async () => {
+  const { ctx, cleanup } = await makeGitBook(
+    healthyBook({ '文风/文风铁律.md': '---\n禁词: [未闭合\n---\n## 铁律\nx' })
+  )
+  try {
+    const r = await determineNextState(ctx)
+    assert.equal(r.序, 0)
+    assert.ok(r.dto.failures.some((f) => f.file === '文风/文风铁律.md'))
+  } finally {
+    await cleanup()
+  }
+})
+
+test('序0：名册/时间线表解析失败 → 修复确认', async () => {
+  const { ctx, cleanup } = await makeGitBook(
+    healthyBook({
+      '定稿/设定/名册.md': '## 名册\n没有表格',
+      '定稿/设定/时间线/第01卷.md': '不是表格的内容',
+    })
+  )
+  try {
+    const r = await determineNextState(ctx)
+    assert.equal(r.序, 0)
+    const files = r.dto.failures.map((f) => f.file)
+    assert.ok(files.includes('定稿/设定/名册.md'), `实际：${files}`)
+    assert.ok(files.includes('定稿/设定/时间线/第01卷.md'), `实际：${files}`)
+  } finally {
+    await cleanup()
+  }
+})
+
+test('序3：工作区仅存细纲 → 断点续跑，细纲不被改写（AC5）', async () => {
+  const { ctx, root, cleanup } = await makeGitBook(healthyBook())
+  try {
+    const 细纲内容 = '# 第 2 章细纲\n## 本章要写到的事\n- [ ] 已确认的事'
+    await fs.mkdir(path.join(root, '工作区'), { recursive: true })
+    await fs.writeFile(path.join(root, '工作区/细纲.md'), 细纲内容, 'utf8')
+    const r = await determineNextState(ctx)
+    assert.equal(r.序, 3, `实际：${JSON.stringify(r)}`)
+    assert.equal(r.state, 'resume')
+    assert.equal(await fs.readFile(path.join(root, '工作区/细纲.md'), 'utf8'), 细纲内容)
   } finally {
     await cleanup()
   }

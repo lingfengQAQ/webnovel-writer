@@ -75,3 +75,36 @@ test('删除缓存后全量重建，查询结果不变（AC1）', async () => {
 
   await fs.unlink(tmpDb)
 })
+
+test('meta 运行标记跨全量重建保留（体检记录不因定稿后刷新丢失）', async () => {
+  const tmpDb = path.join(os.tmpdir(), `test-meta-keep-${Date.now()}.db`)
+  const cache = new CacheManager(tmpDb)
+  await cache.ensureReady(fixtureRoot)
+
+  await cache.run("INSERT OR REPLACE INTO meta (key, value) VALUES ('last_health_check_chapter', '7')")
+  const r = await cache.rebuildFromSource(fixtureRoot)
+  assert.equal(r.ok, true)
+
+  const rows = await cache.query("SELECT value FROM meta WHERE key = 'last_health_check_chapter'")
+  assert.equal(rows[0]?.value, '7')
+
+  await cache.close()
+  await fs.unlink(tmpDb)
+})
+
+test('schema 版本不匹配的旧缓存 → ensureReady 自动重建', async () => {
+  const tmpDb = path.join(os.tmpdir(), `test-schema-ver-${Date.now()}.db`)
+  const cache1 = new CacheManager(tmpDb)
+  await cache1.ensureReady(fixtureRoot)
+  await cache1.run("UPDATE meta SET value = '0' WHERE key = 'schema_version'")
+  await cache1.close()
+
+  const cache2 = new CacheManager(tmpDb)
+  await cache2.ensureReady(fixtureRoot)
+  const v = await cache2.query("SELECT value FROM meta WHERE key = 'schema_version'")
+  assert.notEqual(v[0]?.value, '0') // 已按当前 schema 重建
+  const chapters = await cache2.query('SELECT COUNT(*) AS c FROM chapters')
+  assert.ok(chapters[0].c > 0)
+  await cache2.close()
+  await fs.unlink(tmpDb)
+})

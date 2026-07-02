@@ -72,8 +72,8 @@ async function scanChapters(repoPath, db) {
   try {
     const files = await fs.readdir(chapterDir)
     const insertStmt = db.prepare(`
-      INSERT INTO chapters (chapter_num, title, volume_num, perspective, story_time, word_count, chapter_position, hook_type, mood_position, file_path, is_key_chapter)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO chapters (chapter_num, title, volume_num, perspective, story_time, word_count, chapter_position, hook_type, mood_position, is_volume_end, file_path, is_key_chapter)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     for (const file of files) {
@@ -97,6 +97,7 @@ async function scanChapters(repoPath, db) {
           fm.章定位 || '推进',
           fm.钩子 || null,
           fm.情绪定位 || null,
+          fm.收卷 === '是' || fm.收卷 === true ? 1 : 0,
           filePath,
           fm.是否关键章 ? 1 : 0
         )
