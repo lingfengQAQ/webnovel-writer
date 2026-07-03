@@ -6,6 +6,8 @@
       "verified": "结构就绪，真模型 smoke 推迟 beta",
       "agentCapable": true,
       "hasHooks": true,
+      "detect_bin": "claude",
+      "install_dir": ".claude",
       "smoke": "node scripts/smoke.mjs --host claude-code",
       "smoke_status": "deferred-beta"
     },
@@ -14,6 +16,8 @@
       "verified": "结构就绪，真模型 smoke 推迟 beta",
       "agentCapable": true,
       "hasHooks": false,
+      "detect_bin": "codex",
+      "install_dir": ".codex",
       "smoke": "node scripts/smoke.mjs --host codex",
       "smoke_status": "deferred-beta"
     },
@@ -21,13 +25,17 @@
       "tier": 2,
       "verified": "社区反馈",
       "agentCapable": true,
-      "hasHooks": false
+      "hasHooks": false,
+      "detect_bin": "gemini",
+      "install_dir": ".gemini"
     },
     "cursor": {
       "tier": 2,
       "verified": "社区反馈",
       "agentCapable": true,
-      "hasHooks": false
+      "hasHooks": false,
+      "detect_bin": "cursor-agent",
+      "install_dir": ".cursor"
     },
     "_default": {
       "tier": 3,

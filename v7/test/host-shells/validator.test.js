@@ -15,7 +15,7 @@ async function makePkg() {
     await fs.mkdir(path.dirname(full), { recursive: true })
     await fs.writeFile(full, c, 'utf8')
   }
-  await w('adapters/registry.json', JSON.stringify({ schema_version: 'webnovel-host-registry/v2', hosts: { 'claude-code': { tier: 1, agentCapable: true, hasHooks: true } } }))
+  await w('adapters/registry.json', JSON.stringify({ schema_version: 'webnovel-host-registry/v2', hosts: { 'claude-code': { tier: 1, agentCapable: true, hasHooks: true, detect_bin: 'claude', install_dir: '.claude' } } }))
   await w('adapters/claude-code/support.md', '# claude-code 核验\n')
   await w('roles/事实审查.md', '---\nname: 事实审查\ndescription: d\n---\nbody {{categories.factCheck}}')
   await w('skills/webnovel-writer/SKILL.md', '---\nname: webnovel-writer\ndescription: d\n---\nbody')

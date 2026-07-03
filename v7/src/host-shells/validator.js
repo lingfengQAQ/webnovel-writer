@@ -26,6 +26,13 @@ export async function validatePackage(baseDir) {
   for (const [host, h] of Object.entries(registry.hosts)) {
     if (host === '_default') continue
     if (h.tier == null) errors.push(`${host} 缺 tier`)
+    if (h.tier === 1 || h.tier === 2) {
+      // 安装器依赖：探测可执行名 + 壳落位目录（M5）
+      if (!h.detect_bin) errors.push(`${host} 缺 detect_bin（安装器探测用）`)
+      if (!h.install_dir || !/^\.[\w.-]+$/.test(h.install_dir)) {
+        errors.push(`${host} 缺合法 install_dir（形如 .claude）`)
+      }
+    }
     if (h.tier === 1) {
       try {
         await fs.access(path.join(baseDir, 'adapters', host, 'support.md'))
