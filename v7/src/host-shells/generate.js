@@ -9,12 +9,16 @@ import { FACT_CATEGORIES, EDIT_CATEGORIES, SEVERITIES, SCHEMA_EXAMPLE } from '..
  * 确定性:同输入必同输出（drift check 基础）。不联网、不改业务源。
  */
 
+/** 安装后统一的命令引用（spec §5.9 平台上下文变量;运行时 vendored 进 .webnovel/,离线可跑） */
+const CMD = 'node .webnovel/bin/webnovel-writer.js'
+
 /** schema 单源注入上下文(category/severity/范例来自 schema.js,角色与校验器不双表) */
 function schemaContext() {
   return {
     categories: { factCheck: FACT_CATEGORIES.join('、'), editorial: EDIT_CATEGORIES.join('、') },
     severities: SEVERITIES.join(' | '),
     schema: { example: JSON.stringify(SCHEMA_EXAMPLE, null, 2) },
+    cmd: CMD,
   }
 }
 

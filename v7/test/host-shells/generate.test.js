@@ -17,19 +17,24 @@ test('renderTemplate：agentCapable=false → 渲染兼容(降级)模式块', ()
   assert.ok(!renderTemplate(t, { agentCapable: false }).includes('完整'))
 })
 
-test('生成 claude-code 壳：hasHooks 块入、unless 块去；两审完整模式；占位符全渲染', async () => {
+test('生成 claude-code 壳：hasHooks 块入、unless 块去；两审完整模式；F1 命令接线；占位符全渲染', async () => {
   const out = await generateHostShells(V7)
   const skill = out['claude-code']['skills/webnovel-writer/SKILL.md']
   assert.match(skill, /SessionStart 已注入/)
-  assert.ok(!skill.includes('扫描含'), 'hasHooks=true 应去掉 unless 块')
-  assert.match(skill, /完整模式/)
+  assert.ok(!skill.includes('session-context`，向作者报'), 'hasHooks=true 应去掉 unless 块')
+  assert.match(skill, /独立 subagent/)
+  assert.ok(!skill.includes('兼容模式'), 'agentCapable=true 应去掉兼容模式块')
+  assert.match(skill, /node \.webnovel\/bin\/webnovel-writer\.js next --json/, '命令引用变量应渲染为 vendored 调用')
+  for (const cmdName of ['review-input', 'save-review', 'finalize', 'persist-book', 'persist-outline']) {
+    assert.ok(skill.includes(cmdName), `写章流程应接 F1 命令 ${cmdName}`)
+  }
   assert.ok(!skill.includes('{{'), '占位符应全部渲染')
 })
 
 test('生成 codex 壳：无 hook → unless 块入；角色输出 TOML', async () => {
   const out = await generateHostShells(V7)
   const skill = out['codex']['skills/webnovel-writer/SKILL.md']
-  assert.match(skill, /读工作目录/)
+  assert.match(skill, /session-context/)
   assert.ok(!skill.includes('SessionStart 已注入'))
   const role = out['codex']['agents/事实审查.toml']
   assert.match(role, /name = "事实审查"/)
