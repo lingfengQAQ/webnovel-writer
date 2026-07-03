@@ -37,7 +37,9 @@
 - 删光 `.cache/` 全量重建，查询结果不变；
 - Windows 中文路径全链路；
 - 定稿原子性（中途失败时工作区原样保留）；
-- 防呆方言（系统写出的 YAML 平铺/块列表/危险值引号）。
+- 防呆方言（系统写出的 YAML 平铺/块列表/危险值引号）；
+- 安装链路端到端（M5，双平台 install-e2e）：npm pack 产物装进干净中文路径目录 → init → vendored bin 建书 → next → update 幂等；
+- 主循环全程 CLI（M5）：建书→细纲→备料→机检→两审→定稿→next 报下一章，子进程 spawn bin，不走进程内调用。
 
 4.2 修 bug 必须附回归测试；同一问题第二次出现视为流程缺陷，必须复盘。
 
@@ -60,3 +62,5 @@
 6.4 commit message 前缀沿用现状：`feat` / `fix` / `docs` / `chore`（本仓库开发用）。发布产物（marketplace/CHANGELOG）版本走 `docs/operations/plugin-release.md` 流程。
 
 6.5 版本号：`v7/package.json` 在 M5 发版前为预发版号（`7.0.0-alpha`）；发版时升 `7.0.0` 并与 README 徽章、`.claude-plugin/marketplace.json`、`plugin.json`、`CHANGELOG.md` 一致——README 版本表是 `plugin-version.yml` CI 硬约束，发版必须同步。
+
+6.6 宿主通道 I/O（M5）：AI 产物回流命令的 JSON 输入一律走 `--file`/`--payload` 文件路径，禁止 stdin（Windows 中文管道编码不可靠）；小体量 DTO 输出走 stdout（`next --json`），含正文全文的大 JSON 落工作区文件（`review-input`）。相对路径相对书仓库根（无书时相对工作目录）解析。

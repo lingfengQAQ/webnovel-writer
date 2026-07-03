@@ -56,14 +56,14 @@
 
 ## Acceptance Criteria
 
-- [ ] AC1 干净 Windows 中文用户名环境一条命令装出工作目录并建第一本书：CI 用例绿（npm pack 产物 + 中文路径临时目录全链路）+ 手测一次通过
-- [ ] AC2 `init` 装出的布局逐项存在且内容正确：`AGENTS.md`（标记块）、`.webnovel/`（脚本可 `node` 直跑、`books.jsonl`、哈希清单）、检测到的平台壳；报告输出含支持等级与下一步指引
-- [ ] AC3 `update`：未改文件被更新；手改文件被跳过且列出；`AGENTS.md` 块外内容保留；`--force` 可覆盖
-- [ ] AC4 写章八阶段每一步都有宿主可调 CLI 通道：F1 清单 8 个命令逐个有测试（含 schema 校验失败、文件缺失的人话报错）
-- [ ] AC5 `finalize→next` 端到端经 CLI 子进程跑通，next 报「起草第 N+1 章」不重抄
-- [ ] AC6 工作目录定位三分支（书仓库直启 / 工作目录+当前书 / 无处可依）各有测试；换书后 next 作用于新书
-- [ ] AC7 SessionStart 注入：hook 路径与无 hook 宿主状态机入口路径输出逐字一致（既有测试延伸到 CLI 通道）
-- [ ] AC8 全量测试绿 + CI 双平台绿；drift check 对新增模板变量仍确定性通过
+- [ ] AC1 干净 Windows 中文用户名环境一条命令装出工作目录并建第一本书：CI 用例绿（npm pack 产物 + 中文路径临时目录全链路）+ 手测一次通过 —— CI job 已建（install-e2e，双平台）本地全通过；待推送后 CI 绿 + 用户手测
+- [x] AC2 `init` 装出的布局逐项存在且内容正确：`AGENTS.md`（标记块）、`.webnovel/`（脚本可 `node` 直跑、`books.jsonl`、哈希清单）、检测到的平台壳；报告输出含支持等级与下一步指引
+- [x] AC3 `update`：未改文件被更新；手改文件被跳过且列出；`AGENTS.md` 块外内容保留；`--force` 可覆盖
+- [x] AC4 写章八阶段每一步都有宿主可调 CLI 通道：F1 清单 8 个命令逐个有测试（含 schema 校验失败、文件缺失的人话报错）
+- [x] AC5 `finalize→next` 端到端经 CLI 子进程跑通，next 报「起草第 N+1 章」不重抄
+- [x] AC6 工作目录定位三分支（书仓库直启 / 工作目录+当前书 / 无处可依）各有测试；换书后 next 作用于新书
+- [x] AC7 SessionStart 注入：hook 路径与无 hook 宿主状态机入口路径输出逐字一致（既有测试延伸到 CLI 通道）
+- [ ] AC8 全量测试绿 + CI 双平台绿；drift check 对新增模板变量仍确定性通过 —— 本地 335 绿 + drift 绿；CI 待推送验证
 
 ## Out of Scope
 
