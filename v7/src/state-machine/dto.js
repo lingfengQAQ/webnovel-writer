@@ -48,6 +48,7 @@ export async function buildDto(ctx, 序, base = {}) {
 }
 
 async function whatsMissing(ctx) {
+  if (!ctx.repoPath) return ['book.yaml', '总纲'] // 空工作目录：书仓库还不存在
   const missing = []
   for (const [label, rel] of [
     ['book.yaml', 'book.yaml'],

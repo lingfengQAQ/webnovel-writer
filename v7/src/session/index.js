@@ -3,9 +3,9 @@ import path from 'node:path'
 import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
 
 /**
- * SessionStart 注入与书单自愈（story-repo-spec §2.0）。
+ * SessionStart 注入与书单登记（story-repo-spec §2.0）。
  * 有 hook 宿主（Claude Code）启动调本层;无 hook 宿主由状态机入口调同一函数,行为等价。
- * 写侧（books.jsonl 登记/换书）属 M5;本层只读 + 扫描重建。
+ * 读侧 + 扫描重建自愈（M4）与写侧（登记/换书/最后打开,M5）同模块,books.jsonl 格式单源。
  */
 
 /** 读 .webnovel/books.jsonl,逐行 JSON,损坏行跳过并计数 */
@@ -33,8 +33,7 @@ export async function readBooksRegistry(workdir) {
 
 /**
  * 自愈回写：把有效书单写回 .webnovel/books.jsonl（P1-4）。
- * 仅用于丢坏行 / 落扫描重建结果,不是 M5 的登记/换书写侧——那归 M5。
- * 失败不阻断会话（best-effort）。
+ * 失败不阻断会话（best-effort 由调用方决定）。
  */
 export async function writeBooksRegistry(workdir, books) {
   const dir = path.join(workdir, '.webnovel')
@@ -64,14 +63,14 @@ export async function scanRebuildBooks(workdir) {
 }
 
 /**
- * 组装 SessionStart 注入文本（当前在写哪本/共几本/全书近况入口）。
- * 登记缺失或为空 → 扫描重建。两个宿主入口调本函数 → 注入逐字一致。
+ * 读书单并自愈：登记缺失/为空 → 扫描重建回写;坏行 → 丢弃回写好行。
+ * SessionStart 注入、工作目录定位、list-books 共用本函数,自愈逻辑单源。
  */
-export async function assembleSessionContext(workdir) {
+export async function loadBooks(workdir) {
   let reg = await readBooksRegistry(workdir)
   let rebuilt = false
   let needsAuthorPick = false
-  let toWrite = null // P1-4：自愈回写载体
+  let toWrite = null
 
   if (!reg.ok || reg.missing || reg.books.length === 0) {
     const scan = await scanRebuildBooks(workdir)
@@ -92,17 +91,82 @@ export async function assembleSessionContext(workdir) {
       // 回写失败不阻断会话（best-effort）
     }
   }
+  return { ok: true, books: reg.books, rebuilt, needsAuthorPick }
+}
 
-  const current = reg.books.find((b) => b.当前) || null
-  const names = reg.books.map((b) => b.书名).join('、')
+/** 本地日期 YYYY-MM-DD（「最后打开」是作者可见字段,取本地时区） */
+function localDate() {
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+/**
+ * 登记一本书并置为当前（建书流程调用）。同目录已登记则更新书名,不产生重复行。
+ */
+export async function registerBook(workdir, { 书名, 目录 }) {
+  if (!书名 || !目录) return { ok: false, error: '登记需要 书名 与 目录', books: [] }
+  const { books } = await loadBooks(workdir)
+  const kept = books.filter((b) => b.目录 !== 目录).map((b) => ({ ...b, 当前: false }))
+  kept.push({ 书名, 目录, 当前: true, 最后打开: localDate() })
+  try {
+    await writeBooksRegistry(workdir, kept)
+  } catch (err) {
+    return { ok: false, error: `写书单失败：${err.message}`, books: [] }
+  }
+  return { ok: true, books: kept, error: '' }
+}
+
+/**
+ * 换书：按书名或目录名精确匹配置「当前」。未命中返回候选,人话交作者。
+ */
+export async function setCurrentBook(workdir, name) {
+  const { books } = await loadBooks(workdir)
+  const hit = books.find((b) => b.书名 === name || b.目录 === name)
+  if (!hit) {
+    const 候选 = books.map((b) => b.书名).join('、') || '（书单为空）'
+    return { ok: false, book: null, error: `没有叫《${name}》的书。候选：${候选}` }
+  }
+  const next = books.map((b) =>
+    b === hit ? { ...b, 当前: true, 最后打开: localDate() } : { ...b, 当前: false }
+  )
+  try {
+    await writeBooksRegistry(workdir, next)
+  } catch (err) {
+    return { ok: false, book: null, error: `写书单失败：${err.message}` }
+  }
+  return { ok: true, book: next.find((b) => b.当前), error: '' }
+}
+
+/** 会话打开当前书时刷新「最后打开」。best-effort,失败不阻断 */
+export async function touchLastOpened(workdir, 目录) {
+  try {
+    const reg = await readBooksRegistry(workdir)
+    if (!reg.ok || reg.missing) return
+    const next = reg.books.map((b) => (b.目录 === 目录 ? { ...b, 最后打开: localDate() } : b))
+    await writeBooksRegistry(workdir, next)
+  } catch {
+    // best-effort
+  }
+}
+
+/**
+ * 组装 SessionStart 注入文本（当前在写哪本/共几本/全书近况入口）。
+ * 登记缺失或为空 → 扫描重建。两个宿主入口调本函数 → 注入逐字一致。
+ */
+export async function assembleSessionContext(workdir) {
+  const { books, rebuilt, needsAuthorPick } = await loadBooks(workdir)
+
+  const current = books.find((b) => b.当前) || null
+  const names = books.map((b) => b.书名).join('、')
   const text = [
     current
       ? `当前在写《${current.书名}》`
-      : reg.books.length
+      : books.length
         ? `尚未选择当前书（候选：${names}）`
         : '尚未选择当前书',
-    `共 ${reg.books.length} 本`,
+    `共 ${books.length} 本`,
     current ? '继续写作直接说「继续」（将读当前书全书近况）' : '请选择要写哪本书',
   ].join('；')
-  return { ok: true, text, books: reg.books, current, rebuilt, needsAuthorPick }
+  return { ok: true, text, books, current, rebuilt, needsAuthorPick }
 }

@@ -1,11 +1,17 @@
 import { determineNextState } from '../state-machine/index.js'
 
 /**
- * next（「继续」单入口）：跑状态机判定下一步，打印中文摘要。
+ * next（「继续」单入口）：跑状态机判定下一步。缺省打印中文摘要；--json 输出完整 DTO（F1）。
+ * 空工作目录（无当前书）也可跑 → 状态机报序1 建书引导。
  * 契约：纯返回 {ok, output?, error?}（见 design §6.2）。
  */
+export const allowNoBook = true
+
 export async function run(args, options, ctx) {
   const r = await determineNextState(ctx)
+  if (options.json) {
+    return { ok: true, output: JSON.stringify(r, null, 2) }
+  }
   const lines = []
   if (r.gitHealth.fixed.length) {
     lines.push('【git 已自动处理】', ...r.gitHealth.fixed.map((s) => '  · ' + s))

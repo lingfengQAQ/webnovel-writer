@@ -11,6 +11,12 @@ import * as d from './detectors.js'
  */
 export async function determineNextState(ctx) {
   const { repoPath, cache } = ctx
+
+  // 空工作目录（bin 定位后无当前书）：没有书仓库可查,直接序1 建书引导（spec §10 序1「工作目录无任何书」）
+  if (!repoPath) {
+    return mk(1, 'create-book', true, '工作目录还没有书，进入建书引导。', { fixed: [], guidance: [] }, await buildDto(ctx, 1, {}))
+  }
+
   const gitHealth = await checkGitHealth(ctx)
 
   // 序0 修复确认（检测=脚本，提议=AI）

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
 import { CacheManager } from '../src/cache/index.js'
 import { checkNodeVersion } from '../src/runtime/node-version.js'
+import { resolveRunContext } from '../src/runtime/locate.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -80,18 +81,35 @@ try {
   const mod = await import(commandUrl)
 
   const { options, positionalArgs } = parseArgs(argv.slice(1))
+  const packageRoot = path.join(__dirname, '..')
 
-  const repoPath = process.cwd() // M3 状态机后续处理工作目录定位
-  cache = new CacheManager(path.join(repoPath, '.cache', 'index.db'))
-  await cache.ensureReady(repoPath)
+  // 工作目录定位（story-repo-spec §2.0）：书仓库直启 / 工作目录当前书 / 人话提示
+  const plan = await resolveRunContext(process.cwd(), { scope: mod.scope || 'book' })
 
-  const result = await mod.run(positionalArgs, options, { repoPath, cache })
-  if (result.ok) {
-    if (result.output) console.log(result.output)
-    process.exitCode = 0
-  } else {
-    console.error(result.error)
+  if (plan.mode === 'error' || (plan.mode === 'workdir-no-book' && !mod.allowNoBook)) {
+    console.error(plan.message)
     process.exitCode = 1
+  } else {
+    let ctx
+    if (plan.mode === 'workdir') {
+      ctx = { workdir: plan.workdir, packageRoot }
+    } else if (plan.mode === 'workdir-no-book') {
+      // 空工作目录里允许跑的命令（next → 状态机报序1 建书引导）
+      ctx = { workdir: plan.workdir, packageRoot, repoPath: null, cache: null }
+    } else {
+      cache = new CacheManager(path.join(plan.repoPath, '.cache', 'index.db'))
+      await cache.ensureReady(plan.repoPath)
+      ctx = { repoPath: plan.repoPath, cache, workdir: plan.workdir ?? null, packageRoot }
+    }
+
+    const result = await mod.run(positionalArgs, options, ctx)
+    if (result.ok) {
+      if (result.output) console.log(result.output)
+      process.exitCode = 0
+    } else {
+      console.error(result.error)
+      process.exitCode = 1
+    }
   }
 } catch (err) {
   if (err.code === 'ERR_MODULE_NOT_FOUND' || err.code === 'ENOENT') {
