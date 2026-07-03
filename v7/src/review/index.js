@@ -212,6 +212,29 @@ export async function persistReviewReport(ctx, { chapterNum, merged, draft, 待�
 }
 
 /**
+ * 两审产物入库：schema 校验 → 合并 → 落盘。runReviews 与 save-review CLI 共用,不双写。
+ * @param {{repoPath}} ctx
+ * @param {{chapterNum, rawFact, rawEdit, mode?, 待确认新专名?, 章摘要?, draft}} args
+ */
+export async function saveReviews(ctx, { chapterNum, rawFact, rawEdit, mode = 'complete', 待确认新专名 = [], 章摘要 = '', draft }) {
+  const vFact = validateReviewReport(rawFact, { reviewType: 'factCheck' })
+  const vEdit = validateReviewReport(rawEdit, { reviewType: 'editorial' })
+  const errors = [...vFact.errors, ...vEdit.errors]
+  if (errors.length) return { ok: false, errors }
+
+  const merged = mergeReviews({ factCheck: vFact.report, editorial: vEdit.report }, { mode, chapterNum })
+  const saved = await persistReviewReport(ctx, {
+    chapterNum,
+    merged,
+    draft,
+    待确认新专名,
+    章摘要,
+    raw: { factCheck: rawFact, editorial: rawEdit },
+  })
+  return { ok: true, merged, 审稿路径: saved.审稿路径, errors: [] }
+}
+
+/**
  * 两审编排:组装输入 → DI 注入两审 → 校验 → 合并 → 落盘。零真 AI(reviewers 由宿主壳/测试注入)。
  * @param {{repoPath, cache}} ctx
  * @param {{chapterNum, draftPath, mode, reviewers, 待确认新专名?, 章摘要?}} args
@@ -234,19 +257,13 @@ export async function runReviews(ctx, { chapterNum, draftPath, mode = 'complete'
     rawEdit = await reviewers.editorial(inp.input)
   }
 
-  const vFact = validateReviewReport(rawFact, { reviewType: 'factCheck' })
-  const vEdit = validateReviewReport(rawEdit, { reviewType: 'editorial' })
-  const errors = [...vFact.errors, ...vEdit.errors]
-  if (errors.length) return { ok: false, errors }
-
-  const merged = mergeReviews({ factCheck: vFact.report, editorial: vEdit.report }, { mode, chapterNum })
-  const saved = await persistReviewReport(ctx, {
+  return saveReviews(ctx, {
     chapterNum,
-    merged,
-    draft: inp.input.草稿全文,
+    rawFact,
+    rawEdit,
+    mode,
     待确认新专名,
     章摘要,
-    raw: { factCheck: rawFact, editorial: rawEdit },
+    draft: inp.input.草稿全文,
   })
-  return { ok: true, merged, 审稿路径: saved.审稿路径, errors: [] }
 }

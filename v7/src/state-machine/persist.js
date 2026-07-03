@@ -38,7 +38,22 @@ export async function persistDraftOutline(ctx, { 细纲 }) {
   }
 }
 
-/** 序1 建书 → book.yaml + 大纲/总纲.md + 大纲/卷纲/第01卷.md + .gitignore + git init + core.quotepath */
+/** 书仓库指路 AGENTS.md（spec §2.1 建书时自动生成）。内容内嵌：运行时 vendored 副本不带 templates/ */
+function bookAgentsMd(书名) {
+  return [
+    '# webnovel-writer 书仓库',
+    '',
+    `本目录是《${书名}》的书仓库（定稿 / 大纲 / 文风 / 工作区）。AI 工具不要在这里启动——各平台壳装在上一层工作目录。`,
+    '',
+    '- 日常写作：回上一层工作目录启动 agent CLI，对它说「继续」。',
+    '- 单独 clone 了本仓库：先在期望的工作目录运行 `npx webnovel-writer init`，把本仓库放进工作目录，再运行 `webnovel-writer list-books` 重建书单。',
+    '',
+    '事实变更只经定稿流程入 git。',
+    '',
+  ].join('\n')
+}
+
+/** 序1 建书 → book.yaml + 大纲/总纲.md + 大纲/卷纲/第01卷.md + AGENTS.md 指路 + .gitignore + git init + core.quotepath */
 export async function persistCreateBook(ctx, { book, 总纲, 卷纲 }) {
   try {
     const gitignore = await buildGitignore(ctx.repoPath, ['.cache/', '工作区/'])
@@ -46,12 +61,17 @@ export async function persistCreateBook(ctx, { book, 总纲, 卷纲 }) {
       { path: 'book.yaml', content: serializeYAML(book) },
       { path: path.join('大纲', '总纲.md'), content: 总纲 },
       { path: path.join('大纲', '卷纲', '第01卷.md'), content: 卷纲 },
+      { path: 'AGENTS.md', content: bookAgentsMd(book?.书名 || '未命名') },
       { path: '.gitignore', content: gitignore },
     ])
     // P0-2：书仓库工程化（spec quality §3.3 钉死建书流程负责 git init + core.quotepath）
     const git = createGit(ctx.repoPath)
     await git.init()
     await git.setQuotepathFalse()
+    // 建书产物随手提交（一次性 init 前缀）：否则 next 立刻误触序2 手改检测;身份未配则局部兜底
+    await git.ensureIdentity()
+    await git.add(written)
+    await git.commit(`init: 建书《${book?.书名 || '未命名'}》`)
     return { ok: true, written, error: '' }
   } catch (err) {
     return { ok: false, written: [], error: `建书落盘失败：${err.message}` }

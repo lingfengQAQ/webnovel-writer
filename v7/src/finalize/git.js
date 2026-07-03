@@ -29,6 +29,17 @@ export function createGit(repoPath) {
     async setQuotepathFalse() {
       await run(['config', 'core.quotepath', 'false'])
     },
+    /** 提交身份兜底：作者不是程序员,机器可能没配 git 身份;仅设本仓库局部,不碰全局 */
+    async ensureIdentity() {
+      try {
+        const { stdout } = await run(['config', 'user.name'])
+        if (stdout.trim()) return
+      } catch {
+        // 未配置 → 落到下面补
+      }
+      await run(['config', 'user.name', 'webnovel-writer'])
+      await run(['config', 'user.email', 'webnovel-writer@local'])
+    },
     /** 撤销 paths 下已跟踪文件的未提交修改（不碰其他路径如 工作区/） */
     async restore(paths) {
       try {
