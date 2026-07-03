@@ -49,7 +49,7 @@
 - [x] 6.1 `--help` 增新命令段；bin 帮助文案与实际命令清单一致性测试（如已有惯例则从之）
 - [ ] 6.2 手测（AC1 手测半，用户执行）：Windows 中文用户名真机 npx（pack 产物）init → 建书 → 写一章走到定稿；记录进任务 notes
 - [x] 6.3 spec 更新（3.3）：实施计划 M5 打勾与偏差记录；registry/support.md 如有字段变化同步；memory 更新
-- [ ] 6.4 提交（3.4）：分批 commit（基座 / F1 / 安装器 / 壳与 CI）
+- [x] 6.4 提交（3.4）：分批 commit（基座 937ea48 / F1 58ccce0 / 安装器 b1a4a05 / 壳 0ad5767 / CI 416547b / gitignore 0dedc69 / docs 1a3bf49）；已推送，CI run 28663338317 六 job 全绿
 
 ## V. 验证命令
 
