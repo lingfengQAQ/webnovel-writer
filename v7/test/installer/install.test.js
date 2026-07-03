@@ -41,6 +41,7 @@ test('init：一条命令装出完整布局（AC2）,vendored bin 自包含可�
       '.webnovel/roles/事实审查.md',
       '.webnovel/roles/编辑审.md',
       '.webnovel/node_modules/js-yaml/package.json',
+      '.webnovel/node_modules/argparse/package.json',
       '.webnovel/package.json',
       '.webnovel/manifest.json',
       '.webnovel/books.jsonl',

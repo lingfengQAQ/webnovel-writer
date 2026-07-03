@@ -2,7 +2,7 @@
 .agents/
 .codex/
 .gemini/
-AGENTS.md
+/AGENTS.md
 
 # Python caches & virtualenv
 __pycache__/
