@@ -30,3 +30,22 @@ jobs:
         run: node scripts/build-host-shells.mjs --check
       - name: 版本门槛冒烟
         run: node bin/webnovel-writer.js --version
+
+  install-e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: v7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+      - name: 安装依赖
+        run: npm ci
+      - name: 安装链路端到端（npm pack → 中文路径 init → 建书 → next → update）
+        run: npm run e2e:install

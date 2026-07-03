@@ -9,8 +9,17 @@
   "bin": {
     "webnovel-writer": "bin/webnovel-writer.js"
   },
+  "files": [
+    "bin/",
+    "src/",
+    "roles/",
+    "skills/",
+    "adapters/",
+    "templates/"
+  ],
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "e2e:install": "node scripts/pack-install-e2e.mjs"
   },
   "dependencies": {
     "js-yaml": "^5.2.0"
