@@ -36,6 +36,7 @@ export function parseBookConfig(yamlString) {
     关键章稿数: 3,
     自动确认细纲: false,
     连写批次大小: 8,
+    连写无条目变动上限: 3,
   }
 
   // 合并默认值（只覆盖 undefined 的字段）

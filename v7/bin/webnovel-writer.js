@@ -69,10 +69,14 @@ if (!command || command === '--help') {
   console.log('')
   console.log('状态机 / 例外流程（M3）：')
   console.log('  next [--json]                           继续：状态机判定下一步（--json 出完整 DTO）')
-  console.log('  health-check                            体检：悬了太久/条目活跃率/连续弱钩，报告落工作区（文体项随 M5.5）')
+  console.log('  health-check                            体检：账面 + 高频意象/句式/指纹漂移/缺时间锚点，报告落工作区')
   console.log('  impact <关键词>                          影响分析：哪些章建立在这个事实上（已发布/未发布）')
   console.log('  goto-chapter <章号> [--confirm]          回到第N章（先备份再回滚，作者不碰 git）')
   console.log('  relink --message=<一句话说明>            补登手改：定稿/大纲 未登记改动入档（fix(手改)）')
+  console.log('')
+  console.log('自动模式（M6，连写按批次定稿）：')
+  console.log('  stage-chapter <章号> --payload=<json>    暂存一章进待定稿批次（不 commit），返回停止判定')
+  console.log('  batch-status [--json]                   批次全貌：各章状态/审稿摘要/停止条件')
   process.exit(0)
 }
 

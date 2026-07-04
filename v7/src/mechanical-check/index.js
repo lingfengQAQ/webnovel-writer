@@ -3,14 +3,10 @@ import path from 'node:path'
 import { parseFrontMatter } from '../storage/parsers/front-matter.js'
 import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
 import { parseThreadDeclarations, VERBS, OPENING_VERBS } from '../util/thread-declarations.js'
-import { styleMetrics } from '../style-stats/index.js'
+import { styleMetrics, AVG_SENTENCE_LEN_TOLERANCE, SENTENCE_VARIANCE_TOLERANCE } from '../style-stats/index.js'
 
 // front matter 章档案必填字段（§4.1 机器消费部分）
 const REQUIRED_FM = ['章号', '标题', '卷', '字数', '章定位', '钩子', '情绪定位']
-
-// 句式偏离容差（vs 基线指纹；硬编码合理默认，候选只提醒不拦截）
-const AVG_LEN_TOLERANCE = 0.3
-const VARIANCE_TOLERANCE = 0.5
 
 /**
  * 机检：零 token 可计数项（D2 七项 + 条目变动形式检查，spec 0.9 §8 第 5 步）。
@@ -256,7 +252,7 @@ async function checkStyleDeviation(body, cache, candidates) {
   const m = styleMetrics(body)
   if (base.avg_sentence_length > 0) {
     const dev = (m.平均句长 - base.avg_sentence_length) / base.avg_sentence_length
-    if (Math.abs(dev) >= AVG_LEN_TOLERANCE) {
+    if (Math.abs(dev) >= AVG_SENTENCE_LEN_TOLERANCE) {
       candidates.push({
         type: '句式偏离',
         value: '平均句长',
@@ -266,7 +262,7 @@ async function checkStyleDeviation(body, cache, candidates) {
   }
   if (base.sentence_length_variance > 0) {
     const dev = (m.句长方差 - base.sentence_length_variance) / base.sentence_length_variance
-    if (Math.abs(dev) >= VARIANCE_TOLERANCE) {
+    if (Math.abs(dev) >= SENTENCE_VARIANCE_TOLERANCE) {
       candidates.push({
         type: '句式偏离',
         value: '句长方差',

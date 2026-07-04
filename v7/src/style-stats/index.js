@@ -8,6 +8,10 @@
 export const IMAGERY_MIN_COUNT = 10
 export const IMAGERY_MIN_CHAPTERS = 3
 
+// 句式偏离容差（单章机检 vs 基线、批次质检共用同一口径，不双写）
+export const AVG_SENTENCE_LEN_TOLERANCE = 0.3
+export const SENTENCE_VARIANCE_TOLERANCE = 0.5
+
 const MIN_GRAM = 4
 const MAX_GRAM = 8
 const TTR_WINDOW = 1000

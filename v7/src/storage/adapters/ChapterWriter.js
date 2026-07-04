@@ -1,18 +1,13 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { serializeFrontMatter } from '../serializers/front-matter.js'
+import { sanitizeFileName } from '../../util/filename.js'
 
 /**
  * ChapterWriter：写新章到定稿（M2 定稿流程调用）。
  */
 
 let backupCounter = 0
-
-/** 文件名净化：Windows 非法字符 <>:"/\|?* 与控制字符替成 _（标题本体不改,只净化文件名）。 */
-function sanitizeFileName(title) {
-  const s = String(title).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/\s+/g, ' ').trim()
-  return s || '未命名'
-}
 
 /** 临时挪走同章旧文件（标题可能不同），避免 scanChapters 撞 PRIMARY KEY（P0-3a）。 */
 async function backupOldChapterFiles(dir, chapterNum, safeTitle) {

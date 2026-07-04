@@ -7,6 +7,7 @@ import { promisify } from 'node:util'
 import { finalizeChapter } from '../../src/finalize/index.js'
 import { createGit } from '../../src/finalize/git.js'
 import { gitBookCtx } from '../commands/_helper.js'
+import { mechanicalCheck } from '../../src/mechanical-check/index.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -151,6 +152,95 @@ test('finalizeChapter 改同章标题后断电：旧章恢复，新章不残留'
       { cwd: ctx.repoPath, encoding: 'utf8' }
     )
     assert.equal(stdout.trim(), '')
+  } finally {
+    await cleanup()
+  }
+})
+
+// —— 新开条目入档（M6 P1.0：threadCreates，补 M2 起「埋下」无入档通道的缺口）——
+
+const 新条目 = () => ({
+  id: '伏笔-002',
+  短题: '黑影来历',
+  frontMatter: { 强度: '中', 状态: '进行', 开启章: 3, 最后推进章: 3 },
+  body: '## 描述\n黑影的来历。\n\n## 收尾计划\n第二卷揭晓。\n\n## 履历\n- 第3章：埋下——黑影首次现身\n',
+})
+
+test('finalizeChapter threadCreates：埋下建档→缓存可见→下一章推进机检零误报（接力）', async () => {
+  const { ctx, cleanup } = await gitBookCtx()
+  try {
+    const p = payload()
+    p.frontMatter.伏笔 = ['推进 伏笔-001', '埋下 伏笔-002']
+    p.threadCreates = [新条目()]
+    const r = await finalizeChapter(ctx, p)
+    assert.equal(r.ok, true, r.error)
+
+    const f = await fs.readFile(path.join(ctx.repoPath, '大纲/伏笔/伏笔-002-黑影来历.md'), 'utf8')
+    assert.match(f, /状态: 进行/)
+    assert.match(f, /## 履历/)
+    const rows = await ctx.cache.query("SELECT id, status FROM threads WHERE id = '伏笔-002'")
+    assert.equal(rows.length, 1, '定稿刷缓存后新条目必须可见')
+
+    // 接力：下一章草稿声明「推进 伏笔-002」，机检不得误判「不存在」
+    const draft = [
+      '---',
+      '章号: 4',
+      '标题: 追影',
+      '卷: 1',
+      '字数: 40',
+      '章定位: 推进',
+      '钩子: 危机钩-强',
+      '情绪定位: 铺垫',
+      '伏笔:',
+      '  - 推进 伏笔-002',
+      '---',
+      '林晚循着黑影的踪迹一路追到后山，夜风里那道身影再次出现，她悄悄握紧了袖中的短刀。',
+    ].join('\n')
+    const draftPath = path.join(ctx.repoPath, '工作区', '草稿-A.md')
+    await fs.mkdir(path.dirname(draftPath), { recursive: true })
+    await fs.writeFile(draftPath, draft, 'utf8')
+    const mc = await mechanicalCheck(ctx, { chapterNum: 4, draftPath })
+    assert.equal(mc.ok, true, mc.error)
+    assert.deepEqual(
+      mc.issues.filter((i) => i.check === '条目变动'),
+      [],
+      JSON.stringify(mc.issues)
+    )
+  } finally {
+    await cleanup()
+  }
+})
+
+test('finalizeChapter threadCreates 撞已有编号 → 整体失败并干净回滚', async () => {
+  const { ctx, cleanup } = await gitBookCtx()
+  try {
+    const git = createGit(ctx.repoPath)
+    const before = await git.revCount()
+    const p = payload()
+    p.threadCreates = [{ ...新条目(), id: '伏笔-001' }] // sample-book 已有
+    const r = await finalizeChapter(ctx, p)
+    assert.equal(r.ok, false)
+    assert.match(r.error, /已存在/)
+    assert.equal(await git.revCount(), before)
+    const { stdout } = await execFileAsync(
+      'git',
+      ['status', '--porcelain', '--', '定稿', '大纲'],
+      { cwd: ctx.repoPath, encoding: 'utf8' }
+    )
+    assert.equal(stdout.trim(), '')
+  } finally {
+    await cleanup()
+  }
+})
+
+test('finalizeChapter threadCreates 断电回滚：新条目文件不残留', async () => {
+  const { ctx, cleanup } = await gitBookCtx()
+  try {
+    const p = payload()
+    p.threadCreates = [新条目()]
+    const r = await finalizeChapter(ctx, p, { faultAfterWrite: true })
+    assert.equal(r.ok, false)
+    await assert.rejects(() => fs.access(path.join(ctx.repoPath, '大纲/伏笔/伏笔-002-黑影来历.md')))
   } finally {
     await cleanup()
   }

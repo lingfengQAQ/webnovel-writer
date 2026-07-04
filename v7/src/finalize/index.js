@@ -27,6 +27,7 @@ export async function finalizeChapter(ctx, payload, opts = {}) {
     frontMatter,
     body = '',
     summary = null,
+    threadCreates = [],
     threadUpdates = [],
     characterUpdates = [],
     rosterUpserts = [],
@@ -62,6 +63,13 @@ export async function finalizeChapter(ctx, payload, opts = {}) {
     }
 
     const tlw = new ThreadLedgerWriter(repoPath)
+    // 新开条目先建档（开启类声明的入档执行体），再处理更新——同一章可"埋下并写首条履历"
+    for (const t of threadCreates) {
+      const r = await tlw.createThread(t)
+      if (!r.ok) throw new Error(r.error)
+      stageFiles.push(r.filePath)
+      rollbackFiles.push(r.filePath)
+    }
     for (const t of threadUpdates) {
       if (t.updates) {
         const r = await tlw.updateThread(t.id, t.updates)
