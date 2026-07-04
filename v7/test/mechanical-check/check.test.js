@@ -218,3 +218,106 @@ test('机检 声明行不合「动词 编号」格式 → 阻断', async () => {
     await cleanup()
   }
 })
+
+// —— 体检消费两候选（M5.5：高频意象命中 + 句式偏离 vs 基线指纹，均非阻断）——
+
+// 千字文选段：字字不重，按长度切句不会误触「复读」检查
+const 字池 =
+  '天地玄黄宇宙洪荒日月盈昃辰宿列张寒来暑往秋收冬藏闰余成岁律吕调阳云腾致雨露结为霜金生丽水玉出昆冈剑号巨阙珠称夜光果珍李柰菜重芥姜海咸河淡鳞潜羽翔龙师火帝鸟官人皇始制文字乃服衣裳推位让国有虞陶唐吊民伐罪周发殷汤坐朝问道垂拱平章爱育黎首臣伏戎羌遐迩一体率宾归王鸣凤在竹白驹食场'
+
+function sentencesOfLengths(lengths) {
+  let pos = 0
+  const parts = []
+  for (const n of lengths) {
+    parts.push(字池.slice(pos, pos + n))
+    pos += n
+  }
+  return parts.join('。') + '。'
+}
+
+async function runWithCache(draftBody, { extra, seed } = {}) {
+  const { ctx, cleanup } = await repoCtx(null, files(draftBody, { extra }))
+  try {
+    if (seed) await seed(ctx)
+    const draftPath = path.join(ctx.repoPath, '工作区', '草稿-A.md')
+    const r = await mechanicalCheck(ctx, { chapterNum: 3, draftPath })
+    return { r, cleanup }
+  } catch (e) {
+    await cleanup()
+    throw e
+  }
+}
+
+const 基线指纹 = (avg, variance) => (ctx) =>
+  ctx.cache.run(
+    "INSERT INTO fingerprints (chapter_range_start, chapter_range_end, is_baseline, avg_sentence_length, sentence_length_variance, avg_paragraph_length, common_phrase_frequency, vocabulary_richness, fingerprint_data) VALUES (1, 2, 1, ?, ?, 20, '{}', 0.5, '{}')",
+    [avg, variance]
+  )
+
+const 目标字数 = (n) => ({ 'book.yaml': `spec_version: "7.0"\n书名: 测\n每章目标字数: ${n}\n` })
+
+test('机检 高频意象命中（体检缓存）→ 候选非阻断，pass 不受影响', async () => {
+  const seed = (ctx) =>
+    ctx.cache.run("INSERT OR REPLACE INTO meta (key, value) VALUES ('imagery_top', ?)", [
+      JSON.stringify([
+        { phrase: '空气仿佛凝固', count: 47, chapterCount: 12, firstChapter: 3, lastChapter: 40 },
+      ]),
+    ])
+  const { r, cleanup } = await runWithCache(
+    '林晚推门而入，空气仿佛凝固。她环视四周缓缓落座，空气仿佛凝固，无人开口说话，落针可闻此时无声。',
+    { seed }
+  )
+  try {
+    const c = r.candidates.find((x) => x.type === '高频意象')
+    assert.ok(c, JSON.stringify(r.candidates))
+    assert.equal(c.value, '空气仿佛凝固')
+    assert.match(c.description, /全书已用 47 次，本章又用 2 次/)
+    assert.equal(r.pass, true, JSON.stringify(r.issues))
+  } finally {
+    await cleanup()
+  }
+})
+
+test('机检 无体检数据 → 高频意象/句式偏离静默跳过', async () => {
+  const { r, cleanup } = await run(正常正文)
+  try {
+    assert.ok(!r.candidates.some((x) => x.type === '高频意象' || x.type === '句式偏离'))
+  } finally {
+    await cleanup()
+  }
+})
+
+test('机检 句式偏离边界：平均句长偏 29% 不报', async () => {
+  const body = sentencesOfLengths([12, 13, 13, 13, 13, 13, 13, 13, 13, 13]) // 均 12.9，基线 10
+  const { r, cleanup } = await runWithCache(body, { extra: 目标字数(130), seed: 基线指纹(10, 0) })
+  try {
+    assert.ok(!r.candidates.some((x) => x.type === '句式偏离'), JSON.stringify(r.candidates))
+  } finally {
+    await cleanup()
+  }
+})
+
+test('机检 句式偏离边界：平均句长偏 31% 报（非阻断）', async () => {
+  const body = sentencesOfLengths([13, 13, 13, 13, 13, 13, 13, 13, 13, 14]) // 均 13.1，基线 10
+  const { r, cleanup } = await runWithCache(body, { extra: 目标字数(130), seed: 基线指纹(10, 0) })
+  try {
+    const c = r.candidates.find((x) => x.type === '句式偏离' && x.value === '平均句长')
+    assert.ok(c, JSON.stringify(r.candidates))
+    assert.match(c.description, /偏了 31%/)
+    assert.ok(!r.issues.some((i) => i.check === '句式偏离'), '句式偏离只进候选不进 issues')
+  } finally {
+    await cleanup()
+  }
+})
+
+test('机检 句长方差偏离 ≥50% 报，平均句长未偏不误报', async () => {
+  const body = sentencesOfLengths([10, 14]) // 均 12 与基线持平；方差 4 vs 基线 1
+  const { r, cleanup } = await runWithCache(body, { extra: 目标字数(25), seed: 基线指纹(12, 1) })
+  try {
+    const c = r.candidates.find((x) => x.type === '句式偏离' && x.value === '句长方差')
+    assert.ok(c, JSON.stringify(r.candidates))
+    assert.ok(!r.candidates.some((x) => x.type === '句式偏离' && x.value === '平均句长'))
+  } finally {
+    await cleanup()
+  }
+})

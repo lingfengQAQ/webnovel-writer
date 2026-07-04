@@ -3,13 +3,20 @@ import path from 'node:path'
 import { parseFrontMatter } from '../storage/parsers/front-matter.js'
 import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
 import { parseThreadDeclarations, VERBS, OPENING_VERBS } from '../util/thread-declarations.js'
+import { styleMetrics } from '../style-stats/index.js'
 
 // front matter 章档案必填字段（§4.1 机器消费部分）
 const REQUIRED_FM = ['章号', '标题', '卷', '字数', '章定位', '钩子', '情绪定位']
 
+// 句式偏离容差（vs 基线指纹；硬编码合理默认，候选只提醒不拦截）
+const AVG_LEN_TOLERANCE = 0.3
+const VARIANCE_TOLERANCE = 0.5
+
 /**
  * 机检：零 token 可计数项（D2 七项 + 条目变动形式检查，spec 0.9 §8 第 5 步）。
- * 不过关（pass=false）= 存在阻断 issue。新专名/信息差关键词只出候选（candidates），不拦截。
+ * 不过关（pass=false）= 存在阻断 issue。新专名/信息差关键词/高频意象/句式偏离只出候选
+ * （candidates），不拦截。高频意象与句式偏离消费体检缓存（meta 清单/基线指纹），
+ * 体检产出、机检消费——机检不做全书扫描。
  * @param {{repoPath: string, cache: object}} ctx
  * @param {{chapterNum: number, draftPath: string}} args
  * @returns {Promise<{ok: boolean, pass: boolean, issues: object[], candidates: object[], error: string}>}
@@ -37,6 +44,8 @@ export async function mechanicalCheck(ctx, { chapterNum, draftPath }) {
     checkFrontMatter(parsed, fm, issues) // 6
     await checkSecretKeywords(body, cache, candidates) // 7（候选）
     await checkThreadDeclarations(fm, cache, issues) // 8（条目变动，只查形式）
+    await checkImageryHits(body, cache, candidates) // 9（候选，消费体检的高频意象清单）
+    await checkStyleDeviation(body, cache, candidates) // 10（候选，vs 基线指纹）
 
     return { ok: true, pass: issues.length === 0, issues, candidates, error: '' }
   } catch (err) {
@@ -206,6 +215,63 @@ async function checkThreadDeclarations(fm, cache, issues) {
       issues.push({ check: '条目变动', severity: 'high', blocking: true, description: `「${d.raw}」：${d.id} 不存在，疑似编号笔误` })
     } else if (status !== '进行') {
       issues.push({ check: '条目变动', severity: 'high', blocking: true, description: `「${d.raw}」：${d.id} 状态是「${status}」，不能再「${d.verb}」` })
+    }
+  }
+}
+
+// 体检产出的跨章高频意象清单（meta imagery_top）：本章草稿命中 → 非阻断提醒；未体检过 → 静默跳过
+async function checkImageryHits(body, cache, candidates) {
+  let top = []
+  try {
+    const rows = await cache.query("SELECT value FROM meta WHERE key = 'imagery_top'")
+    top = JSON.parse(rows[0]?.value || '[]')
+  } catch {
+    return
+  }
+  for (const t of top) {
+    if (!t?.phrase) continue
+    const hits = body.split(t.phrase).length - 1
+    if (hits > 0) {
+      candidates.push({
+        type: '高频意象',
+        value: t.phrase,
+        description: `「${t.phrase}」全书已用 ${t.count} 次，本章又用 ${hits} 次，建议换个写法`,
+      })
+    }
+  }
+}
+
+// 本章句式 vs 基线指纹（体检 upsert 的基线行）：平均句长偏 ≥30% 或句长方差偏 ≥50% → 非阻断提醒；无基线 → 静默跳过
+async function checkStyleDeviation(body, cache, candidates) {
+  let base = null
+  try {
+    const rows = await cache.query(
+      'SELECT avg_sentence_length, sentence_length_variance FROM fingerprints WHERE is_baseline = 1 ORDER BY chapter_range_end DESC LIMIT 1'
+    )
+    base = rows[0] || null
+  } catch {
+    return
+  }
+  if (!base) return
+  const m = styleMetrics(body)
+  if (base.avg_sentence_length > 0) {
+    const dev = (m.平均句长 - base.avg_sentence_length) / base.avg_sentence_length
+    if (Math.abs(dev) >= AVG_LEN_TOLERANCE) {
+      candidates.push({
+        type: '句式偏离',
+        value: '平均句长',
+        description: `本章平均句长 ${m.平均句长.toFixed(1)} 字，基线 ${base.avg_sentence_length.toFixed(1)} 字，偏了 ${Math.round(Math.abs(dev) * 100)}%，句子比基线明显${dev > 0 ? '变长' : '变短'}`,
+      })
+    }
+  }
+  if (base.sentence_length_variance > 0) {
+    const dev = (m.句长方差 - base.sentence_length_variance) / base.sentence_length_variance
+    if (Math.abs(dev) >= VARIANCE_TOLERANCE) {
+      candidates.push({
+        type: '句式偏离',
+        value: '句长方差',
+        description: `本章句长方差 ${m.句长方差.toFixed(1)}，基线 ${base.sentence_length_variance.toFixed(1)}，偏了 ${Math.round(Math.abs(dev) * 100)}%，句子长短比基线${dev > 0 ? '更参差' : '更齐整'}`,
+      })
     }
   }
 }

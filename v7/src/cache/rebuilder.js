@@ -46,7 +46,7 @@ export async function rebuildCache(repoPath, db) {
     // 6. 扫描角色卡 → 填充 entities 表
     await scanCharacters(repoPath, db)
 
-    // 7. fingerprints 表留空（特征提取随 M3+ 体检补）
+    // 7. fingerprints 由体检按需重算（M5.5），重建不填
 
     db.exec('COMMIT')
     return { ok: true, warnings, errors }

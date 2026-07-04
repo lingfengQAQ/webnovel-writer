@@ -77,6 +77,25 @@ export async function prepareChapterMaterials(ctx, { chapterNum }) {
       // 无文风铁律
     }
 
+    // 反复读清单：体检产出的跨章高频意象（meta imagery_top），提醒本章避免再用
+    let 反复读 = '（尚未体检，暂无数据——首次体检后自动填充）'
+    try {
+      const metaRows = await cache.query("SELECT value FROM meta WHERE key = 'imagery_top'")
+      if (metaRows.length) {
+        const top = JSON.parse(metaRows[0].value || '[]')
+        反复读 = top.length
+          ? top
+              .slice(0, 10)
+              .map(
+                (t) => `- 「${t.phrase}」全书已用 ${t.count} 次（${t.chapterCount} 章出现），本章避免再用`
+              )
+              .join('\n')
+          : '（最近一次体检没有查出跨章高频复用短语）'
+      }
+    } catch {
+      // meta 读不到按未体检处理
+    }
+
     const parts = [
       `# 第 ${chapterNum} 章写作材料`,
       '',
@@ -94,7 +113,7 @@ export async function prepareChapterMaterials(ctx, { chapterNum }) {
       '',
       反和解 ? `## 反和解规则\n${反和解}` : '## 反和解规则\n（无）',
       '',
-      '## 反复读清单\n（暂空，跨章高频意象统计随 M5.5 体检补）',
+      `## 反复读清单\n${反复读}`,
       '',
     ]
     const content = parts.join('\n')

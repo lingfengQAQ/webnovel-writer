@@ -14,20 +14,21 @@ test('report-style-drift 无指纹数据 → 友好错误（M1 边界，不做�
   }
 })
 
-test('report-style-drift 有基线+最近指纹 → 返回差异（测对比逻辑）', async () => {
+test('report-style-drift 有基线+最近指纹 → 返回含句长方差在内的差异', async () => {
   const { ctx, cleanup } = await fixtureCtx()
   try {
-    // M1 不做特征提取，手工插入基线 + 最近指纹，验证对比逻辑
+    // 手工插入基线 + 最近指纹，只验证对比逻辑（特征提取由体检测试覆盖）
     await ctx.cache.query(
-      "INSERT INTO fingerprints (chapter_range_start, chapter_range_end, is_baseline, avg_sentence_length, vocabulary_richness, fingerprint_data) VALUES (1, 30, 1, 20.0, 0.5, '{}')"
+      "INSERT INTO fingerprints (chapter_range_start, chapter_range_end, is_baseline, avg_sentence_length, sentence_length_variance, vocabulary_richness, fingerprint_data) VALUES (1, 30, 1, 20.0, 30.0, 0.5, '{}')"
     )
     await ctx.cache.query(
-      "INSERT INTO fingerprints (chapter_range_start, chapter_range_end, is_baseline, avg_sentence_length, vocabulary_richness, fingerprint_data) VALUES (31, 40, 0, 25.0, 0.6, '{}')"
+      "INSERT INTO fingerprints (chapter_range_start, chapter_range_end, is_baseline, avg_sentence_length, sentence_length_variance, vocabulary_richness, fingerprint_data) VALUES (31, 40, 0, 25.0, 42.5, 0.6, '{}')"
     )
     const r = await run([], {}, ctx)
     assert.equal(r.ok, true)
     const drift = JSON.parse(r.output)
     assert.ok(Math.abs(drift.avg_sentence_length_delta - 5.0) < 1e-9)
+    assert.ok(Math.abs(drift.sentence_length_variance_delta - 12.5) < 1e-9)
   } finally {
     await cleanup()
   }
