@@ -13,6 +13,7 @@ import {
   SENTENCE_VARIANCE_TOLERANCE,
 } from '../style-stats/index.js'
 import { runHealthCheck } from '../health-check/index.js'
+import { renderBookStatus } from '../prep/book-status.js'
 
 /**
  * staging：待定稿批次（自动模式，spec §8.1）。批次真源 = 工作区/待定稿/ 下的文件，
@@ -105,8 +106,11 @@ function metaFile(rows) {
 /**
  * 叠加视图的事实包：staged 章正文/档案 + 预登记（条目/名册/角色/时间线/信息差）。
  * 全部来自批次文件，供备料/审稿输入/机检合并；无批次时 exists=false 且各集合为空。
+ * @param {string} repoPath
+ * @param {{before?: number}} [opts] 只取章号 < before 的 staged 章——组装第 K 章材料/审稿/机检时
+ *   批内事实只能来自更早的章（重审受影响章时，不许后章事实倒灌）
  */
-export async function stagedFacts(repoPath) {
+export async function stagedFacts(repoPath, opts = {}) {
   const batch = await readBatch(repoPath)
   const facts = {
     exists: batch.exists,
@@ -114,6 +118,7 @@ export async function stagedFacts(repoPath) {
     threads: new Map(),
     newEntities: new Set(),
     newAliases: new Set(),
+    roster: [],
     characterUpdates: new Map(),
     timelineRows: [],
     secretWrites: [],
@@ -122,7 +127,12 @@ export async function stagedFacts(repoPath) {
   }
   if (!batch.exists) return facts
 
-  for (const row of batch.章列表) {
+  const rows = Number.isInteger(opts.before)
+    ? batch.章列表.filter((r) => r.章号 < opts.before)
+    : batch.章列表
+  if (!rows.length) return { ...facts, exists: false }
+
+  for (const row of rows) {
     const dirP = path.join(repoPath, BATCH_DIR, row.目录)
 
     let fm = {}
@@ -182,8 +192,18 @@ export async function stagedFacts(repoPath) {
       facts.threads.set(t.id, cur)
     }
     for (const r of payload.rosterUpserts || []) {
-      if (r?.正名) facts.newEntities.add(r.正名)
-      for (const a of splitAliases(r?.别名)) facts.newAliases.add(a)
+      if (!r?.正名) continue
+      facts.newEntities.add(r.正名)
+      const aliases = splitAliases(r.别名)
+      for (const a of aliases) facts.newAliases.add(a)
+      const pair = facts.roster.find((x) => x.正名 === r.正名)
+      if (pair) {
+        for (const a of aliases) {
+          if (!pair.别名.includes(a)) pair.别名.push(a)
+        }
+      } else {
+        facts.roster.push({ 正名: r.正名, 别名: aliases })
+      }
     }
     for (const c of payload.characterUpdates || []) {
       if (!c?.name) continue
@@ -199,6 +219,52 @@ function splitAliases(v) {
   if (Array.isArray(v)) return v.filter(Boolean).map((s) => String(s).trim()).filter(Boolean)
   if (typeof v === 'string') return v.split(/[,，、]/).map((s) => s.trim()).filter(Boolean)
   return []
+}
+
+/**
+ * 全书近况叠加（备料/审稿输入消费）：staged 章计入位置与总量、连续弱钩接算、
+ * 批内已推进的条目从"悬了太久"剔除。assembleBookStatus 本体保持只算定稿。
+ * @param {{ok, data, markdown}} status assembleBookStatus 结果
+ * @param {object} facts stagedFacts 结果
+ */
+export function overlayBookStatus(status, facts) {
+  if (!status?.ok || !facts?.exists || !facts.chapters.length) return status
+  const staged = facts.chapters
+  const data = { ...status.data, 卷内进度: { ...status.data.卷内进度 } }
+
+  data.总章数 = status.data.总章数 + staged.length
+  data.总字数 = status.data.总字数 + facts.总字数
+
+  const 卷号 = (c) => Number(c.frontMatter.卷) || status.data.当前卷
+  const 新当前卷 = Math.max(status.data.当前卷, ...staged.map(卷号))
+  const 卷内新增 = staged.filter((c) => 卷号(c) === 新当前卷).length
+  if (新当前卷 !== status.data.当前卷) {
+    data.当前卷 = 新当前卷
+    data.卷内进度.写到 = 卷内新增
+  } else {
+    data.卷内进度.写到 = status.data.卷内进度.写到 + 卷内新增
+  }
+
+  let weak = 0
+  let broke = false
+  for (let i = staged.length - 1; i >= 0; i--) {
+    const h = String(staged[i].frontMatter.钩子 || '')
+    if (h.includes('弱钩') || h.endsWith('-弱')) weak++
+    else {
+      broke = true
+      break
+    }
+  }
+  data.连续弱钩 = broke ? weak : weak + status.data.连续弱钩
+
+  data.悬了太久 = status.data.悬了太久.filter((t) => !facts.threads.get(t.id)?.最后推进章)
+
+  const 起 = staged[0].章号
+  const 止 = staged[staged.length - 1].章号
+  const markdown = renderBookStatus(data, [
+    `- 批内已暂存：第 ${起}-${止} 章共 ${staged.length} 章（未定稿，作者批量过稿后入档）`,
+  ])
+  return { ...status, data, markdown }
 }
 
 /**

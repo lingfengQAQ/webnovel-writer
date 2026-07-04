@@ -10,19 +10,24 @@ import { SecretReader } from '../storage/adapters/SecretReader.js'
 import { ThreadLedgerReader } from '../storage/adapters/ThreadLedgerReader.js'
 import { writeAtomicBatch } from '../storage/atomic.js'
 import { validateReviewReport } from './schema.js'
+import { stagedFacts, overlayBookStatus } from '../staging/index.js'
 
 const 兼容声明 = '本次使用兼容模式（单上下文顺序审稿），审稿隔离度低于完整两审模式。'
 const 完整声明 = '完整两审模式（事实审查/编辑审各自独立上下文）。'
 
+const 类型英文 = { 伏笔: 'foreshadow', 悬念: 'suspense', 感情线: 'romance' }
+
 /**
  * 组装两审共享的 ReviewInput DTO（AI 不见文件路径,实施计划 §1.5 原则 1）。
  * 复用 M1 读接口 + M2 全书近况 + 细纲「要写到的事」。
+ * 有待定稿批次时叠加批内预登记（只取本章之前的章）——批内第 K+1 章审稿能看到第 K 章事实。
  * @param {{repoPath, cache}} ctx
  * @param {{chapterNum: number, draftPath: string}} args
  */
 export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
   try {
     const { repoPath, cache } = ctx
+    const facts = await stagedFacts(repoPath, { before: chapterNum })
 
     // resolve 而非 join：draftPath 传绝对路径时 join 会拼出坏路径
     const 草稿全文 = await fs.readFile(path.resolve(repoPath, draftPath), 'utf8')
@@ -40,7 +45,7 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
       // 无细纲
     }
 
-    const status = await assembleBookStatus(ctx)
+    const status = overlayBookStatus(await assembleBookStatus(ctx), facts)
     const 当前卷 = status.ok ? status.data.当前卷 : 1
 
     // P1-1：名册快照（正名+别名）,供 AI 判新专名,不泄漏路径;同时建 aliasMap 供角色别名命中
@@ -57,6 +62,17 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
       })
     } catch {
       // 缓存不可用则略
+    }
+    // 批内预登记的名册行（新角色/新别名）
+    for (const pair of facts.roster) {
+      const row = 名册.find((x) => x.正名 === pair.正名)
+      if (row) {
+        for (const a of pair.别名) if (!row.别名.includes(a)) row.别名.push(a)
+      } else {
+        名册.push({ 正名: pair.正名, 别名: [...pair.别名] })
+      }
+      const known = aliasMap.get(pair.正名) || []
+      aliasMap.set(pair.正名, [...new Set([...known, ...pair.别名])])
     }
 
     // 相关角色:扫角色目录,正名或别名出现在草稿里的纳入（P1-1:别名也要命中）
@@ -75,7 +91,10 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
         else if (typeof fmAliases === 'string')
           fmAliases.split(',').forEach((a) => a.trim() && aliases.add(a.trim()))
         const hit = 草稿全文.includes(name) || [...aliases].some((a) => a && 草稿全文.includes(a))
-        if (hit) 相关角色.push(cc.context)
+        if (!hit) continue
+        // 批内预登记的角色变更叠加（第 K 章改了状态，K+1 章审稿要看到最新值）
+        const upd = facts.characterUpdates.get(name)
+        相关角色.push(upd ? { ...cc.context, ...upd } : cc.context)
       }
     } catch {
       // 无角色目录
@@ -83,9 +102,17 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
 
     const tl = await new TimelineReader(repoPath, cache).readVolumeRange(Math.max(1, 当前卷 - 1), 当前卷)
     const 时间线片段 = tl.ok ? tl.timeline.map((row) => ({ 章: row.章 ?? '', 事件: row.一句话事件 ?? '' })) : []
+    for (const tr of facts.timelineRows) {
+      时间线片段.push({ 章: tr.row?.章 ?? '', 事件: `${tr.row?.一句话事件 ?? ''}（批内预登记）` })
+    }
 
     const secrets = await new SecretReader(repoPath, cache).listUnrevealed()
     const 信息差候选 = secrets.map((s) => ({ id: s.id, 短题: s.短题, 关键词: s.关键词 }))
+    for (const s of facts.secretWrites) {
+      const fm = s.frontMatter || {}
+      if (fm.读者已知 === true || fm.读者已知 === 'true') continue
+      信息差候选.push({ id: s.id, 短题: fm.短题 || s.id, 关键词: Array.isArray(fm.关键词) ? fm.关键词 : [] })
+    }
 
     // P1-1：相关条目 = 仍在进行、且在本章前开启的条目（不泄漏 file_path）
     let 相关条目 = []
@@ -104,6 +131,24 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
       }))
     } catch {
       // 缓存不可用则略
+    }
+    // 批内预登记的条目事实：新开条目补进清单，已有条目刷状态/最后推进章
+    for (const [id, t] of facts.threads) {
+      const row = 相关条目.find((x) => x.id === id)
+      if (row) {
+        if (t.状态) row.状态 = t.状态
+        if (t.最后推进章) row.最后推进章 = t.最后推进章
+      } else if (t.新开) {
+        相关条目.push({
+          id,
+          type: 类型英文[t.type] || t.type,
+          简述: id,
+          状态: t.状态 || '进行',
+          开启章: t.开启章,
+          最后推进章: t.最后推进章 ?? t.开启章,
+          批内预登记: true,
+        })
+      }
     }
 
     // 草稿声明涉及的条目附履历尾部（末 3 行）；未声明的维持纯元数据（控 token）

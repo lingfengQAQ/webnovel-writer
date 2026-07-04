@@ -50,19 +50,27 @@ export async function assembleBookStatus(ctx) {
       悬了太久: overdue,
     }
 
-    const overdueLine = overdue.length
-      ? overdue.map((t) => `${t.id}（悬了 ${t.overdue_count} 章）`).join('、')
-      : '无'
-    const markdown = [
-      '## 全书近况（脚本生成）',
-      `- 位置：第 ${当前卷} 卷 ${data.卷内进度.写到}/${卷规模} 章`,
-      `- 悬了太久：${overdueLine}`,
-      `- 连续弱钩：${连续弱钩} 章`,
-      `- 全书：${data.总章数} 章 / ${data.总字数} 字 / ${data.条目数} 条目 / ${data.角色数} 角色`,
-    ].join('\n')
-
-    return { ok: true, data, markdown, error: '' }
+    return { ok: true, data, markdown: renderBookStatus(data), error: '' }
   } catch (err) {
     return { ok: false, data: null, markdown: '', error: `组装全书近况失败：${err.message}` }
   }
+}
+
+/**
+ * 全书近况 → Markdown（assembleBookStatus 与批次叠加视图共用同一渲染，不双写格式）。
+ * @param {object} data assembleBookStatus 的 data 形状
+ * @param {string[]} [extraLines] 追加在位置行之后的额外行（如批内暂存概况）
+ */
+export function renderBookStatus(data, extraLines = []) {
+  const overdueLine = data.悬了太久.length
+    ? data.悬了太久.map((t) => `${t.id}（悬了 ${t.overdue_count} 章）`).join('、')
+    : '无'
+  return [
+    '## 全书近况（脚本生成）',
+    `- 位置：第 ${data.当前卷} 卷 ${data.卷内进度.写到}/${data.卷内进度.卷规模} 章`,
+    ...extraLines,
+    `- 悬了太久：${overdueLine}`,
+    `- 连续弱钩：${data.连续弱钩} 章`,
+    `- 全书：${data.总章数} 章 / ${data.总字数} 字 / ${data.条目数} 条目 / ${data.角色数} 角色`,
+  ].join('\n')
 }

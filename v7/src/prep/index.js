@@ -5,10 +5,12 @@ import { extractSection } from '../util/markdown.js'
 import { TimelineReader } from '../storage/adapters/TimelineReader.js'
 import { SecretReader } from '../storage/adapters/SecretReader.js'
 import { ChapterReader } from '../storage/adapters/ChapterReader.js'
+import { stagedFacts, overlayBookStatus } from '../staging/index.js'
 
 /**
  * 备料：组装 工作区/本章写作材料.md（spec §8 step3，默认精准片段）。
  * 八组件：全书近况 + 要写到的事 + 事实切片 + 信息差边界 + 近章结尾 + 反复读清单 + 文风锚点 + 反和解规则。
+ * 有待定稿批次时按"定稿 + 批内预登记"叠加组装（spec §8.1，批内事实只取本章之前的章）。
  * @param {{repoPath: string, cache: object}} ctx
  * @param {{chapterNum: number}} args
  * @returns {Promise<{ok: boolean, filePath: string, content: string, error: string}>}
@@ -17,7 +19,8 @@ export async function prepareChapterMaterials(ctx, { chapterNum }) {
   try {
     const { repoPath, cache } = ctx
 
-    const status = await assembleBookStatus(ctx)
+    const facts = await stagedFacts(repoPath, { before: chapterNum })
+    const status = overlayBookStatus(await assembleBookStatus(ctx), facts)
     const 当前卷 = status.ok ? status.data.当前卷 : 1
 
     // 本章要写到的事（读细纲）
@@ -29,15 +32,19 @@ export async function prepareChapterMaterials(ctx, { chapterNum }) {
       // 无细纲
     }
 
-    // 事实切片：当前卷+上一卷时间线（精准片段）
+    // 事实切片：当前卷+上一卷时间线（精准片段）+ 批内预登记行
     const tl = await new TimelineReader(repoPath, cache).readVolumeRange(
       Math.max(1, 当前卷 - 1),
       当前卷
     )
-    const 时间线md =
+    const 时间线行 =
       tl.ok && tl.timeline.length
-        ? tl.timeline.map((row) => `- ${row.章 ?? ''} ${row.一句话事件 ?? ''}`).join('\n')
-        : '（无）'
+        ? tl.timeline.map((row) => `- ${row.章 ?? ''} ${row.一句话事件 ?? ''}`)
+        : []
+    for (const tr of facts.timelineRows) {
+      时间线行.push(`- ${tr.row?.章 ?? ''} ${tr.row?.一句话事件 ?? ''}（批内预登记）`)
+    }
+    const 时间线md = 时间线行.length ? 时间线行.join('\n') : '（无）'
 
     // 信息差边界（未揭晓，勿泄）：短题+知情人+关键词+内容首句——写稿 AI 知道秘密才守得住秘密
     const secretReader = new SecretReader(repoPath, cache)
@@ -51,17 +58,35 @@ export async function prepareChapterMaterials(ctx, { chapterNum }) {
         `- ${s.id}（${s.短题}）：知情人=${知情人}；关键词=${关键词}；内容：${fl.line || '（未读到）'}——读者未知，除知情人的对话与视角外不得出现`
       )
     }
+    // 批内预登记的信息差（未揭晓）一并守住
+    for (const s of facts.secretWrites) {
+      const fm = s.frontMatter || {}
+      if (fm.读者已知 === true || fm.读者已知 === 'true') continue
+      const 知情人 = Array.isArray(fm.知情人) && fm.知情人.length ? fm.知情人.join('、') : '（未登记）'
+      const 关键词 = Array.isArray(fm.关键词) && fm.关键词.length ? fm.关键词.join('/') : '（无）'
+      信息差行.push(
+        `- ${s.id}（批内预登记）：知情人=${知情人}；关键词=${关键词}；内容：${firstContentLine(s.content)}——读者未知，除知情人的对话与视角外不得出现`
+      )
+    }
     const 信息差md = 信息差行.length ? 信息差行.join('\n') : '（无）'
 
-    // 近章结尾（近 2 章末尾 150 字，反复读防接不上）
-    const recent = await cache.query(
-      'SELECT chapter_num FROM chapters ORDER BY chapter_num DESC LIMIT 2'
-    )
-    const reader = new ChapterReader(repoPath, cache)
+    // 近章结尾（近 2 章末尾 150 字，反复读防接不上）：批内暂存章优先，不足回定稿章补
+    const stagedTail = facts.chapters.slice(-2)
     const tails = []
-    for (const r of recent.reverse()) {
-      const t = await reader.readTail(r.chapter_num, 150)
-      tails.push(`### 第${r.chapter_num}章结尾\n${t.ok ? t.text : ''}`)
+    const need = 2 - stagedTail.length
+    if (need > 0) {
+      const recent = await cache.query(
+        'SELECT chapter_num FROM chapters ORDER BY chapter_num DESC LIMIT ?',
+        [need]
+      )
+      const reader = new ChapterReader(repoPath, cache)
+      for (const r of recent.reverse()) {
+        const t = await reader.readTail(r.chapter_num, 150)
+        tails.push(`### 第${r.chapter_num}章结尾\n${t.ok ? t.text : ''}`)
+      }
+    }
+    for (const c of stagedTail) {
+      tails.push(`### 第${c.章号}章结尾（批内暂存）\n${charTail(c.body, 150)}`)
     }
 
     // 文风锚点 + 反和解（读文风铁律）
@@ -127,4 +152,18 @@ export async function prepareChapterMaterials(ctx, { chapterNum }) {
   } catch (err) {
     return { ok: false, filePath: '', content: '', error: `备料失败：${err.message}` }
   }
+}
+
+// 批内暂存章的结尾片段（与 ChapterReader.readTail 同口径：正文末 N 个字符）
+function charTail(body, n) {
+  return [...String(body)].slice(-n).join('').trim()
+}
+
+// 信息差内容首句（跳过空行与小节标题）
+function firstContentLine(content) {
+  for (const line of String(content || '').split('\n')) {
+    const t = line.trim()
+    if (t && !t.startsWith('#')) return t
+  }
+  return '（未读到）'
 }

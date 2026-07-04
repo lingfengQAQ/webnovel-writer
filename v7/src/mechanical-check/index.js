@@ -4,6 +4,7 @@ import { parseFrontMatter } from '../storage/parsers/front-matter.js'
 import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
 import { parseThreadDeclarations, VERBS, OPENING_VERBS } from '../util/thread-declarations.js'
 import { styleMetrics, AVG_SENTENCE_LEN_TOLERANCE, SENTENCE_VARIANCE_TOLERANCE } from '../style-stats/index.js'
+import { stagedFacts } from '../staging/index.js'
 
 // front matter 章档案必填字段（§4.1 机器消费部分）
 const REQUIRED_FM = ['章号', '标题', '卷', '字数', '章定位', '钩子', '情绪定位']
@@ -31,15 +32,17 @@ export async function mechanicalCheck(ctx, { chapterNum, draftPath }) {
 
     const issues = []
     const candidates = []
+    // 待定稿批次叠加（spec §8.1 批内依赖）：staged 条目/名册/信息差并入已知集合，只取本章之前的章
+    const staged = await stagedFacts(repoPath, { before: chapterNum })
 
     checkWordCount(body, bookConfig, issues) // 1
     checkBannedWords(body, style.禁词, issues) // 2
     checkBannedPatterns(body, style.禁句式, issues) // 3
     checkRepetition(body, issues) // 4
-    await checkNewProperNouns(body, cache, candidates) // 5（候选）
+    await checkNewProperNouns(body, cache, candidates, staged) // 5（候选）
     checkFrontMatter(parsed, fm, issues) // 6
-    await checkSecretKeywords(body, cache, candidates) // 7（候选）
-    await checkThreadDeclarations(fm, cache, issues) // 8（条目变动，只查形式）
+    await checkSecretKeywords(body, cache, candidates, staged) // 7（候选）
+    await checkThreadDeclarations(fm, cache, issues, staged) // 8（条目变动，只查形式）
     await checkImageryHits(body, cache, candidates) // 9（候选，消费体检的高频意象清单）
     await checkStyleDeviation(body, cache, candidates) // 10（候选，vs 基线指纹）
 
@@ -113,7 +116,7 @@ function checkRepetition(body, issues) {
 }
 
 // 保守启发式：对话提示词（道/说/问…）前的 2-3 字 Han 视作疑似人名，比对名册（非阻断候选）
-async function checkNewProperNouns(body, cache, candidates) {
+async function checkNewProperNouns(body, cache, candidates, staged) {
   const known = new Set()
   try {
     for (const e of await cache.query('SELECT id FROM entities')) known.add(e.id)
@@ -121,6 +124,8 @@ async function checkNewProperNouns(body, cache, candidates) {
   } catch {
     // 无缓存，跳过
   }
+  for (const n of staged?.newEntities || []) known.add(n)
+  for (const a of staged?.newAliases || []) known.add(a)
   const seen = new Set()
   const re = /([一-龥]{2,3})(冷笑道|笑道|喝道|说道|问道|答道|道|说|喊|问)/g
   let m
@@ -137,12 +142,17 @@ async function checkNewProperNouns(body, cache, candidates) {
   }
 }
 
-async function checkSecretKeywords(body, cache, candidates) {
+async function checkSecretKeywords(body, cache, candidates, staged) {
   let secrets = []
   try {
     secrets = await cache.query('SELECT id, keywords FROM secrets WHERE reader_knows = 0')
   } catch {
-    return
+    secrets = []
+  }
+  for (const s of staged?.secretWrites || []) {
+    const fm = s.frontMatter || {}
+    if (fm.读者已知 === true || fm.读者已知 === 'true') continue
+    secrets.push({ id: s.id, keywords: JSON.stringify(Array.isArray(fm.关键词) ? fm.关键词 : []) })
   }
   for (const s of secrets) {
     let kws = []
@@ -179,7 +189,7 @@ function checkFrontMatter(parsed, fm, issues) {
 
 // 条目变动形式检查（spec 0.9 §8 第 5 步；查 threads 表，零语义）：
 // ①类型一致 ②开启类动词不得撞已有编号 ③非开启动词要求条目存在且状态=进行
-async function checkThreadDeclarations(fm, cache, issues) {
+async function checkThreadDeclarations(fm, cache, issues, staged) {
   const { declarations, malformed } = parseThreadDeclarations(fm)
   for (const bad of malformed) {
     issues.push({ check: '条目变动', severity: 'high', blocking: true, description: `条目声明格式应为「动词 编号」：${bad}` })
@@ -191,6 +201,10 @@ async function checkThreadDeclarations(fm, cache, issues) {
     for (const t of await cache.query('SELECT id, status FROM threads')) known.set(t.id, t.status)
   } catch {
     return // 无缓存，跳过（形式检查依赖条目表）
+  }
+  // 批内预登记的条目并入已知集合（K 章埋下、K+1 章推进不误判）
+  for (const [id, t] of staged?.threads || []) {
+    known.set(id, t.状态 ?? known.get(id) ?? '进行')
   }
 
   for (const d of declarations) {
