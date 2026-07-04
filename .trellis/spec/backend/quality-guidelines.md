@@ -20,6 +20,8 @@
 
 2.3 **精准读取**：每类数据文件必须配"定位读到所需一段"的脚本接口；写作材料组装默认用片段，禁止默认整文件读取。
 
+2.4 **机检的阻断语义**：`pass = issues.length === 0` 是既有消费方依赖的契约。新增检查项默认走 `candidates` 通道（`{type, value, description}`，提醒不拦截）；只有产品文档（PRD/spec）明确定为阻断项的才进 `issues`。禁止用 `blocking: false` 的 issue 表达提醒——那会让 pass 误判打回。跨章统计项由体检产出存缓存（meta/`fingerprints`），机检只消费，无数据静默跳过，禁止在机检里做全书扫描。
+
 ## 3. 编码与平台（CI 强制）
 
 3.1 一切文件 IO 显式 UTF-8 无 BOM；禁止依赖系统 locale。

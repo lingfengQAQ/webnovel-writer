@@ -20,6 +20,8 @@
 
 2.4 表名属机器域，用英文：`chapters`、`threads`、`secrets`、`entities`、`entity_aliases`、`fingerprints`。`entity_aliases` 是 `entities` 的别名索引表（alias → entity_id），供别名解析与唯一性校验。表设计必须支撑精准读取接口（PRD §3.6）的全部查询。
 
+2.5 **派生统计必须确定性可重算**（M5.5 起，`fingerprints` 行与 meta 统计 key 如 `imagery_top`）：同一批源文件任何时候重算，结果必须逐字段一致——禁止时间戳、随机量、locale 相关排序（排序用码元序比较，禁止 `localeCompare`）；对象序列化的键顺序必须由固定的构造顺序保证。"删缓存重算后指纹逐字段一致"是测试断言项。写入方约定：基线段与近段章段重合时只落基线行（同主键两次 upsert 会翻转 `is_baseline`，见 cache-design §1.5）。
+
 ## 3. 禁止事项
 
 3.1 禁止引入第二个数据库、向量库（语义检索为可选插件，永不做事实召回主路径）、常驻服务。
