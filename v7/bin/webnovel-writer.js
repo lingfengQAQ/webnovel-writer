@@ -77,6 +77,10 @@ if (!command || command === '--help') {
   console.log('自动模式（M6，连写按批次定稿）：')
   console.log('  stage-chapter <章号> --payload=<json>    暂存一章进待定稿批次（不 commit），返回停止判定')
   console.log('  batch-status [--json]                   批次全貌：各章状态/审稿摘要/停止条件')
+  console.log('  finalize-batch [--until=<章号>]          作者敲定后逐章按序原子定稿（每章独立 commit）')
+  console.log('  batch-reject <章号>                      打回第K章，其后各章标记受影响待重审')
+  console.log('  batch-restage <章号>                     受影响章重审完成，收回待审收')
+  console.log('  batch-discard                           整批丢弃（未入档，定稿零变化；先经作者确认）')
   process.exit(0)
 }
 
