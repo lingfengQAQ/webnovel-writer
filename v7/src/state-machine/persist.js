@@ -4,6 +4,7 @@ import { serializeYAML } from '../storage/serializers/yaml-dialect.js'
 import { parseFrontMatter } from '../storage/parsers/front-matter.js'
 import { writeAtomicBatch } from '../storage/atomic.js'
 import { createGit } from '../finalize/git.js'
+import { refreshCacheAfterSourceChange } from '../cache/index.js'
 
 /**
  * AI 态产物回流落盘（M3 落盘,AI 不碰文件）。AI 提交结构化 DTO,本层映射到路径写出。
@@ -71,14 +72,18 @@ export async function persistCreateBook(ctx, { book, 总纲, 卷纲 }) {
     // 建书产物随手提交（一次性 init 前缀）：否则 next 立刻误触序2 手改检测;身份未配则局部兜底
     await git.ensureIdentity()
     await git.add(written)
-    await git.commit(`init: 建书《${book?.书名 || '未命名'}》`)
+    if (await git.hasStagedChanges()) {
+      await git.commit(`init: 建书《${book?.书名 || '未命名'}》`)
+    }
     return { ok: true, written, error: '' }
   } catch (err) {
     return { ok: false, written: [], error: `建书落盘失败：${err.message}` }
   }
 }
 
-/** 序4 卷复盘 → 定稿/摘要/卷摘要/第NN卷.md + 大纲/卷纲/第{卷号+1}卷.md（+ 可选伏笔条目） */
+/** 序4 卷复盘 → 定稿/摘要/卷摘要/第NN卷.md + 大纲/卷纲/第{卷号+1}卷.md（+ 可选伏笔条目）。
+ * 产物随手 commit（`vol(NN): 复盘与下卷规划`,spec §9）——与建书同理,不 commit 会让 next 误触序2 手改检测；
+ * 新伏笔条目改了源,同步刷缓存,否则 list-threads/备料/两审要等下次定稿才看得见。 */
 export async function persistVolumeReview(ctx, { 卷号, 卷摘要, 下卷卷纲, 伏笔条目 = [] }) {
   try {
     const files = []
@@ -93,7 +98,14 @@ export async function persistVolumeReview(ctx, { 卷号, 卷摘要, 下卷卷纲
       files.push({ path: path.join('大纲', '伏笔', `${e.id}.md`), content: body })
     }
     const written = await writeAtomicBatch(ctx.repoPath, files)
-    return { ok: true, written, error: '' }
+    const git = createGit(ctx.repoPath)
+    await git.ensureIdentity()
+    await git.add(written)
+    if (await git.hasStagedChanges()) {
+      await git.commit(`vol(${nn}): 复盘与下卷规划`)
+    }
+    const cacheRefresh = await refreshCacheAfterSourceChange(ctx)
+    return { ok: true, written, cacheRefresh, error: '' }
   } catch (err) {
     return { ok: false, written: [], error: `卷复盘落盘失败：${err.message}` }
   }
@@ -118,7 +130,10 @@ export async function persistRepair(ctx, { repairs }, { allowedFiles = [] } = {}
       ctx.repoPath,
       repairs.map((r) => ({ path: r.file, content: r.content }))
     )
-    return { ok: true, written, error: '' }
+    // 修复件此前因解析失败不在缓存,写完必须自刷,否则报表/备料继续缺数据。
+    // 修复本身不 commit：入档走序2 手改补登（relink）,与 spec §9 的手改通道一致。
+    const cacheRefresh = await refreshCacheAfterSourceChange(ctx)
+    return { ok: true, written, cacheRefresh, error: '' }
   } catch (err) {
     return { ok: false, written: [], error: `修复落盘失败：${err.message}` }
   }

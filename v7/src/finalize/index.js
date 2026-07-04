@@ -7,6 +7,7 @@ import { TimelineWriter } from '../storage/adapters/TimelineWriter.js'
 import { SecretWriter } from '../storage/adapters/SecretWriter.js'
 import { SummaryWriter } from '../storage/adapters/SummaryWriter.js'
 import { createGit } from './git.js'
+import { refreshCacheAfterSourceChange } from '../cache/index.js'
 
 /**
  * 定稿：原子 commit（D3）。写工作树 → git add → commit → 最后清工作区。
@@ -127,13 +128,7 @@ export async function finalizeChapter(ctx, payload, opts = {}) {
 
     // P0-1：定稿后同步刷新缓存，避免 next 读旧章号重抄本章。
     // 重建失败不阻断定稿（已 commit 入档），但不能继续保留旧缓存，否则 next 会读旧章号。
-    if (ctx.cache) {
-      try {
-        cacheRefresh = await ctx.cache.rebuildFromSource(repoPath, { keepExistingOnFailure: false })
-      } catch (err) {
-        cacheRefresh = { ok: false, warnings: [], errors: [`缓存刷新失败：${err.message}`] }
-      }
-    }
+    cacheRefresh = await refreshCacheAfterSourceChange(ctx)
 
     // 4. 清工作区（必须在 commit 成功之后）
     for (const wf of workspaceFiles) {

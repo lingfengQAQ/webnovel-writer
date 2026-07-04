@@ -152,6 +152,18 @@ test('persist-book：工作目录模式建书+指路 AGENTS.md+登记置当前;�
     const badDir = await persistBook([], { file: p, dir: '../逃逸' }, ctx)
     assert.equal(badDir.ok, false)
     assert.ok(badDir.error.includes('不合法'))
+
+    // 书名含 Windows 非法字符 → 前置拦截并指路 --dir（P2-4）
+    const badName = await jsonFile(os.tmpdir(), `wnw-pb-bad-${process.pid}.json`, {
+      book: { spec_version: '7.0', 书名: '冒险:开始' },
+      总纲: '# 总纲\nx',
+      卷纲: '# 第1卷\ny',
+    })
+    const rBad = await persistBook([], { file: badName }, ctx)
+    assert.equal(rBad.ok, false)
+    assert.ok(rBad.error.includes('--dir'), '报错应指路 --dir 而不是 mkdir 深处报天书')
+    const rDir = await persistBook([], { file: badName, dir: '冒险开始' }, ctx)
+    assert.equal(rDir.ok, true, rDir.error)
   } finally {
     await fs.rm(workdir, { recursive: true, force: true })
   }
@@ -192,6 +204,10 @@ test('review-input：落 工作区/审稿输入.json（含草稿全文与章号�
 
     const gone = await reviewInput(['1'], { draft: '工作区/没有.md' }, ctx)
     assert.equal(gone.ok, false)
+
+    // --draft 传绝对路径也要能读（P2-2：resolve 而非 join）
+    const abs = await reviewInput(['1'], { draft: path.join(root, '工作区', '草稿-A.md') }, ctx)
+    assert.equal(abs.ok, true, abs.error)
   } finally {
     await cleanup()
   }
@@ -239,6 +255,14 @@ test('save-review：两审 JSON 入库落审稿单;schema 不过人话报错', a
     const noDraft = await saveReview(['1'], { file: good, draft: '工作区/无.md' }, ctx)
     assert.equal(noDraft.ok, false)
     assert.ok(noDraft.error.includes('草稿'))
+
+    // --draft 传绝对路径也要能读（P2-2：resolve 而非 join）
+    const absDraft = await saveReview(
+      ['1'],
+      { file: good, draft: path.join(root, '工作区', '草稿-A.md') },
+      ctx
+    )
+    assert.equal(absDraft.ok, true, absDraft.error)
   } finally {
     await cleanup()
   }

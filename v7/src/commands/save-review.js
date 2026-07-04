@@ -27,7 +27,8 @@ export async function run(args, options, ctx) {
     options.draft && options.draft !== true ? options.draft : path.join('工作区', '草稿-A.md')
   let draft
   try {
-    draft = await fs.readFile(path.join(ctx.repoPath, draftRel), 'utf8')
+    // resolve 而非 join：--draft 传绝对路径时 join 会拼出坏路径
+    draft = await fs.readFile(path.resolve(ctx.repoPath, draftRel), 'utf8')
   } catch (err) {
     return { ok: false, error: `读不到草稿 ${draftRel}：${err.message}（审稿单要附草稿原文）` }
   }

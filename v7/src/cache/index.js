@@ -7,6 +7,20 @@ import { rebuildCache } from './rebuilder.js'
 let rebuildCounter = 0
 
 /**
+ * 改源流程统一的缓存刷新（P1-2）：finalize/goto/retcon/卷复盘/修复补登等改了源文件的路径,
+ * 成功尾部必须自刷——ensureReady 只兜「缺失/损坏」,不感知源变更。
+ * 失败不抛：作废旧缓存（防陈旧数据驱动后续判定）,返回结果供上层如实上报,下次命令自动重建。
+ */
+export async function refreshCacheAfterSourceChange(ctx) {
+  if (!ctx.cache) return null
+  try {
+    return await ctx.cache.rebuildFromSource(ctx.repoPath, { keepExistingOnFailure: false })
+  } catch (err) {
+    return { ok: false, warnings: [], errors: [`缓存刷新失败：${err.message}`] }
+  }
+}
+
+/**
  * CacheManager：管理 .cache/index.db 五表。
  */
 export class CacheManager {

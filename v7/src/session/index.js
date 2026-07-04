@@ -65,6 +65,7 @@ export async function scanRebuildBooks(workdir) {
 /**
  * 读书单并自愈：登记缺失/为空 → 扫描重建回写;坏行 → 丢弃回写好行。
  * SessionStart 注入、工作目录定位、list-books 共用本函数,自愈逻辑单源。
+ * 并发跑两条命令时自愈回写是 last-write-wins：登记可随时从各书 book.yaml 扫描重建,接受现状。
  */
 export async function loadBooks(workdir) {
   let reg = await readBooksRegistry(workdir)

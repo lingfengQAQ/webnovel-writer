@@ -182,3 +182,25 @@ test('update：既装宿主无需重新探测也继续跟新（manifest 记忆�
     await cleanup()
   }
 })
+
+test('update：只更新部分宿主时其他宿主清单记录保留,手改不被下轮静默覆盖（P2-3）', async () => {
+  const { root, ctx, cleanup } = await tmpWorkdir()
+  try {
+    await installWorkdir(ctx, { hostsOverride: 'codex', ...NO_ENV })
+    // 只更 claude-code：.codex 的记录不能从清单里丢
+    await installWorkdir(ctx, { hostsOverride: 'claude-code', ...NO_ENV })
+    const m = await readManifest(root)
+    const codexKeys = Object.keys(m.files).filter((k) => k.startsWith('.codex'))
+    assert.ok(codexKeys.length > 0, '本轮未涉及的 .codex 记录应保留在清单里')
+
+    // 手改一个 .codex 文件后全量 update：应识别为手改跳过,而不是判 new 静默覆盖
+    const modified = codexKeys[0]
+    await fs.writeFile(path.join(root, modified), '用户手改内容', 'utf8')
+    const r = await installWorkdir(ctx, { hostsOverride: 'codex,claude-code', ...NO_ENV })
+    assert.equal(r.ok, true)
+    assert.ok(r.skipped.includes(modified), `${modified} 应被判手改跳过（实际 skipped：${r.skipped.join('、')}）`)
+    assert.equal(await read(root, modified), '用户手改内容', '手改内容不得被覆盖')
+  } finally {
+    await cleanup()
+  }
+})

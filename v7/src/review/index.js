@@ -24,7 +24,8 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
   try {
     const { repoPath, cache } = ctx
 
-    const 草稿全文 = await fs.readFile(path.join(repoPath, draftPath), 'utf8')
+    // resolve 而非 join：draftPath 传绝对路径时 join 会拼出坏路径
+    const 草稿全文 = await fs.readFile(path.resolve(repoPath, draftPath), 'utf8')
 
     // 拟条目变动：草稿 front matter 三数组声明（与机检共用同一解析，不双写）
     const draftFm = parseFrontMatter(草稿全文)

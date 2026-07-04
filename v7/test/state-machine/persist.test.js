@@ -11,6 +11,7 @@ import {
   persistVolumeReview,
   persistDraftOutline,
 } from '../../src/state-machine/persist.js'
+import { makeGitBook } from './_helper.js'
 
 async function tmpRepo() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'wnw-persist-'))
@@ -73,13 +74,15 @@ test('persistCreateBook（序1）→ 写 book.yaml + 总纲 + 第一卷卷纲', 
   } finally { await cleanup() }
 })
 
-test('persistVolumeReview（序4）→ 写卷摘要 + 下卷卷纲', async () => {
-  const { ctx, root, cleanup } = await tmpRepo()
+test('persistVolumeReview（序4）→ 写卷摘要 + 下卷卷纲 + vol commit（P1-1）', async () => {
+  const { ctx, root, git, cleanup } = await makeGitBook({ 'book.yaml': 'spec_version: "7.0"\n书名: 测\n' })
   try {
     const r = await persistVolumeReview(ctx, { 卷号: 1, 卷摘要: '第一卷收束。', 下卷卷纲: '# 第2卷\n新地图。' })
-    assert.equal(r.ok, true)
+    assert.equal(r.ok, true, r.error)
     assert.match(await read(root, '定稿/摘要/卷摘要/第01卷.md'), /收束/)
     assert.match(await read(root, '大纲/卷纲/第02卷.md'), /新地图/)
+    const { stdout } = await git(['log', '-1', '--format=%s'])
+    assert.match(stdout.trim(), /^vol\(01\): /, '复盘产物应随手 commit（否则 next 误触序2）')
   } finally { await cleanup() }
 })
 

@@ -19,7 +19,9 @@ SessionStart 已注入「当前在写哪本 / 共几本 / 全书近况入口」�
 作者说「继续」，运行 `{{cmd}} next --json`（git 健康检查先行），按返回的 `序` 执行：
 - 序0 修复确认：对 `dto.failures` 逐个给「保留作者意图」的修复方案，作者确认后写 `{"repairs":[{"file","content"}]}`，运行 `{{cmd}} persist-repair --file=<json路径>`。
 - 序1 建书：问答收集书名、类型、主角、金手指、结局，产出 `{"book","总纲","卷纲"}`，运行 `{{cmd}} persist-book --file=<json路径>`。
-- 序2 手改补登 / 序3 断点续跑 / 序5 体检：按返回的 `message` 指引执行。
+- 序2 手改补登：向作者出示 `dto.变更文件` 问「补登吗」，确认后运行 `{{cmd}} relink --message=<一句话说明>`。
+- 序3 断点续跑：按 `dto.从哪继续` 回到写章流程对应步骤。
+- 序5 体检：按返回的 `message` 指引执行。
 - 序4 卷复盘：吃 DTO 与作者对谈，产出 `{"卷号","卷摘要","下卷卷纲","伏笔条目"}`，运行 `{{cmd}} persist-volume-review --file=<json路径>`。
 - 序6 起草细纲：吃 DTO 拟细纲提案（本章定位声明 + 本章要写到的事 + 备选），作者确认后产出 `{"细纲"}`，运行 `{{cmd}} persist-outline --file=<json路径>`。
 

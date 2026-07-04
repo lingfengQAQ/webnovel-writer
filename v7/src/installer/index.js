@@ -64,18 +64,18 @@ export async function installWorkdir(ctx, { hostsOverride = null, force = false,
     return fail(`组装安装文件失败：${err.message}`)
   }
 
-  // 哈希三态写入
+  // 哈希三态写入。新清单以旧清单为底：本轮未涉及的宿主/文件保留旧记录，
+  // 否则下次全量 update 会把它们判成 new 而静默覆盖用户手改（违反 §8 不静默覆盖）
   const written = []
   const skipped = []
-  const newFiles = { }
+  const newFiles = { ...(manifest?.files || {}) }
   for (const [rel, content] of Object.entries(files)) {
     const full = path.join(workdir, rel)
     const disk = await readIfExists(full)
     const cls = classifyFile(rel, disk == null ? null : sha256(disk), manifest)
     const newHash = sha256(content)
     if (cls === 'user-modified' && !force) {
-      skipped.push(rel)
-      newFiles[rel] = manifest.files[rel] // 保留旧记录,下次仍能识别用户改动
+      skipped.push(rel) // 旧记录已在底表,下次仍能识别用户改动
       continue
     }
     if (disk !== content) {

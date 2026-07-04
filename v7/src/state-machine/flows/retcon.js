@@ -2,6 +2,7 @@ import path from 'node:path'
 import { createGit } from '../../finalize/git.js'
 import { EntityWriter } from '../../storage/adapters/EntityWriter.js'
 import { ThreadLedgerWriter } from '../../storage/adapters/ThreadLedgerWriter.js'
+import { refreshCacheAfterSourceChange } from '../../cache/index.js'
 
 /**
  * 吃书 retcon（spec §9）：显式改定稿，commit `retcon(N): 原因`，设定/条目同步，留痕可查。
@@ -39,7 +40,9 @@ export async function retcon(ctx, { chapterNum, 原因, characterUpdates = [], t
     const rel = [...new Set(written)].map((f) => path.relative(repoPath, f))
     await git.add(rel)
     const commitHash = await git.commit(`retcon(${chapterNum}): ${原因}`)
-    return { ok: true, commitHash, message: `已吃书并留痕：retcon(${chapterNum}): ${原因}` }
+    // 角色/条目源已改,缓存同步刷,否则 threads/entities 陈旧
+    const cacheRefresh = await refreshCacheAfterSourceChange(ctx)
+    return { ok: true, commitHash, cacheRefresh, message: `已吃书并留痕：retcon(${chapterNum}): ${原因}` }
   } catch (err) {
     try {
       await git.restore(['定稿/', '大纲/'])

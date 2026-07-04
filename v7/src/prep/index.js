@@ -94,7 +94,7 @@ export async function prepareChapterMaterials(ctx, { chapterNum }) {
       '',
       反和解 ? `## 反和解规则\n${反和解}` : '## 反和解规则\n（无）',
       '',
-      '## 反复读清单\n（M2 暂空，跨章高频意象统计随 M3+ 体检补）',
+      '## 反复读清单\n（暂空，跨章高频意象统计随 M5.5 体检补）',
       '',
     ]
     const content = parts.join('\n')

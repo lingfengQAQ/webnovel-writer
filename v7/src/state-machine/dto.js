@@ -7,7 +7,7 @@ import { assembleBookStatus } from '../prep/book-status.js'
  * 产物回流由 M3 落盘（M4 不碰文件）。每个 DTO 标注 `期望产物` 告诉 M4 该产出什么。
  * @param {{repoPath, cache}} ctx
  * @param {number} 序
- * @param {object} base 路由已知信息（failures / 卷 / nextChapter）
+ * @param {object} base 路由已知信息（failures / manualEdits / 现存与从哪继续 / 卷 / nextChapter）
  */
 export async function buildDto(ctx, 序, base = {}) {
   switch (序) {
@@ -22,6 +22,20 @@ export async function buildDto(ctx, 序, base = {}) {
         state: 'create-book',
         缺: await whatsMissing(ctx),
         期望产物: '问答生成 book.yaml + 总纲 + 第一卷卷纲（由 M3 落盘 + 登记 books.jsonl）',
+      }
+    case 2:
+      return {
+        state: 'relink-manual-edits',
+        变更文件: base.manualEdits || [],
+        补登命令: 'relink --message=<一句话说明>',
+        期望产物: '向作者出示变更清单问「补登吗」，确认后运行补登命令（fix(手改) 入档并刷新缓存）；不补登则按作者指示处理',
+      }
+    case 3:
+      return {
+        state: 'resume',
+        工作区现存: base.现存 || [],
+        从哪继续: base.从哪继续 || '',
+        期望产物: '按「从哪继续」回到写章流程对应步骤（spec §10 续跑映射）',
       }
     case 4: {
       const status = await assembleBookStatus(ctx)

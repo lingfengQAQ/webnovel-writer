@@ -1,5 +1,6 @@
 import { createGit } from '../../finalize/git.js'
 import { checkGitHealth } from '../git-health.js'
+import { refreshCacheAfterSourceChange } from '../../cache/index.js'
 
 /**
  * 回到第 N 章（spec §9，git 回滚包装）。执行前展示影响范围 + 作者确认；
@@ -54,12 +55,17 @@ export async function gotoChapter(ctx, { chapterNum, confirm = false } = {}) {
   try {
     await git.createBackupRef(ref) // 备份当前 HEAD
     await git.resetHard(hash)
+    // 工作树已回旧 commit,缓存必须同步刷,否则 next 拿旧 maxChapter 起草错章号
+    const cacheRefresh = await refreshCacheAfterSourceChange(ctx)
+    const cacheNote =
+      cacheRefresh && !cacheRefresh.ok ? '（缓存刷新失败，已作废旧缓存，下次命令自动重建）' : ''
     return {
       ok: true,
       reverted: true,
       backupRef: `refs/${ref}`,
+      cacheRefresh,
       gitHealth,
-      message: `已回到第 ${chapterNum} 章。原状态已备份到 refs/${ref}，如需找回：git reset --hard refs/${ref}`,
+      message: `已回到第 ${chapterNum} 章。原状态已备份到 refs/${ref}，如需找回：git reset --hard refs/${ref}${cacheNote}`,
     }
   } catch (err) {
     return { ok: false, error: `回退失败：${err.message}`, gitHealth }

@@ -35,6 +35,14 @@ export async function run(args, options, ctx) {
   if (/[\\/]/.test(dirName) || dirName.includes('..') || dirName.startsWith('.')) {
     return { ok: false, error: `书目录名不合法：${dirName}（须是工作目录下的一层普通目录名）` }
   }
+  // Windows 目录名雷区前置拦截,不让 mkdir 深处报天书;书名本身不用改,指路 --dir
+  const hasControlChar = [...dirName].some((c) => c.charCodeAt(0) < 32)
+  if (/[<>:"|?*]/.test(dirName) || hasControlChar || /[. ]$/.test(dirName)) {
+    return {
+      ok: false,
+      error: `书名「${dirName}」含文件系统不支持的字符（< > : " | ? * 控制符，或结尾的点/空格），不能直接当目录名。书名不用改，加 --dir=<目录名> 指定一个不含这些字符的目录即可。`,
+    }
+  }
   const repoPath = path.join(ctx.workdir, dirName)
   try {
     await fs.access(path.join(repoPath, 'book.yaml'))
