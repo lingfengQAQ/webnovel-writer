@@ -1,8 +1,8 @@
 # Webnovel Writer 多宿主与多智能体适配 Spec
 
-> 日期：2026-06-05（v3 修订：2026-06-11；v3.1：同日，hook 语义 deny → ask，依据 #113；v3.2：2026-06-12，按 PRD 1.0 §10.2 修订——安装器重写为工作目录布局、AGENTS.md 公约数层、SessionStart 注入、模板条件块、放弃插件市场；v3.3：2026-06-26，RFC 后续决策——两审模式、审稿清单定义；v3.4：2026-06-27，RFC 深度核验——事实审查增 D3 未登记伏笔检测 category；v3.5：2026-07-02，设计边界回顾——§6.1 目录图角色清单同步两审实态）
-> 状态：草案 v3.5
-> 基线：**v7 story repo**（`story-repo-spec-2026-06-10.md` 0.8）+ **PRD**（`v7-prd.md` 1.0，产品法律文本，冲突时以 PRD 为准）。v2 的基线是 v6.1.0 Python runtime，该架构已被 v7 推翻；本版继承 v2 的元层纪律，重写全部基座层。
+> 日期：2026-06-05（v3 修订：2026-06-11；v3.1：同日，hook 语义 deny → ask，依据 #113；v3.2：2026-06-12，按 PRD 1.0 §10.2 修订——安装器重写为工作目录布局、AGENTS.md 公约数层、SessionStart 注入、模板条件块、放弃插件市场；v3.3：2026-06-26，RFC 后续决策——两审模式、审稿清单定义；v3.4：2026-06-27，RFC 深度核验——事实审查增 D3 未登记伏笔检测 category；v3.5：2026-07-02，设计边界回顾——§6.1 目录图角色清单同步两审实态；v3.6：2026-07-03，M1-M5 review S-2——§7.1 registry 示例补 M5 实态字段 detect_bin/install_dir 等，照抄示例不再被 validator 打回）
+> 状态：草案 v3.6
+> 基线：**v7 story repo**（`story-repo-spec-2026-06-10.md` 0.10）+ **PRD**（`v7-prd.md` 1.1，产品法律文本，冲突时以 PRD 为准）。v2 的基线是 v6.1.0 Python runtime，该架构已被 v7 推翻；本版继承 v2 的元层纪律，重写全部基座层。
 > 来源：v2（基于 PR #110 review 重写）+ 2026-06 多平台调研核验 + Trellis 多宿主机制调研（2026-06-11）+ PRD 1.0 + RFC 后续决策（2026-06-26）+ RFC 深度核验（2026-06-27）
 > 定位：把 v7 的格式层（story repo）原封不动地暴露给多个 agent 宿主——格式平台无关，本 spec 只管入口怎么落、角色怎么生成、安装怎么零门槛、支持等级怎么诚实。
 
@@ -236,14 +236,22 @@ node scripts/build-host-shells.mjs --check     # drift check，CI 必跑
 {
   "schema_version": "webnovel-host-registry/v2",
   "hosts": {
-    "claude-code": { "tier": 1, "verified": "亲测", "smoke": "node scripts/smoke.mjs --host claude-code" },
-    "codex":       { "tier": 1, "verified": "亲测", "smoke": "node scripts/smoke.mjs --host codex" },
-    "gemini-cli":  { "tier": 2, "verified": "社区反馈" },
-    "cursor":      { "tier": 2, "verified": "社区反馈" },
+    "claude-code": { "tier": 1, "verified": "亲测", "agentCapable": true, "hasHooks": true,
+                     "detect_bin": "claude", "install_dir": ".claude",
+                     "smoke": "node scripts/smoke.mjs --host claude-code" },
+    "codex":       { "tier": 1, "verified": "亲测", "agentCapable": true, "hasHooks": false,
+                     "detect_bin": "codex", "install_dir": ".codex",
+                     "smoke": "node scripts/smoke.mjs --host codex" },
+    "gemini-cli":  { "tier": 2, "verified": "社区反馈", "agentCapable": true, "hasHooks": false,
+                     "detect_bin": "gemini", "install_dir": ".gemini" },
+    "cursor":      { "tier": 2, "verified": "社区反馈", "agentCapable": true, "hasHooks": false,
+                     "detect_bin": "cursor-agent", "install_dir": ".cursor" },
     "_default":    { "tier": 3, "verified": "标准 SKILL.md 理论可用" }
   }
 }
 ```
+
+除 `_default` 外每个宿主必填 `detect_bin`（安装器 PATH 探测名）与 `install_dir`（平台壳落点，validator 强制）；`agentCapable`（两审能否走独立 subagent）与 `hasHooks`（有无 SessionStart 注入）驱动模板条件块（§6.2）。
 
 - **一级**（Claude Code + Codex）：维护者亲测，发布前必须过 smoke。
 - **二级**（Gemini CLI / Cursor）：社区反馈确认，README 如实标注。
