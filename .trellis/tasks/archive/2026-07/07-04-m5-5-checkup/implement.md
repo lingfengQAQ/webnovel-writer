@@ -50,7 +50,7 @@
   - v7-prd.md 1.1 → 1.2：§4 #2 验收用词同步替换
   - v7-implementation-plan.md §M5.5 出口达成标注
   - 追加：cache-design §1.5 补"基线段与近段重合只落基线行"写入约定；backend/database-guidelines 增 2.5（派生统计确定性）、backend/quality-guidelines 增 2.4（机检候选通道语义）
-- [ ] P4.4 commit + push，CI 双平台绿
+- [x] P4.4 commit + push，CI 双平台绿——run 28704414272 六 job 全绿（2026-07-04）
 
 ## 风险与回滚点
 
