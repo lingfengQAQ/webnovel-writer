@@ -174,6 +174,7 @@ M1 defer 的指纹提取与 M2 D2 决策推迟的统计项在此收口——此�
 - 批量审稿、作者敲定后逐章按序定稿、整批回滚（"回到第 N 章"复用 M3）
 - **架构实施**（§1.5 原则）：叠加视图通过 Storage Adapter 组装，状态机只管编排
 - **出口**：PRD §4 #15 验收——自动模式端到端 + 注入错误的恢复演练（批内污染不出批次）
+  （出口达成 2026-07-05：staging 批次模块（真源唯一读写点）+ 批次六命令 stage-chapter/batch-status/finalize-batch/batch-reject/batch-restage/batch-discard；备料/审稿输入/机检三消费点叠加，批内依赖可用、删缓存重建输出不变；停止四件套逐章判早停 + 批次质检三判据；污染传播三态 + finalize-batch 入口硬校验"全待审收"；序 3/序 6 dto 批次感知；SKILL「自动模式（连写）」段 + 壳重渲染 drift 绿。实现口径两处偏离原计划并已回填法律文本："整批不要"= batch-discard 删工作区（非"回到第 N 章"，goto 只管已定稿回退）；叠加视图=staging 只读模块直读工作区文件（不经 Storage Adapter、不碰缓存）。任务：`.trellis/tasks/07-04-m6-auto-mode/`，spec 0.12 决策 36-37）
 
 ### M7 导出 + /migrate + beta 入口
 
