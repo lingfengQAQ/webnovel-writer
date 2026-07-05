@@ -39,8 +39,8 @@ export async function persistDraftOutline(ctx, { 细纲 }) {
   }
 }
 
-/** 书仓库指路 AGENTS.md（spec §2.1 建书时自动生成）。内容内嵌：运行时 vendored 副本不带 templates/ */
-function bookAgentsMd(书名) {
+/** 书仓库指路 AGENTS.md（spec §2.1 建书时自动生成；migrate 建仓复用）。内容内嵌：运行时 vendored 副本不带 templates/ */
+export function bookAgentsMd(书名) {
   return [
     '# webnovel-writer 书仓库',
     '',

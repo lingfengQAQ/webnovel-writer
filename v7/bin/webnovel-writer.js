@@ -66,6 +66,7 @@ if (!command || command === '--help') {
   console.log('  list-books                               书单（登记缺失自动扫描重建）')
   console.log('  switch-book <书名>                       换书：改「当前」标记')
   console.log('  session-context                          会话上下文注入文本（hook 与入口同源）')
+  console.log('  migrate <v6项目路径> [--dir=<目录名>]     v6 书项目一次性迁移成 v7 书仓库（源只读，报告落工作区）')
   console.log('')
   console.log('状态机 / 例外流程（M3）：')
   console.log('  next [--json]                           继续：状态机判定下一步（--json 出完整 DTO）')
