@@ -1,6 +1,8 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { assembleBookStatus } from '../prep/book-status.js'
+import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
+import { readBatch, judgeStop, 章状态 } from '../staging/index.js'
 
 /**
  * 为 AI 态组装上下文 DTO（M3 只备料，不调 AI）。M4 吃 DTO 出结构化产物，
@@ -35,6 +37,7 @@ export async function buildDto(ctx, 序, base = {}) {
         state: 'resume',
         工作区现存: base.现存 || [],
         从哪继续: base.从哪继续 || '',
+        ...(await batchDetail(ctx, base)),
         期望产物: '按「从哪继续」回到写章流程对应步骤（spec §10 续跑映射）',
       }
     case 4: {
@@ -49,15 +52,49 @@ export async function buildDto(ctx, 序, base = {}) {
     }
     case 6: {
       const status = await assembleBookStatus(ctx)
+      const config = await new BookConfigReader(ctx.repoPath).read()
+      const 自动确认细纲 = !!(config.ok && config.data.自动确认细纲)
       return {
         state: 'draft-outline',
         nextChapter: base.nextChapter,
         全书近况: status.ok ? status.markdown : '',
-        期望产物: '工作区/细纲.md（含本章定位声明 + 本章要写到的事 + 备选，由 M3 落盘）；卷近尾声时提案可含收卷提议（依据卷纲进度与卷规模参考值，作者确认后定稿写入 收卷: 是）',
+        自动确认细纲,
+        期望产物: 自动确认细纲
+          ? '工作区/细纲.md（含本章定位声明 + 本章要写到的事 + 备选，由 M3 落盘）；自动确认细纲已开：提案直接 persist-outline 生效，不再问作者；卷近尾声时提案可含收卷提议'
+          : '工作区/细纲.md（含本章定位声明 + 本章要写到的事 + 备选，由 M3 落盘）；卷近尾声时提案可含收卷提议（依据卷纲进度与卷规模参考值，作者确认后定稿写入 收卷: 是）',
       }
     }
     default:
       return { state: base.state || 'unknown' }
+  }
+}
+
+// 序 3 的待定稿批次明细（无批次时不加字段）
+async function batchDetail(ctx, base) {
+  if (!(base.现存 || []).includes('待定稿/')) return {}
+  const batch = await readBatch(ctx.repoPath)
+  if (!batch.exists) return {}
+  const 打回 = batch.章列表.filter((r) => r.状态 === 章状态.打回).map((r) => r.章号)
+  const 受影响 = batch.章列表.filter((r) => r.状态 === 章状态.受影响).map((r) => r.章号)
+  const 停止 = await judgeStop(ctx, batch)
+  let 建议
+  if (打回.length) {
+    建议 = `重写打回章（第 ${打回.join('、')} 章）：走写章流程后 stage-chapter 覆盖`
+  } else if (受影响.length) {
+    建议 = `重审受影响章（第 ${受影响.join('、')} 章）：重跑两审 save-review 后 batch-restage`
+  } else if (停止.stop) {
+    建议 = '批次已停：batch-status 呈报作者批量过稿，裁决后 finalize-batch'
+  } else {
+    建议 = `继续批内下一章（第 ${batch.章列表[batch.章列表.length - 1].章号 + 1} 章）`
+  }
+  return {
+    批次: {
+      起章: batch.起章,
+      章数: batch.章列表.length,
+      章: batch.章列表.map((r) => ({ 章号: r.章号, 标题: r.标题, 状态: r.状态 })),
+      停止,
+      建议,
+    },
   }
 }
 

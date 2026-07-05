@@ -36,7 +36,18 @@ SessionStart 已注入「当前在写哪本 / 共几本 / 全书近况入口」�
    兼容模式——按 `事实审查`、`编辑审` 两份任务书顺序自审，`mode` 填 `degraded`。
 {{/unless}}
    两份报告合成 `{"事实审查","编辑审","mode","待确认新专名","章摘要"}`，运行 `{{cmd}} save-review <章号> --file=<json路径>`；审稿单落 `工作区/审稿.md`，交作者：接受 / 改完接受 / 打回。
-4. 定稿：作者敲定后组定稿包（`frontMatter`、`body`、`summary`、`threadUpdates`、`characterUpdates`、`rosterUpserts`、`timelineRows`、`secretWrites`、`commitLines`、`workspaceFiles`——本章用过的工作区文件全列进 `workspaceFiles`），运行 `{{cmd}} finalize <章号> --payload=<json路径>`，再运行 `{{cmd}} next --json` 进下一步。
+4. 定稿：作者敲定后组定稿包（`frontMatter`、`body`、`summary`、`threadCreates`（本章「埋下/设下/开启」的新条目，`{id, 短题, frontMatter, body}`）、`threadUpdates`、`characterUpdates`、`rosterUpserts`、`timelineRows`、`secretWrites`、`commitLines`、`workspaceFiles`——本章用过的工作区文件全列进 `workspaceFiles`），运行 `{{cmd}} finalize <章号> --payload=<json路径>`，再运行 `{{cmd}} next --json` 进下一步。
+
+## 自动模式（连写，作者说「连写/挂机写一批」才进入）
+1. 批内每章走写章流程 1-3；`next --json` 返回 `dto.自动确认细纲 = true` 时细纲提案直接 `{{cmd}} persist-outline` 生效，不问作者。
+2. 每章两审 save-review 后不 finalize：组同样的定稿包运行 `{{cmd}} stage-chapter <章号> --payload=<json路径>` 暂存（批内材料/审稿/机检自动叠加「定稿+批内预登记」，后章可用前章事实）。
+3. 按 stage-chapter 返回走：停止条件未命中 → `{{cmd}} next --json` 继续下一章；命中（写满/收卷/卷纲耗尽/连续无条目变动/批次质检不过线）→ 停止连写。
+4. 停止后运行 `{{cmd}} batch-status` 向作者呈报，按作者裁决执行：
+   - 整批接受 → `{{cmd}} finalize-batch`（逐章按序原子入档；`--until=<章号>` 只转正前段）。
+   - 改某几章 → 改完重跑两审与 `{{cmd}} stage-chapter` 覆盖，再 finalize-batch。
+   - 从第 K 章起打回 → `{{cmd}} batch-reject <K>`；重写 K 后 stage-chapter 覆盖，受影响章重跑两审后 `{{cmd}} batch-restage <章号>`，全部回「待审收」再 finalize-batch。
+5. 作者明确说整批不要 → 再次确认后 `{{cmd}} batch-discard`（未入档，定稿零变化）。
+6. 中断后作者说「继续」：`next` 序 3 返回 `dto.批次`，按其 `建议` 字段续跑。
 
 ## 例外流程
 - 回到第N章：`{{cmd}} goto-chapter <章号>`，先备份再回滚。
