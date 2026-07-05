@@ -1,0 +1,112 @@
+{
+  "project": {
+    "title": "剑碎虚空",
+    "genre": "xianxia",
+    "author": "测试作者"
+  },
+  "progress": {
+    "current_chapter": 3,
+    "total_words": 9000,
+    "last_updated": "2026-05-01"
+  },
+  "protagonist_state": {
+    "name": "陆沉",
+    "power": { "realm": "练气", "layer": "五层", "bottleneck": "灵脉淤塞" },
+    "location": { "current": "青云宗外门", "last_chapter": 3 },
+    "golden_finger": { "name": "残剑剑灵", "level": 2, "skills": ["剑意共鸣"] },
+    "attributes": {}
+  },
+  "entities_v3": {
+    "角色": {
+      "luchen": {
+        "name": "陆沉",
+        "canonical_name": "陆沉",
+        "tier": "核心",
+        "aliases": ["小师弟"],
+        "is_protagonist": true,
+        "first_appearance": 1,
+        "last_appearance": 3,
+        "current": { "realm": "练气五层", "location": "青云宗外门" },
+        "desc": "背负残剑的外门弟子"
+      },
+      "susu": {
+        "name": "苏素",
+        "canonical_name": "苏素",
+        "tier": "支线",
+        "aliases": ["苏师姐"],
+        "first_appearance": 2,
+        "last_appearance": 3,
+        "current": { "realm": "筑基一层", "location": "藏经阁" }
+      }
+    },
+    "势力": {
+      "qingyun": {
+        "name": "青云宗",
+        "canonical_name": "青云宗",
+        "tier": "核心",
+        "aliases": ["宗门"],
+        "first_appearance": 1,
+        "last_appearance": 3,
+        "current": { "status": "东域二流宗门" }
+      }
+    }
+  },
+  "alias_index": {
+    "小师弟": [{ "id": "luchen", "type": "角色" }],
+    "苏师姐": [{ "id": "susu", "type": "角色" }],
+    "宗门": [{ "id": "qingyun", "type": "势力" }]
+  },
+  "state_changes": [
+    { "entity_id": "luchen", "field": "realm", "old": "练气四层", "new": "练气五层", "reason": "剑灵反哺", "chapter": 3 }
+  ],
+  "structured_relationships": [
+    { "from": "luchen", "to": "susu", "type": "师姐弟", "description": "藏经阁初见，苏素予其残卷", "chapter": 2 }
+  ],
+  "plot_threads": {
+    "active_threads": [
+      { "name": "外门大比", "status": "active", "note": "三个月后外门大比，陆沉需入前十" }
+    ],
+    "foreshadowing": [
+      {
+        "content": "残剑剑柄内藏半张古图",
+        "status": "active",
+        "tier": "core",
+        "planted_chapter": 1,
+        "target_chapter": 30,
+        "urgency": 80
+      },
+      {
+        "content": "苏素识破陆沉伪装的灵根",
+        "status": "已解决",
+        "tier": "支线",
+        "chapter": 2,
+        "resolved": 3
+      }
+    ]
+  },
+  "chapter_meta": {
+    "0001": {
+      "hook": { "type": "危机钩", "content": "长老逼问残剑来历", "strength": "strong" }
+    },
+    "3": {
+      "hook": { "type": "悬念钩", "content": "古图一角浮现", "strength": "medium" }
+    }
+  },
+  "strand_tracker": {
+    "last_quest_chapter": 3,
+    "current_dominant": "quest",
+    "history": [
+      { "chapter": 1, "strand": "quest" },
+      { "chapter": 2, "strand": "constellation" },
+      { "chapter": 3, "strand": "quest" }
+    ]
+  },
+  "world_settings": {
+    "power_system": ["练气", "筑基", "金丹"],
+    "factions": [{ "name": "青云宗", "type": "宗门" }],
+    "locations": ["青云宗", "藏经阁"]
+  },
+  "review_checkpoints": [],
+  "disambiguation_warnings": [],
+  "disambiguation_pending": []
+}

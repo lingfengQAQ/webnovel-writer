@@ -1,0 +1,16 @@
+{
+  "character_state": [
+    { "id": "cs-1", "layer": "semantic", "category": "character_state", "subject": "陆沉", "field": "灵根", "value": "伪装成废灵根", "status": "active", "source_chapter": 1, "evidence": ["第1章盘问一节"], "updated_at": "2026-05-01" }
+  ],
+  "story_facts": [
+    { "id": "sf-1", "layer": "semantic", "category": "story_facts", "subject": "残剑", "field": "来历", "value": "陆家灭门夜唯一遗物", "status": "active", "source_chapter": 1, "evidence": [], "updated_at": "2026-05-01" }
+  ],
+  "world_rules": [],
+  "timeline": [],
+  "open_loops": [
+    { "id": "ol-1", "layer": "episodic", "category": "open_loops", "subject": "盯梢", "field": "", "value": "三长老着人盯梢陆沉，尚未收线", "status": "active", "source_chapter": 1, "evidence": [], "updated_at": "2026-05-01" }
+  ],
+  "reader_promises": [],
+  "relationships": [],
+  "meta": { "version": 1, "last_updated": "2026-05-01", "total_items": 3 }
+}

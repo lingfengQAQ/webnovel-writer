@@ -1,0 +1,28 @@
+{
+  "project_info": {
+    "title": "潮汐之下",
+    "genre": "urban",
+    "author": "测试作者二"
+  },
+  "progress": { "current_chapter": 2, "total_words": 5200, "last_updated": "2026-06-20" },
+  "protagonist_state": {
+    "name": "江遥",
+    "power": { "realm": "", "layer": "" },
+    "location": { "current": "滨海市", "last_chapter": 2 },
+    "golden_finger": { "name": "潮汐直觉", "level": 1 }
+  },
+  "strand_tracker": { "current_dominant": "quest", "history": [{ "chapter": 1, "strand": "quest" }] },
+  "world_settings": { "power_system": [], "factions": [], "locations": ["滨海市"] },
+  "plot_threads": {
+    "active_threads": [],
+    "foreshadowing": [
+      { "content": "父亲沉船事故的保险单编号异常", "status": "未回收", "tier": "核心", "planted_chapter": 1, "target_chapter": 40 }
+    ]
+  },
+  "relationships": {},
+  "review_checkpoints": [],
+  "disambiguation_warnings": [],
+  "disambiguation_pending": [],
+  "_migrated_to_sqlite": true,
+  "_migration_timestamp": "2026-06-01T00:00:00"
+}

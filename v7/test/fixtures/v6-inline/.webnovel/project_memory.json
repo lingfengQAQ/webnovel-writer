@@ -1,0 +1,6 @@
+{
+  "patterns": [
+    { "pattern_type": "style", "description": "战斗段落短句连用，收在动作定格", "source_chapter": 3, "learned_at": "2026-05-01", "updated_at": "2026-05-01" },
+    { "pattern_type": "taboo", "description": "避免'顿时''瞬间'连用刷时间感", "source_chapter": 2, "learned_at": "2026-05-01", "updated_at": "2026-05-01" }
+  ]
+}

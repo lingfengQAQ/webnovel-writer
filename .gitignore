@@ -15,6 +15,9 @@ venv/
 
 # Local runtime data
 .webnovel/
+# v6 迁移测试 fixture 例外（目录先重包含，内容才可重包含）
+!v7/test/fixtures/*/.webnovel/
+!v7/test/fixtures/*/.webnovel/**
 
 # OS / editor
 .DS_Store
