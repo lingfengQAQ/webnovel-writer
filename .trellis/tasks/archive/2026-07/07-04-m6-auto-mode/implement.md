@@ -51,7 +51,7 @@
 - [x] P4.3 开关矩阵测试（AC5）：四组合行为断言（全关=现状包含在既有回归；单开各一用例；全开=AC1 引用）——`test/state-machine/auto-mode.test.js`
 - [x] P4.4 全量 `node --test`（Windows 本机）407 绿 + AC1-AC8 复核、prd.md 打勾（AC8 CI 部分待 push）
 - [x] P4.5 spec 回填（Phase 3.3）：story-repo-spec 0.12（§3 `连写无条目变动上限` 键；§8.1 实现口径——批次三件套/三态/污染传播/stage 前置审稿单/质检判据；§8 第 8 步条目创建；决策 36-37）；multi-agent spec v3.7（SKILL 自动模式段 + §5.1 批次不开第二条写入路径）；v7-implementation-plan §M6 出口标注（含两处实现偏离记录）；backend database-guidelines 增 §7 工作区暂存数据四条
-- [ ] P4.6 commit + push，CI 双平台绿；prd.md AC8 回填 run 号
+- [x] P4.6 commit + push（28acfd2 代码 / f514a31 spec 回填），CI 双平台绿（run 28732587038 六 job）；prd.md AC8 已回填 run 号
 
 提交：`feat(v7): M6 P4——状态机批次感知、SKILL 自动模式段与开关矩阵` + `docs(v7): M6 spec 回填`
 

@@ -71,7 +71,7 @@
 - [x] AC5 开关矩阵（PRD #14 验收）：`自动确认细纲`×连写四组合——全关时既有全量测试零改动仍绿（407 绿，router.test.js 未动）；单开细纲自动确认序 6 dto 有标志；连写走批次通道（序 3 批次明细）；全开端到端即 AC1（`test/state-machine/auto-mode.test.js`）
 - [x] AC6 整批丢弃：`batch-discard` 后定稿零变化、工作区干净、`next` 回序 6（`test/staging/finalize-batch.test.js` AC6）
 - [x] AC7 缓存不变量：批次进行中删 `.cache` 全量重建，备料/审稿输入/机检叠加输出不变（`test/staging/overlay.test.js`）；`fingerprints` 与 meta `imagery_top` 全程无 staged 数据（finalize-batch.test.js AC1 内断言）
-- [ ] AC8 全量测试绿 + CI 双平台绿（drift check 含 SKILL 壳重渲染）——本机 407 绿 + drift check 绿；CI run 号待 push 回填
+- [x] AC8 全量测试绿 + CI 双平台绿（drift check 含 SKILL 壳重渲染）——本机 407 绿 + drift check 绿；CI run 28732587038 六 job 全绿（ubuntu/windows × node 22.13.0/lts + install-e2e 双平台）
 
 ## Out of Scope
 
