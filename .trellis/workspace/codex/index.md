@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-0.md`
-- **Total Sessions**: 2
-- **Last Active**: 2026-07-03
+- **Total Sessions**: 3
+- **Last Active**: 2026-07-05
 <!-- @@@/auto:current-status -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 3 | 2026-07-05 | M6 P4 收口：状态机批次感知、SKILL 自动模式段、spec 0.12 回填与全 AC 达成 | `28acfd2`, `f514a31` | `v7` |
 | 2 | 2026-07-03 | v7 边界收口：九项代码修复全落地（A格式/B判定/C缺料/D审计） | `d593f0e`, `b0ddc9c`, `54f59d4` | `v7` |
 | 1 | 2026-07-02 | 边界回顾文档回填：spec 0.9 / PRD 1.1 / multi-agent v3.5 / 实施计划 0.3 | `871c448` | `v7` |
 <!-- @@@/auto:session-history -->
