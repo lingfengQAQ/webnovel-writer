@@ -73,6 +73,7 @@ if (!command || command === '--help') {
   console.log('  impact <关键词>                          影响分析：哪些章建立在这个事实上（已发布/未发布）')
   console.log('  goto-chapter <章号> [--confirm]          回到第N章（先备份再回滚，作者不碰 git）')
   console.log('  relink --message=<一句话说明>            补登手改：定稿/大纲 未登记改动入档（fix(手改)）')
+  console.log('  export <章号> | --range=a-b | --all      干净导出：去 front matter 纯正文 → 工作区/导出/')
   console.log('')
   console.log('自动模式（M6，连写按批次定稿）：')
   console.log('  stage-chapter <章号> --payload=<json>    暂存一章进待定稿批次（不 commit），返回停止判定')
