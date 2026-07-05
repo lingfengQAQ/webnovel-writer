@@ -37,7 +37,7 @@
   - AC5 报告三节断言；目标目录已存在拒绝；books.jsonl 登记断言
 - [x] P3.5 全量 `node --test`（Windows 本机）429 绿 + AC1-AC7 复核、prd.md 打勾（AC6 CI 部分待 push）
 - [x] P3.6 spec 回填（Phase 3.3）：story-repo-spec 0.13（§4.7 导出实现口径；§12 迁移实现注记——双形态/待校对前缀/整体回退/如实丢弃；决策 38）；实施计划 §M7 出口达成标注（代码面达成即进入 beta）；backend error-handling §3.6 目录级原子边界
-- [ ] P3.7 commit + push，CI 双平台绿；prd.md AC6 回填 run 号
+- [x] P3.7 commit + push（5ba85a5/8615d91/e14545a/557bd42），CI 双平台绿（run 28736268905 六 job）；prd.md AC6 已回填 run 号
 
 提交：`feat(v7): M7 P3——migrate 物化/命令/指引` + `docs(v7): M7 spec 回填`
 

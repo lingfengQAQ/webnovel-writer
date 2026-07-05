@@ -39,7 +39,7 @@ v7 最后一个功能里程碑（实施计划 §M7）：作者发布用的**干�
 - [x] AC3 不丢字演练：fixture 内每一段 v6 文本在 v7 产物或待校对区可 grep 到（14 类文本逐映射行抽样，`e2e.test.js`）
 - [x] AC4 回退演练：注入中途失败 → 目标目录无半成品残留、源 v6 项目未被改动（逐文件指纹断言）；残留临时目录幂等清扫
 - [x] AC5 迁移报告内容断言：计数、待校对清单、如实丢弃三节齐；books.jsonl 登记 + 设当前书；目标目录已存在拒绝
-- [ ] AC6 全量测试绿 + CI 双平台绿（Windows 中文路径含 v6 fixture）——本机 429 绿 + drift 绿；CI run 号待 push 回填
+- [x] AC6 全量测试绿 + CI 双平台绿（Windows 中文路径含 v6 fixture）——本机 429 绿 + drift 绿；CI run 28736268905 六 job 全绿（ubuntu/windows × node 22.13.0/lts + install-e2e 双平台）
 - [x] AC7 迁移指引文档存在且步骤与实现一致（`v7/docs/migration-guide.md`：卸载市场版→npx init→migrate→校对，命令名/参数与实现逐一核对）
 
 ## Out of Scope
