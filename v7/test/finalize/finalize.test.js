@@ -246,6 +246,33 @@ test('finalizeChapter threadCreates 断电回滚：新条目文件不残留', as
   }
 })
 
+// R4/C1/C2：commit 之后的清理问题绝不能反转定稿结果，也绝不能清到工作区外。
+test('finalizeChapter 清理遇目录与可疑路径：仍 ok、目录被清、逃逸被拒', async () => {
+  const { ctx, cleanup } = await gitBookCtx()
+  try {
+    // 评审报告是目录（旧实现 fs.rm 无 recursive 会抛 → 谎报"已回滚"）
+    const reportDir = path.join(ctx.repoPath, '工作区', '评审报告')
+    await fs.mkdir(reportDir, { recursive: true })
+    await fs.writeFile(path.join(reportDir, '事实审查.md'), '通过', 'utf8')
+
+    const p = payload()
+    p.workspaceFiles = ['细纲.md', '评审报告', '工作区/审稿.md', '../定稿/正文/0001-开局.md']
+    const r = await finalizeChapter(ctx, p)
+    assert.equal(r.ok, true, r.error)
+    assert.ok(r.commitHash, '应正常入档')
+
+    await assert.rejects(() => fs.access(reportDir), undefined, '目录应被递归清掉')
+    // `..` 逃逸目标（已定稿正文）必须原样存活，且有 warning 提示
+    await fs.access(path.join(ctx.repoPath, '定稿/正文/0001-开局.md'))
+    assert.ok(
+      (r.warnings || []).some((w) => w.includes('可疑路径')),
+      `应有可疑路径告警：${JSON.stringify(r.warnings)}`
+    )
+  } finally {
+    await cleanup()
+  }
+})
+
 test('gitBookCtx 仓库形态对齐真实建书：工作区不入跟踪、quotepath 关闭', async () => {
   const { ctx, cleanup } = await gitBookCtx()
   try {

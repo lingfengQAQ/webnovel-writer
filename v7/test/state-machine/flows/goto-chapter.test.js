@@ -72,3 +72,31 @@ test('P1-6：定稿有未登记手改 + confirm → 拒绝 reset（不丢手改�
     await cleanup()
   }
 })
+
+test('R1：有进行中批次 → goto 直接拒绝，批次与定稿都原样', async () => {
+  const { ctx, root, cleanup } = await bookWithChapters()
+  try {
+    const dir = path.join(root, '工作区', '待定稿', '0003-批内章')
+    await fs.mkdir(dir, { recursive: true })
+    await fs.writeFile(
+      path.join(root, '工作区', '待定稿', '批次.json'),
+      JSON.stringify({ 章列表: [{ 章号: 3, 标题: '批内章', 状态: '待审收', 目录: '0003-批内章' }] }),
+      'utf8'
+    )
+
+    const r = await gotoChapter(ctx, { chapterNum: 1, confirm: true })
+    assert.equal(r.ok, false, '批次在场应拒绝回退')
+    assert.match(r.error, /待定稿批次/)
+    assert.match(r.error, /finalize-batch|batch-discard/)
+    // 定稿未被 reset、批次原样
+    await fs.access(path.join(root, '定稿/正文/0002-承.md'))
+    await fs.access(dir)
+
+    // needsConfirm 预览路径同样被拦（不给出误导性的"确认请带 confirm"）
+    const preview = await gotoChapter(ctx, { chapterNum: 1, confirm: false })
+    assert.equal(preview.ok, false)
+    assert.match(preview.error, /待定稿批次/)
+  } finally {
+    await cleanup()
+  }
+})

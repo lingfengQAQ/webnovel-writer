@@ -8,6 +8,7 @@ import { SecretWriter } from '../storage/adapters/SecretWriter.js'
 import { SummaryWriter } from '../storage/adapters/SummaryWriter.js'
 import { createGit } from './git.js'
 import { refreshCacheAfterSourceChange } from '../cache/index.js'
+import { normalizeWorkspaceRel } from '../util/workspace-path.js'
 
 /**
  * 定稿：原子 commit（D3）。写工作树 → git add → commit → 最后清工作区。
@@ -138,12 +139,11 @@ export async function finalizeChapter(ctx, payload, opts = {}) {
     // 重建失败不阻断定稿（已 commit 入档），但不能继续保留旧缓存，否则 next 会读旧章号。
     cacheRefresh = await refreshCacheAfterSourceChange(ctx)
 
-    // 4. 清工作区（必须在 commit 成功之后）
-    for (const wf of workspaceFiles) {
-      await fs.rm(path.join(repoPath, '工作区', wf), { force: true })
-    }
+    // 4. 清工作区（必须在 commit 成功之后；失败只记 warning——
+    //    commit 已经发生，任何清理问题都不得把结果反转成"失败/已回滚"（R4））
+    const warnings = await cleanWorkspaceFiles(repoPath, workspaceFiles)
 
-    return { ok: true, commitHash, cacheRefresh, error: '' }
+    return { ok: true, commitHash, cacheRefresh, warnings, error: '' }
   } catch (err) {
     // commit 前中断：回滚本次 stage/rollback 集合（非整棵 定稿/大纲 子树,避免误伤同子树其他章手改）。
     // 逐文件 restore:新章文件未跟踪会让整条 restore 报错被吞,逐个跑才能精确复原已跟踪文件。
@@ -179,4 +179,25 @@ function buildCommitMessage(chapterNum, title, lines) {
   if (lines.设定) extras.push(`设定: ${lines.设定}`)
   if (extras.length) msg += '\n\n' + extras.join('\n')
   return msg
+}
+
+/**
+ * commit 后的工作区清理：归一路径（剥前缀+拒 `..`，C2/G-4）、目录也能清（recursive），
+ * 任何失败只收 warning 永不抛——本函数在原子点之后运行，不许影响定稿结果。
+ */
+async function cleanWorkspaceFiles(repoPath, workspaceFiles) {
+  const warnings = []
+  for (const wf of workspaceFiles) {
+    const name = normalizeWorkspaceRel(wf)
+    if (!name) {
+      warnings.push(`工作区清理跳过可疑路径「${wf}」（不在工作区内）。`)
+      continue
+    }
+    try {
+      await fs.rm(path.join(repoPath, '工作区', name), { recursive: true, force: true })
+    } catch (err) {
+      warnings.push(`工作区/${name} 清理失败（${err.message}）——本章已入档，稍后手动删除即可。`)
+    }
+  }
+  return warnings
 }

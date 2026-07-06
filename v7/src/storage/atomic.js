@@ -22,7 +22,7 @@ export async function writeAtomicBatch(repoPath, files) {
       const n = counter++
       const tmp = `${full}.wnwtmp.${process.pid}.${n}`
       const backup = `${full}.wnwbackup.${process.pid}.${n}`
-      const plan = { tmp, final: full, backup, existed: false, rel: f.path }
+      const plan = { tmp, final: full, backup, existed: false, renamedIn: false, rel: f.path }
       plans.push(plan)
       await fs.writeFile(tmp, f.content, 'utf8')
 
@@ -38,6 +38,7 @@ export async function writeAtomicBatch(repoPath, files) {
 
     for (const p of plans) {
       await fs.rename(p.tmp, p.final)
+      p.renamedIn = true
     }
     for (const p of plans) {
       if (p.existed) await fs.rm(p.backup, { force: true })
@@ -58,11 +59,13 @@ async function restorePlan(plan) {
     // 尽力回滚
   }
   try {
+    // 只删本次真正写入过 final 的内容；existed=false 且未 renamedIn 时 final 位置
+    // 是从未动过的原文件（写 tmp/备份 rename 先失败的场景），绝不能删（R12）。
+    if (plan.renamedIn) {
+      await fs.rm(plan.final, { force: true })
+    }
     if (plan.existed) {
-      await fs.rm(plan.final, { force: true })
       await fs.rename(plan.backup, plan.final)
-    } else {
-      await fs.rm(plan.final, { force: true })
     }
   } catch {
     // 尽力回滚；调用方会收到原始错误

@@ -14,16 +14,12 @@ export async function run(args, options, ctx) {
   const spec = await readJsonInput(ctx, options.payload ?? options.file, 'payload')
   if (!spec.ok) return { ok: false, error: spec.error }
   const payload = spec.data
-  if (Array.isArray(payload.workspaceFiles)) {
-    payload.workspaceFiles = payload.workspaceFiles.map((f) =>
-      String(f).replace(/^工作区[\\/]/, '')
-    )
-  }
 
   const r = await stageChapter(ctx, { chapterNum, payload })
   if (!r.ok) return { ok: false, error: r.error }
 
   const lines = [`第 ${chapterNum} 章已暂存（批内 ${r.staged} 章，未入档——批量定稿时才 commit）。`]
+  for (const w of r.warnings || []) lines.push(w)
   if (r.停止.stop) {
     lines.push('批次到此为止，转人工：')
     for (const reason of r.停止.reasons) lines.push(`- ${reason}`)

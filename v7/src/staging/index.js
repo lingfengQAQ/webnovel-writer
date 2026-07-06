@@ -4,6 +4,7 @@ import { parseFrontMatter } from '../storage/parsers/front-matter.js'
 import { serializeFrontMatter } from '../storage/serializers/front-matter.js'
 import { parseThreadDeclarations, OPENING_VERBS } from '../util/thread-declarations.js'
 import { sanitizeFileName } from '../util/filename.js'
+import { normalizeWorkspaceRel } from '../util/workspace-path.js'
 import { writeAtomicBatch } from '../storage/atomic.js'
 import { finalizeChapter } from '../finalize/index.js'
 import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
@@ -319,23 +320,35 @@ export async function stageChapter(ctx, { chapterNum, payload }) {
       metaFile(rows),
     ])
 
+    // 批次已落盘；此后的清理失败只记 warning，不得把已成功的暂存反转成失败（E4）
+    const warnings = []
+
     // 覆盖重暂存且标题变了：旧目录成孤儿，写成后清掉
     if (existing && existing.目录 !== dirName) {
-      await fs.rm(path.join(repoPath, BATCH_DIR, existing.目录), { recursive: true, force: true })
+      try {
+        await fs.rm(path.join(repoPath, BATCH_DIR, existing.目录), { recursive: true, force: true })
+      } catch (err) {
+        warnings.push(`旧章目录 ${existing.目录} 清理失败（${err.message}），不影响批次，可手动删除。`)
+      }
     }
 
     // 清本章工作区单章文件（已搬进批次目录；评审报告是本章两审产物一并清）
     const clears = new Set(['细纲.md', '本章写作材料.md', '草稿-A.md', '审稿.md', '评审报告'])
     for (const wf of payload.workspaceFiles || []) {
-      const name = String(wf).replace(/^工作区[\\/]/, '')
-      if (!name.includes('..')) clears.add(name)
+      const name = normalizeWorkspaceRel(wf)
+      if (name) clears.add(name)
+      else warnings.push(`工作区清理跳过可疑路径「${wf}」（不在工作区内）。`)
     }
     for (const wf of clears) {
-      await fs.rm(path.join(repoPath, '工作区', wf), { recursive: true, force: true })
+      try {
+        await fs.rm(path.join(repoPath, '工作区', wf), { recursive: true, force: true })
+      } catch (err) {
+        warnings.push(`工作区/${wf} 清理失败（${err.message}），本章已暂存，稍后手动删除即可。`)
+      }
     }
 
     const 停止 = await judgeStop(ctx, await readBatch(repoPath))
-    return { ok: true, 章号: chapterNum, staged: rows.length, 停止, error: '' }
+    return { ok: true, 章号: chapterNum, staged: rows.length, 停止, warnings, error: '' }
   } catch (err) {
     return { ok: false, error: `暂存第 ${chapterNum} 章失败：${err.message}` }
   }

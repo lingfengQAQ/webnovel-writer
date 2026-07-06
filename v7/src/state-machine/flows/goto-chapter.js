@@ -1,6 +1,7 @@
 import { createGit } from '../../finalize/git.js'
 import { checkGitHealth } from '../git-health.js'
 import { refreshCacheAfterSourceChange } from '../../cache/index.js'
+import { readBatch } from '../../staging/index.js'
 
 /**
  * 回到第 N 章（spec §9，git 回滚包装）。执行前展示影响范围 + 作者确认；
@@ -11,6 +12,18 @@ import { refreshCacheAfterSourceChange } from '../../cache/index.js'
 export async function gotoChapter(ctx, { chapterNum, confirm = false } = {}) {
   if (!Number.isInteger(chapterNum)) return { ok: false, error: '请指定要回到的章号' }
   const git = createGit(ctx.repoPath)
+
+  // R1：批次与回退互斥（spec §8.1「goto 管已定稿、丢弃批次管未定稿，职责不混」在此强制）。
+  // 批次是 gitignore 的工作区文件，reset 动不了它——放行会留下孤儿批次，
+  // 随后 finalize-batch 按原章号转正，定稿区出现静默断档。
+  const batch = await readBatch(ctx.repoPath)
+  if (batch.exists) {
+    const 尾 = batch.章列表[batch.章列表.length - 1].章号
+    return {
+      ok: false,
+      error: `有进行中的待定稿批次（第 ${batch.起章}-${尾} 章），回退会让批次成为孤儿、定稿章号断档。请先处理批次：finalize-batch 批量转正，或 batch-discard 丢弃，再回退。`,
+    }
+  }
 
   // P1-6：先跑 git 健康检查（此前漏跑,与状态机主入口一致）
   const gitHealth = await checkGitHealth(ctx)

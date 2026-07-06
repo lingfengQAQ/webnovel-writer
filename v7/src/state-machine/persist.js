@@ -2,6 +2,8 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { serializeYAML } from '../storage/serializers/yaml-dialect.js'
 import { parseFrontMatter } from '../storage/parsers/front-matter.js'
+import { parseMarkdownTable } from '../storage/parsers/markdown-table.js'
+import { parseBookConfig } from '../storage/parsers/book-config.js'
 import { writeAtomicBatch } from '../storage/atomic.js'
 import { createGit } from '../finalize/git.js'
 import { refreshCacheAfterSourceChange } from '../cache/index.js'
@@ -112,6 +114,25 @@ export async function persistVolumeReview(ctx, { 卷号, 卷摘要, 下卷卷纲
 }
 
 /**
+ * 序0 修复回写的内容校验：按文件类型分派解析器（R3）——
+ * 与 detectors.detectParseFailures 的检测器选型一刀对齐：book.yaml 是纯 YAML、
+ * 名册/时间线是纯表格，用 parseFrontMatter 一刀切会把合法修复拒之门外，书锁死在序 0。
+ */
+function validateRepairContent(file, content) {
+  const rel = String(file).replaceAll('\\', '/')
+  if (rel === 'book.yaml') {
+    const r = parseBookConfig(content)
+    return r.ok ? { ok: true } : { ok: false, error: r.error }
+  }
+  if (rel === '定稿/设定/名册.md' || rel.startsWith('定稿/设定/时间线/')) {
+    const r = parseMarkdownTable(content)
+    return r.ok ? { ok: true } : { ok: false, error: r.error }
+  }
+  const r = parseFrontMatter(content)
+  return r.ok ? { ok: true } : { ok: false, error: r.error }
+}
+
+/**
  * 序0 修复确认 → 写回修复后的源文件。安全网:
  * 只写在 allowedFiles（M3 检测到的失败清单）内的文件;修复内容必须能解析,否则不写。
  */
@@ -120,9 +141,9 @@ export async function persistRepair(ctx, { repairs }, { allowedFiles = [] } = {}
     if (!allowedFiles.includes(r.file)) {
       return { ok: false, written: [], error: `拒绝写入非失败清单文件：${r.file}` }
     }
-    const parsed = parseFrontMatter(r.content)
-    if (!parsed.ok) {
-      return { ok: false, written: [], error: `修复内容仍解析失败（${r.file}）：${parsed.error}` }
+    const check = validateRepairContent(r.file, r.content)
+    if (!check.ok) {
+      return { ok: false, written: [], error: `修复内容仍解析失败（${r.file}）：${check.error}` }
     }
   }
   try {

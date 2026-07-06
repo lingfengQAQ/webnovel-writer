@@ -63,12 +63,26 @@ function serializeValue(value) {
 
   // 字符串：判断是否需要引号
   if (needsQuoting(value)) {
-    // 简单引号转义（双引号内的双引号转义为 \"）
-    const escaped = value.replace(/"/g, '\\"')
-    return `"${escaped}"`
+    return `"${escapeDoubleQuoted(value)}"`
   }
 
   return value
+}
+
+/**
+ * 双引号标量的完整转义：反斜杠必须最先转，随后引号与控制字符——
+ * 漏任何一类都会让写出的 front matter 自己读不回（R8）。
+ */
+function escapeDoubleQuoted(value) {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/\t/g, '\\t')
+    // 其余 C0 控制字符转 \xXX，防不可见字符炸解析
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, (c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, '0')}`)
 }
 
 /**
@@ -77,13 +91,23 @@ function serializeValue(value) {
  * @returns {boolean}
  */
 function needsQuoting(value) {
-  // 纯数字字符串：123 → "123"
-  if (/^\d+$/.test(value)) {
+  // 空串裸写会变 null；前后空格裸写会被裁
+  if (value === '' || value !== value.trim()) {
     return true
   }
 
-  // 浮点数：1.23 → "1.23"
-  if (/^\d+\.\d+$/.test(value)) {
+  // 数字形态全家：整数/浮点/带符号/科学计数（1e3、+5、-2.5E-3）
+  if (/^[+-]?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(value)) {
+    return true
+  }
+
+  // 进制前缀数字：0x1F / 0o17 / 0b101
+  if (/^0[xX][0-9a-fA-F]+$/.test(value) || /^0[oO][0-7]+$/.test(value) || /^0[bB][01]+$/.test(value)) {
+    return true
+  }
+
+  // 特殊浮点字面值：.inf / .nan（含符号与大小写变体）
+  if (/^[+-]?\.(inf|Inf|INF)$/.test(value) || /^\.(nan|NaN|NAN)$/.test(value)) {
     return true
   }
 
@@ -92,8 +116,8 @@ function needsQuoting(value) {
     return true
   }
 
-  // null 字面值：null/Null/NULL → "null"
-  if (/^(null|Null|NULL)$/i.test(value)) {
+  // null 字面值：null/Null/NULL/~ → "null"
+  if (/^(null|Null|NULL|~)$/.test(value)) {
     return true
   }
 
@@ -102,8 +126,13 @@ function needsQuoting(value) {
     return true
   }
 
-  // 以 # 开头（注释）：#comment → "#comment"
-  if (value.startsWith('#')) {
+  // 空格+井号 = 行内注释起点，后半截会被当注释吞掉
+  if (value.includes(' #')) {
+    return true
+  }
+
+  // 起首 YAML 指示符/引号/别名锚点等：[ ] { } * & ! | > @ % ` " ' , 以及 # 与 ? 后随空白
+  if (/^[[\]{}*&!|>@%`"',#]/.test(value) || /^\?(\s|$)/.test(value)) {
     return true
   }
 
@@ -112,8 +141,9 @@ function needsQuoting(value) {
     return true
   }
 
-  // 包含换行符
-  if (value.includes('\n')) {
+  // 包含换行/制表等控制字符
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x1f]/.test(value)) {
     return true
   }
 

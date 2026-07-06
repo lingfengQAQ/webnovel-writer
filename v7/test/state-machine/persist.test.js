@@ -125,3 +125,53 @@ test('persistRepair：修复内容仍解析失败 → ok=false 不写', async ()
     assert.equal(r.ok, false)
   } finally { await cleanup() }
 })
+
+// R3：book.yaml / 名册 / 时间线不是 front matter 文件，校验必须按类型分派，
+// 否则合法修复被「缺少 front matter 分隔符」拒收，书锁死在序 0。
+test('persistRepair：book.yaml 的合法修复被接受（纯 YAML，无 --- 围栏）', async () => {
+  const { ctx, root, cleanup } = await tmpRepo()
+  try {
+    const good = 'spec_version: "7.0"\n书名: 测试书\n类型: 玄幻\n每章目标字数: 3000\n卷规模: 40\n'
+    const r = await persistRepair(
+      ctx,
+      { repairs: [{ file: 'book.yaml', content: good }] },
+      { allowedFiles: ['book.yaml'] }
+    )
+    assert.equal(r.ok, true, r.error)
+    assert.match(await read(root, 'book.yaml'), /书名: 测试书/)
+  } finally { await cleanup() }
+})
+
+test('persistRepair：名册/时间线的合法修复被接受（纯表格）', async () => {
+  const { ctx, root, cleanup } = await tmpRepo()
+  try {
+    const roster = '| 正名 | 别名 | 类型 | 首现章 |\n|---|---|---|---|\n| 林晚 |  | 角色 | 1 |\n'
+    const timeline = '| 章 | 书内时间 | 一句话事件 | 在场 |\n|---|---|---|---|\n| 1 | 春月初一 | 开局 | 林晚 |\n'
+    const r = await persistRepair(
+      ctx,
+      {
+        repairs: [
+          { file: '定稿/设定/名册.md', content: roster },
+          { file: '定稿/设定/时间线/第01卷.md', content: timeline },
+        ],
+      },
+      { allowedFiles: ['定稿/设定/名册.md', '定稿/设定/时间线/第01卷.md'] }
+    )
+    assert.equal(r.ok, true, r.error)
+    assert.match(await read(root, '定稿/设定/名册.md'), /林晚/)
+    assert.match(await read(root, '定稿/设定/时间线/第01卷.md'), /春月初一/)
+  } finally { await cleanup() }
+})
+
+test('persistRepair：名册修复内容仍是坏表格 → ok=false 不写', async () => {
+  const { ctx, cleanup } = await tmpRepo()
+  try {
+    const r = await persistRepair(
+      ctx,
+      { repairs: [{ file: '定稿/设定/名册.md', content: '不是表格的东西\n' }] },
+      { allowedFiles: ['定稿/设定/名册.md'] }
+    )
+    assert.equal(r.ok, false)
+    assert.match(r.error, /名册/)
+  } finally { await cleanup() }
+})
