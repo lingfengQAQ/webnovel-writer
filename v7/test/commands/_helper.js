@@ -73,11 +73,15 @@ export async function tempBookCtx() {
 
 /**
  * 同 tempBookCtx，但额外 git init + 首提交（定稿/git 流程测试用）。
+ * 仓库形态对齐真实建书 persistCreateBook：.gitignore（.cache/、工作区/）+
+ * core.quotepath false + 工作区不入跟踪（G-1：脚手架失真会掩盖 goto/finalize 的真实行为）。
  */
 export async function gitBookCtx() {
   const { ctx, cleanup } = await tempBookCtx()
+  await writeFile(path.join(ctx.repoPath, '.gitignore'), '.cache/\n工作区/\n', 'utf8')
   const git = (args) => execFileAsync('git', args, { cwd: ctx.repoPath })
   await git(['init', '-q'])
+  await git(['config', 'core.quotepath', 'false'])
   await git(['config', 'user.email', 't@example.com'])
   await git(['config', 'user.name', 'test'])
   await git(['add', '-A'])

@@ -245,3 +245,26 @@ test('finalizeChapter threadCreates 断电回滚：新条目文件不残留', as
     await cleanup()
   }
 })
+
+test('gitBookCtx 仓库形态对齐真实建书：工作区不入跟踪、quotepath 关闭', async () => {
+  const { ctx, cleanup } = await gitBookCtx()
+  try {
+    const { stdout: tracked } = await execFileAsync('git', ['ls-files'], {
+      cwd: ctx.repoPath,
+      encoding: 'utf8',
+    })
+    assert.equal(
+      tracked.split('\n').some((f) => f.startsWith('工作区')),
+      false,
+      `工作区被跟踪：${tracked}`
+    )
+    const { stdout: qp } = await execFileAsync('git', ['config', 'core.quotepath'], {
+      cwd: ctx.repoPath,
+      encoding: 'utf8',
+    })
+    assert.equal(qp.trim(), 'false')
+    await fs.access(path.join(ctx.repoPath, '.gitignore'))
+  } finally {
+    await cleanup()
+  }
+})
