@@ -1,6 +1,7 @@
 import { serializeFrontMatter } from '../storage/serializers/front-matter.js'
 import { serializeMarkdownTable } from '../storage/serializers/markdown-table.js'
 import { parseMarkdownTable } from '../storage/parsers/markdown-table.js'
+import { serializeYAML } from '../storage/serializers/yaml-dialect.js'
 import { extractSection } from '../util/markdown.js'
 import { sanitizeFileName } from '../util/filename.js'
 
@@ -38,14 +39,15 @@ export function transformV6(facts) {
   } else if (!GENRE_MAP.get(String(rawGenre).toLowerCase()) && !/^[一-鿿]+$/.test(类型)) {
     待校对.push(`book.yaml：题材「${rawGenre}」没有对应的中文码表，原样保留，请改成中文题材名。`)
   }
-  add('book.yaml', [
-    'spec_version: "7.0"',
-    `书名: ${bookName}`,
-    `类型: ${类型}`,
-    '每章目标字数: 3000',
-    '卷规模: 40',
-    '',
-  ].join('\n'))
+  // book.yaml 走防呆序列化器（R9）：书名以 [ * " - 起首或纯数字时，手写拼接会
+  // 解析失败/类型漂移 → 书内设置回落默认、books.jsonl 扫描重建时该书从书单消失
+  add('book.yaml', serializeYAML({
+    spec_version: '7.0',
+    书名: bookName,
+    类型,
+    每章目标字数: 3000,
+    卷规模: 40,
+  }) + '\n')
 
   // —— 卷号推断：卷内布局优先，详细大纲「### 第N章」次之，兜底 1 ——
   const volumeOf = buildVolumeIndex(facts.outlines)
@@ -84,7 +86,8 @@ export function transformV6(facts) {
   // —— 伏笔条目 ——
   facts.foreshadowing.forEach((fb, i) => {
     const id = `伏笔-${String(i + 1).padStart(3, '0')}`
-    const 短题 = sanitizeFileName(fb.content).slice(0, 9) || '迁移条目'
+    // 按码点切前 9 字（F-4）：UTF-16 码元切会把 emoji/生僻字的代理对切成两半，文件名损坏
+    const 短题 = Array.from(sanitizeFileName(fb.content)).slice(0, 9).join('') || '迁移条目'
     const planted = fb.plantedChapter ?? 1
     const fm = {
       强度: TIER_TO_STRENGTH.get(fb.tier) || '中',
@@ -109,6 +112,28 @@ export function transformV6(facts) {
   counts.伏笔 = facts.foreshadowing.length
 
   // —— 名册 + 角色卡 ——
+  // 一对多别名降级（R10）：v6 允许同一别名指向多实体做消歧，v7 别名唯一（缓存重建
+  // 撞冲突会整体回滚）。首实体保留该别名，其余剥离进待校对文件，迁移不再硬失败。
+  const aliasOwner = new Map()
+  const 别名歧义 = []
+  for (const e of facts.entities) {
+    e.aliases = e.aliases.filter((a) => {
+      const owner = aliasOwner.get(a)
+      if (owner === undefined) {
+        aliasOwner.set(a, e.name)
+        return true
+      }
+      if (owner !== e.name) 别名歧义.push({ 别名: a, 保留: owner, 剥离: e.name })
+      return false
+    })
+  }
+  if (别名歧义.length) {
+    add('定稿/设定/迁移待校对-别名歧义.md',
+      `# 迁移待校对：一对多别名\n\n> v6 里同一别名指向多个实体（用于消歧），v7 要求别名唯一。\n> 迁移时按首个实体保留，其余实体的该别名已剥离——请校对归属：\n> 该给谁就在名册里给谁补上，或换一个不冲突的别名。校对完删掉本文件。\n\n` +
+      别名歧义.map((x) => `- 「${x.别名}」保留给【${x.保留}】，已从【${x.剥离}】剥离`).join('\n') + '\n')
+    待校对.push('定稿/设定/迁移待校对-别名歧义.md：v6 一对多别名按首实体保留，请校对归属。')
+  }
+
   const nameOf = new Map(facts.entities.map((e) => [e.id, e.name]))
   if (facts.entities.length) {
     add('定稿/设定/名册.md', serializeMarkdownTable(

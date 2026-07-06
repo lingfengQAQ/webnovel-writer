@@ -81,3 +81,22 @@ test('upsertRosterRow 已存在则更新该行（不重复）', async () => {
   }
 })
 
+test('A11：upsert 更新行时保留作者手加的额外列', async () => {
+  const 带备注名册 =
+    '| 正名 | 别名 | 类型 | 首现章 | 备注 |\n|---|---|---|---|---|\n| 林晚 | 晚晚 | 角色 | 1 | 主角，勿动 |\n'
+  const root = await makeRepo({ '定稿/设定/名册.md': 带备注名册 })
+  try {
+    const r = await new EntityWriter(root).upsertRosterRow({
+      正名: '林晚',
+      别名: '晚晚, 小晚',
+      类型: '角色',
+      首现章: 1,
+    })
+    assert.equal(r.ok, true)
+    const c = await read(root, '定稿/设定/名册.md')
+    assert.match(c, /\| 林晚 \| 晚晚, 小晚 \| 角色 \| 1 \| 主角，勿动 \|/, `备注列不能丢：\n${c}`)
+  } finally {
+    await cleanup(root)
+  }
+})
+

@@ -8,6 +8,7 @@ import { promisify } from 'node:util'
 import { migrateV6 } from '../../src/migrate/index.js'
 import { run as migrateCmd } from '../../src/commands/migrate.js'
 import { CacheManager } from '../../src/cache/index.js'
+import { EntityReader } from '../../src/storage/adapters/EntityReader.js'
 import { determineNextState } from '../../src/state-machine/index.js'
 import { loadBooks } from '../../src/session/index.js'
 import { tempV6, tempV6Sqlite, inlineFixture } from './_v6.js'
@@ -82,6 +83,12 @@ test('AC2 端到端（inline）：迁移落位、git 单 commit、缓存可删�
       assert.equal(rows[0].n, 3)
       // AC7 口径顺检：迁移不产生指纹（体检才产）
       assert.equal((await cache.query('SELECT COUNT(*) AS n FROM fingerprints', []))[0].n, 0)
+
+      // R5：名册写中文类型（作者域），入缓存归一成英文 machine 值——迁移书的角色不再隐身
+      const types = (await cache.query('SELECT DISTINCT type FROM entities', [])).map((r) => r.type).sort()
+      assert.deepEqual(types, ['character', 'organization'], `entities.type 应全为英文机器值：${types}`)
+      const chars = await new EntityReader(repo, cache).listCharacters()
+      assert.ok(chars.some((c) => c.id === '陆沉'), `list-characters 应含陆沉：${JSON.stringify(chars)}`)
 
       // next 直接进正常流程：序 6 起草第 4 章
       const next = await determineNextState({ repoPath: repo, cache, workdir: ctx.workdir })

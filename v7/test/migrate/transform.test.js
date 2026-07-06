@@ -125,3 +125,62 @@ test('sqlite → db 实体/摘要/追读力进产物；genre 未知码原样并�
     await cleanup()
   }
 })
+
+// —— 批 2 回归：R9 / R10 / F-4（transformV6 纯函数，用最小 facts 直测）——
+import { parseBookConfig } from '../../src/storage/parsers/book-config.js'
+
+function minimalFacts(over = {}) {
+  return {
+    project: { title: '测', genre: '玄幻' },
+    chapters: [], summaries: new Map(), dbSummaries: new Map(),
+    foreshadowing: [], entities: [], relationships: [],
+    protagonistState: {}, outlines: { master: '', volumes: [] },
+    settingFiles: [], scratchpad: {}, patterns: [], stateChanges: [],
+    chaseDebtCount: 0, warnings: [], activeThreads: [],
+    readingPower: new Map(), chapterMeta: new Map(), form: 'inline',
+    ...over,
+  }
+}
+
+test('R9：危险书名走防呆序列化器——[ * 起首与纯数字书名都能读回', () => {
+  for (const title of ['[快穿]反派', '*追读', '"引号"书', '- 开局', '12345', 'true']) {
+    const plan = transformV6(minimalFacts({ project: { title, genre: '玄幻' } }))
+    const cfg = parseBookConfig(fileOf(plan, 'book.yaml'))
+    assert.equal(cfg.ok, true, `书名「${title}」的 book.yaml 解析失败：${cfg.error}`)
+    assert.equal(cfg.data.书名, title, `书名「${title}」往返漂移成 ${JSON.stringify(cfg.data.书名)}`)
+  }
+})
+
+test('R10：一对多别名降级——首实体保留、其余剥离进待校对，迁移不再硬失败', () => {
+  const plan = transformV6(minimalFacts({
+    entities: [
+      { id: 'a', name: '张三', type: '角色', aliases: ['小明', '老张'], current: {}, firstAppearance: 1 },
+      { id: 'b', name: '李四', type: '角色', aliases: ['小明'], current: {}, firstAppearance: 2 },
+    ],
+  }))
+  const roster = fileOf(plan, '定稿/设定/名册.md')
+  assert.match(roster, /\| 张三 \| 小明, 老张 \| 角色 \| 1 \|/)
+  assert.match(roster, /\| 李四 \|  \| 角色 \| 2 \|/)
+  const 歧义 = fileOf(plan, '定稿/设定/迁移待校对-别名歧义.md')
+  assert.match(歧义, /「小明」保留给【张三】，已从【李四】剥离/)
+  assert.ok(plan.report.待校对.some((s) => s.includes('别名歧义')), JSON.stringify(plan.report.待校对))
+})
+
+test('R10：同实体重复别名静默去重，不进歧义清单', () => {
+  const plan = transformV6(minimalFacts({
+    entities: [{ id: 'a', name: '张三', type: '角色', aliases: ['小明', '小明'], current: {}, firstAppearance: 1 }],
+  }))
+  const roster = fileOf(plan, '定稿/设定/名册.md')
+  assert.match(roster, /\| 张三 \| 小明 \| 角色 \| 1 \|/)
+  assert.ok(!plan.files.some((f) => f.path.includes('别名歧义')))
+})
+
+test('F-4：伏笔短题按码点截断，文件名不含半个代理对', () => {
+  const plan = transformV6(minimalFacts({
+    foreshadowing: [{ content: '💠🀄𝌆一二三四五六七八九十', tier: '核心', status: '未回收', plantedChapter: 1 }],
+  }))
+  const fb = plan.files.find((f) => f.path.startsWith('大纲/伏笔/伏笔-001'))
+  assert.ok(fb, '伏笔文件应存在')
+  const lone = fb.path.match(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/)
+  assert.equal(lone, null, `文件名含孤代理：${JSON.stringify(fb.path)}`)
+})

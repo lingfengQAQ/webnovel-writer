@@ -102,6 +102,64 @@ test('别名冲突 → 报 error 并拒绝重建（AC10）', async () => {
   }
 })
 
+// —— 批 2 回归：R5 / R6 / A13 ——
+
+test('R5：名册中文类型入库归一成英文机器值（角色→character、地点→location）', async () => {
+  const root = await makeRepo({
+    'book.yaml': 'spec_version: "7.0"\n书名: 测试\n',
+    '定稿/设定/名册.md':
+      '| 正名 | 别名 | 类型 | 首现章 |\n|---|---|---|---|\n| 江遥 | 小江 | 角色 | 1 |\n| 滨海市 |  | 地点 | 1 |\n| 旧英文 |  | character | 1 |\n',
+  })
+  const cache = new CacheManager(path.join(root, '.cache', 'index.db'))
+  try {
+    await cache.ensureReady(root)
+    const typeOf = async (id) =>
+      (await cache.query('SELECT type FROM entities WHERE id = ?', [id]))[0]?.type
+    assert.equal(await typeOf('江遥'), 'character')
+    assert.equal(await typeOf('滨海市'), 'location')
+    assert.equal(await typeOf('旧英文'), 'character', '英文旧值恒等收纳，存量书无损')
+  } finally {
+    await cache.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('R6：全角逗号/顿号分隔的别名全部入 entity_aliases 可解析', async () => {
+  const root = await makeRepo({
+    'book.yaml': 'spec_version: "7.0"\n书名: 测试\n',
+    '定稿/设定/名册.md':
+      '| 正名 | 别名 | 类型 | 首现章 |\n|---|---|---|---|\n| 林晚 | 阿晚，晚儿、小晚 | 角色 | 1 |\n',
+  })
+  const cache = new CacheManager(path.join(root, '.cache', 'index.db'))
+  try {
+    await cache.ensureReady(root)
+    const aliases = (await cache.query('SELECT alias FROM entity_aliases ORDER BY alias', []))
+      .map((r) => r.alias)
+    assert.deepEqual(aliases, ['小晚', '晚儿', '阿晚'].sort(), `全角分隔的三个别名都应入库：${aliases}`)
+  } finally {
+    await cache.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('A13：名册缺「别名」列 → 实体照常入库，不炸整次重建', async () => {
+  const root = await makeRepo({
+    'book.yaml': 'spec_version: "7.0"\n书名: 测试\n',
+    '定稿/正文/0001-开局.md': '---\n章号: 1\n标题: 开局\n卷: 1\n字数: 100\n章定位: 推进\n---\n正文。',
+    '定稿/设定/名册.md': '| 正名 | 类型 | 首现章 |\n|---|---|---|\n| 林晚 | 角色 | 1 |\n',
+  })
+  const cache = new CacheManager(path.join(root, '.cache', 'index.db'))
+  try {
+    const result = await cache.rebuildFromSource(root)
+    assert.equal(result.ok, true, `缺别名列不应回滚重建：${JSON.stringify(result.errors)}`)
+    assert.equal((await cache.query('SELECT COUNT(*) AS n FROM entities', []))[0].n, 1)
+    assert.equal((await cache.query('SELECT COUNT(*) AS n FROM chapters', []))[0].n, 1, '章不应被连坐')
+  } finally {
+    await cache.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('别名冲突 → ROLLBACK 不留半库（P1-1：已写 chapters 也回滚）', async () => {
   const root = await makeRepo({
     'book.yaml': 'spec_version: "7.0"\n书名: 测试\n',

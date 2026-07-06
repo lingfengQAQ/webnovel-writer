@@ -55,8 +55,9 @@ export class EntityWriter {
         // 文件不存在，用默认表头
       }
 
+      // 合并而非整行替换：作者手加的额外列（如 备注）随替换丢失是静默数据丢（A11）
       const idx = rows.findIndex((r) => r.正名 === row.正名)
-      if (idx >= 0) rows[idx] = row
+      if (idx >= 0) rows[idx] = { ...rows[idx], ...row }
       else rows.push(row)
 
       await fs.mkdir(path.dirname(filePath), { recursive: true })

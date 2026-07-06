@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { parseFrontMatter } from '../parsers/front-matter.js'
 import { parseMarkdownTable } from '../parsers/markdown-table.js'
+import { splitAliases } from '../../util/aliases.js'
 
 /**
  * EntityReader：读取角色卡、解析别名。
@@ -82,9 +83,9 @@ export class EntityReader {
         return { ok: false, canonicalName: null, error: '名册解析失败' }
       }
 
-      // 查找别名
+      // 查找别名（splitAliases 单源：与缓存重建/叠加视图同刀，全角分隔与缺列都兜住）
       for (const row of table.rows) {
-        const aliases = row.别名.split(',').map((a) => a.trim())
+        const aliases = splitAliases(row.别名)
         if (aliases.includes(alias)) {
           return { ok: true, canonicalName: row.正名, error: '' }
         }

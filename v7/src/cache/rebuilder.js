@@ -2,6 +2,8 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { parseFrontMatter } from '../storage/parsers/front-matter.js'
 import { parseMarkdownTable } from '../storage/parsers/markdown-table.js'
+import { splitAliases } from '../util/aliases.js'
+import { normalizeEntityType } from '../util/entity-type.js'
 
 /**
  * 全量重建缓存（BEGIN → DELETE 六表 → 扫描源文件 INSERT → COMMIT，中途失败 ROLLBACK 不留半库）。
@@ -254,12 +256,13 @@ async function scanEntities(repoPath, db) {
 
     for (const row of table.rows) {
       const entityId = row.正名
-      const type = row.类型 || 'character'
+      // 名册类型列是作者域中文（G-3），入库统一翻成机器域英文——查询链全按英文过滤
+      const type = normalizeEntityType(row.类型)
 
       entityStmt.run(entityId, type, null, null, null, null, parseInt(row.首现章 || '1', 10), rosterPath)
 
-      // 处理别名
-      const aliases = row.别名.split(',').map((a) => a.trim()).filter((a) => a)
+      // 处理别名（splitAliases 单源：全角逗号/顿号同刀，缺列不炸）
+      const aliases = splitAliases(row.别名)
       for (const alias of aliases) {
         if (aliasMap.has(alias)) {
           return {
@@ -286,10 +289,12 @@ async function scanCharacters(repoPath, db) {
 
   // upsert：角色卡可能不在名册里（名册非强制全覆盖），只 UPDATE 会丢这些角色。
   // 在名册里则补全字段并把 file_path 指向更详细的角色卡。
+  // type 也随 upsert 归一成 'character'（G-2：有角色卡即角色，名册行类型写错不至于让角色隐身）。
   const upsertStmt = db.prepare(`
     INSERT INTO entities (id, type, status, location, realm, possessions, last_changed_chapter, file_path)
     VALUES (?, 'character', ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
+      type = 'character',
       status = excluded.status,
       location = excluded.location,
       realm = excluded.realm,

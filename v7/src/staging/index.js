@@ -5,6 +5,7 @@ import { serializeFrontMatter } from '../storage/serializers/front-matter.js'
 import { parseThreadDeclarations, OPENING_VERBS } from '../util/thread-declarations.js'
 import { sanitizeFileName } from '../util/filename.js'
 import { normalizeWorkspaceRel } from '../util/workspace-path.js'
+import { splitAliases } from '../util/aliases.js'
 import { writeAtomicBatch } from '../storage/atomic.js'
 import { finalizeChapter } from '../finalize/index.js'
 import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
@@ -214,12 +215,6 @@ export async function stagedFacts(repoPath, opts = {}) {
     for (const s of payload.secretWrites || []) facts.secretWrites.push(s)
   }
   return facts
-}
-
-function splitAliases(v) {
-  if (Array.isArray(v)) return v.filter(Boolean).map((s) => String(s).trim()).filter(Boolean)
-  if (typeof v === 'string') return v.split(/[,，、]/).map((s) => s.trim()).filter(Boolean)
-  return []
 }
 
 /**
