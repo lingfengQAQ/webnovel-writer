@@ -2,6 +2,7 @@ import { createGit } from '../../finalize/git.js'
 import { checkGitHealth } from '../git-health.js'
 import { refreshCacheAfterSourceChange } from '../../cache/index.js'
 import { readBatch } from '../../staging/index.js'
+import { isTrackedSourcePath } from '../detectors.js'
 
 /**
  * 回到第 N 章（spec §9，git 回滚包装）。执行前展示影响范围 + 作者确认；
@@ -47,19 +48,17 @@ export async function gotoChapter(ctx, { chapterNum, confirm = false } = {}) {
   }
 
   // P1-6：reset --hard 前检查脏树。rescue ref 只存 HEAD 指针不含工作树,
-  // 定稿/大纲 若有未提交手改会被静默抹掉且无法找回 → 拒绝,要作者先 commit/stash。
+  // 跟踪面（定稿/大纲/文风/book.yaml，与序2 同源判定）若有未提交手改会被静默抹掉
+  // 且无法找回 → 拒绝,要作者先补登（relink）再回退。
   const status = await git.status()
   const dirtyScoped = status
     .split('\n')
     .filter(Boolean)
-    .some((l) => {
-      const p = l.slice(3)
-      return p.startsWith('定稿') || p.startsWith('大纲')
-    })
+    .some((l) => l.slice(3).split(' -> ').some(isTrackedSourcePath))
   if (dirtyScoped) {
     return {
       ok: false,
-      error: '定稿/大纲 有未登记的手改，reset --hard 会丢弃且无法从救援 ref 找回。请先 commit 或 stash 再回退。',
+      error: '定稿/大纲/文风/book.yaml 有未登记的手改，reset --hard 会丢弃且无法从救援 ref 找回。先跑 relink 补登（或作者自行处理）再回退。',
       gitHealth,
     }
   }

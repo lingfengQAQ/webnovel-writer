@@ -38,7 +38,10 @@ export class TimelineWriter {
         // 文件不存在，用默认表头
       }
 
-      rows.push(row)
+      // 同章已有行则替换（A12：定稿失败重试/goto 后重定稿同章，时间线不得叠重复行）
+      const idx = rows.findIndex((r) => String(r.章) === String(row.章))
+      if (idx >= 0) rows[idx] = { ...rows[idx], ...row }
+      else rows.push(row)
       await fs.writeFile(filePath, serializeMarkdownTable(headers, rows), 'utf8')
       return { ok: true, filePath, error: '' }
     } catch (err) {

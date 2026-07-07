@@ -14,7 +14,12 @@ let rebuildCounter = 0
 export async function refreshCacheAfterSourceChange(ctx) {
   if (!ctx.cache) return null
   try {
-    return await ctx.cache.rebuildFromSource(ctx.repoPath, { keepExistingOnFailure: false })
+    // 源变了 → 体检产出的 imagery_top 已陈旧，一并作废（宁可无提醒不给过时提醒），
+    // 下次体检重算；裸重建（删缓存/ensureReady）不经此路径，imagery_top 照常保留。
+    return await ctx.cache.rebuildFromSource(ctx.repoPath, {
+      keepExistingOnFailure: false,
+      preserveDerived: false,
+    })
   } catch (err) {
     return { ok: false, warnings: [], errors: [`缓存刷新失败：${err.message}`] }
   }
@@ -81,11 +86,12 @@ export class CacheManager {
   /**
    * 全量重建缓存。
    * @param {string} repoPath
-   * @param {{keepExistingOnFailure?: boolean}} [opts]
+   * @param {{keepExistingOnFailure?: boolean, preserveDerived?: boolean}} [opts]
+   *   preserveDerived=false 时不保留体检派生物（imagery_top）——改源刷新用，防陈旧提醒
    * @returns {Promise<{ok: boolean, warnings: string[], errors: string[]}>}
    */
   async rebuildFromSource(repoPath, opts = {}) {
-    const { keepExistingOnFailure = true } = opts
+    const { keepExistingOnFailure = true, preserveDerived = true } = opts
     let hadExisting = false
     try {
       await fs.access(this.dbPath)
@@ -109,6 +115,9 @@ export class CacheManager {
       } catch {
         preservedMeta = []
       }
+    }
+    if (!preserveDerived) {
+      preservedMeta = preservedMeta.filter((row) => row.key !== 'imagery_top')
     }
 
     // 关闭现有连接

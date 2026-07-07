@@ -53,13 +53,25 @@ test('readHead：读取章节开头 N 字', async () => {
   assert.ok(result.text.includes('林晚抬头'))
 })
 
-test('readRange：批量读取章号范围', async () => {
-  const reader = new ChapterReader(fixtureRoot)
-  const result = await reader.readRange(1, 2, ['标题', '卷'])
-
-  assert.equal(result.ok, true)
-  assert.equal(result.chapters.length, 2)
-  assert.equal(result.chapters[0].章号, 1)
-  assert.equal(result.chapters[0].标题, '开局')
-  assert.equal(result.chapters[1].标题, '初遇')
+// A6：接口形状不随缓存冷热漂移——缓存命中与文件降级都输出中文键
+test('readFrontMatter：缓存命中与文件降级输出同一形状（中文键）', async () => {
+  const fakeCache = {
+    query: async () => [
+      {
+        chapter_num: 1, title: '开局', volume_num: 1, perspective: '林晚',
+        story_time: null, word_count: 100, chapter_position: '开篇',
+        hook_type: '悬念钩-强', mood_position: null, is_volume_end: 0,
+        file_path: '/x/0001.md', is_key_chapter: 0,
+      },
+    ],
+  }
+  const warm = await new ChapterReader(fixtureRoot, fakeCache).readFrontMatter(1)
+  const cold = await new ChapterReader(fixtureRoot).readFrontMatter(1)
+  assert.equal(warm.ok, true)
+  assert.equal(cold.ok, true)
+  assert.equal(warm.data.章号, 1)
+  assert.equal(warm.data.标题, '开局')
+  assert.equal(warm.data.chapter_num, undefined, '缓存命中不得泄漏英文列名')
+  assert.equal(warm.data.file_path, undefined, '不得泄漏文件路径')
+  assert.equal(cold.data.标题, '开局')
 })

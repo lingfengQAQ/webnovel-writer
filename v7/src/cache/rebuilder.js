@@ -28,13 +28,13 @@ export async function rebuildCache(repoPath, db) {
     db.exec('DELETE FROM fingerprints')
 
     // 2. 扫描章节文件 → 填充 chapters 表
-    const chapterMap = await scanChapters(repoPath, db)
+    const chapterMap = await scanChapters(repoPath, db, warnings)
 
     // 3. 扫描条目文件 → 填充 threads 表（验证履历章节）
     await scanThreads(repoPath, db, chapterMap, warnings)
 
     // 4. 扫描信息差 → 填充 secrets 表
-    await scanSecrets(repoPath, db)
+    await scanSecrets(repoPath, db, warnings)
 
     // 5. 解析名册 → 填充 entities + entity_aliases 表（验证别名唯一性）
     const aliasCheck = await scanEntities(repoPath, db)
@@ -46,7 +46,7 @@ export async function rebuildCache(repoPath, db) {
     }
 
     // 6. 扫描角色卡 → 填充 entities 表
-    await scanCharacters(repoPath, db)
+    await scanCharacters(repoPath, db, warnings)
 
     // 7. fingerprints 由体检按需重算（M5.5），重建不填
 
@@ -65,57 +65,71 @@ export async function rebuildCache(repoPath, db) {
 
 /**
  * 扫描章节文件，填充 chapters 表。
+ * 错误边界（B1/B-S）：解析失败 = 跳过 + warning；读文件/主键冲突 = 硬错冒泡触发 ROLLBACK
+ * ——过宽的 try/catch 会让最新章从缓存静默消失，next 读偏小的 MAX(chapter_num) 重抄本章。
  * @returns {Promise<Map<number, string>>} 章号 → 文件路径映射
  */
-async function scanChapters(repoPath, db) {
+async function scanChapters(repoPath, db, warnings) {
   const chapterDir = path.join(repoPath, '定稿', '正文')
   const chapterMap = new Map()
 
+  let files
   try {
-    const files = await fs.readdir(chapterDir)
-    const insertStmt = db.prepare(`
-      INSERT INTO chapters (chapter_num, title, volume_num, perspective, story_time, word_count, chapter_position, hook_type, mood_position, is_volume_end, file_path, is_key_chapter)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `)
-
-    for (const file of files) {
-      if (!file.endsWith('.md')) continue
-
-      const filePath = path.join(chapterDir, file)
-      const content = await fs.readFile(filePath, 'utf8')
-      const parsed = parseFrontMatter(content)
-
-      if (parsed.ok) {
-        const fm = parsed.data
-        const chapterNum = fm.章号 || parseInt(file.match(/\d+/)?.[0] || '0', 10)
-
-        insertStmt.run(
-          chapterNum,
-          fm.标题 || '未命名',
-          fm.卷 || 1,
-          fm.视角 || null,
-          fm.书内时间 || null,
-          fm.字数 || 0,
-          fm.章定位 || '推进',
-          fm.钩子 || null,
-          fm.情绪定位 || null,
-          fm.收卷 === '是' || fm.收卷 === true ? 1 : 0,
-          filePath,
-          fm.是否关键章 ? 1 : 0
-        )
-
-        chapterMap.set(chapterNum, filePath)
-      }
-    }
+    files = await fs.readdir(chapterDir)
   } catch (err) {
-    // 目录不存在，跳过
+    if (err.code === 'ENOENT') return chapterMap // 目录不存在（新书），跳过
+    throw err
+  }
+
+  const insertStmt = db.prepare(`
+    INSERT INTO chapters (chapter_num, title, volume_num, perspective, story_time, word_count, chapter_position, hook_type, mood_position, is_volume_end, file_path, is_key_chapter)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+
+  for (const file of files) {
+    if (!file.endsWith('.md')) continue
+
+    const filePath = path.join(chapterDir, file)
+    const content = await fs.readFile(filePath, 'utf8')
+    const parsed = parseFrontMatter(content)
+
+    if (!parsed.ok) {
+      warnings.push(`章文件 定稿/正文/${file} 解析失败，未入缓存：${parsed.error}`)
+      continue
+    }
+    const fm = parsed.data
+    const chapterNum = fm.章号 || parseInt(file.match(/\d+/)?.[0] || '0', 10)
+
+    if (chapterMap.has(chapterNum)) {
+      throw new Error(
+        `第 ${chapterNum} 章有重复档案：${path.basename(chapterMap.get(chapterNum))} 与 ${file} 同章号，请先处理再重建缓存`
+      )
+    }
+
+    insertStmt.run(
+      chapterNum,
+      fm.标题 || '未命名',
+      fm.卷 || 1,
+      fm.视角 || null,
+      fm.书内时间 || null,
+      fm.字数 || 0,
+      fm.章定位 || '推进',
+      fm.钩子 || null,
+      fm.情绪定位 || null,
+      fm.收卷 === '是' || fm.收卷 === true ? 1 : 0,
+      filePath,
+      fm.是否关键章 ? 1 : 0
+    )
+
+    chapterMap.set(chapterNum, filePath)
   }
 
   return chapterMap
 }
 
 /**
- * 扫描条目文件，填充 threads 表。
+ * 扫描条目文件，填充 threads 表。错误边界同 scanChapters（B1/B2）：
+ * 解析失败 = warning；重号（含卷复盘绕过 createThread 写出的撞号文件）= 硬错冒泡。
  */
 async function scanThreads(repoPath, db, chapterMap, warnings) {
   const types = [
@@ -129,49 +143,63 @@ async function scanThreads(repoPath, db, chapterMap, warnings) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
 
+  const seen = new Map()
   for (const { dir, type } of types) {
     const threadDir = path.join(repoPath, '大纲', dir)
 
+    let files
     try {
-      const files = await fs.readdir(threadDir)
+      files = await fs.readdir(threadDir)
+    } catch (err) {
+      if (err.code === 'ENOENT') continue // 该类目录不存在，跳过
+      throw err
+    }
 
-      for (const file of files) {
-        if (!file.endsWith('.md')) continue
+    for (const file of files) {
+      if (!file.endsWith('.md')) continue
 
-        const filePath = path.join(threadDir, file)
-        const content = await fs.readFile(filePath, 'utf8')
-        const parsed = parseFrontMatter(content)
+      const filePath = path.join(threadDir, file)
+      const content = await fs.readFile(filePath, 'utf8')
+      const parsed = parseFrontMatter(content)
 
-        if (parsed.ok) {
-          const fm = parsed.data
-          const id = file.replace('.md', '').split('-').slice(0, 2).join('-') // 伏笔-001
+      if (!parsed.ok) {
+        warnings.push(`条目文件 大纲/${dir}/${file} 解析失败，未入缓存：${parsed.error}`)
+        continue
+      }
+      const fm = parsed.data
+      const stem = file.replace(/\.md$/, '')
+      const id = stem.split('-').slice(0, 2).join('-') // 伏笔-001
+      const shortTitle = stem.split('-').slice(2).join('-') || id
 
-          // 验证履历章节存在性
-          const historySection = extractSection(parsed.body, '履历')
-          if (historySection) {
-            const historyChapters = parseHistoryChapters(historySection)
-            for (const ch of historyChapters) {
-              if (!chapterMap.has(ch)) {
-                warnings.push(`条目 ${id} 履历引用章节 ${ch} 不存在`)
-              }
-            }
+      if (seen.has(id)) {
+        throw new Error(
+          `条目 ${id} 有重复档案：${seen.get(id)} 与 ${file} 同编号，请先处理再重建缓存`
+        )
+      }
+      seen.set(id, file)
+
+      // 验证履历章节存在性
+      const historySection = extractSection(parsed.body, '履历')
+      if (historySection) {
+        const historyChapters = parseHistoryChapters(historySection)
+        for (const ch of historyChapters) {
+          if (!chapterMap.has(ch)) {
+            warnings.push(`条目 ${id} 履历引用章节 ${ch} 不存在`)
           }
-
-          insertStmt.run(
-            id,
-            type,
-            id, // short_title 简化为 id
-            fm.强度 || '中',
-            fm.状态 || '进行',
-            fm.开启章 || 1,
-            fm.预计收尾 || null,
-            fm.最后推进章 || fm.开启章 || 1,
-            filePath
-          )
         }
       }
-    } catch (err) {
-      // 目录不存在，跳过
+
+      insertStmt.run(
+        id,
+        type,
+        shortTitle,
+        fm.强度 || '中',
+        fm.状态 || '进行',
+        fm.开启章 || 1,
+        fm.预计收尾 || null,
+        fm.最后推进章 || fm.开启章 || 1,
+        filePath
+      )
     }
   }
 }
@@ -179,7 +207,7 @@ async function scanThreads(repoPath, db, chapterMap, warnings) {
 /**
  * 扫描信息差，填充 secrets 表。
  */
-async function scanSecrets(repoPath, db) {
+async function scanSecrets(repoPath, db, warnings) {
   const secretDir = path.join(repoPath, '定稿', '设定', '信息差')
 
   const insertStmt = db.prepare(`
@@ -187,35 +215,39 @@ async function scanSecrets(repoPath, db) {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `)
 
+  let files
   try {
-    const files = await fs.readdir(secretDir)
-
-    for (const file of files) {
-      if (!file.endsWith('.md')) continue
-
-      const filePath = path.join(secretDir, file)
-      const content = await fs.readFile(filePath, 'utf8')
-      const parsed = parseFrontMatter(content)
-
-      if (parsed.ok) {
-        const fm = parsed.data
-        const stem = file.replace('.md', '')
-        const id = stem.split('-').slice(0, 2).join('-')
-        const shortTitle = stem.split('-').slice(2).join('-') || id // 信息差-021-灭门真凶 → 灭门真凶
-
-        insertStmt.run(
-          id,
-          shortTitle,
-          JSON.stringify(fm.知情人 || []),
-          fm.读者已知 ? 1 : 0,
-          fm.登记章 || 1,
-          JSON.stringify(fm.关键词 || []),
-          filePath
-        )
-      }
-    }
+    files = await fs.readdir(secretDir)
   } catch (err) {
-    // 目录不存在，跳过
+    if (err.code === 'ENOENT') return // 目录不存在，跳过
+    throw err
+  }
+
+  for (const file of files) {
+    if (!file.endsWith('.md')) continue
+
+    const filePath = path.join(secretDir, file)
+    const content = await fs.readFile(filePath, 'utf8')
+    const parsed = parseFrontMatter(content)
+
+    if (!parsed.ok) {
+      warnings.push(`信息差文件 定稿/设定/信息差/${file} 解析失败，未入缓存：${parsed.error}`)
+      continue
+    }
+    const fm = parsed.data
+    const stem = file.replace('.md', '')
+    const id = stem.split('-').slice(0, 2).join('-')
+    const shortTitle = stem.split('-').slice(2).join('-') || id // 信息差-021-灭门真凶 → 灭门真凶
+
+    insertStmt.run(
+      id,
+      shortTitle,
+      JSON.stringify(fm.知情人 || []),
+      fm.读者已知 ? 1 : 0,
+      fm.登记章 || 1,
+      JSON.stringify(fm.关键词 || []),
+      filePath
+    )
   }
 }
 
@@ -284,7 +316,7 @@ async function scanEntities(repoPath, db) {
 /**
  * 扫描角色卡，填充 entities 表。
  */
-async function scanCharacters(repoPath, db) {
+async function scanCharacters(repoPath, db, warnings) {
   const charDir = path.join(repoPath, '定稿', '设定', '角色')
 
   // upsert：角色卡可能不在名册里（名册非强制全覆盖），只 UPDATE 会丢这些角色。
@@ -303,32 +335,36 @@ async function scanCharacters(repoPath, db) {
       file_path = excluded.file_path
   `)
 
+  let files
   try {
-    const files = await fs.readdir(charDir)
-
-    for (const file of files) {
-      if (!file.endsWith('.md')) continue
-
-      const name = file.replace('.md', '')
-      const filePath = path.join(charDir, file)
-      const content = await fs.readFile(filePath, 'utf8')
-      const parsed = parseFrontMatter(content)
-
-      if (parsed.ok) {
-        const fm = parsed.data
-        upsertStmt.run(
-          name,
-          fm.状态 || null,
-          fm.位置 || null,
-          fm.境界 || null,
-          JSON.stringify(fm.持有 || []),
-          fm.最后变更章 || 1,
-          filePath
-        )
-      }
-    }
+    files = await fs.readdir(charDir)
   } catch (err) {
-    // 目录不存在，跳过
+    if (err.code === 'ENOENT') return // 目录不存在，跳过
+    throw err
+  }
+
+  for (const file of files) {
+    if (!file.endsWith('.md')) continue
+
+    const name = file.replace('.md', '')
+    const filePath = path.join(charDir, file)
+    const content = await fs.readFile(filePath, 'utf8')
+    const parsed = parseFrontMatter(content)
+
+    if (!parsed.ok) {
+      warnings.push(`角色卡 定稿/设定/角色/${file} 解析失败，未入缓存：${parsed.error}`)
+      continue
+    }
+    const fm = parsed.data
+    upsertStmt.run(
+      name,
+      fm.状态 || null,
+      fm.位置 || null,
+      fm.境界 || null,
+      JSON.stringify(fm.持有 || []),
+      fm.最后变更章 || 1,
+      filePath
+    )
   }
 }
 

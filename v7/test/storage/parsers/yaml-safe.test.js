@@ -87,8 +87,8 @@ test('容错读取保留未知字段：解析→修改→序列化', async () =>
   // 修改已知字段
   parsed.data.标题 = '新标题'
 
-  // 写回（保留未知字段）
-  const serialized = serializeFrontMatter(parsed.data, parsed.body, parsed.rawYAML)
+  // 写回（未知字段的保留由 data 展开达成——parseFrontMatter 把全部键放进 data）
+  const serialized = serializeFrontMatter(parsed.data, parsed.body)
 
   assert.ok(serialized.includes('自定义字段: 自定义值'), '未知字段应被保留')
   assert.ok(serialized.includes('标题: 新标题'), '已知字段应被更新')

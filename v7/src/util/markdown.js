@@ -22,9 +22,10 @@ export function extractSection(content, title) {
 }
 
 /**
- * 在首个标题含 sectionTitle 的 ## 小节段尾追加一行（段不存在则在文末新建该段）。
+ * 在标题精确等于 sectionTitle 的 ## 小节段尾追加一行（段不存在则在文末新建该段）。
+ * 精确匹配而非子串（A17）：「履历」不得命中「补充履历」段。
  * @param {string} body Markdown 正文
- * @param {string} sectionTitle 小节标题关键词
+ * @param {string} sectionTitle 小节标题（与 `## 标题` 全等比较，两侧空白容忍）
  * @param {string} line 要追加的整行（如 "- 第152章：推进——..."）
  * @returns {string} 追加后的正文
  */
@@ -32,7 +33,7 @@ export function appendUnderSection(body, sectionTitle, line) {
   const lines = body.split('\n')
   let secIdx = -1
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].startsWith('## ') && lines[i].includes(sectionTitle)) {
+    if (lines[i].startsWith('## ') && lines[i].slice(3).trim() === sectionTitle) {
       secIdx = i
       break
     }

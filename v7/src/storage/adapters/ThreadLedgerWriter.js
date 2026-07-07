@@ -96,7 +96,8 @@ export class ThreadLedgerWriter {
     const dir = path.join(this.repoPath, '大纲', type)
     try {
       const files = await fs.readdir(dir)
-      const found = files.find((f) => f.startsWith(threadId))
+      // 有界匹配（A9）：与 createThread 查重同口径，伏笔-1 不得改到 伏笔-10 的文件
+      const found = files.find((f) => f === `${threadId}.md` || f.startsWith(`${threadId}-`))
       return found ? path.join(dir, found) : null
     } catch {
       return null

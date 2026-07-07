@@ -267,3 +267,64 @@ test('命中即停：手改(序2) + 工作区草稿(序3) 同时存在 → 先�
     await cleanup()
   }
 })
+
+// 决策 D6：跟踪面扩为 定稿/大纲/文风/book.yaml——文风铁律/book.yaml 的修复回写
+// 由序 2 补登入档，不再长期漂在未提交区（随后 goto reset 会抹掉）
+test('序2 跟踪面（D3 区）：文风铁律与 book.yaml 手改都被检出待补登', async () => {
+  const { ctx, root, cleanup } = await makeGitBook(
+    healthyBook({ '文风/文风铁律.md': '---\n条数: 1\n---\n- 短句为主。\n' })
+  )
+  try {
+    await fs.writeFile(path.join(root, '文风/文风铁律.md'), '---\n条数: 2\n---\n- 短句为主。\n- 忌堆形容词。\n', 'utf8')
+    const r = await determineNextState(ctx)
+    assert.equal(r.序, 2, JSON.stringify(r))
+    assert.deepEqual(r.dto.变更文件, ['文风/文风铁律.md'])
+
+    await ctx.cache.query('SELECT 1') // 确保缓存活着（下一步复用 ctx）
+    // 追加新键（healthyBook 已有 体检周期，重复键会触发序0 解析失败而非序2）
+    await fs.appendFile(path.join(root, 'book.yaml'), '每章目标字数: 2500\n', 'utf8')
+    const r2 = await determineNextState(ctx)
+    assert.equal(r2.序, 2)
+    assert.ok(r2.dto.变更文件.includes('book.yaml'), JSON.stringify(r2.dto.变更文件))
+  } finally {
+    await cleanup()
+  }
+})
+
+// D6：待定稿目录里只有杂项文件（无章目录、无有效 meta）≠ 批次——
+// 现存判定与 readBatch.exists 同口径，不出「续跑」却无批次可跑的自相矛盾 DTO
+test('序3 口径（D6）：待定稿/ 只有杂项文件不算批次，不触发批次续跑', async () => {
+  const { ctx, root, cleanup } = await makeGitBook(healthyBook())
+  try {
+    await fs.mkdir(path.join(root, '工作区/待定稿'), { recursive: true })
+    await fs.writeFile(path.join(root, '工作区/待定稿/notes.txt'), '杂项', 'utf8')
+    const r = await determineNextState(ctx)
+    assert.notEqual(r.序, 3, JSON.stringify(r))
+    assert.equal(r.序, 6)
+  } finally {
+    await cleanup()
+  }
+})
+
+// D7：章号查询失败不裸抛、也不降级成「第 1 章」引导重抄——人话报错 + 自愈指引
+test('序4-6 前章号查询失败 → ok:false 人话（不裸抛、不误导起草第 1 章）', async () => {
+  const { ctx, cleanup } = await makeGitBook(healthyBook())
+  try {
+    const broken = {
+      repoPath: ctx.repoPath,
+      cache: {
+        query: async (sql) => {
+          if (sql.includes('FROM chapters ORDER BY')) throw new Error('database disk image is malformed')
+          return ctx.cache.query(sql)
+        },
+      },
+    }
+    const r = await determineNextState(broken)
+    assert.equal(r.ok, false)
+    assert.equal(r.state, 'cache-error')
+    assert.match(r.message, /缓存查询失败/)
+    assert.match(r.message, /\.cache/)
+  } finally {
+    await cleanup()
+  }
+})

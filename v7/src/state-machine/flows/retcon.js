@@ -22,7 +22,8 @@ export async function retcon(ctx, { chapterNum, 原因, characterUpdates = [], t
     for (const c of characterUpdates) {
       const r = await ew.updateCharacter(c.name, c.updates)
       if (!r.ok) throw new Error(r.error)
-      written.push(path.join(repoPath, '定稿', '设定', '角色', `${c.name}.md`))
+      // 路径取写入器返回值（A10 同源）：手拼在名字含可净化字符时会与实际写点分裂
+      written.push(r.filePath)
     }
 
     const tlw = new ThreadLedgerWriter(repoPath)
@@ -44,9 +45,14 @@ export async function retcon(ctx, { chapterNum, 原因, characterUpdates = [], t
     const cacheRefresh = await refreshCacheAfterSourceChange(ctx)
     return { ok: true, commitHash, cacheRefresh, message: `已吃书并留痕：retcon(${chapterNum}): ${原因}` }
   } catch (err) {
+    // 回滚收窄到本次写入集合（D4，对齐 finalize 模式）：整棵 定稿/大纲 restore+clean
+    // 会误伤序2 在场的作者手改与无关未跟踪新文件。逐文件 restore——retcon 只更新既有
+    // 文件，不会有未跟踪路径让整条 restore 报错。
     try {
-      await git.restore(['定稿/', '大纲/'])
-      await git.clean(['定稿/', '大纲/'])
+      const rel = [...new Set(written)].map((f) => path.relative(repoPath, f))
+      for (const r of rel) {
+        await git.restore([r])
+      }
     } catch {
       // 回滚尽力而为
     }

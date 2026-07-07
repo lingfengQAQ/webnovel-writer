@@ -4,6 +4,16 @@ import { parseFrontMatter } from '../storage/parsers/front-matter.js'
 import { parseMarkdownTable } from '../storage/parsers/markdown-table.js'
 import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
 import { createGit } from '../finalize/git.js'
+import { readBatch } from '../staging/index.js'
+
+/** 序2/relink/goto 共用的「跟踪面」（决策 D6）：手改检测、relink 补登范围、goto 脏树拒绝
+ * 三处同源判定，防双写漂移。文风铁律与 book.yaml 的序0 修复回写由此走序2 补登入档。 */
+export const TRACKED_SOURCE_PREFIXES = ['定稿/', '大纲/', '文风/']
+
+/** @param {string} p git status porcelain 里的仓库相对路径 */
+export function isTrackedSourcePath(p) {
+  return p === 'book.yaml' || TRACKED_SOURCE_PREFIXES.some((pre) => p.startsWith(pre))
+}
 
 /**
  * 序0：扫描源文件解析失败。清单钉死于 spec 0.9 §10（实现不得自行增减）：
@@ -87,7 +97,7 @@ export async function bookMissing(repoPath) {
   }
 }
 
-/** 序2：定稿/大纲 下未登记的手改清单（git 工作树未提交改动,含未跟踪新文件）。
+/** 序2：跟踪面（TRACKED_SOURCE_PREFIXES + book.yaml）下未登记的手改清单（git 工作树未提交改动,含未跟踪新文件）。
  * 供状态机出 dto 变更清单、relink 补登命令圈定 add 范围——检测与执行同源,不双写。 */
 export async function listManualEdits(repoPath) {
   try {
@@ -96,7 +106,7 @@ export async function listManualEdits(repoPath) {
     for (const line of status.split('\n').filter(Boolean)) {
       // porcelain 行「XY path」;重命名是「XY old -> new」,两侧都算手改
       for (const p of line.slice(3).split(' -> ')) {
-        if (p.startsWith('定稿') || p.startsWith('大纲')) paths.push(p)
+        if (isTrackedSourcePath(p)) paths.push(p)
       }
     }
     return paths
@@ -125,11 +135,9 @@ export async function unfinishedWorkDetail(repoPath) {
   const 现存 = files.filter(
     (f) => f.startsWith('草稿') || f === '审稿.md' || f === '细纲.md' || f === '本章写作材料.md'
   )
-  try {
-    if ((await fs.readdir(path.join(ws, '待定稿'))).length) 现存.push('待定稿/')
-  } catch {
-    // 无待定稿
-  }
+  // 待定稿现存与 readBatch.exists 同口径（D6）：目录里只有杂项文件不算批次——
+  // 否则 DTO 出「待定稿批次续跑」却无批次明细可跑。heal:false——检测器是只读路径
+  if ((await readBatch(repoPath, { heal: false })).exists) 现存.push('待定稿/')
   const 从哪继续 = 现存.includes('待定稿/')
     ? '待定稿批次续跑'
     : 现存.includes('审稿.md')

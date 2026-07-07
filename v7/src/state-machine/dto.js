@@ -69,14 +69,15 @@ export async function buildDto(ctx, 序, base = {}) {
   }
 }
 
-// 序 3 的待定稿批次明细（无批次时不加字段）
+// 序 3 的待定稿批次明细（无批次时不加字段）。heal:false——路由组包是名义只读路径，
+// 批次.json 缺失时只重建内存视图，不落盘自愈（D5）
 async function batchDetail(ctx, base) {
   if (!(base.现存 || []).includes('待定稿/')) return {}
-  const batch = await readBatch(ctx.repoPath)
+  const batch = await readBatch(ctx.repoPath, { heal: false })
   if (!batch.exists) return {}
   const 打回 = batch.章列表.filter((r) => r.状态 === 章状态.打回).map((r) => r.章号)
   const 受影响 = batch.章列表.filter((r) => r.状态 === 章状态.受影响).map((r) => r.章号)
-  const 停止 = await judgeStop(ctx, batch)
+  const 停止 = await judgeStop(ctx, batch, { heal: false })
   let 建议
   if (打回.length) {
     建议 = `重写打回章（第 ${打回.join('、')} 章）：走写章流程后 stage-chapter 覆盖`
@@ -85,7 +86,10 @@ async function batchDetail(ctx, base) {
   } else if (停止.stop) {
     建议 = '批次已停：batch-status 呈报作者批量过稿，裁决后 finalize-batch'
   } else {
-    建议 = `继续批内下一章（第 ${batch.章列表[batch.章列表.length - 1].章号 + 1} 章）`
+    // 批内全部过审且未停：主场景是连写中断续写；但作者若刚用 --until 先发过前段，
+    // 剩余章已是裁决后的留存，指路转正而不只是闷头堆章（E5）
+    const 下一章 = batch.章列表[batch.章列表.length - 1].章号 + 1
+    建议 = `继续批内下一章（第 ${下一章} 章）；批内 ${batch.章列表.length} 章均已过审，若作者要先发这批，可 finalize-batch 直接转正`
   }
   return {
     批次: {

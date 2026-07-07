@@ -4,6 +4,7 @@ import { parseFrontMatter } from '../parsers/front-matter.js'
 import { serializeFrontMatter } from '../serializers/front-matter.js'
 import { parseMarkdownTable } from '../parsers/markdown-table.js'
 import { serializeMarkdownTable } from '../serializers/markdown-table.js'
+import { sanitizeFileName } from '../../util/filename.js'
 
 const ROSTER_HEADERS = ['正名', '别名', '类型', '首现章']
 
@@ -18,20 +19,22 @@ export class EntityWriter {
 
   /**
    * 更新角色卡 front matter（合并 updates，保留正文）。
+   * 文件名与 migrate/ChapterWriter 同源过 sanitizeFileName（A10/F-7：名字含可净化
+   * 字符时读写不同名会找不到卡）。返回 filePath 供定稿 stage 用，消除路径双源。
    * @param {string} name 正名
    * @param {object} updates 位置/状态/境界/持有/最后变更章 等
-   * @returns {Promise<{ok: boolean, error: string}>}
+   * @returns {Promise<{ok: boolean, filePath: string, error: string}>}
    */
   async updateCharacter(name, updates) {
-    const filePath = path.join(this.repoPath, '定稿', '设定', '角色', `${name}.md`)
+    const filePath = path.join(this.repoPath, '定稿', '设定', '角色', `${sanitizeFileName(name)}.md`)
     try {
       const parsed = parseFrontMatter(await fs.readFile(filePath, 'utf8'))
-      if (!parsed.ok) return { ok: false, error: `角色 ${name} 解析失败：${parsed.error}` }
+      if (!parsed.ok) return { ok: false, filePath: '', error: `角色 ${name} 解析失败：${parsed.error}` }
       const merged = { ...parsed.data, ...updates }
       await fs.writeFile(filePath, serializeFrontMatter(merged, parsed.body), 'utf8')
-      return { ok: true, error: '' }
+      return { ok: true, filePath, error: '' }
     } catch (err) {
-      return { ok: false, error: `角色 ${name} 不存在或写入失败：${err.message}` }
+      return { ok: false, filePath: '', error: `角色 ${name} 不存在或写入失败：${err.message}` }
     }
   }
 

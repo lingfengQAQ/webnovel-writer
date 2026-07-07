@@ -12,11 +12,13 @@ export async function run(args, options, ctx) {
   if (options.json) {
     return { ok: true, output: JSON.stringify(r, null, 2) }
   }
+  if (!r.ok) return { ok: false, error: r.message }
   const lines = []
-  if (r.gitHealth.fixed.length) {
+  // gitHealth 防御（G-7）：序1 等无仓库路径的返回不一定带完整 gitHealth
+  if (r.gitHealth?.fixed?.length) {
     lines.push('【git 已自动处理】', ...r.gitHealth.fixed.map((s) => '  · ' + s))
   }
-  if (r.gitHealth.guidance.length) {
+  if (r.gitHealth?.guidance?.length) {
     lines.push('【需你留意】', ...r.gitHealth.guidance.map((s) => '  · ' + s))
   }
   lines.push(`【当前状态】序${r.序} ${r.state}${r.needsAI ? '（需 AI）' : ''}`)

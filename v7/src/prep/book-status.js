@@ -1,5 +1,6 @@
 import { ThreadLedgerReader } from '../storage/adapters/ThreadLedgerReader.js'
 import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
+import { isWeakHook } from '../util/hooks.js'
 
 /**
  * 组装全书近况（喂细纲 step1 与备料 step3）。复用 M1 缓存与读端口，派生值查询时算。
@@ -30,8 +31,7 @@ export async function assembleBookStatus(ctx) {
     )
     let 连续弱钩 = 0
     for (const r of hookRows) {
-      const h = r.hook_type || ''
-      if (h.includes('弱钩') || h.endsWith('-弱')) 连续弱钩++
+      if (isWeakHook(r.hook_type)) 连续弱钩++
       else break
     }
 

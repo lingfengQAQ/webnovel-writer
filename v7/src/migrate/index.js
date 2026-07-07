@@ -130,16 +130,27 @@ function renderReport(plan, v6Path, dirName) {
     ...(丢弃.length ? 丢弃.map((t) => `- ${t}`) : ['（无）']),
     '',
     '> 校对完成后本报告可删；「迁移待校对-」开头的文件处理完也一并删掉。',
+    '> v6→v7 有哪些变化、迁移映射了什么，见 npm 包内 docs/migration-guide.md。',
     '',
   ]
   return lines.join('\n')
 }
 
+// 残留临时目录的陈旧线（F-5）：只清超过 24h 的 .migrate-tmp-*——
+// 同工作目录并行 migrate 时，别的进程正在写的活跃临时目录不得误删
+const TMP_STALE_MS = 24 * 60 * 60 * 1000
+
 async function sweepStaleTmp(workdir) {
   try {
     for (const ent of await fs.readdir(workdir)) {
-      if (ent.startsWith(TMP_PREFIX)) {
-        await fs.rm(path.join(workdir, ent), { recursive: true, force: true })
+      if (!ent.startsWith(TMP_PREFIX)) continue
+      const full = path.join(workdir, ent)
+      try {
+        const st = await fs.stat(full)
+        if (Date.now() - st.mtimeMs < TMP_STALE_MS) continue
+        await fs.rm(full, { recursive: true, force: true })
+      } catch {
+        // 单个残留读不了/删不掉不拦整体
       }
     }
   } catch {

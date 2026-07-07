@@ -42,11 +42,25 @@ export async function determineNextState(ctx) {
     return mk(3, 'resume', false, `工作区有未完成的流程（${unfinished.现存.join('、')}），从「${unfinished.从哪继续}」继续。`, gitHealth, await buildDto(ctx, 3, unfinished))
   }
 
-  // 序4/5/6 需章号信息
-  const lastRows = await cache.query(
-    'SELECT chapter_num, volume_num, is_volume_end FROM chapters ORDER BY chapter_num DESC LIMIT 1'
-  )
-  const last = lastRows[0] || null
+  // 序4/5/6 需章号信息。查询失败不裸抛也不降级成「第 1 章」（D7）——
+  // 假 maxChapter=0 会引导重抄第 1 章，比报错更危险
+  let last = null
+  try {
+    const lastRows = await cache.query(
+      'SELECT chapter_num, volume_num, is_volume_end FROM chapters ORDER BY chapter_num DESC LIMIT 1'
+    )
+    last = lastRows[0] || null
+  } catch (err) {
+    return {
+      ok: false,
+      序: null,
+      state: 'cache-error',
+      needsAI: false,
+      gitHealth,
+      dto: {},
+      message: `缓存查询失败（${err.message}）：删除书目录下 .cache/ 后重跑 next，会自动重建缓存。`,
+    }
+  }
   const maxChapter = last?.chapter_num || 0
   const config = await new BookConfigReader(repoPath).read()
   const 体检周期 = (config.ok && config.data.体检周期) || 50

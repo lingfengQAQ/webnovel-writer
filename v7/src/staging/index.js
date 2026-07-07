@@ -6,6 +6,7 @@ import { parseThreadDeclarations, OPENING_VERBS } from '../util/thread-declarati
 import { sanitizeFileName } from '../util/filename.js'
 import { normalizeWorkspaceRel } from '../util/workspace-path.js'
 import { splitAliases } from '../util/aliases.js'
+import { isWeakHook } from '../util/hooks.js'
 import { writeAtomicBatch } from '../storage/atomic.js'
 import { finalizeChapter } from '../finalize/index.js'
 import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
@@ -30,9 +31,11 @@ export const 章状态 = { 待审收: '待审收', 打回: '打回', 受影响: 
 
 /**
  * 读批次元数据（含与实际章目录的对账）。
+ * @param {{heal?: boolean}} [opts] heal=false 时批次.json 缺失只重建内存视图不落盘——
+ *   名义只读的路径（next 路由组 DTO）不得隐含写盘（D5）
  * @returns {Promise<{exists: boolean, 起章: number, 章列表: Array<{章号,标题,状态,目录}>, warnings: string[]}>}
  */
-export async function readBatch(repoPath) {
+export async function readBatch(repoPath, { heal = true } = {}) {
   const empty = { exists: false, 起章: 0, 章列表: [], warnings: [] }
   const dir = path.join(repoPath, BATCH_DIR)
   let entries
@@ -76,7 +79,7 @@ export async function readBatch(repoPath) {
   } else if (dirNames.length) {
     warnings.push('批次.json 缺失或损坏，已按章目录重建批次记录；为稳妥起见全部标记「受影响」，请重审后再定稿。')
     for (const d of dirNames) rows.push(await rowFromDir(repoPath, d, warnings))
-    await writeAtomicBatch(repoPath, [metaFile(rows)])
+    if (heal) await writeAtomicBatch(repoPath, [metaFile(rows)])
   }
 
   if (!rows.length) return empty
@@ -87,10 +90,24 @@ export async function readBatch(repoPath) {
 async function rowFromDir(repoPath, dirName, warnings) {
   const num = parseInt(dirName.slice(0, 4), 10)
   let 标题 = dirName.slice(5)
+  const dirP = path.join(repoPath, BATCH_DIR, dirName)
+
+  // 三件套全缺 = rejectFrom 清空后的打回章形态，标「打回」保住 stage-chapter 覆盖通道（E6）；
+  // 标「受影响」会成死行——finalize 读不到定稿包、restage 又拒打回章
+  let 全缺 = true
+  for (const f of ['草稿.md', '定稿包.json', '审稿单.md']) {
+    try {
+      await fs.access(path.join(dirP, f))
+      全缺 = false
+      break
+    } catch {
+      // 该工件不存在，继续查下一件
+    }
+  }
+  if (全缺) return { 章号: num, 标题, 状态: 章状态.打回, 目录: dirName }
+
   try {
-    const parsed = parseFrontMatter(
-      await fs.readFile(path.join(repoPath, BATCH_DIR, dirName, '草稿.md'), 'utf8')
-    )
+    const parsed = parseFrontMatter(await fs.readFile(path.join(dirP, '草稿.md'), 'utf8'))
     if (parsed.ok && parsed.data.标题) 标题 = parsed.data.标题
   } catch {
     warnings.push(`章目录 ${dirName} 里的草稿读不出来。`)
@@ -109,11 +126,11 @@ function metaFile(rows) {
  * 叠加视图的事实包：staged 章正文/档案 + 预登记（条目/名册/角色/时间线/信息差）。
  * 全部来自批次文件，供备料/审稿输入/机检合并；无批次时 exists=false 且各集合为空。
  * @param {string} repoPath
- * @param {{before?: number}} [opts] 只取章号 < before 的 staged 章——组装第 K 章材料/审稿/机检时
- *   批内事实只能来自更早的章（重审受影响章时，不许后章事实倒灌）
+ * @param {{before?: number, heal?: boolean}} [opts] 只取章号 < before 的 staged 章——组装第 K 章材料/审稿/机检时
+ *   批内事实只能来自更早的章（重审受影响章时，不许后章事实倒灌）；heal 透传 readBatch（D5）
  */
 export async function stagedFacts(repoPath, opts = {}) {
-  const batch = await readBatch(repoPath)
+  const batch = await readBatch(repoPath, { heal: opts.heal !== false })
   const facts = {
     exists: batch.exists,
     chapters: [],
@@ -244,8 +261,7 @@ export function overlayBookStatus(status, facts) {
   let weak = 0
   let broke = false
   for (let i = staged.length - 1; i >= 0; i--) {
-    const h = String(staged[i].frontMatter.钩子 || '')
-    if (h.includes('弱钩') || h.endsWith('-弱')) weak++
+    if (isWeakHook(staged[i].frontMatter.钩子)) weak++
     else {
       broke = true
       break
@@ -351,9 +367,10 @@ export async function stageChapter(ctx, { chapterNum, payload }) {
 
 /**
  * 停止条件四件套（spec §8.1，零 token）：写满 / 收卷或卷纲耗尽 / 连续无条目变动 / 批次质检不过线。
+ * @param {{heal?: boolean}} [opts] heal 透传 stagedFacts→readBatch（D5：dto 读路径不落盘自愈）
  * @returns {Promise<{stop: boolean, reasons: string[]}>}
  */
-export async function judgeStop(ctx, batch) {
+export async function judgeStop(ctx, batch, opts = {}) {
   const { repoPath, cache } = ctx
   if (!batch?.exists) return { stop: false, reasons: [] }
   const reasons = []
@@ -362,7 +379,7 @@ export async function judgeStop(ctx, batch) {
   const 批次大小 = cfg.连写批次大小 || 8
   const 无变动上限 = cfg.连写无条目变动上限 || 3
 
-  const facts = await stagedFacts(repoPath)
+  const facts = await stagedFacts(repoPath, { heal: opts.heal })
   const staged = facts.chapters
 
   if (staged.length >= 批次大小) {
@@ -423,8 +440,7 @@ export function judgeBatchQuality(staged, baselineFp, config = {}) {
   const 弱上限 = config.连续弱钩上限 || 3
   let weak = 0
   for (let i = staged.length - 1; i >= 0; i--) {
-    const h = String(staged[i].frontMatter.钩子 || '')
-    if (h.includes('弱钩') || h.endsWith('-弱')) weak++
+    if (isWeakHook(staged[i].frontMatter.钩子)) weak++
     else break
   }
   if (weak >= 弱上限) 原因.push(`批内连续 ${weak} 章弱钩（上限 ${弱上限}），追读力要垮，先人工过一眼节奏`)
@@ -512,65 +528,118 @@ export async function restageReview(repoPath, chapterNum) {
 /**
  * 批量定稿：全部（或 --until 前的）章须为「待审收」；升序逐章 finalizeChapter——
  * 每章独立原子 commit，中途失败停在该章、已入档保留（原子性按章保留）。
+ * 可安全重跑（E3/决策 D3）：上次中断留下的「已入档但残留未清」章自动跳过转正、只清残留。
  */
 export async function finalizeBatch(ctx, { until } = {}) {
   const { repoPath } = ctx
-  const batch = await readBatch(repoPath)
-  if (!batch.exists) return { ok: false, 已入档: [], error: '没有进行中的待定稿批次' }
+  const 已入档 = []
+  try {
+    const batch = await readBatch(repoPath)
+    if (!batch.exists) return { ok: false, 已入档, error: '没有进行中的待定稿批次' }
 
-  const inScope = (r) => (until ? r.章号 <= until : true)
-  const 目标 = batch.章列表.filter(inScope)
-  if (!目标.length) return { ok: false, 已入档: [], error: `--until=${until} 范围内没有批内章` }
+    const inScope = (r) => (until ? r.章号 <= until : true)
+    const 目标 = batch.章列表.filter(inScope)
+    if (!目标.length) return { ok: false, 已入档, error: `--until=${until} 范围内没有批内章` }
 
-  const 障碍 = 目标.filter((r) => r.状态 !== 章状态.待审收)
-  if (障碍.length) {
-    const list = 障碍.map((r) => `第 ${r.章号} 章（${r.状态}）`).join('、')
+    // 幂等重跑检测：定稿文件已在且章号 ≤ 缓存最大章 = 上次 finalizeChapter 全链路完成
+    // （缓存刷新在 commit 之后），本次只清残留；也不受状态拦——残留目录被 readBatch
+    // 重建标的「受影响」是保守值，不代表要重审
+    const 已定稿残留 = new Set()
+    for (const row of 目标) {
+      if (await alreadyFinalized(ctx, row.章号)) 已定稿残留.add(row.章号)
+    }
+
+    const 障碍 = 目标.filter((r) => r.状态 !== 章状态.待审收 && !已定稿残留.has(r.章号))
+    if (障碍.length) {
+      const list = 障碍.map((r) => `第 ${r.章号} 章（${r.状态}）`).join('、')
+      return {
+        ok: false,
+        已入档,
+        error: `批内还有未收口的章：${list}——打回章要重写重暂存、受影响章要重审，都回到「待审收」才能批量定稿`,
+      }
+    }
+
+    let remaining = [...batch.章列表]
+    for (const row of 目标) {
+      const dirP = path.join(repoPath, BATCH_DIR, row.目录)
+
+      if (!已定稿残留.has(row.章号)) {
+        let payload
+        try {
+          payload = JSON.parse(await fs.readFile(path.join(dirP, '定稿包.json'), 'utf8'))
+        } catch (err) {
+          return {
+            ok: false,
+            已入档,
+            error: `第 ${row.章号} 章定稿包读取失败：${err.message}——之前 ${已入档.length} 章已入档保留，批次剩余原样`,
+          }
+        }
+        // 本章工作区文件在暂存时已清；批次目录由本函数自管，防误删他章工件
+        payload.workspaceFiles = []
+        const r = await finalizeChapter(ctx, payload)
+        if (!r.ok) {
+          return {
+            ok: false,
+            已入档,
+            失败章: row.章号,
+            error: `第 ${row.章号} 章定稿失败：${r.error}——之前 ${已入档.length} 章已入档保留，批次剩余原样，修好后重跑 finalize-batch`,
+          }
+        }
+        已入档.push({ 章号: row.章号, commit: r.commitHash })
+      }
+
+      // 先记录后删目录（决策 D3）：先把该章行移出批次.json 再删章目录——反过来会在
+      // 「目录已删、记录未更」窗口让已入档章以旧状态复活。清残留失败必须报错止步：
+      // 行已移、目录残留会被 readBatch 按「受影响」重新纳入，静默继续会掩盖残留
+      remaining = remaining.filter((x) => x.章号 !== row.章号)
+      try {
+        if (remaining.length) await writeAtomicBatch(repoPath, [metaFile(remaining)])
+        await fs.rm(dirP, { recursive: true, force: true })
+      } catch (err) {
+        return {
+          ok: false,
+          已入档,
+          失败章: row.章号,
+          error: `第 ${row.章号} 章已入档，但批次残留清理失败：${err.message}——关闭占用该目录的程序后重跑 finalize-batch，已入档的章会自动跳过转正、只清残留`,
+        }
+      }
+    }
+
+    let 体检 = ''
+    if (!remaining.length) {
+      await fs.rm(path.join(repoPath, BATCH_DIR), { recursive: true, force: true })
+      // 体检与批次对齐（spec §9：连写中每批次一次）；失败不阻断——批次已转正完成
+      const hc = await runHealthCheck(ctx)
+      体检 = hc.ok ? `体检已随批次完成（报告见 工作区/体检报告.md）` : `批末体检没跑成：${hc.error}`
+    }
+    return { ok: true, 已入档, 剩余: remaining.length, 体检, error: '' }
+  } catch (err) {
+    // 兜底防裸栈（E3）：finalizeChapter 已 commit 的章保留，指引重跑续走
     return {
       ok: false,
-      已入档: [],
-      error: `批内还有未收口的章：${list}——打回章要重写重暂存、受影响章要重审，都回到「待审收」才能批量定稿`,
+      已入档,
+      error: `批量定稿中断：${err.message}——已入档的 ${已入档.length} 章保留，处理后重跑 finalize-batch 续走`,
     }
   }
+}
 
-  const 已入档 = []
-  let remaining = [...batch.章列表]
-  for (const row of 目标) {
-    const dirP = path.join(repoPath, BATCH_DIR, row.目录)
-    let payload
-    try {
-      payload = JSON.parse(await fs.readFile(path.join(dirP, '定稿包.json'), 'utf8'))
-    } catch (err) {
-      return {
-        ok: false,
-        已入档,
-        error: `第 ${row.章号} 章定稿包读取失败：${err.message}——之前 ${已入档.length} 章已入档保留，批次剩余原样`,
-      }
-    }
-    // 本章工作区文件在暂存时已清；批次目录由本函数自管，防误删他章工件
-    payload.workspaceFiles = []
-    const r = await finalizeChapter(ctx, payload)
-    if (!r.ok) {
-      return {
-        ok: false,
-        已入档,
-        失败章: row.章号,
-        error: `第 ${row.章号} 章定稿失败：${r.error}——之前 ${已入档.length} 章已入档保留，批次剩余原样，修好后重跑 finalize-batch`,
-      }
-    }
-    已入档.push({ 章号: row.章号, commit: r.commitHash })
-    await fs.rm(dirP, { recursive: true, force: true })
-    remaining = remaining.filter((x) => x.章号 !== row.章号)
-    if (remaining.length) await writeAtomicBatch(repoPath, [metaFile(remaining)])
+// 决策 D3 的「上次已转正」判据：定稿文件存在 且 章号 ≤ 缓存最大章，二者都在
+// 才认（只看文件会把手工拷贝误判为已定稿；只看缓存会在缓存陈旧时误判）
+async function alreadyFinalized(ctx, chapterNum) {
+  const prefix = String(chapterNum).padStart(4, '0')
+  let files
+  try {
+    files = await fs.readdir(path.join(ctx.repoPath, '定稿', '正文'))
+  } catch {
+    return false
   }
-
-  let 体检 = ''
-  if (!remaining.length) {
-    await fs.rm(path.join(repoPath, BATCH_DIR), { recursive: true, force: true })
-    // 体检与批次对齐（spec §9：连写中每批次一次）；失败不阻断——批次已转正完成
-    const hc = await runHealthCheck(ctx)
-    体检 = hc.ok ? `体检已随批次完成（报告见 工作区/体检报告.md）` : `批末体检没跑成：${hc.error}`
+  if (!files.some((f) => f.startsWith(`${prefix}-`) && f.endsWith('.md'))) return false
+  try {
+    const rows = await ctx.cache.query('SELECT MAX(chapter_num) AS m FROM chapters')
+    return chapterNum <= (rows[0]?.m || 0)
+  } catch {
+    return false
   }
-  return { ok: true, 已入档, 剩余: remaining.length, 体检, error: '' }
 }
 
 /** 整批丢弃：删工作区批次（未入 git，定稿零变化）。破坏性操作，宿主必须先经作者确认。 */

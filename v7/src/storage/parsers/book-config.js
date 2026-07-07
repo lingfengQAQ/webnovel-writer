@@ -16,11 +16,7 @@ export function parseBookConfig(yamlString) {
     }
   }
 
-  // 验证必需字段（spec §3）
-  const requiredFields = ['spec_version', '书名', '类型', '每章目标字数', '卷规模']
-  const missingFields = requiredFields.filter((field) => !(field in result.data))
-
-  // 默认值（无论是否缺少必需字段，都合并可选字段的默认值）
+  // 默认值（缺字段一律套默认——book.yaml 大部分字段可选，运行时永远给全量配置）
   const defaults = {
     spec_version: '7.0',
     书名: '未命名',

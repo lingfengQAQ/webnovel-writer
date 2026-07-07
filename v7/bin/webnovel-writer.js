@@ -28,7 +28,7 @@ if (command === '--version' || command === '-v') {
 if (!command || command === '--help') {
   console.log('用法：webnovel-writer <命令> [选项]')
   console.log('')
-  console.log('精准读取接口（41 个，分布于 21 个命令；逐条清单见任务 prd.md AC2）：')
+  console.log('精准读取接口（逐条清单如下）：')
   console.log('  read-chapter <章号> [--front-matter|--tail=N|--head=N|--摘要]')
   console.log('  read-chapters [--range=a-b --摘要|--recent=N --tail=M]')
   console.log('  list-chapters --章定位=推进 [--卷=N]')
@@ -99,6 +99,13 @@ function parseArgs(rest) {
     }
   }
   return { options, positionalArgs }
+}
+
+// 命令名白名单（G-9）：命令即 commands/ 下的文件名，路径拼接 import 不给 `../` 之类
+// 输入把报错降级成「mod.run is not a function」——不匹配直接走「未知命令」
+if (!/^[a-z0-9-]+$/.test(command)) {
+  console.error(`未知命令「${command}」。运行 webnovel-writer --help 查看可用命令。`)
+  process.exit(1)
 }
 
 let cache

@@ -95,6 +95,21 @@ export async function persistVolumeReview(ctx, { 卷号, 卷摘要, 下卷卷纲
       const next = String(卷号 + 1).padStart(2, '0')
       files.push({ path: path.join('大纲', '卷纲', `第${next}卷.md`), content: 下卷卷纲 })
     }
+    // 写前查重（B2）：本函数绕过 createThread 直接落文件，撞号会在下次缓存重建时
+    // 才被发现（threads 主键冲突整库回滚）。有界匹配口径与 createThread 一致。
+    if (伏笔条目.length) {
+      let existing = []
+      try {
+        existing = await fs.readdir(path.join(ctx.repoPath, '大纲', '伏笔'))
+      } catch {
+        // 目录不存在，首批条目
+      }
+      for (const e of 伏笔条目) {
+        if (existing.some((f) => f === `${e.id}.md` || f.startsWith(`${e.id}-`))) {
+          return { ok: false, written: [], error: `伏笔条目 ${e.id} 已存在，开新条目须用新编号` }
+        }
+      }
+    }
     for (const e of 伏笔条目) {
       const body = `---\n${serializeYAML(e.frontMatter || {})}\n---\n${e.body || ''}`
       files.push({ path: path.join('大纲', '伏笔', `${e.id}.md`), content: body })

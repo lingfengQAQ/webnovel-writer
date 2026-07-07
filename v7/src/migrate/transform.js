@@ -4,6 +4,7 @@ import { parseMarkdownTable } from '../storage/parsers/markdown-table.js'
 import { serializeYAML } from '../storage/serializers/yaml-dialect.js'
 import { extractSection } from '../util/markdown.js'
 import { sanitizeFileName } from '../util/filename.js'
+import { normalizeEntityType } from '../util/entity-type.js'
 
 const GENRE_MAP = new Map([
   ['xianxia', '仙侠'], ['xiuxian', '仙侠'],
@@ -145,7 +146,8 @@ export function transformV6(facts) {
   }
   let 角色卡 = 0
   for (const e of facts.entities) {
-    if (e.type !== '角色') continue
+    // 类型判定过归一单源（F-9）：v6 用英文/机器键（character 等）的真角色也要出卡
+    if (normalizeEntityType(e.type) !== 'character') continue
     const fm = { 姓名: e.name }
     if (e.aliases.length) fm.别名 = e.aliases
     if (e.current.状态) fm.状态 = e.current.状态

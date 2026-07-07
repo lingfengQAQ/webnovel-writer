@@ -2,6 +2,29 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { parseFrontMatter } from '../parsers/front-matter.js'
 
+// 缓存行（英文 snake_case 列）→ 作者域中文键（A6：接口形状不得随缓存冷热漂移）。
+// file_path/is_key_chapter 是机器域内部列，不出作者域。
+const CHAPTER_ROW_TO_FM = {
+  chapter_num: '章号',
+  title: '标题',
+  volume_num: '卷',
+  perspective: '视角',
+  story_time: '书内时间',
+  word_count: '字数',
+  chapter_position: '章定位',
+  hook_type: '钩子',
+  mood_position: '情绪定位',
+}
+
+function chapterRowToFrontMatter(row) {
+  const fm = {}
+  for (const [col, key] of Object.entries(CHAPTER_ROW_TO_FM)) {
+    if (row[col] !== null && row[col] !== undefined) fm[key] = row[col]
+  }
+  if (row.is_volume_end) fm.收卷 = '是'
+  return fm
+}
+
 /**
  * ChapterReader：读取章节 front matter、正文、范围。
  */
@@ -12,7 +35,7 @@ export class ChapterReader {
   }
 
   /**
-   * 读取章节 front matter。
+   * 读取章节 front matter（缓存命中与文件降级输出同一形状：中文键）。
    * @param {number} chapterNum - 章号
    * @returns {Promise<{ok: boolean, data: object|null, error: string}>}
    */
@@ -25,7 +48,7 @@ export class ChapterReader {
           [chapterNum]
         )
         if (rows.length > 0) {
-          return { ok: true, data: rows[0], error: '' }
+          return { ok: true, data: chapterRowToFrontMatter(rows[0]), error: '' }
         }
       } catch (err) {
         // 缓存失败，降级到文件读取
@@ -115,32 +138,6 @@ export class ChapterReader {
 
     const head = bodyResult.body.slice(0, wordCount)
     return { ok: true, text: head, error: '' }
-  }
-
-  /**
-   * 批量读取章节范围，返回指定字段。
-   * @param {number} startChapter
-   * @param {number} endChapter
-   * @param {string[]} fields - 字段列表（默认 ['摘要']）
-   * @returns {Promise<{ok: boolean, chapters: object[], error: string}>}
-   */
-  async readRange(startChapter, endChapter, fields = ['摘要']) {
-    // 简化实现：逐个读取 front matter
-    const chapters = []
-    for (let i = startChapter; i <= endChapter; i++) {
-      const result = await this.readFrontMatter(i)
-      if (result.ok) {
-        const filtered = { 章号: i }
-        for (const field of fields) {
-          if (field in result.data) {
-            filtered[field] = result.data[field]
-          }
-        }
-        chapters.push(filtered)
-      }
-    }
-
-    return { ok: true, chapters, error: '' }
   }
 
   /**

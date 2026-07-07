@@ -3,6 +3,7 @@ import path from 'node:path'
 import { parseFrontMatter } from '../parsers/front-matter.js'
 import { parseMarkdownTable } from '../parsers/markdown-table.js'
 import { splitAliases } from '../../util/aliases.js'
+import { sanitizeFileName } from '../../util/filename.js'
 
 /**
  * EntityReader：读取角色卡、解析别名。
@@ -19,7 +20,8 @@ export class EntityReader {
    * @returns {Promise<{ok: boolean, data: object|null, error: string}>}
    */
   async readCharacterFrontMatter(name) {
-    const filePath = path.join(this.repoPath, '定稿', '设定', '角色', `${name}.md`)
+    // 文件名与 EntityWriter/migrate 同源净化（A10/F-7）
+    const filePath = path.join(this.repoPath, '定稿', '设定', '角色', `${sanitizeFileName(name)}.md`)
 
     try {
       const content = await fs.readFile(filePath, 'utf8')
@@ -39,7 +41,7 @@ export class EntityReader {
    * @returns {Promise<{ok: boolean, frontMatter: object|null, body: string, error: string}>}
    */
   async readCharacterFull(name) {
-    const filePath = path.join(this.repoPath, '定稿', '设定', '角色', `${name}.md`)
+    const filePath = path.join(this.repoPath, '定稿', '设定', '角色', `${sanitizeFileName(name)}.md`)
 
     try {
       const content = await fs.readFile(filePath, 'utf8')

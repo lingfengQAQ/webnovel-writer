@@ -162,15 +162,20 @@ test('AC4 回退演练：中途失败工作目录零残留、源 v6 未被改动
   const v6 = await tempV6(inlineFixture)
   try {
     const before = await treeFingerprint(v6.v6Path)
-    // 预埋一个上次中断的残留临时目录
+    // 预埋残留：一个陈旧（拨回 25h 前，应被清扫）、一个新鲜（模拟并行迁移在写，F-5 不得误删）
     await fs.mkdir(path.join(ctx.workdir, '.migrate-tmp-99999', '定稿'), { recursive: true })
+    const stale = new Date(Date.now() - 25 * 60 * 60 * 1000)
+    await fs.utimes(path.join(ctx.workdir, '.migrate-tmp-99999'), stale, stale)
+    await fs.mkdir(path.join(ctx.workdir, '.migrate-tmp-88888'), { recursive: true })
 
     const r = await migrateV6(ctx, v6.v6Path, { _faultBeforeRename: true })
     assert.equal(r.ok, false)
     assert.match(r.error, /工作目录已恢复原样/)
 
     const left = await fs.readdir(ctx.workdir)
-    assert.ok(!left.some((n) => n.startsWith('.migrate-tmp-')), `残留：${left}`)
+    assert.ok(!left.includes('.migrate-tmp-99999'), `陈旧残留未被清扫：${left}`)
+    assert.ok(left.includes('.migrate-tmp-88888'), '新鲜临时目录（可能是并行迁移在写）不得误删')
+    assert.ok(!left.includes(`.migrate-tmp-${process.pid}`), `本次迁移自身的临时目录未清：${left}`)
     assert.ok(!left.includes('剑碎虚空'))
     assert.deepEqual(await treeFingerprint(v6.v6Path), before) // 源逐文件未动
   } finally {

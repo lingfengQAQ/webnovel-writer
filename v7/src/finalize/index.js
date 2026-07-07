@@ -91,9 +91,9 @@ export async function finalizeChapter(ctx, payload, opts = {}) {
     for (const c of characterUpdates) {
       const r = await ew.updateCharacter(c.name, c.updates)
       if (!r.ok) throw new Error(r.error)
-      const filePath = path.join(repoPath, '定稿', '设定', '角色', `${c.name}.md`)
-      stageFiles.push(filePath)
-      rollbackFiles.push(filePath)
+      // 路径取写入器返回值（A10：文件名净化单源，防手拼路径与实际写点分裂）
+      stageFiles.push(r.filePath)
+      rollbackFiles.push(r.filePath)
     }
     for (const row of rosterUpserts) {
       const r = await ew.upsertRosterRow(row)

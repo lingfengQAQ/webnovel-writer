@@ -323,3 +323,45 @@ test('stagedFacts：声明与定稿包合并出条目/名册/时间线/信息差
     await cleanup()
   }
 })
+
+// E6：批次.json 损坏重建时，三件套全缺的目录是 rejectFrom 清空后的打回章——
+// 标「打回」保住 stage-chapter 覆盖通道，标「受影响」会成不可操作的死行
+test('批次.json 损坏重建：三件套全缺的目录标「打回」，有工件的标「受影响」', async () => {
+  const { ctx, cleanup } = await repoCtx(null, bookFiles({ 批次大小: 8 }))
+  try {
+    assert.equal((await stage(ctx, 3)).ok, true)
+    assert.equal((await stage(ctx, 4)).ok, true)
+    const rej = await rejectFrom(ctx.repoPath, 3)
+    assert.equal(rej.ok, true, rej.error)
+
+    await fs.rm(path.join(ctx.repoPath, '工作区', '待定稿', '批次.json'), { force: true })
+    const batch = await readBatch(ctx.repoPath)
+    assert.equal(batch.exists, true)
+    const 三 = batch.章列表.find((r) => r.章号 === 3)
+    const 四 = batch.章列表.find((r) => r.章号 === 4)
+    assert.equal(三.状态, 章状态.打回, '空目录须可被 stage-chapter 覆盖恢复')
+    assert.equal(四.状态, 章状态.受影响)
+  } finally {
+    await cleanup()
+  }
+})
+
+// D5：名义只读路径传 heal:false——批次.json 缺失只重建内存视图，不落盘
+test('readBatch heal=false：批次.json 缺失时不落盘自愈，默认路径才写', async () => {
+  const { ctx, cleanup } = await repoCtx(null, bookFiles({ 批次大小: 8 }))
+  try {
+    assert.equal((await stage(ctx, 3)).ok, true)
+    const metaPath = path.join(ctx.repoPath, '工作区', '待定稿', '批次.json')
+    await fs.rm(metaPath, { force: true })
+
+    const cold = await readBatch(ctx.repoPath, { heal: false })
+    assert.equal(cold.exists, true)
+    await assert.rejects(() => fs.access(metaPath), 'heal=false 不得写盘')
+
+    const healed = await readBatch(ctx.repoPath)
+    assert.equal(healed.exists, true)
+    await fs.access(metaPath)
+  } finally {
+    await cleanup()
+  }
+})

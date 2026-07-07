@@ -112,7 +112,8 @@ export class SecretReader {
     const secretDir = path.join(this.repoPath, '定稿', '设定', '信息差')
     try {
       const files = await fs.readdir(secretDir)
-      const found = files.find((file) => file.startsWith(id))
+      // 有界匹配（C3）：信息差-1 不得命中 信息差-10-*.md
+      const found = files.find((file) => file === `${id}.md` || file.startsWith(`${id}-`))
       return found ? path.join(secretDir, found) : null
     } catch (err) {
       return null

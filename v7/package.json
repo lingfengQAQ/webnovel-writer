@@ -15,7 +15,8 @@
     "roles/",
     "skills/",
     "adapters/",
-    "templates/"
+    "templates/",
+    "docs/"
   ],
   "scripts": {
     "test": "node --test",

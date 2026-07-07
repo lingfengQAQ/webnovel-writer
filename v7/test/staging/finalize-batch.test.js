@@ -249,3 +249,43 @@ test('finalize-batch --until：只转正前段，剩余待审收、next 报批�
     await cleanup()
   }
 })
+
+// E3/决策 D3：转正循环先移批次记录再删目录；残留清理失败人话止步（不裸栈、不谎报）；
+// 重跑时「已入档但残留未清」的章自动跳过转正——不二次 commit、不撞「已存在」
+test('E3 清残留失败止步（已入档保留），重跑幂等续走、无重复 commit', async (t) => {
+  const { ctx, cleanup } = await gitBookCtx()
+  try {
+    for (const n of [3, 4]) await stage(ctx, n)
+
+    const realRm = fs.rm.bind(fs)
+    const rmMock = t.mock.method(fs, 'rm', async (target, opts) => {
+      if (String(target).includes('0003-')) {
+        throw Object.assign(new Error('注入：目录被占用'), { code: 'EPERM' })
+      }
+      return realRm(target, opts)
+    })
+    const r1 = await finalizeBatch(ctx)
+    rmMock.mock.restore()
+
+    assert.equal(r1.ok, false)
+    assert.deepEqual(r1.已入档.map((x) => x.章号), [3], '第 3 章 commit 已发生，必须如实报已入档')
+    assert.match(r1.error, /已入档/)
+    assert.match(r1.error, /重跑 finalize-batch/)
+
+    // 中断现场：第 3 章行已移出批次.json（先记录后删目录），残留目录还在
+    const mid = await readBatch(ctx.repoPath, { heal: false })
+    assert.ok(mid.章列表.some((r) => r.章号 === 3), '残留目录被按「受影响」重新纳入（对账如实）')
+
+    const git = createGit(ctx.repoPath)
+    const r2 = await finalizeBatch(ctx)
+    assert.equal(r2.ok, true, r2.error)
+    assert.deepEqual(r2.已入档.map((x) => x.章号), [4], '重跑只转正第 4 章，第 3 章跳过')
+
+    const log = await git.log()
+    assert.equal(log.split('ch(3)').length - 1, 1, '第 3 章恰一个 commit，无二次定稿')
+    assert.equal(log.split('ch(4)').length - 1, 1)
+    assert.equal((await readBatch(ctx.repoPath)).exists, false, '批次收口干净')
+  } finally {
+    await cleanup()
+  }
+})

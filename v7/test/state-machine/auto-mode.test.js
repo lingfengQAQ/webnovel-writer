@@ -4,6 +4,7 @@ import path from 'node:path'
 import { promises as fs } from 'node:fs'
 import { determineNextState } from '../../src/state-machine/index.js'
 import { stageChapter, rejectFrom } from '../../src/staging/index.js'
+import { createGit } from '../../src/finalize/git.js'
 import { gitBookCtx } from '../commands/_helper.js'
 
 // 开关矩阵（PRD #14）：自动确认细纲 × 连写。全关=既有回归（router.test.js 全量）；
@@ -20,6 +21,11 @@ async function setBookYaml(ctx, key, value) {
   const line = `${key}: ${value}`
   const re = new RegExp(`^${key}:.*$`, 'm')
   await fs.writeFile(p, re.test(src) ? src.replace(re, line) : `${src}${line}\n`, 'utf8')
+  // book.yaml 在跟踪面内（决策 D6），不补登会被序 2 拦——模拟 relink 已完成
+  const git = createGit(ctx.repoPath)
+  await git.ensureIdentity()
+  await git.add(['book.yaml'])
+  await git.commit(`fix(手改): 配置 ${key}`)
 }
 
 async function stage3(ctx) {

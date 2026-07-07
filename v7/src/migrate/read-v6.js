@@ -33,8 +33,21 @@ export async function readV6Project(v6Path) {
   }
 
   // —— index.db（只读；缺表/缺列容忍，Q13-10）——
+  // 源零写入是硬承诺（F-6/design §3.1）：readOnly 打不开就中止迁移，绝不回退可写打开
+  // ——可写打开遇 v6 热日志会触发对源库的恢复写入
   const dbPath = path.join(v6Path, '.webnovel', 'index.db')
-  const db = (await exists(dbPath)) ? openReadOnly(dbPath, warnings) : null
+  let db = null
+  if (await exists(dbPath)) {
+    try {
+      db = new DatabaseSync(dbPath, { readOnly: true })
+    } catch (err) {
+      return {
+        ok: false,
+        facts: null,
+        error: `源数据库 .webnovel/index.db 无法只读打开（${err.message}）：可能被别的程序占用，关掉后重试。为守住「迁移绝不改动 v6 源」的承诺，这次没有继续。`,
+      }
+    }
+  }
 
   const hasInlineEntities = state.entities_v3 && Object.keys(state.entities_v3).length > 0
   const form = db && hasInlineEntities ? 'mixed' : db ? 'sqlite' : 'inline'
@@ -200,11 +213,33 @@ async function scanChapters(v6Path, warnings) {
       })
     }
   }
+  // 布局约定外的目录若藏着章形文件，如实告警而非静默漏（F-9）
+  const warnNested = async (dir, label) => {
+    let names
+    try {
+      names = await fs.readdir(dir)
+    } catch {
+      return
+    }
+    if (names.some((f) => /^第\d+章/.test(f) && f.endsWith('.md'))) {
+      warnings.push(
+        `正文/${label}/ 超出「正文/第N卷/第NNN章.md」的布局约定，里面的章节文件未迁移——挪到 正文/ 或卷目录下重跑可补迁。`
+      )
+    }
+  }
   await collect(root, null)
   for (const ent of entries) {
     if (!ent.isDirectory()) continue
     const vm = ent.name.match(/^第(\d+)卷$/)
-    if (vm) await collect(path.join(root, ent.name), Number(vm[1]))
+    if (vm) {
+      const volDir = path.join(root, ent.name)
+      await collect(volDir, Number(vm[1]))
+      for (const sub of await fs.readdir(volDir, { withFileTypes: true })) {
+        if (sub.isDirectory()) await warnNested(path.join(volDir, sub.name), `${ent.name}/${sub.name}`)
+      }
+    } else {
+      await warnNested(path.join(root, ent.name), ent.name)
+    }
   }
   return [...found.values()].sort((a, b) => a.num - b.num)
 }
@@ -291,19 +326,6 @@ async function readJson(p, warnings, fallback) {
   } catch (err) {
     if (err.code !== 'ENOENT') warnings.push(`读取 ${path.basename(p)} 失败（${err.message}），该部分未迁移。`)
     return fallback
-  }
-}
-
-function openReadOnly(dbPath, warnings) {
-  try {
-    try {
-      return new DatabaseSync(dbPath, { readOnly: true })
-    } catch {
-      return new DatabaseSync(dbPath)
-    }
-  } catch (err) {
-    warnings.push(`打开 .webnovel/index.db 失败（${err.message}）：数据库内容未迁移。`)
-    return null
   }
 }
 

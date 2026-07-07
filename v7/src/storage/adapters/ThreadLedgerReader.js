@@ -2,6 +2,24 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { parseFrontMatter } from '../parsers/front-matter.js'
 
+// 缓存行 → 作者域中文键（A6：形状不随缓存冷热漂移）。
+// type/short_title/file_path 是机器域/文件名派生列，不出作者域。
+const THREAD_ROW_TO_FM = {
+  strength: '强度',
+  status: '状态',
+  opened_chapter: '开启章',
+  planned_end: '预计收尾',
+  last_advanced_chapter: '最后推进章',
+}
+
+function threadRowToFrontMatter(row) {
+  const fm = { id: row.id }
+  for (const [col, key] of Object.entries(THREAD_ROW_TO_FM)) {
+    if (row[col] !== null && row[col] !== undefined) fm[key] = row[col]
+  }
+  return fm
+}
+
 /**
  * ThreadLedgerReader：读取三类条目（伏笔/悬念/感情线）。
  */
@@ -12,7 +30,7 @@ export class ThreadLedgerReader {
   }
 
   /**
-   * 读取条目基本信息。
+   * 读取条目基本信息（缓存命中与文件降级输出同一形状：中文键 + id）。
    * @param {string} threadId - 条目 ID（如 "伏笔-001"）
    * @returns {Promise<{ok: boolean, data: object|null, error: string}>}
    */
@@ -25,7 +43,7 @@ export class ThreadLedgerReader {
           [threadId]
         )
         if (rows.length > 0) {
-          return { ok: true, data: rows[0], error: '' }
+          return { ok: true, data: threadRowToFrontMatter(rows[0]), error: '' }
         }
       } catch (err) {
         // 降级到文件读取
@@ -44,7 +62,7 @@ export class ThreadLedgerReader {
       if (!parsed.ok) {
         return { ok: false, data: null, error: `解析失败：${parsed.error}` }
       }
-      return { ok: true, data: parsed.data, error: '' }
+      return { ok: true, data: { id: threadId, ...parsed.data }, error: '' }
     } catch (err) {
       return { ok: false, data: null, error: err.message }
     }
@@ -210,7 +228,8 @@ export class ThreadLedgerReader {
 
     try {
       const files = await fs.readdir(threadDir)
-      const found = files.find((file) => file.startsWith(threadId))
+      // 有界匹配（A9）：伏笔-1 不得命中 伏笔-10-*.md，口径与 createThread 查重一致
+      const found = files.find((file) => file === `${threadId}.md` || file.startsWith(`${threadId}-`))
       return found ? path.join(threadDir, found) : null
     } catch (err) {
       return null
