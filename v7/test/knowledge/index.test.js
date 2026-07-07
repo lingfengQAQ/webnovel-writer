@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import path from 'node:path'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises'
 import {
   loadRoutes,
   resolveLabel,
@@ -40,10 +40,21 @@ test('resolveBookTags：命中带条目全文、条目待补降级为空串、�
   assert.match(r.题材命中.content, /骨架约定/)
   assert.equal(r.流派命中[0].名称, '退婚流')
   assert.deepEqual(r.未命中, ['自创流派'])
-  // 路由行存在但条目待补（都市无条目文件）：归一有效、内容为空
-  const r2 = await resolveBookTags(packageRoot, { 类型: '都市', 流派: [] })
-  assert.equal(r2.题材命中.名称, '都市')
-  assert.equal(r2.题材命中.content, '')
+  // 路由行存在但条目文件缺失（临时夹具）：归一有效、内容降级为空
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'wnw-stub-ref-'))
+  try {
+    await mkdir(path.join(tmp, 'references'), { recursive: true })
+    await writeFile(
+      path.join(tmp, 'references', '路由.csv'),
+      '名称,维度,题材,条目,别名\n都市,题材,都市,题材/待补.md,\n',
+      'utf8'
+    )
+    const r2 = await resolveBookTags(tmp, { 类型: '都市', 流派: [] })
+    assert.equal(r2.题材命中.名称, '都市')
+    assert.equal(r2.题材命中.content, '')
+  } finally {
+    await rm(tmp, { recursive: true, force: true })
+  }
 })
 
 test('resolveBookTags 知识库缺失整体降级：全部未命中，不抛错', async () => {
