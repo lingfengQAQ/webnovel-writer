@@ -36,7 +36,7 @@ SessionStart 已注入「当前在写哪本 / 共几本 / 全书近况入口」�
    兼容模式——按 `事实审查`、`编辑审` 两份任务书顺序自审，`mode` 填 `degraded`。
 {{/unless}}
    两份报告合成 `{"事实审查","编辑审","mode","待确认新专名","章摘要"}`，运行 `{{cmd}} save-review <章号> --file=<json路径>`；审稿单落 `工作区/审稿.md`，交作者：接受 / 改完接受 / 打回。
-4. 定稿：作者敲定后组定稿包（`frontMatter`、`body`、`summary`、`threadCreates`（本章「埋下/设下/开启」的新条目，`{id, 短题, frontMatter, body}`）、`threadUpdates`、`characterUpdates`、`rosterUpserts`、`timelineRows`、`secretWrites`、`commitLines`、`workspaceFiles`——本章用过的工作区文件全列进 `workspaceFiles`），运行 `{{cmd}} finalize <章号> --payload=<json路径>`，再运行 `{{cmd}} next --json` 进下一步。
+4. 定稿：作者敲定后组定稿包（`frontMatter`、`body`、`summary`、`threadCreates`（本章「埋下/设下/开启」的新条目，`{id, 短题, frontMatter, body}`）、`threadUpdates`、`characterUpdates`、`rosterUpserts`（`类型` 用中文：`角色`/`地点`/`组织`/`物品`）、`timelineRows`、`secretWrites`、`commitLines`、`workspaceFiles`——本章用过的工作区文件全列进 `workspaceFiles`），运行 `{{cmd}} finalize <章号> --payload=<json路径>`，再运行 `{{cmd}} next --json` 进下一步。
 
 ## 自动模式（连写，作者说「连写/挂机写一批」才进入）
 1. 批内每章走写章流程 1-3；`next --json` 返回 `dto.自动确认细纲 = true` 时细纲提案直接 `{{cmd}} persist-outline` 生效，不问作者。

@@ -1,0 +1,6 @@
+{"file": ".trellis/tasks/07-06-fix-review-round3/prd.md", "reason": "验收标准 AC1-AC5：探针场景语义、P1 回归测试覆盖、全量绿、spec 回填、不引入新功能"}
+{"file": ".trellis/tasks/07-06-fix-review-round3/design.md", "reason": "六个行为决策（D1-D6）与每条修法——检查实现是否偏离设计（尤其类型归一映射、幂等重跑顺序、restorePlan 三段式）"}
+{"file": ".trellis/tasks/07-05-m1-m7-review/review-m1-m7.md", "reason": "对照 40 条问题清单逐条核销；REFUTED 4 条不许被顺手改动"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "质检口径：双源禁令（新抽的 splitAliases/isWeakHook/TRACKED_SOURCE_PREFIXES/normalizeWorkspaceRel 不得残留旧副本）"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "质检口径：新增守卫/失败路径的文案必须人话中文、不泄英文栈味"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "质检口径：重建事务边界（解析失败跳过+warning / 完整性违反 ROLLBACK）与 B-S 新条款一致性"}

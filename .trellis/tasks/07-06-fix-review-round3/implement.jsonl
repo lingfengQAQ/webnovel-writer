@@ -1,0 +1,12 @@
+{"file": ".trellis/tasks/07-05-m1-m7-review/review-m1-m7.md", "reason": "修复 backlog 真源：40 条问题的分层清单、探针证据编号、三批修复建议"}
+{"file": ".trellis/tasks/07-05-m1-m7-review/research/review-A.md", "reason": "存储层（serializers/parsers/adapters/atomic）每条候选的 file:line、复现值表与建议探针——批1 R7/R8/R12、批2 R6/R11、批3 A 系全部细节"}
+{"file": ".trellis/tasks/07-05-m1-m7-review/research/review-B.md", "reason": "缓存/统计区细节——批3 B1/B2/B-S/imagery 的行号与事务边界分析"}
+{"file": ".trellis/tasks/07-05-m1-m7-review/research/review-C.md", "reason": "写章流程区细节——R4/C1/C2/C4 的防御不对称分析与建议探针"}
+{"file": ".trellis/tasks/07-05-m1-m7-review/research/review-D.md", "reason": "状态机区细节——R3 分派校验、D3 脏树范围、D4 retcon 回滚、D5/D6/D7"}
+{"file": ".trellis/tasks/07-05-m1-m7-review/research/review-E.md", "reason": "staging 区细节——R1/R2 守卫落点、E3-E9 与批次状态机交互分析"}
+{"file": ".trellis/tasks/07-05-m1-m7-review/research/review-F.md", "reason": "迁移/导出区细节——R5/R9/R10 探针记录（A/B/C/D 组）与 F-4..F-10"}
+{"file": ".trellis/tasks/07-05-m1-m7-review/research/review-G.md", "reason": "命令壳/测试基建区细节——G-1 gitBookCtx 差异、G-2 类型断裂证据链、G-5..G-9"}
+{"file": "docs/architecture/story-repo-spec-2026-06-10.md", "reason": "宪法真源：不变量 5/8、§8.1 批次语义、§10 序 0-6——守卫文案与 spec 回填（G-3/E7/E9、决策表 0.14）都要对齐它"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "缓存规范：§5.1/5.2 事务与软失败边界——B-S 条款回填落点"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "错误处理规范：人话化要求（F-8/B ensureReady 文案整改的依据）"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "质量规范：双源禁令、防呆序列化器要求——单源抽取（R6/E8/D6）的依据"}
