@@ -22,7 +22,8 @@ test('prepareChapterMaterials 组装本章写作材料（八组件锚点）并�
     )
     assert.match(c, /文风锚点/)
     assert.match(c, /节奏/) // 来自文风铁律
-    assert.match(c, /反和解/)
+    // 无契约的旧书降级：文风铁律的反和解节以「恩怨清算规则」标题沿用（spec 0.15 §6.3）
+    assert.match(c, /恩怨清算规则/)
     assert.match(c, /反派恶意/) // 来自文风铁律反和解段
 
     const onDisk = await read(ctx.repoPath, '工作区/本章写作材料.md')

@@ -65,6 +65,8 @@ try {
     '.webnovel/node_modules/js-yaml/package.json',
     '.webnovel/manifest.json',
     '.webnovel/books.jsonl',
+    '.webnovel/references/路由.csv',
+    '.webnovel/references/节拍/PA-001-压抑蓄力爆发.md',
     '.claude/skills/webnovel-writer/SKILL.md',
     '.claude/agents/事实审查.md',
     '.claude/settings.json',

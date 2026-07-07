@@ -11,11 +11,73 @@ import { ThreadLedgerReader } from '../storage/adapters/ThreadLedgerReader.js'
 import { writeAtomicBatch } from '../storage/atomic.js'
 import { validateReviewReport } from './schema.js'
 import { stagedFacts, overlayBookStatus } from '../staging/index.js'
+import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
+import { parseOutlineDeclarations, findDeclared, resolveBookTags, readEntry } from '../knowledge/index.js'
 
 const 兼容声明 = '本次使用兼容模式（单上下文顺序审稿），审稿隔离度低于完整两审模式。'
 const 完整声明 = '完整两审模式（事实审查/编辑审各自独立上下文）。'
 
 const 类型英文 = { 伏笔: 'foreshadow', 悬念: 'suspense', 感情线: 'romance' }
+
+/**
+ * 毒点清单四源（spec §6.3/§8）：①契约（本书专属毒点 + 恩怨清算档位）②题材/流派条目 front matter 毒点
+ * ③细纲声明命中的节拍/钩子/场景条目（毒点 + 审稿时节）。任一源缺失静默跳过——旁路降级。
+ */
+async function assemblePoisonPoints(ctx, outlineText) {
+  const out = []
+  try {
+    const raw = await fs.readFile(path.join(ctx.repoPath, '文风', '题材流派指导.md'), 'utf8')
+    const fm = parseFrontMatter(raw)
+    if (fm.ok && fm.data?.恩怨清算) {
+      out.push(`【契约】恩怨清算档位：${fm.data.恩怨清算}——只判主角行动线与恩怨结算结果，不判配角人设`)
+    }
+    const 专属 = extractSection(fm.ok ? fm.body : raw, '本书专属毒点')
+    if (专属) {
+      for (const line of 专属.split('\n')) {
+        const t = line.trim().replace(/^-\s*/, '')
+        if (t) out.push(`【契约】${t}`)
+      }
+    }
+  } catch {
+    // 无契约文件
+  }
+  if (!ctx.packageRoot) return out
+  try {
+    const config = ctx.repoPath ? await new BookConfigReader(ctx.repoPath).read() : { ok: false }
+    if (config.ok) {
+      const tags = await resolveBookTags(ctx.packageRoot, {
+        类型: config.data.类型,
+        流派: config.data.流派,
+      })
+      for (const e of [tags.题材命中, ...tags.流派命中].filter(Boolean)) {
+        const entry = e.条目 ? await readEntry(ctx.packageRoot, e.条目) : null
+        if (!entry) continue
+        for (const p of Array.isArray(entry.fm.毒点) ? entry.fm.毒点 : []) {
+          out.push(`【${e.名称}】${p}`)
+        }
+      }
+    }
+    const decl = parseOutlineDeclarations(outlineText)
+    const hits = [
+      ['节拍', decl.节拍 ? [decl.节拍] : []],
+      ['追读', decl.钩子 ? [decl.钩子] : []],
+      ['场景', decl.场景],
+    ]
+    for (const [dir, decls] of hits) {
+      for (const d of decls) {
+        const entry = await findDeclared(ctx.packageRoot, dir, d)
+        if (!entry) continue
+        for (const p of Array.isArray(entry.fm.毒点) ? entry.fm.毒点 : []) {
+          out.push(`【${entry.fm.名称 || d}】${p}`)
+        }
+        if (entry.审稿时) out.push(`【${entry.fm.名称 || d}·核对】${entry.审稿时.replace(/\n+/g, ' ')}`)
+      }
+    }
+  } catch {
+    // 知识库不可用则略
+  }
+  return out
+}
 
 /**
  * 组装两审共享的 ReviewInput DTO（AI 不见文件路径,实施计划 §1.5 原则 1）。
@@ -38,12 +100,16 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
     const 拟条目变动 = declarations.map(({ type, verb, id }) => ({ type, verb, id }))
 
     let 本章要写到的事 = '（无细纲）'
+    let outlineText = ''
     try {
-      const outline = await fs.readFile(path.join(repoPath, '工作区', '细纲.md'), 'utf8')
-      本章要写到的事 = extractSection(outline, '本章要写到的事') || '（细纲未声明）'
+      outlineText = await fs.readFile(path.join(repoPath, '工作区', '细纲.md'), 'utf8')
+      本章要写到的事 = extractSection(outlineText, '本章要写到的事') || '（细纲未声明）'
     } catch {
       // 无细纲
     }
+
+    // 毒点清单（spec §8 第 6 步编辑审核对项）：契约专属毒点 + 题材/流派条目毒点 + 细纲声明命中条目毒点
+    const 毒点清单 = await assemblePoisonPoints(ctx, outlineText)
 
     const status = overlayBookStatus(await assembleBookStatus(ctx), facts)
     const 当前卷 = status.ok ? status.data.当前卷 : 1
@@ -175,6 +241,7 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
         名册,
         时间线片段,
         信息差候选,
+        毒点清单,
       },
       error: '',
     }

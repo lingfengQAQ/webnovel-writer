@@ -6,12 +6,15 @@ import { TimelineReader } from '../storage/adapters/TimelineReader.js'
 import { SecretReader } from '../storage/adapters/SecretReader.js'
 import { ChapterReader } from '../storage/adapters/ChapterReader.js'
 import { stagedFacts, overlayBookStatus } from '../staging/index.js'
+import { parseFrontMatter } from '../storage/parsers/front-matter.js'
+import { parseOutlineDeclarations, findDeclared } from '../knowledge/index.js'
 
 /**
  * 备料：组装 工作区/本章写作材料.md（spec §8 step3，默认精准片段）。
- * 八组件：全书近况 + 要写到的事 + 事实切片 + 信息差边界 + 近章结尾 + 反复读清单 + 文风锚点 + 反和解规则。
+ * 组件：全书近况 + 要写到的事 + 事实切片 + 信息差边界 + 近章结尾 + 反复读清单 + 文风锚点
+ *       + 题材流派契约（§6.3，无契约的书降级）+ 细纲声明命中的知识切片（声明即路由，§7）。
  * 有待定稿批次时按"定稿 + 批内预登记"叠加组装（spec §8.1，批内事实只取本章之前的章）。
- * @param {{repoPath: string, cache: object}} ctx
+ * @param {{repoPath: string, cache: object, packageRoot?: string}} ctx
  * @param {{chapterNum: number}} args
  * @returns {Promise<{ok: boolean, filePath: string, content: string, error: string}>}
  */
@@ -23,11 +26,12 @@ export async function prepareChapterMaterials(ctx, { chapterNum }) {
     const status = overlayBookStatus(await assembleBookStatus(ctx), facts)
     const 当前卷 = status.ok ? status.data.当前卷 : 1
 
-    // 本章要写到的事（读细纲）
+    // 本章要写到的事 + 知识声明位（读细纲）
     let 要写到的事 = '（无细纲）'
+    let outlineText = ''
     try {
-      const outline = await fs.readFile(path.join(repoPath, '工作区', '细纲.md'), 'utf8')
-      要写到的事 = extractSection(outline, '本章要写到的事') || '（细纲未声明）'
+      outlineText = await fs.readFile(path.join(repoPath, '工作区', '细纲.md'), 'utf8')
+      要写到的事 = extractSection(outlineText, '本章要写到的事') || '（细纲未声明）'
     } catch {
       // 无细纲
     }
@@ -89,18 +93,34 @@ export async function prepareChapterMaterials(ctx, { chapterNum }) {
       tails.push(`### 第${c.章号}章结尾（批内暂存）\n${charTail(c.body, 150)}`)
     }
 
-    // 文风锚点 + 反和解（读文风铁律）
+    // 文风锚点（读文风铁律：纯作者品味）
     let 文风锚点 = '（无文风铁律）'
-    let 反和解 = ''
+    let 旧反和解 = ''
     try {
       const fl = await fs.readFile(path.join(repoPath, '文风', '文风铁律.md'), 'utf8')
       const 铁律 = extractSection(fl, '铁律')
       const 节奏 = extractSection(fl, '节奏偏好')
       文风锚点 = [铁律 && `铁律：${铁律}`, 节奏 && `节奏偏好：${节奏}`].filter(Boolean).join('\n')
-      反和解 = extractSection(fl, '反和解')
+      旧反和解 = extractSection(fl, '反和解') // 0.14 前的旧书把反和解写在文风铁律，降级沿用
     } catch {
       // 无文风铁律
     }
+
+    // 题材流派契约（spec §6.3 建书蒸馏产物；无契约的书降级——旁路增益不是必经关卡）
+    let 契约段 = ''
+    try {
+      const raw = await fs.readFile(path.join(repoPath, '文风', '题材流派指导.md'), 'utf8')
+      const fm = parseFrontMatter(raw)
+      const 档位 = fm.ok && fm.data?.恩怨清算 ? `恩怨清算档位：${fm.data.恩怨清算}（约束主角行动线与恩怨结算，不约束配角人设）\n\n` : ''
+      契约段 = `## 题材流派契约（本书写作契约）\n${档位}${(fm.ok ? fm.body : raw).trim()}`
+    } catch {
+      契约段 = 旧反和解
+        ? `## 恩怨清算规则\n${旧反和解}`
+        : '## 题材流派契约\n（本书无契约文件——未做建书蒸馏，跳过）'
+    }
+
+    // 细纲声明命中的知识切片（声明即路由；查不到表注入声明文本本身，spec §7）
+    const 知识切片 = ctx.packageRoot ? await declaredKnowledge(ctx.packageRoot, outlineText) : ''
 
     // 反复读清单：体检产出的跨章高频意象（meta imagery_top），提醒本章避免再用
     let 反复读 = '（尚未体检，暂无数据——首次体检后自动填充）'
@@ -136,8 +156,9 @@ export async function prepareChapterMaterials(ctx, { chapterNum }) {
       '',
       `## 文风锚点\n${文风锚点}`,
       '',
-      反和解 ? `## 反和解规则\n${反和解}` : '## 反和解规则\n（无）',
+      契约段,
       '',
+      ...(知识切片 ? [知识切片, ''] : []),
       `## 反复读清单\n${反复读}`,
       '',
     ]
@@ -157,6 +178,25 @@ export async function prepareChapterMaterials(ctx, { chapterNum }) {
 // 批内暂存章的结尾片段（与 ChapterReader.readTail 同口径：正文末 N 个字符）
 function charTail(body, n) {
   return [...String(body)].slice(-n).join('').trim()
+}
+
+/** 细纲声明位 → 知识切片段（节拍/钩子/场景的「落笔时」节；未命中降级为声明文本本身） */
+async function declaredKnowledge(packageRoot, outlineText) {
+  const decl = parseOutlineDeclarations(outlineText)
+  const parts = []
+  const push = async (label, dir, declaration) => {
+    if (!declaration) return
+    const entry = await findDeclared(packageRoot, dir, declaration)
+    if (entry && entry.落笔时) {
+      parts.push(`### ${label}：${declaration}\n${entry.落笔时}`)
+    } else {
+      parts.push(`### ${label}：${declaration}\n（知识库无此条目，按声明执行）`)
+    }
+  }
+  await push('本章节拍', '节拍', decl.节拍)
+  await push('章尾钩子', '追读', decl.钩子)
+  for (const s of decl.场景) await push('本章场景', '场景', s)
+  return parts.length ? `## 本章知识切片（按细纲声明注入）\n\n${parts.join('\n\n')}` : ''
 }
 
 // 信息差内容首句（跳过空行与小节标题）

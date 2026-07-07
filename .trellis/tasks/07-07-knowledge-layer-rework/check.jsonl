@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/07-07-knowledge-layer-rework/prd.md", "reason": "对照验收 A1-A8 逐条核销；A6-A8 内容质量关是作者明确要求——测试测不出内容质量，必须逐条独立审查并留记录"}
+{"file": ".trellis/tasks/07-07-knowledge-layer-rework/design.md", "reason": "检查实现是否偏离设计：三层路由键、三处降级路径、条目三节结构、反同质化纪律（无示例情节/差异化点必填≥3）"}
+{"file": ".trellis/tasks/07-07-knowledge-layer-rework/implement.md", "reason": "评审门定义：门1 行为测试+冒烟、门2 每批内容审查+作者签收、门3 全量校验+旧结构下线"}
+{"file": "docs/architecture/story-repo-spec-2026-06-10.md", "reason": "spec 回填核对：细纲三字段、知识注入点、契约文件与实现一致；不变量与铁律不得被破坏"}

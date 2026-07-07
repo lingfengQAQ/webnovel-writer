@@ -1,0 +1,6 @@
+{"file": ".trellis/tasks/07-07-knowledge-layer-rework/prd.md", "reason": "需求真源：R1-R8（维度立正/三层路由/蒸馏/接线/降级/内容纪律/installer/spec 回填）与验收 A1-A8"}
+{"file": ".trellis/tasks/07-07-knowledge-layer-rework/design.md", "reason": "技术设计：数据层终态与条目格式、三层路由数据流、消费点改动清单（§4 表，含代码位置）、降级三处、反同质化纪律、内容重写映射（§7 表）"}
+{"file": ".trellis/tasks/07-07-knowledge-layer-rework/implement.md", "reason": "执行清单：P1 管线 12 步 + P2 内容五批；每批「改写→独立审查→作者签收」流程；三个评审门与回滚点"}
+{"file": "docs/architecture/story-repo-spec-2026-06-10.md", "reason": "格式法律：§5 知识层承诺、§6.1 反和解、§7 细纲结构（本任务加三字段）、§8 写章八阶段、§10 状态机序 1/6——改动必须与 spec 回填同步；铁律「只吃整理好的 DTO」不得破坏"}
+{"file": "v7/references/迁移报告.md", "reason": "v6 知识层迁移清单与真源选定（CSV 单源）——P2 内容重写的源映射依据"}
+{"file": ".trellis/spec/backend/index.md", "reason": "后端编码规范索引：命令契约（纯返回 {ok,...}）、错误处理、目录结构约定"}

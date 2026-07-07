@@ -56,17 +56,21 @@ export function bookAgentsMd(书名) {
   ].join('\n')
 }
 
-/** 序1 建书 → book.yaml + 大纲/总纲.md + 大纲/卷纲/第01卷.md + AGENTS.md 指路 + .gitignore + git init + core.quotepath */
-export async function persistCreateBook(ctx, { book, 总纲, 卷纲 }) {
+/** 序1 建书 → book.yaml + 大纲/总纲.md + 大纲/卷纲/第01卷.md + 文风/题材流派指导.md（可选，spec §6.3）+ AGENTS.md 指路 + .gitignore + git init + core.quotepath */
+export async function persistCreateBook(ctx, { book, 总纲, 卷纲, 题材流派指导 }) {
   try {
     const gitignore = await buildGitignore(ctx.repoPath, ['.cache/', '工作区/'])
-    const written = await writeAtomicBatch(ctx.repoPath, [
+    const files = [
       { path: 'book.yaml', content: serializeYAML(book) },
       { path: path.join('大纲', '总纲.md'), content: 总纲 },
       { path: path.join('大纲', '卷纲', '第01卷.md'), content: 卷纲 },
       { path: 'AGENTS.md', content: bookAgentsMd(book?.书名 || '未命名') },
       { path: '.gitignore', content: gitignore },
-    ])
+    ]
+    if (typeof 题材流派指导 === 'string' && 题材流派指导.trim()) {
+      files.push({ path: path.join('文风', '题材流派指导.md'), content: 题材流派指导 })
+    }
+    const written = await writeAtomicBatch(ctx.repoPath, files)
     // P0-2：书仓库工程化（spec quality §3.3 钉死建书流程负责 git init + core.quotepath）
     const git = createGit(ctx.repoPath)
     await git.init()

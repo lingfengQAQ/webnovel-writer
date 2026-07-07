@@ -21,6 +21,7 @@ export function parseBookConfig(yamlString) {
     spec_version: '7.0',
     书名: '未命名',
     类型: '玄幻',
+    流派: [],
     每章目标字数: 3000,
     卷规模: 40,
     文体基线起: 1,

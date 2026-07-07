@@ -1,7 +1,7 @@
 # Webnovel Writer 多宿主与多智能体适配 Spec
 
-> 日期：2026-06-05（v3 修订：2026-06-11；v3.1：同日，hook 语义 deny → ask，依据 #113；v3.2：2026-06-12，按 PRD 1.0 §10.2 修订——安装器重写为工作目录布局、AGENTS.md 公约数层、SessionStart 注入、模板条件块、放弃插件市场；v3.3：2026-06-26，RFC 后续决策——两审模式、审稿清单定义；v3.4：2026-06-27，RFC 深度核验——事实审查增 D3 未登记伏笔检测 category；v3.5：2026-07-02，设计边界回顾——§6.1 目录图角色清单同步两审实态；v3.6：2026-07-03，M1-M5 review S-2——§7.1 registry 示例补 M5 实态字段 detect_bin/install_dir 等，照抄示例不再被 validator 打回；v3.7：2026-07-04，M6 自动模式——SKILL.md 单源增「自动模式（连写）」段并重渲染各宿主壳，§5.1 补批次暂存不开第二条写入路径）
-> 状态：草案 v3.7
+> 日期：2026-06-05（v3 修订：2026-06-11；v3.1：同日，hook 语义 deny → ask，依据 #113；v3.2：2026-06-12，按 PRD 1.0 §10.2 修订——安装器重写为工作目录布局、AGENTS.md 公约数层、SessionStart 注入、模板条件块、放弃插件市场；v3.3：2026-06-26，RFC 后续决策——两审模式、审稿清单定义；v3.4：2026-06-27，RFC 深度核验——事实审查增 D3 未登记伏笔检测 category；v3.5：2026-07-02，设计边界回顾——§6.1 目录图角色清单同步两审实态；v3.6：2026-07-03，M1-M5 review S-2——§7.1 registry 示例补 M5 实态字段 detect_bin/install_dir 等，照抄示例不再被 validator 打回；v3.7：2026-07-04，M6 自动模式——SKILL.md 单源增「自动模式（连写）」段并重渲染各宿主壳，§5.1 补批次暂存不开第二条写入路径；v3.8：2026-07-07，知识库重构（story-repo-spec 0.15）——§8.1 工作目录布局补知识库 references vendoring，SKILL.md 单源同步知识声明位与建书蒸馏并重渲染各宿主壳）
+> 状态：草案 v3.8
 > 基线：**v7 story repo**（`story-repo-spec-2026-06-10.md` 0.12）+ **PRD**（`v7-prd.md` 1.2，产品法律文本，冲突时以 PRD 为准）。v2 的基线是 v6.1.0 Python runtime，该架构已被 v7 推翻；本版继承 v2 的元层纪律，重写全部基座层。
 > 来源：v2（基于 PR #110 review 重写）+ 2026-06 多平台调研核验 + Trellis 多宿主机制调研（2026-06-11）+ PRD 1.0 + RFC 后续决策（2026-06-26）+ RFC 深度核验（2026-06-27）
 > 定位：把 v7 的格式层（story repo）原封不动地暴露给多个 agent 宿主——格式平台无关，本 spec 只管入口怎么落、角色怎么生成、安装怎么零门槛、支持等级怎么诚实。
@@ -272,7 +272,7 @@ node scripts/build-host-shells.mjs --check     # drift check，CI 必跑
 ### 8.1 init
 
 1. **检测环境**：Node ≥ 22（不足时人话提示升级）；识别已安装的 agent CLI（按 registry 顺序探测）。
-2. **生成工作目录布局**（story repo spec §2.0）：`AGENTS.md`（公约数层，标记块）、`.webnovel/`（Node 脚本、角色定义、模板哈希清单、`books.jsonl`）、检测到的各平台壳（`.claude/`、`.codex/` 等，由生成器按 §5.9 条件块编译）。
+2. **生成工作目录布局**（story repo spec §2.0）：`AGENTS.md`（公约数层，标记块）、`.webnovel/`（Node 脚本、角色定义、知识库 references、模板哈希清单、`books.jsonl`）、检测到的各平台壳（`.claude/`、`.codex/` 等，由生成器按 §5.9 条件块编译）。
 3. **输出报告**：装到了哪、各宿主支持等级、降级说明、下一步（打开 agent CLI 说"开始写书"）。
 
 ### 8.2 update

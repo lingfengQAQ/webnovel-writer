@@ -8,7 +8,7 @@ import { createRequire } from 'node:module'
  * 复制源 = 当前运行的包根;js-yaml 及其传递依赖从本包的解析位置递归收集。
  */
 
-const RUNTIME_ENTRIES = ['bin', 'src', 'roles', 'package.json']
+const RUNTIME_ENTRIES = ['bin', 'src', 'roles', 'references', 'package.json']
 
 /** 文件集/清单键统一正斜杠：清单跨平台可移植（双平台 CI、网盘搬家不失配） */
 const posix = (p) => p.split(path.sep).join('/')
