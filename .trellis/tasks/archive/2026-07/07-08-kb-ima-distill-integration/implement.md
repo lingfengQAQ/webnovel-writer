@@ -51,8 +51,8 @@
 
 - [x] Z.1 作者抽查签收（重点：场景手法型 5 条、诡秘流重写、五档语义、近重复裁决）——2026-07-16 作者确认按现状原样签收，冻结 166 条为 07-10 十维治理的输入基线；五档与手法型场景条目将由 07-10 按 spec 0.17 覆盖/搬迁，属已知的历史决策如实入库
 - [x] Z.2 删除 `v7/v7_fix_package/` 整目录；`git status` 确认不在暂存区（报告与清单留档于 research/fix-package-report/）
-- [ ] Z.3 commit（references + src/test 两处代码点 + spec 若有同步）；提交信息按仓库惯例 `feat(v7): ...`
-- [ ] Z.4 任务归档
+- [x] Z.3 commit：`e2410c7`（references + src/test 两处代码点 + spec/README + 任务材料）
+- [x] Z.4 任务归档：`45e1e5c`
 
 ## 验证命令
 

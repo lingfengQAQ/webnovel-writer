@@ -1,7 +1,7 @@
 {
   "id": "kb-ima-distill-integration",
   "name": "kb-ima-distill-integration",
-  "title": "知识库 ima 蒸馏收编——14 份修正应用 + 20 条新条目过审 + 路由登记 + 云端回传",
+  "title": "知识库 ima 蒸馏收编——修正应用 + 新条目过审 + 五档扩展",
   "description": "",
   "status": "completed",
   "dev_type": null,
@@ -21,6 +21,6 @@
   "children": [],
   "parent": null,
   "relatedFiles": [],
-  "notes": "",
+  "notes": "2026-07-16 作者签收 166 条基线；云端不回传，本地仓库为唯一真源。",
   "meta": {}
 }
