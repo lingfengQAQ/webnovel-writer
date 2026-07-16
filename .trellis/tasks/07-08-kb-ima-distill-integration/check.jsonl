@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/07-08-kb-ima-distill-integration/prd.md", "reason": "对照验收 A1-A6 逐条核销；A5 内容质量关是作者铁规——测试测不出内容质量，每条须独立新鲜上下文审查并留记录，作者抽查签收后才入生效范围"}
+{"file": ".trellis/tasks/07-08-kb-ima-distill-integration/design.md", "reason": "检查偏离：来源映射是否按 §2（fixes 版 vs cloud_new 版取对了没）、诡秘流是否去尽单书专名（§4）、路由终态 39 行与克苏鲁行修改（§5）、LF 归一"}
+{"file": ".trellis/tasks/07-08-kb-ima-distill-integration/implement.md", "reason": "评审门：门0 五档先行、门1 每批审查记录齐、门2 作者签收后才执行 Z.2 删除 v7_fix_package 与 commit"}
+{"file": "v7/test/references/format.test.js", "reason": "A3 验收锚点：合法档位=5；全目录格式校验须绿"}

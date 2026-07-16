@@ -1,0 +1,9 @@
+{"file": ".trellis/tasks/07-08-kb-ima-distill-integration/prd.md", "reason": "需求真源：R1-R6 与验收 A1-A6；作者五项拍板（诡秘流新立/五档/不管云端/场景全收/收尾删 v7_fix_package）；小i可选项处理口径 R5"}
+{"file": ".trellis/tasks/07-08-kb-ima-distill-integration/design.md", "reason": "技术与内容设计：文件来源映射表（§2，fixes/cloud_new → references）、五档语义与两处代码点（§3）、诡秘流泛化重写要点（§4）、路由表终态 39 行（§5）、审查协议（§6）"}
+{"file": ".trellis/tasks/07-08-kb-ima-distill-integration/implement.md", "reason": "执行清单：门0 五档先行 + 批A-F 内容批次 + 横切收口 + 收尾；每批「落盘→独立审查→记录」；门2 签收后才删 v7_fix_package"}
+{"file": ".trellis/tasks/07-07-knowledge-layer-rework/prd.md", "reason": "上游任务需求：R6 内容重写纪律（只写结构与禁忌/毒点措辞约束主角行动线不禁角色设计）——本次收编条目沿用同一纪律"}
+{"file": ".trellis/tasks/07-07-knowledge-layer-rework/research/content-review/批3-节拍.md", "reason": "近重复核查与合并先例（PA-037→PA-002、PA-040→PA-005 等 6 组）；五项清单审查记录格式范本；批D 节拍新 3 条按此口径查重"}
+{"file": ".trellis/tasks/07-07-knowledge-layer-rework/research/content-review/批1-流派.md", "reason": "流派批审查记录范本（五项清单原文）；批B 流派 6 条审查沿用"}
+{"file": "v7/src/knowledge/index.js", "reason": "路由消费真源：loadRoutes/resolveLabel（先到先得线性扫描——克苏鲁摘「诡秘」别名后新行才可达）/listChapterIndex/findDeclared；路由.csv 只服务题材/流派"}
+{"file": "v7/src/commands/knowledge-pack.js", "reason": "门0 代码点之一：46 行档位枚举三档→五档 + 语义短句（design §3 文案）"}
+{"file": "v7/test/references/format.test.js", "reason": "门0 代码点之二：66 行合法档位数组五档化；该测试扫描全目录，新条目自动纳入格式校验"}

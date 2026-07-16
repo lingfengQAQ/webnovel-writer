@@ -63,7 +63,7 @@ test('书级条目三节齐全（骨架约定/读者预期/毒点展开）', asy
 })
 
 test('题材条目必有 恩怨清算默认 且取值合法', async () => {
-  const 合法档位 = ['有仇必报', '恩怨分明', '留有余地']
+  const 合法档位 = ['有仇必报', '宿命必偿', '恩怨分明', '以直报怨', '留有余地']
   for (const f of await mdFiles('题材')) {
     const raw = await fs.readFile(path.join(ROOT, '题材', f), 'utf8')
     const fm = parseFrontMatter(raw)
