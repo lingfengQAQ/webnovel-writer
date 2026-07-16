@@ -1,0 +1,32 @@
+{
+  "id": "knowledge-taxonomy-governance",
+  "name": "knowledge-taxonomy-governance",
+  "title": "知识库维度边界与扩充治理",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "codex",
+  "assignee": "codex",
+  "createdAt": "2026-07-10",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "v7",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-10-knowledge-runtime-framework",
+    "07-10-book-level-knowledge-migration",
+    "07-10-story-object-knowledge-migration",
+    "07-10-chapter-knowledge-migration",
+    "07-10-knowledge-integration-audit"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
