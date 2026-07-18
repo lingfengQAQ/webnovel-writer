@@ -13,6 +13,8 @@ import { collectRuntimeFiles } from '../../src/installer/vendor.js'
 import { run as knowledgePack } from '../../src/commands/knowledge-pack.js'
 import { tempBookCtx } from '../commands/_helper.js'
 import { minimalCreateBookPayload } from '../state-machine/_helper.js'
+import { stageChapter } from '../../src/staging/index.js'
+import { writeReviewArtifacts } from '../staging/_helper.js'
 
 // 真源知识库（v7 包根）——样例条目即夹具
 const packageRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -71,8 +73,10 @@ const 细纲带声明 = [
   '## 本章提案',
   '本章定位：推进章。',
   '本章节拍：PA-001 压抑蓄力爆发',
-  '章尾钩子：悬念钩',
   '本章场景：拍卖会、自定义梦境回廊',
+  '本章技法：限制视角误导',
+  '本章追读：悬念钩',
+  '知识变体：拍卖会只写会后余波，不写逐口竞价',
   '## 本章要写到的事（确认即生效）',
   '- [ ] 林晚查到玉佩的第一条线索',
   '## 备选',
@@ -92,14 +96,16 @@ test('备料注入：契约常驻 + 声明命中切片 + 自定义声明降级�
     assert.match(c, /系统信息不可靠/)
     assert.match(c, /主角不得靠系统白给渡过主线危机/)
     assert.doesNotMatch(c, /恩怨清算档位/)
-    // 声明命中：节拍/钩子/场景的「落笔时」节
+    // 声明命中：四维选择只注入各自的「落笔时」节
     assert.match(c, /### 本章节拍：PA-001 压抑蓄力爆发/)
     assert.match(c, /爆发必须改写局面/)
-    assert.match(c, /### 章尾钩子：悬念钩/)
     assert.match(c, /### 本章场景：拍卖会/)
     assert.match(c, /竞价过程写节点不写流水/)
+    assert.match(c, /### 本章追读：悬念钩/)
     // 自定义声明降级：声明本身即知识
-    assert.match(c, /### 本章场景：自定义梦境回廊\n（知识库无此条目，按声明执行）/)
+    assert.match(c, /### 本章场景：自定义梦境回廊\n（自定义选择，按细纲声明执行）/)
+    assert.match(c, /### 本章技法：限制视角误导\n（自定义选择，按细纲声明执行）/)
+    assert.match(c, /### 知识变体\n- 拍卖会只写会后余波，不写逐口竞价/)
   } finally {
     await cleanup()
   }
@@ -143,6 +149,8 @@ test('审稿输入：冻结契约 + 声明命中的审稿切片，不回读当�
     assert.match(r.input.作品契约, /主角不得靠系统白给/)
     assert.ok(r.input.知识审查.some((item) => item.startsWith('【压抑蓄力爆发·核对】')))
     assert.ok(r.input.知识审查.some((item) => item.startsWith('【拍卖会·核对】')))
+    assert.ok(r.input.知识审查.some((item) => item.includes('【技法·自定义】')))
+    assert.ok(r.input.知识审查.some((item) => item.includes('【知识变体】')))
     assert.equal(r.input.毒点清单, undefined)
   } finally {
     await cleanup()
@@ -176,20 +184,121 @@ test('序1 DTO：知识路由菜单 + 蒸馏期望产物（A1）', async () => {
   assert.match(dto.期望产物, /作者已确认:true/)
 })
 
-test('序6 DTO：节拍/钩子/场景索引 + 场景候选（卷纲命中）', async () => {
+test('序6 DTO：四维只给按本章语料命中的少量候选，不暴露全量菜单', async () => {
   const { ctx, cleanup } = await tempBookCtx()
   try {
     ctx.packageRoot = packageRoot
-    // 卷纲里埋场景关键词 → 候选命中
-    await fs.appendFile(path.join(ctx.repoPath, '大纲', '卷纲', '第01卷.md'), '\n中段安排一场拍卖会夺宝。\n', 'utf8')
+    await fs.appendFile(
+      path.join(ctx.repoPath, '大纲', '卷纲', '第01卷.md'),
+      '\n- 第3章安排拍卖会竞价，先抑后扬，章尾使用悬念钩。\n',
+      'utf8'
+    )
     const dto = await buildDto(ctx, 6, { nextChapter: 3 })
-    assert.ok(dto.节拍索引.some((s) => s.includes('PA-001')))
-    assert.ok(dto.钩子清单.some((s) => s.includes('悬念钩')))
-    assert.ok(dto.场景索引.some((s) => s.includes('拍卖会')))
-    assert.ok(dto.场景候选.some((s) => s.includes('拍卖会')))
+    assert.ok(dto.章级知识候选.节拍.some((item) => item.编号 === 'PA-001'))
+    assert.ok(dto.章级知识候选.场景.some((item) => item.名称 === '拍卖会'))
+    assert.ok(dto.章级知识候选.追读.some((item) => item.名称 === '悬念钩'))
+    for (const entries of Object.values(dto.章级知识候选)) {
+      assert.ok(entries.length <= 3)
+      assert.ok(entries.every((item) => item.来源.includes('@sha256:')))
+      assert.ok(entries.every((item) => !('文件' in item)))
+    }
+    assert.equal(dto.节拍索引, undefined)
+    assert.equal(dto.钩子清单, undefined)
+    assert.equal(dto.场景索引, undefined)
     assert.match(dto.期望产物, /本章节拍/)
+    assert.match(dto.期望产物, /本章技法/)
+    assert.match(dto.期望产物, /完全自定义/)
   } finally {
     await cleanup()
+  }
+})
+
+test('序6 DTO：批内前章选择只触发软重复信号，不硬排除合法复用', async () => {
+  const { ctx, cleanup } = await tempBookCtx()
+  try {
+    ctx.packageRoot = packageRoot
+    const stagedOutline = [
+      '# 第 3 章细纲',
+      '## 本章提案',
+      '本章场景：拍卖会',
+      '知识变体：第 3 章只写竞价，第 4 章承接会后追踪',
+      '## 本章要写到的事（确认即生效）',
+      '- [ ] 完成拍卖竞价',
+    ].join('\n')
+    await fs.writeFile(path.join(ctx.repoPath, '工作区', '细纲.md'), stagedOutline, 'utf8')
+    await writeReviewArtifacts(ctx.repoPath, 3)
+    const staged = await stageChapter(ctx, {
+      chapterNum: 3,
+      payload: {
+        frontMatter: {
+          章号: 3,
+          标题: '拍卖落槌',
+          卷: 1,
+          书内时间: '春月初三',
+          字数: 100,
+          章定位: '推进',
+          钩子: '悬念钩-中',
+          情绪定位: '抬升',
+        },
+        body: '竞价落槌后，林晚发现有人跟踪。',
+      },
+    })
+    assert.equal(staged.ok, true, staged.error)
+    await fs.appendFile(
+      path.join(ctx.repoPath, '大纲', '卷纲', '第01卷.md'),
+      '\n- 第4章继续拍卖会余波，追查竞价者。\n',
+      'utf8'
+    )
+
+    const dto = await buildDto(ctx, 6, { nextChapter: 4 })
+    const auction = dto.章级知识候选.场景.find((item) => item.名称 === '拍卖会')
+    assert.ok(auction, '近期用过的合适候选仍须保留')
+    assert.deepEqual(auction.近期使用, [
+      { 章号: 3, 变体: '第 3 章只写竞价，第 4 章承接会后追踪' },
+    ])
+    assert.match(auction.重复提醒, /软降权/)
+  } finally {
+    await cleanup()
+  }
+})
+
+test('序6 DTO：技法维度使用同一候选接口，并把规划切片交给真实消费者', async () => {
+  const packageFixture = await mkdtemp(path.join(os.tmpdir(), 'wnw-technique-ref-'))
+  const { ctx, cleanup } = await tempBookCtx()
+  try {
+    const dir = path.join(packageFixture, 'references', '技法')
+    await mkdir(dir, { recursive: true })
+    await writeFile(
+      path.join(dir, '限制视角误导.md'),
+      [
+        '---',
+        '名称: 限制视角误导',
+        '类别: 视角',
+        '作用层级: 场景',
+        '触发问题:',
+        '  - 信息误导',
+        '一句话: 只给视角人物能确认的信息',
+        '---',
+        '## 规划这一章时',
+        '先列出视角人物知道与不知道的事实。',
+        '## 落笔时',
+        '不得越过视角人物认知补叙真相。',
+        '## 审稿时',
+        '核对是否出现越权信息。',
+      ].join('\n'),
+      'utf8'
+    )
+    ctx.packageRoot = packageFixture
+    const dto = await buildDto(ctx, 6, {
+      nextChapter: 3,
+      本章任务: '本章用限制视角误导隐藏真相',
+    })
+    assert.equal(dto.章级知识候选.技法[0].名称, '限制视角误导')
+    assert.match(dto.章级知识候选.技法[0].规划, /知道与不知道/)
+    assert.match(dto.章级知识候选.技法[0].来源, /^技法\/限制视角误导\.md@sha256:/)
+  } finally {
+    await cleanup()
+    await rm(packageFixture, { recursive: true, force: true })
   }
 })
 
@@ -245,7 +354,7 @@ test('知识库整体缺失时序1/序6 DTO 零报错（A3）', async () => {
       ctx.packageRoot = empty
       const dto6 = await buildDto(ctx, 6, { nextChapter: 3 })
       assert.equal(dto6.state, 'draft-outline')
-      assert.ok(!dto6.节拍索引)
+      assert.ok(!dto6.章级知识候选)
     } finally {
       await cleanup()
     }

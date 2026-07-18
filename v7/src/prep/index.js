@@ -7,9 +7,13 @@ import { SecretReader } from '../storage/adapters/SecretReader.js'
 import { ChapterReader } from '../storage/adapters/ChapterReader.js'
 import { stagedFacts, overlayBookStatus } from '../staging/index.js'
 import { parseFrontMatter } from '../storage/parsers/front-matter.js'
-import { parseOutlineDeclarations, findDeclared } from '../knowledge/index.js'
 import { ContractReader } from '../storage/adapters/ContractReader.js'
 import { DesignReader } from '../storage/adapters/DesignReader.js'
+import {
+  CHAPTER_KNOWLEDGE_LABELS,
+  parseChapterDeclarations,
+  resolveChapterDeclarations,
+} from '../knowledge/chapter.js'
 
 /**
  * 备料：组装 工作区/本章写作材料.md（spec §8 step3，默认精准片段）。
@@ -112,7 +116,7 @@ export async function prepareChapterMaterials(ctx, { chapterNum }) {
 
     const 契约段 = `## 作品契约（本章所需）\n${contract.content.replace(/^## /gm, '### ')}`
 
-    const declarations = parseOutlineDeclarations(outlineText)
+    const declarations = parseChapterDeclarations(outlineText)
     const designObjects = await assembleDesignObjects(
       repoPath,
       declarations.对象,
@@ -124,7 +128,7 @@ export async function prepareChapterMaterials(ctx, { chapterNum }) {
     const stagedFactObjects = assembleStagedFactObjects(facts.factChanges)
 
     // 细纲声明命中的知识切片（声明即路由；查不到表注入声明文本本身，spec §7）
-    const 知识切片 = ctx.packageRoot ? await declaredKnowledge(ctx.packageRoot, outlineText) : ''
+    const 知识切片 = await declaredKnowledge(ctx.packageRoot, outlineText)
 
     // 反复读清单：体检产出的跨章高频意象（meta imagery_top），提醒本章避免再用
     let 反复读 = '（尚未体检，暂无数据——首次体检后自动填充）'
@@ -228,22 +232,23 @@ function charTail(body, n) {
   return [...String(body)].slice(-n).join('').trim()
 }
 
-/** 细纲声明位 → 知识切片段（节拍/钩子/场景的「落笔时」节；未命中降级为声明文本本身） */
+/** 确认细纲的四维选择 → 落笔切片；自定义与真实变体保留原文。 */
 async function declaredKnowledge(packageRoot, outlineText) {
-  const decl = parseOutlineDeclarations(outlineText)
+  const { declarations, selections } = await resolveChapterDeclarations(packageRoot, outlineText)
   const parts = []
-  const push = async (label, dir, declaration) => {
-    if (!declaration) return
-    const entry = await findDeclared(packageRoot, dir, declaration)
-    if (entry && entry.落笔时) {
-      parts.push(`### ${label}：${declaration}\n${entry.落笔时}`)
+  for (const selection of selections) {
+    const label = CHAPTER_KNOWLEDGE_LABELS[selection.维度]
+    if (selection.条目?.落笔时) {
+      parts.push(`### ${label}：${selection.声明}\n${selection.条目.落笔时}`)
+    } else if (selection.条目) {
+      parts.push(`### ${label}：${selection.声明}\n（该条目没有额外落笔切片，按细纲声明执行）`)
     } else {
-      parts.push(`### ${label}：${declaration}\n（知识库无此条目，按声明执行）`)
+      parts.push(`### ${label}：${selection.声明}\n（自定义选择，按细纲声明执行）`)
     }
   }
-  await push('本章节拍', '节拍', decl.节拍)
-  await push('章尾钩子', '追读', decl.钩子)
-  for (const s of decl.场景) await push('本章场景', '场景', s)
+  if (declarations.变体.length) {
+    parts.push(`### 知识变体\n${declarations.变体.map((item) => `- ${item}`).join('\n')}`)
+  }
   return parts.length ? `## 本章知识切片（按细纲声明注入）\n\n${parts.join('\n\n')}` : ''
 }
 

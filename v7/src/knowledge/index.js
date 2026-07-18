@@ -156,16 +156,6 @@ export async function resolveBookKnowledge(
   return { 题材命中, 副题材命中, 流派命中, 未命中, 兼容提醒 }
 }
 
-/** 旧调用面在一次性切换期间的内部桥接；最终调用者改完后删除。 */
-export async function resolveBookTags(packageRoot, { 类型, 流派 = [] }) {
-  const result = await resolveBookKnowledge(packageRoot, { 类型, 流派 })
-  return {
-    题材命中: result.题材命中,
-    流派命中: result.流派命中,
-    未命中: result.未命中.map((item) => item.输入),
-  }
-}
-
 async function withRouteContent(packageRoot, row) {
   const out = {
     名称: row.名称,
@@ -289,59 +279,6 @@ export async function queryKnowledge(
         }
       : {}),
   }))
-}
-
-/** 章级旧索引调用面；由十维正式读取器提供数据。 */
-export async function listChapterIndex(packageRoot, dimension) {
-  if (!KNOWLEDGE_GROUPS.篇章执行.includes(dimension)) return []
-  const entries = await listKnowledgeEntries(packageRoot, dimension)
-  return entries.map((entry) => ({
-    名称: entry.名称,
-    编号: entry.编号 || '',
-    关键词: entry.关键词 || [],
-    一句话: entry.一句话 || '',
-    文件: entry.文件,
-  }))
-}
-
-/** 按编号或名称精确读取已声明知识；自定义声明返回 null。 */
-export async function findDeclared(packageRoot, dimension, declaration) {
-  const decl = String(declaration || '').trim()
-  if (!decl) return null
-  const entries = await listKnowledgeEntries(packageRoot, dimension)
-  const hit = entries.find(
-    (entry) =>
-      (entry.编号 && decl.startsWith(entry.编号)) ||
-      decl === entry.名称 ||
-      decl.includes(entry.名称)
-  )
-  return hit ? readEntry(packageRoot, hit.文件) : null
-}
-
-/** 场景候选保留为薄封装，实际走同一个有限候选查询器。 */
-export async function sceneCandidates(packageRoot, texts) {
-  const corpus = (Array.isArray(texts) ? texts : [texts]).filter(Boolean).join('\n')
-  if (!corpus) return []
-  const hits = await queryKnowledge(packageRoot, '场景', { 问题: corpus })
-  return hits.map((entry) => ({ 名称: entry.名称, 一句话: entry.一句话 || '' }))
-}
-
-/**
- * 旧细纲声明解析器在章级调用切换前保留；下一阶段一次性改为十维目标标签。
- */
-export function parseOutlineDeclarations(outline) {
-  const out = { 节拍: '', 钩子: '', 场景: [], 对象: [] }
-  for (const line of String(outline || '').split('\n')) {
-    const text = line.trim()
-    const match = text.match(/^(本章节拍|章尾钩子|本章场景|本章对象)[：:]\s*(.*)$/)
-    if (!match || !match[2]) continue
-    const value = match[2].trim()
-    if (match[1] === '本章节拍') out.节拍 = value
-    else if (match[1] === '章尾钩子') out.钩子 = value
-    else if (match[1] === '本章场景') out.场景 = normalizeList(value)
-    else out.对象 = normalizeList(value)
-  }
-  return out
 }
 
 function adaptIndexFields(dimension, fm) {

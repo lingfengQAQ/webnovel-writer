@@ -2,8 +2,12 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { assembleBookStatus } from '../prep/book-status.js'
 import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
-import { readBatch, judgeStop, 章状态 } from '../staging/index.js'
-import { loadRoutes, listChapterIndex, sceneCandidates } from '../knowledge/index.js'
+import { readBatch, stagedFacts, judgeStop, 章状态 } from '../staging/index.js'
+import { loadRoutes, queryKnowledge } from '../knowledge/index.js'
+import {
+  CHAPTER_KNOWLEDGE_DIMENSIONS,
+  readRecentChapterKnowledge,
+} from '../knowledge/chapter.js'
 import { OutlineReader } from '../storage/adapters/OutlineReader.js'
 import { ChapterReader } from '../storage/adapters/ChapterReader.js'
 import {
@@ -79,6 +83,7 @@ export async function buildDto(ctx, 序, base = {}) {
       const 知识 = await chapterKnowledge(ctx, {
         当前卷: status.ok ? status.data.当前卷 : 1,
         nextChapter: base.nextChapter,
+        本章任务: base.本章任务,
       })
       const contractSignals = evaluateContractIssueSignals(
         await readContractIssueHistory(ctx.repoPath),
@@ -95,7 +100,7 @@ export async function buildDto(ctx, 序, base = {}) {
           自动确认细纲
             ? '工作区/细纲.md（含本章定位声明 + 本章要写到的事 + 备选，由 M3 落盘）；自动确认细纲已开：提案直接 persist-outline 生效，不再问作者；卷近尾声时提案可含收卷提议'
             : '工作区/细纲.md（含本章定位声明 + 本章要写到的事 + 备选，由 M3 落盘）；卷近尾声时提案可含收卷提议（依据卷纲进度与卷规模参考值，作者确认后定稿写入 收卷: 是）'
-        }；本章提案段内按需声明知识位（皆可空，从菜单点选或自定义）：本章节拍：<编号或名称> / 章尾钩子：<类型> / 本章场景：<顿号分隔多值>`,
+        }；章级候选只是少量材料，不是固定答案。可组合、变体或完全自定义，作者确认整份细纲即确认这些软策略。提案段按需声明（皆可空、多选）：本章节拍 / 本章场景 / 本章技法 / 本章追读；实际修改或自定义另写知识变体，本章涉及计划对象时写本章对象。`,
       }
     }
     default:
@@ -104,39 +109,84 @@ export async function buildDto(ctx, 序, base = {}) {
 }
 
 /**
- * 序6 的章级知识菜单（spec §7 声明位）：节拍/钩子/场景紧凑索引 + 场景候选。
- * 知识库缺失一律空集降级（旁路增益不是必经关卡）。
+ * 序6 的章级知识候选：只按当前语料查节拍/场景/技法/追读，每维最多三条。
+ * 知识库缺失或无机械命中一律空集降级，不回退全量菜单。
  */
-async function chapterKnowledge(ctx, { 当前卷, nextChapter }) {
+async function chapterKnowledge(ctx, { 当前卷, nextChapter, 本章任务 }) {
   if (!ctx.packageRoot) return {}
-  const fmt = (list) =>
-    list.map((e) => `${e.编号 ? `${e.编号} ` : ''}${e.名称}${e.一句话 ? `——${e.一句话}` : ''}`)
-  const 节拍 = await listChapterIndex(ctx.packageRoot, '节拍')
-  const 钩子 = await listChapterIndex(ctx.packageRoot, '追读')
-  const 场景 = await listChapterIndex(ctx.packageRoot, '场景')
-  // 场景候选语料：当前卷卷纲 + 上一章结尾——脚本只出候选，不拦截
+
+  let staged = { chapters: [] }
+  try {
+    staged = await stagedFacts(ctx.repoPath, { before: nextChapter, heal: false })
+  } catch {
+    // 批次不可读时按定稿历史继续，候选不阻断创作。
+  }
+  const recent = await readRecentChapterKnowledge(ctx.repoPath, {
+    before: nextChapter,
+    stagedChapters: staged.chapters,
+  })
+
   const corpus = []
+  if (typeof 本章任务 === 'string' && 本章任务.trim()) corpus.push(本章任务.trim())
   try {
     const vol = await new OutlineReader(ctx.repoPath).readVolumeOutline(当前卷)
-    if (vol.ok) corpus.push(vol.content || vol.text || '')
+    if (vol.ok) {
+      const content = vol.content || ''
+      corpus.push(extractChapterTask(content, nextChapter) || content)
+    }
   } catch {
     // 无卷纲
   }
-  if (Number.isInteger(nextChapter) && nextChapter > 1 && ctx.cache) {
-    try {
-      const t = await new ChapterReader(ctx.repoPath, ctx.cache).readTail(nextChapter - 1, 300)
-      if (t.ok) corpus.push(t.text)
-    } catch {
-      // 无上一章
+
+  if (Number.isInteger(nextChapter) && nextChapter > 1) {
+    const previousStaged = staged.chapters.find((chapter) => chapter.章号 === nextChapter - 1)
+    if (previousStaged) corpus.push([...String(previousStaged.body || '')].slice(-300).join(''))
+    else {
+      try {
+        const tail = await new ChapterReader(ctx.repoPath, ctx.cache).readTail(nextChapter - 1, 300)
+        if (tail.ok) corpus.push(tail.text)
+      } catch {
+        // 无上一章
+      }
     }
   }
-  const 候选 = await sceneCandidates(ctx.packageRoot, corpus)
-  const out = {}
-  if (节拍.length) out.节拍索引 = fmt(节拍)
-  if (钩子.length) out.钩子清单 = fmt(钩子)
-  if (场景.length) out.场景索引 = fmt(场景)
-  if (候选.length) out.场景候选 = 候选.map((c) => `${c.名称}${c.一句话 ? `——${c.一句话}` : ''}`)
-  return out
+
+  const problem = corpus.filter((text) => String(text || '').trim()).join('\n')
+  if (!problem) return {}
+  const results = await Promise.all(
+    CHAPTER_KNOWLEDGE_DIMENSIONS.map(async (dimension) => [
+      dimension,
+      await queryKnowledge(ctx.packageRoot, dimension, { 问题: problem, 近期: recent }),
+    ])
+  )
+  const candidates = {}
+  for (const [dimension, entries] of results) {
+    if (!entries.length) continue
+    candidates[dimension] = entries.map(toPlanningCandidate)
+  }
+  return Object.keys(candidates).length ? { 章级知识候选: candidates } : {}
+}
+
+function toPlanningCandidate(entry) {
+  return {
+    名称: entry.名称,
+    ...(entry.编号 ? { 编号: entry.编号 } : {}),
+    ...(entry.一句话 ? { 摘要: entry.一句话 } : {}),
+    ...(entry.规划 ? { 规划: entry.规划 } : {}),
+    来源: entry.来源版本,
+    ...(entry.近期使用 ? { 近期使用: entry.近期使用 } : {}),
+    ...(entry.重复提醒 ? { 重复提醒: entry.重复提醒 } : {}),
+  }
+}
+
+function extractChapterTask(volumeOutline, chapterNum) {
+  if (!Number.isInteger(chapterNum)) return ''
+  const pattern = new RegExp(`第\\s*0*${chapterNum}\\s*章`)
+  return String(volumeOutline || '')
+    .split(/\r?\n/)
+    .filter((line) => pattern.test(line))
+    .join('\n')
+    .trim()
 }
 
 // 序 3 的待定稿批次明细（无批次时不加字段）。heal:false——路由组包是名义只读路径，

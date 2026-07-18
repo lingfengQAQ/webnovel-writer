@@ -12,9 +12,12 @@ import { writeAtomicBatch } from '../storage/atomic.js'
 import { validateReviewReport } from './schema.js'
 import { stagedFacts, overlayBookStatus } from '../staging/index.js'
 import { ContractReader } from '../storage/adapters/ContractReader.js'
-import { parseOutlineDeclarations, findDeclared } from '../knowledge/index.js'
 import { reviewOutcomeFile } from './outcome.js'
 import { DesignReader } from '../storage/adapters/DesignReader.js'
+import {
+  parseChapterDeclarations,
+  resolveChapterDeclarations,
+} from '../knowledge/chapter.js'
 
 const 兼容声明 = '本次使用兼容模式（单上下文顺序审稿），审稿隔离度低于完整两审模式。'
 const 完整声明 = '完整两审模式（事实审查/编辑审各自独立上下文）。'
@@ -26,21 +29,18 @@ const 类型英文 = { 伏笔: 'foreshadow', 悬念: 'suspense', 感情线: 'rom
  */
 async function assembleKnowledgeChecks(ctx, outlineText) {
   const out = []
-  if (!ctx.packageRoot) return out
   try {
-    const decl = parseOutlineDeclarations(outlineText)
-    const hits = [
-      ['节拍', decl.节拍 ? [decl.节拍] : []],
-      ['追读', decl.钩子 ? [decl.钩子] : []],
-      ['场景', decl.场景],
-    ]
-    for (const [dir, decls] of hits) {
-      for (const d of decls) {
-        const entry = await findDeclared(ctx.packageRoot, dir, d)
-        if (!entry) continue
-        if (entry.审稿时) out.push(`【${entry.fm.名称 || d}·核对】${entry.审稿时.replace(/\n+/g, ' ')}`)
+    const { declarations, selections } = await resolveChapterDeclarations(ctx.packageRoot, outlineText)
+    for (const selection of selections) {
+      if (selection.条目?.审稿时) {
+        out.push(`【${selection.条目.名称}·核对】${selection.条目.审稿时.replace(/\n+/g, ' ')}`)
+      } else if (selection.条目) {
+        out.push(`【${selection.条目.名称}·核对】按确认细纲中的${selection.维度}选择核对。`)
+      } else {
+        out.push(`【${selection.维度}·自定义】按确认细纲核对：${selection.声明}`)
       }
     }
+    for (const variant of declarations.变体) out.push(`【知识变体】按确认细纲核对：${variant}`)
   } catch {
     // 知识库不可用则略
   }
@@ -81,7 +81,7 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
     }
 
     const 知识审查 = await assembleKnowledgeChecks(ctx, outlineText)
-    const designDeclarations = parseOutlineDeclarations(outlineText).对象
+    const designDeclarations = parseChapterDeclarations(outlineText).对象
     const designObjects = designDeclarations.length
       ? await new DesignReader(repoPath).readMany(designDeclarations, {
           excludePaths: facts.removedPlans || new Set(),

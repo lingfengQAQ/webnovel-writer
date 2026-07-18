@@ -25,6 +25,7 @@ import {
 } from '../knowledge/contract-issues.js'
 import { isFactPath, validateFactChanges } from '../knowledge/fact-changes.js'
 import { isDesignPath } from '../knowledge/design.js'
+import { archiveChapterKnowledgeFromOutline } from '../knowledge/chapter.js'
 
 /**
  * staging：待定稿批次（自动模式，spec §8.1）。批次真源 = 工作区/待定稿/ 下的文件，
@@ -346,6 +347,10 @@ export async function stageChapter(ctx, { chapterNum, payload }) {
     const reviewed = await applyReviewOutcome(repoPath, chapterNum, payload)
     if (!reviewed.ok) return reviewed
     payload = reviewed.payload
+
+    const archived = await archiveChapterKnowledgeFromOutline(ctx, payload)
+    if (!archived.ok) return { ok: false, error: `暂存停止：${archived.error}` }
+    payload = archived.payload
 
     const priorFacts = await stagedFacts(repoPath, { before: chapterNum })
     const factValidation = await validateFactChanges(repoPath, payload.factChanges, {
@@ -748,7 +753,7 @@ export async function finalizeBatch(ctx, { until } = {}) {
         }
         // 本章工作区文件在暂存时已清；批次目录由本函数自管，防误删他章工件
         payload.workspaceFiles = []
-        const r = await finalizeChapter(ctx, payload)
+        const r = await finalizeChapter(ctx, payload, { archiveOutline: false })
         if (!r.ok) {
           return {
             ok: false,

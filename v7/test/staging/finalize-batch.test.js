@@ -48,10 +48,24 @@ function chapterPayload(num, { body, 钩子 = '危机钩-强' } = {}) {
 }
 
 async function stage(ctx, num, opts) {
+  await fs.writeFile(path.join(ctx.repoPath, '工作区', '细纲.md'), chapterOutline(num), 'utf8')
   await writeReviewArtifacts(ctx.repoPath, num)
   const r = await stageChapter(ctx, { chapterNum: num, payload: chapterPayload(num, opts) })
   assert.equal(r.ok, true, r.error)
   return r
+}
+
+function chapterOutline(num) {
+  return [
+    `# 第 ${num} 章细纲`,
+    '## 本章提案',
+    '本章节拍：压抑蓄力爆发',
+    '本章场景：拍卖会',
+    '本章追读：悬念钩',
+    `知识变体：第 ${num} 章按递进关系落地`,
+    '## 本章要写到的事（确认即生效）',
+    `- [ ] 完成第 ${num} 章任务`,
+  ].join('\n')
 }
 
 // 定稿/大纲 全树快照（相对路径 → 内容），批次转正 vs 手动定稿逐字段对比
@@ -84,6 +98,11 @@ test('AC1 批次端到端：stage×3 → finalize-batch 逐章 commit，入档�
   const manualRepo = await gitBookCtx()
   try {
     for (const n of [3, 4, 5]) await stage(batchRepo.ctx, n)
+    await fs.writeFile(
+      path.join(batchRepo.ctx.repoPath, '工作区', '细纲.md'),
+      '# 另一章未完成细纲\n本章场景：不得覆盖批内选择',
+      'utf8'
+    )
 
     // AC7 后半：批内期间 fingerprints/meta 零 staged 污染
     assert.equal(
@@ -107,12 +126,19 @@ test('AC1 批次端到端：stage×3 → finalize-batch 逐章 commit，入档�
     assert.equal((await readBatch(batchRepo.ctx.repoPath)).exists, false, '批次目录清空')
     assert.match(r.体检, /体检/)
 
+    await fs.rm(path.join(batchRepo.ctx.repoPath, '工作区', '细纲.md'))
+
     const nx = await determineNextState(batchRepo.ctx)
     assert.equal(nx.序, 6, JSON.stringify(nx))
     assert.match(nx.message, /第 6 章/)
 
     // 手动模式同 payload 逐章定稿 → 定稿/大纲 全树逐字段一致
     for (const n of [3, 4, 5]) {
+      await fs.writeFile(
+        path.join(manualRepo.ctx.repoPath, '工作区', '细纲.md'),
+        chapterOutline(n),
+        'utf8'
+      )
       const m = await finalizeChapter(manualRepo.ctx, chapterPayload(n))
       assert.equal(m.ok, true, m.error)
     }
@@ -120,6 +146,13 @@ test('AC1 批次端到端：stage×3 → finalize-batch 逐章 commit，入档�
       await snapshotTree(batchRepo.ctx.repoPath),
       await snapshotTree(manualRepo.ctx.repoPath)
     )
+    const chapter3 = await fs.readFile(
+      path.join(batchRepo.ctx.repoPath, '定稿', '正文', '0003-连写3.md'),
+      'utf8'
+    )
+    assert.match(chapter3, /知识选择:\n  - 节拍｜压抑蓄力爆发/)
+    assert.match(chapter3, /变体｜第 3 章按递进关系落地/)
+    assert.doesNotMatch(chapter3, /不得覆盖批内选择/)
   } finally {
     await batchRepo.cleanup()
     await manualRepo.cleanup()

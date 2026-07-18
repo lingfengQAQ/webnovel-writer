@@ -11,6 +11,7 @@ import { refreshCacheAfterSourceChange } from '../cache/index.js'
 import { normalizeWorkspaceRel } from '../util/workspace-path.js'
 import { validateFactChanges } from '../knowledge/fact-changes.js'
 import { sanitizeFileName } from '../util/filename.js'
+import { archiveChapterKnowledgeFromOutline } from '../knowledge/chapter.js'
 
 /**
  * 定稿：原子 commit（D3）。写工作树 → git add → commit → 最后清工作区。
@@ -19,12 +20,18 @@ import { sanitizeFileName } from '../util/filename.js'
  *
  * @param {{repoPath: string, cache?: object}} ctx
  * @param {object} payload 定稿包（章档案/正文/摘要/条目/设定变更/commit 行/待清工作区文件）
- * @param {{git?: object, faultAfterWrite?: boolean}} [opts] 注入 git（测试）/故障注入（断电模拟）
+ * @param {{git?: object, faultAfterWrite?: boolean, archiveOutline?: boolean}} [opts]
+ *   注入 git（测试）/故障注入（断电模拟）；批量转正传 archiveOutline=false，只消费暂存值
  * @returns {Promise<{ok: boolean, commitHash?: string, error?: string}>}
  */
 export async function finalizeChapter(ctx, payload, opts = {}) {
   const { repoPath } = ctx
   const git = opts.git || createGit(repoPath)
+  if (opts.archiveOutline !== false) {
+    const archived = await archiveChapterKnowledgeFromOutline(ctx, payload)
+    if (!archived.ok) return { ok: false, error: `定稿停止：${archived.error}` }
+    payload = archived.payload
+  }
   const {
     chapterNum,
     frontMatter,
