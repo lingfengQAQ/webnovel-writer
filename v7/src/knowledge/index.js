@@ -330,15 +330,16 @@ export async function sceneCandidates(packageRoot, texts) {
  * 旧细纲声明解析器在章级调用切换前保留；下一阶段一次性改为十维目标标签。
  */
 export function parseOutlineDeclarations(outline) {
-  const out = { 节拍: '', 钩子: '', 场景: [] }
+  const out = { 节拍: '', 钩子: '', 场景: [], 对象: [] }
   for (const line of String(outline || '').split('\n')) {
     const text = line.trim()
-    const match = text.match(/^(本章节拍|章尾钩子|本章场景)[：:]\s*(.*)$/)
+    const match = text.match(/^(本章节拍|章尾钩子|本章场景|本章对象)[：:]\s*(.*)$/)
     if (!match || !match[2]) continue
     const value = match[2].trim()
     if (match[1] === '本章节拍') out.节拍 = value
     else if (match[1] === '章尾钩子') out.钩子 = value
-    else out.场景 = normalizeList(value)
+    else if (match[1] === '本章场景') out.场景 = normalizeList(value)
+    else out.对象 = normalizeList(value)
   }
   return out
 }

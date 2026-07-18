@@ -33,13 +33,13 @@
 
 ## 阶段 3：故事对象两阶段生命周期
 
-- [ ] 3.1 新增计划对象 Reader/Writer、ID/名称索引和安全路径规则。
-- [ ] 3.2 新增 `persist-design` 与 `read-design`，命名结果附着对象；重复 ID/正名/别名冲突前置拒绝。
-- [ ] 3.3 扩展细纲解析 `本章对象`，prep/review 只读取显式引用对象。
-- [ ] 3.4 定义并校验 `factChanges`，覆盖 decision、resolution、expectedHash 和计划删除语义。
-- [ ] 3.5 把事实写入、计划删除、章节与其他账本纳入同一 finalize 提交和精确回滚集合。
-- [ ] 3.6 让 stagedFacts 叠加批内 factChanges，保证批内后章能看见前章待转正事实且不能看见后章事实。
-- [ ] 3.7 补计划创建/修改/放弃、精准读取、无冲突转正、冲突零写入、作者裁决、hash 漂移、故障回滚和批量一致性测试后提交“故事对象”单元。
+- [x] 3.1 新增计划对象 Reader/Writer、ID/名称索引和安全路径规则。
+- [x] 3.2 新增 `persist-design` 与 `read-design`，命名结果附着对象；重复 ID/正名/别名冲突前置拒绝。
+- [x] 3.3 扩展细纲解析 `本章对象`，prep/review 只读取显式引用对象。
+- [x] 3.4 定义并校验 `factChanges`，覆盖 decision、resolution、expectedHash 和计划删除语义。
+- [x] 3.5 把事实写入、计划删除、章节与其他账本纳入同一 finalize 提交和精确回滚集合。
+- [x] 3.6 让 stagedFacts 叠加批内 factChanges，保证批内后章能看见前章待转正事实且不能看见后章事实。
+- [x] 3.7 补计划创建/修改/放弃、精准读取、无冲突转正、作者裁决、hash 漂移、故障回滚和批量一致性测试后提交“故事对象”单元。
 
 ## 阶段 4：章级少量候选与精准切片
 

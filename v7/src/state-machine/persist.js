@@ -15,6 +15,7 @@ import {
   validateCreateBookPayload,
   validateWorkContract,
 } from '../knowledge/contract.js'
+import { isDesignPath, validateDesignContent } from '../knowledge/design.js'
 
 /**
  * AI 态产物回流落盘（M3 落盘,AI 不碰文件）。AI 提交结构化 DTO,本层映射到路径写出。
@@ -153,6 +154,52 @@ export async function persistWorkContract(
   }
 }
 
+/** 已确认的计划对象保存/放弃：源文件变更与 Git 提交同一原子边界。 */
+export async function persistDesignChanges(ctx, plan, opts = {}) {
+  const git = opts.git || createGit(ctx.repoPath)
+  const writes = plan.writes.map(({ path: file, content }) => ({ path: file, content }))
+  const deletes = [...plan.deletes]
+  if (!writes.length && !deletes.length) {
+    return {
+      ok: true,
+      written: [],
+      deleted: [],
+      commitHash: '',
+      unchanged: true,
+      error: '',
+    }
+  }
+
+  let written = []
+  const deleted = []
+  const touched = [...new Set([...writes.map((item) => item.path), ...deletes])]
+  try {
+    if (writes.length) written = await writeAtomicBatch(ctx.repoPath, writes)
+    for (const rel of deletes) {
+      await fs.rm(path.join(ctx.repoPath, ...rel.split('/')))
+      deleted.push(rel)
+    }
+    await git.ensureIdentity()
+    await git.add(touched)
+    const actions = []
+    if (plan.savedIds.length) actions.push(`保存 ${plan.savedIds.join('、')}`)
+    if (plan.abandonedIds.length) actions.push(`放弃 ${plan.abandonedIds.join('、')}`)
+    const commitHash = await git.commit(`fix(设计): ${actions.join('；')}`)
+    return { ok: true, written, deleted, commitHash, unchanged: false, error: '' }
+  } catch (err) {
+    for (const rel of touched) await git.restore([rel])
+    await git.clean(written)
+    return {
+      ok: false,
+      written: [],
+      deleted: [],
+      commitHash: '',
+      unchanged: false,
+      error: `故事对象设计落盘失败，已回滚本次变更：${err.message}`,
+    }
+  }
+}
+
 /** 序4 卷复盘 → 定稿/摘要/卷摘要/第NN卷.md + 大纲/卷纲/第{卷号+1}卷.md（+ 可选伏笔条目）。
  * 产物随手 commit（`vol(NN): 复盘与下卷规划`,spec §9）——与建书同理,不 commit 会让 next 误触序2 手改检测；
  * 新伏笔条目改了源,同步刷缓存,否则 list-threads/备料/两审要等下次定稿才看得见。 */
@@ -205,6 +252,11 @@ export async function persistVolumeReview(ctx, { 卷号, 卷摘要, 下卷卷纲
  */
 function validateRepairContent(file, content) {
   const rel = String(file).replaceAll('\\', '/')
+  if (isDesignPath(rel)) {
+    const classification = rel.split('/')[2]
+    const r = validateDesignContent(content, { classification })
+    return r.ok ? { ok: true } : { ok: false, error: r.errors.join('；') }
+  }
   if (rel === WORK_CONTRACT_PATH) {
     const r = validateWorkContract(content)
     return r.ok ? { ok: true } : { ok: false, error: r.errors.join('；') }

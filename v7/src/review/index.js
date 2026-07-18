@@ -14,6 +14,7 @@ import { stagedFacts, overlayBookStatus } from '../staging/index.js'
 import { ContractReader } from '../storage/adapters/ContractReader.js'
 import { parseOutlineDeclarations, findDeclared } from '../knowledge/index.js'
 import { reviewOutcomeFile } from './outcome.js'
+import { DesignReader } from '../storage/adapters/DesignReader.js'
 
 const 兼容声明 = '本次使用兼容模式（单上下文顺序审稿），审稿隔离度低于完整两审模式。'
 const 完整声明 = '完整两审模式（事实审查/编辑审各自独立上下文）。'
@@ -80,6 +81,15 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
     }
 
     const 知识审查 = await assembleKnowledgeChecks(ctx, outlineText)
+    const designDeclarations = parseOutlineDeclarations(outlineText).对象
+    const designObjects = designDeclarations.length
+      ? await new DesignReader(repoPath).readMany(designDeclarations, {
+          excludePaths: facts.removedPlans || new Set(),
+        })
+      : { ok: true, objects: [], missing: [], error: '' }
+    if (!designObjects.ok) {
+      return { ok: false, input: null, error: `组装审稿输入停止：${designObjects.error}` }
+    }
 
     const status = overlayBookStatus(await assembleBookStatus(ctx), facts)
     const 当前卷 = status.ok ? status.data.当前卷 : 1
@@ -213,6 +223,28 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
         信息差候选,
         作品契约: contract.content,
         知识审查,
+        批内待转正事实: [...(facts.factChanges || new Map()).entries()].map(
+          ([factPath, change]) => ({
+            事实路径: factPath,
+            来源章: change.章号,
+            内容: change.content,
+          })
+        ),
+        本章计划对象: designObjects.objects.map((object) => ({
+          计划路径: object.path,
+          分类: object.分类,
+          ID: object.ID,
+          名称: object.名称,
+          ...(object.对象类型 ? { 对象类型: object.对象类型 } : {}),
+          ...(object.正名 ? { 正名: object.正名 } : {}),
+          ...(object.别名.length ? { 别名: object.别名 } : {}),
+          本书设计: object.sections.get('本书设计'),
+          一致性边界: object.sections.get('一致性边界'),
+          提醒: '这是计划对象，不是已经成立的正文事实。',
+        })),
+        ...(designObjects.missing.length
+          ? { 计划对象缺失提醒: `未找到：${designObjects.missing.join('、')}。按正文实际内容审查，不要求临时对象补档。` }
+          : {}),
       },
       error: '',
     }

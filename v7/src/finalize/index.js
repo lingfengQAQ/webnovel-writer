@@ -9,6 +9,8 @@ import { SummaryWriter } from '../storage/adapters/SummaryWriter.js'
 import { createGit } from './git.js'
 import { refreshCacheAfterSourceChange } from '../cache/index.js'
 import { normalizeWorkspaceRel } from '../util/workspace-path.js'
+import { validateFactChanges } from '../knowledge/fact-changes.js'
+import { sanitizeFileName } from '../util/filename.js'
 
 /**
  * 定稿：原子 commit（D3）。写工作树 → git add → commit → 最后清工作区。
@@ -34,6 +36,7 @@ export async function finalizeChapter(ctx, payload, opts = {}) {
     rosterUpserts = [],
     timelineRows = [],
     secretWrites = [],
+    factChanges = [],
     commitLines = {},
     workspaceFiles = [],
   } = payload
@@ -41,6 +44,19 @@ export async function finalizeChapter(ctx, payload, opts = {}) {
   // 1. 校验（不过则什么都没写，天然原样）
   if (!Number.isInteger(chapterNum)) return { ok: false, error: '章号必须是整数' }
   if (!frontMatter || !frontMatter.标题) return { ok: false, error: '缺少章档案或标题' }
+  const factValidation = await validateFactChanges(repoPath, factChanges)
+  if (!factValidation.ok) {
+    return { ok: false, error: `事实转正停止：${factValidation.errors.join('；')}` }
+  }
+  const factTargetCollisions = findFactTargetCollisions(factValidation.changes, {
+    characterUpdates,
+    rosterUpserts,
+    timelineRows,
+    secretWrites,
+  })
+  if (factTargetCollisions.length) {
+    return { ok: false, error: `事实转正停止：${factTargetCollisions.join('；')}` }
+  }
 
   const stageFiles = []
   const rollbackFiles = []
@@ -119,6 +135,19 @@ export async function finalizeChapter(ctx, payload, opts = {}) {
       rollbackFiles.push(r.filePath)
     }
 
+    for (const change of factValidation.changes) {
+      const factFile = path.join(repoPath, ...change.factPath.split('/'))
+      await fs.mkdir(path.dirname(factFile), { recursive: true })
+      await fs.writeFile(factFile, change.content, 'utf8')
+      stageFiles.push(factFile)
+      rollbackFiles.push(factFile)
+      if (change.removePlan) {
+        const planFile = path.join(repoPath, ...change.planPath.split('/'))
+        await fs.rm(planFile)
+        stageFiles.push(planFile)
+      }
+    }
+
     // 故障注入点（断电模拟，仅测试用）
     if (opts.faultAfterWrite) throw new Error('注入故障：写工作树后、commit 前中断')
 
@@ -170,6 +199,29 @@ export async function finalizeChapter(ctx, payload, opts = {}) {
       error: `定稿中断，已回滚未提交写入、工作区原样保留：${err.message}`,
     }
   }
+}
+
+function findFactTargetCollisions(
+  changes,
+  { characterUpdates, rosterUpserts, timelineRows, secretWrites }
+) {
+  const managed = new Set()
+  for (const update of characterUpdates) {
+    if (update?.name) managed.add(`定稿/设定/角色/${sanitizeFileName(update.name)}.md`)
+  }
+  if (rosterUpserts.length) managed.add('定稿/设定/名册.md')
+  for (const row of timelineRows) {
+    const volume = Number(row?.volumeNum)
+    if (Number.isInteger(volume) && volume > 0) {
+      managed.add(`定稿/设定/时间线/第${String(volume).padStart(2, '0')}卷.md`)
+    }
+  }
+  for (const secret of secretWrites) {
+    if (secret?.id) managed.add(`定稿/设定/信息差/${secret.id}.md`)
+  }
+  return changes
+    .filter((change) => managed.has(change.factPath))
+    .map((change) => `${change.factPath} 同时出现在 factChanges 与其他事实写入字段中`)
 }
 
 function buildCommitMessage(chapterNum, title, lines) {

@@ -23,6 +23,8 @@ import {
   evaluateContractIssueSignals,
   readContractIssueHistory,
 } from '../knowledge/contract-issues.js'
+import { isFactPath, validateFactChanges } from '../knowledge/fact-changes.js'
+import { isDesignPath } from '../knowledge/design.js'
 
 /**
  * staging：待定稿批次（自动模式，spec §8.1）。批次真源 = 工作区/待定稿/ 下的文件，
@@ -152,6 +154,8 @@ export async function stagedFacts(repoPath, opts = {}) {
     characterUpdates: new Map(),
     timelineRows: [],
     secretWrites: [],
+    factChanges: new Map(),
+    removedPlans: new Set(),
     总字数: 0,
     warnings: [...batch.warnings],
   }
@@ -242,6 +246,17 @@ export async function stagedFacts(repoPath, opts = {}) {
     }
     for (const tr of payload.timelineRows || []) facts.timelineRows.push(tr)
     for (const s of payload.secretWrites || []) facts.secretWrites.push(s)
+    for (const change of payload.factChanges || []) {
+      if (!isFactPath(change?.factPath) || !isDesignPath(change?.planPath)) continue
+      if (!['无冲突', '作者已裁决'].includes(change.decision)) continue
+      if (typeof change.content !== 'string' || !change.content.trim()) continue
+      facts.factChanges.set(change.factPath, {
+        ...change,
+        章号: row.章号,
+        content: change.content,
+      })
+      if (change.removePlan === true) facts.removedPlans.add(change.planPath)
+    }
   }
   return facts
 }
@@ -331,6 +346,17 @@ export async function stageChapter(ctx, { chapterNum, payload }) {
     const reviewed = await applyReviewOutcome(repoPath, chapterNum, payload)
     if (!reviewed.ok) return reviewed
     payload = reviewed.payload
+
+    const priorFacts = await stagedFacts(repoPath, { before: chapterNum })
+    const factValidation = await validateFactChanges(repoPath, payload.factChanges, {
+      factOverlay: priorFacts.factChanges,
+      removedPlans: priorFacts.removedPlans,
+    })
+    if (!factValidation.ok) {
+      return { ok: false, error: `事实转正停止：${factValidation.errors.join('；')}` }
+    }
+    if (factValidation.changes.length) payload.factChanges = factValidation.changes
+    else delete payload.factChanges
 
     const 标题 = payload.frontMatter.标题
     const dirName = `${String(chapterNum).padStart(4, '0')}-${sanitizeFileName(标题)}`

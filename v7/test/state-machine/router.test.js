@@ -9,6 +9,7 @@ import { CacheManager } from '../../src/cache/index.js'
 import { determineNextState } from '../../src/state-machine/index.js'
 import { runHealthCheck } from '../../src/health-check/index.js'
 import { minimalWorkContract } from './_helper.js'
+import { designFixture } from '../knowledge/_design-fixture.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -89,6 +90,19 @@ test('序0：源文件解析失败 → 修复确认', async () => {
     const r = await determineNextState(ctx)
     assert.equal(r.序, 0)
     assert.equal(r.state, 'repair-confirm')
+  } finally {
+    await cleanup()
+  }
+})
+
+test('序0：计划对象损坏 → 启动先进入修复确认', async () => {
+  const { ctx, cleanup } = await makeGitBook(healthyBook({
+    '大纲/创作设计/人物/CHAR-001-林晚.md': designFixture().replace('## 一致性边界', '## 边界缺失'),
+  }))
+  try {
+    const result = await determineNextState(ctx)
+    assert.equal(result.序, 0, JSON.stringify(result))
+    assert.ok(result.dto.failures.some((failure) => failure.file.includes('创作设计/人物')))
   } finally {
     await cleanup()
   }

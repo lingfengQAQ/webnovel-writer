@@ -6,6 +6,12 @@ import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
 import { createGit } from '../finalize/git.js'
 import { readBatch } from '../staging/index.js'
 import { validateWorkContract } from '../knowledge/contract.js'
+import {
+  DESIGN_CLASSES,
+  DESIGN_ROOT,
+  validateDesignContent,
+  validateDesignRegistry,
+} from '../knowledge/design.js'
 
 /** 序2/relink/goto 共用的「跟踪面」（决策 D6）：手改检测、relink 补登范围、goto 脏树拒绝
  * 三处同源判定，防双写漂移。文风铁律与 book.yaml 的序0 修复回写由此走序2 补登入档。 */
@@ -44,6 +50,28 @@ export async function detectParseFailures(repoPath) {
       const parsed = parseFrontMatter(await fs.readFile(path.join(base, f), 'utf8'))
       if (!parsed.ok) failures.push({ file: `${sub}/${f}`, error: parsed.error })
     }
+  }
+
+  const designObjects = []
+  for (const classification of DESIGN_CLASSES) {
+    const sub = `${DESIGN_ROOT}/${classification}`
+    const base = path.join(repoPath, ...sub.split('/'))
+    let files
+    try {
+      files = await fs.readdir(base)
+    } catch {
+      continue
+    }
+    for (const file of files) {
+      if (!file.endsWith('.md')) continue
+      const content = await fs.readFile(path.join(base, file), 'utf8')
+      const parsed = validateDesignContent(content, { classification })
+      if (!parsed.ok) failures.push({ file: `${sub}/${file}`, error: parsed.errors.join('；') })
+      else designObjects.push({ ...parsed.data, path: `${sub}/${file}` })
+    }
+  }
+  for (const error of validateDesignRegistry(designObjects)) {
+    failures.push({ file: DESIGN_ROOT, error })
   }
 
   // book.yaml：存在但解析失败才算（缺失归序 1 建书态）

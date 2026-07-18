@@ -9,6 +9,7 @@ import { stagedFacts, overlayBookStatus } from '../staging/index.js'
 import { parseFrontMatter } from '../storage/parsers/front-matter.js'
 import { parseOutlineDeclarations, findDeclared } from '../knowledge/index.js'
 import { ContractReader } from '../storage/adapters/ContractReader.js'
+import { DesignReader } from '../storage/adapters/DesignReader.js'
 
 /**
  * 备料：组装 工作区/本章写作材料.md（spec §8 step3，默认精准片段）。
@@ -111,6 +112,17 @@ export async function prepareChapterMaterials(ctx, { chapterNum }) {
 
     const 契约段 = `## 作品契约（本章所需）\n${contract.content.replace(/^## /gm, '### ')}`
 
+    const declarations = parseOutlineDeclarations(outlineText)
+    const designObjects = await assembleDesignObjects(
+      repoPath,
+      declarations.对象,
+      facts.removedPlans || new Set()
+    )
+    if (!designObjects.ok) {
+      return { ok: false, filePath: '', content: '', error: `备料停止：${designObjects.error}` }
+    }
+    const stagedFactObjects = assembleStagedFactObjects(facts.factChanges)
+
     // 细纲声明命中的知识切片（声明即路由；查不到表注入声明文本本身，spec §7）
     const 知识切片 = ctx.packageRoot ? await declaredKnowledge(ctx.packageRoot, outlineText) : ''
 
@@ -150,6 +162,8 @@ export async function prepareChapterMaterials(ctx, { chapterNum }) {
       '',
       契约段,
       '',
+      ...(designObjects.content ? [designObjects.content, ''] : []),
+      ...(stagedFactObjects ? [stagedFactObjects, ''] : []),
       ...(知识切片 ? [知识切片, ''] : []),
       `## 反复读清单\n${反复读}`,
       '',
@@ -166,6 +180,47 @@ export async function prepareChapterMaterials(ctx, { chapterNum }) {
   } catch (err) {
     return { ok: false, filePath: '', content: '', error: `备料失败：${err.message}` }
   }
+}
+
+function assembleStagedFactObjects(changes) {
+  if (!(changes instanceof Map) || !changes.size) return ''
+  const parts = [
+    '## 批内待转正事实',
+    '',
+    '> 以下事实来自本章之前已过审的批内章节，尚未正式入档，但本章须按其保持一致。',
+  ]
+  for (const [factPath, change] of changes) {
+    parts.push('', `### 第 ${change.章号} 章：${factPath}`, '', change.content)
+  }
+  return parts.join('\n')
+}
+
+async function assembleDesignObjects(repoPath, references, excludePaths) {
+  if (!references.length) return { ok: true, content: '', error: '' }
+  const result = await new DesignReader(repoPath).readMany(references, { excludePaths })
+  if (!result.ok) return { ok: false, content: '', error: result.error }
+  const parts = [
+    '## 本章计划对象（尚未转正）',
+    '',
+    '> 以下内容用于保持设计一致，不代表正文已经建立这些事实。',
+  ]
+  for (const object of result.objects) {
+    const type = object.对象类型 ? `/${object.对象类型}` : ''
+    parts.push(
+      '',
+      `### ${object.ID} ${object.正名 || object.名称}（${object.分类}${type}）`,
+      '',
+      '#### 本书设计',
+      object.sections.get('本书设计'),
+      '',
+      '#### 一致性边界',
+      object.sections.get('一致性边界')
+    )
+  }
+  if (result.missing.length) {
+    parts.push('', `- 未找到计划对象：${result.missing.join('、')}。按本章文本继续，不要求临时对象补档。`)
+  }
+  return { ok: true, content: parts.join('\n'), error: '' }
 }
 
 // 批内暂存章的结尾片段（与 ChapterReader.readTail 同口径：正文末 N 个字符）

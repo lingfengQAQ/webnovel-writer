@@ -8,12 +8,15 @@ import { promisify } from 'node:util'
 import {
   persistRepair,
   persistCreateBook,
+  persistDesignChanges,
   persistWorkContract,
   persistVolumeReview,
   persistDraftOutline,
 } from '../../src/state-machine/persist.js'
 import { makeGitBook, minimalCreateBookPayload, minimalWorkContract } from './_helper.js'
 import { validateWorkContract } from '../../src/knowledge/contract.js'
+import { designFixture } from '../knowledge/_design-fixture.js'
+import { buildDesignChangePlan, validateDesignContent } from '../../src/knowledge/design.js'
 
 async function tmpRepo() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'wnw-persist-'))
@@ -108,6 +111,35 @@ test('persistWorkContract：提交失败时三份源文件精确回滚', async (
     const { stdout } = await exec('git', ['status', '--porcelain'], { cwd: root })
     assert.equal(stdout.trim(), '')
   } finally { await cleanup() }
+})
+
+test('persistDesignChanges：改名提交失败时旧计划恢复、新路径清除', async () => {
+  const oldPath = '大纲/创作设计/人物/CHAR-001-林晚.md'
+  const oldContent = designFixture()
+  const { ctx, root, cleanup } = await makeGitBook({
+    'book.yaml': 'spec_version: "7.0"\n书名: 测\n',
+    [oldPath]: oldContent,
+  })
+  try {
+    const existing = {
+      ...validateDesignContent(oldContent, { classification: '人物' }).data,
+      path: oldPath,
+    }
+    const nextContent = designFixture({ canonical: '林晚舟' })
+    const next = validateDesignContent(nextContent, { classification: '人物' }).data
+    const plan = buildDesignChangePlan([existing], [next], [], [])
+    const realGit = (await import('../../src/finalize/git.js')).createGit(root)
+    const result = await persistDesignChanges(ctx, plan, {
+      git: { ...realGit, async commit() { throw new Error('测试提交失败') } },
+    })
+    assert.equal(result.ok, false)
+    assert.equal((await read(root, oldPath)).replaceAll('\r\n', '\n'), oldContent)
+    await assert.rejects(() => read(root, next.path))
+    const { stdout } = await exec('git', ['status', '--porcelain'], { cwd: root })
+    assert.equal(stdout.trim(), '')
+  } finally {
+    await cleanup()
+  }
 })
 
 test('persistVolumeReview（序4）→ 写卷摘要 + 下卷卷纲 + vol commit（P1-1）', async () => {
@@ -210,4 +242,28 @@ test('persistRepair：名册修复内容仍是坏表格 → ok=false 不写', as
     assert.equal(r.ok, false)
     assert.match(r.error, /名册/)
   } finally { await cleanup() }
+})
+
+test('persistRepair：计划对象按对象 schema 校验，不只检查普通 front matter', async () => {
+  const { ctx, root, cleanup } = await tmpRepo()
+  const target = '大纲/创作设计/人物/CHAR-001-林晚.md'
+  try {
+    const bad = await persistRepair(
+      ctx,
+      { repairs: [{ file: target, content: '---\nID: CHAR-001\n名称: 林晚\n---\n缺必需小节。' }] },
+      { allowedFiles: [target] }
+    )
+    assert.equal(bad.ok, false)
+    assert.match(bad.error, /本书设计|一致性边界/)
+
+    const good = await persistRepair(
+      ctx,
+      { repairs: [{ file: target, content: designFixture() }] },
+      { allowedFiles: [target] }
+    )
+    assert.equal(good.ok, true, good.error)
+    assert.match(await read(root, target), /一致性边界/)
+  } finally {
+    await cleanup()
+  }
 })
