@@ -49,7 +49,7 @@ async function readTree(root) {
   return parts.join('\n')
 }
 
-test('AC2 端到端（inline）：迁移落位、git 单 commit、缓存可删重建、next 进正常写章流程', async () => {
+test('AC2 端到端（inline）：迁移落位、git 单 commit、缓存可删重建；缺契约先停下确认', async () => {
   const { ctx, cleanup } = await tempWorkdir()
   const v6 = await tempV6(inlineFixture)
   try {
@@ -90,10 +90,10 @@ test('AC2 端到端（inline）：迁移落位、git 单 commit、缓存可删�
       const chars = await new EntityReader(repo, cache).listCharacters()
       assert.ok(chars.some((c) => c.id === '陆沉'), `list-characters 应含陆沉：${JSON.stringify(chars)}`)
 
-      // next 直接进正常流程：序 6 起草第 4 章
+      // 本任务不让迁移器替作者编造作品契约；迁移书先停在修复确认。
       const next = await determineNextState({ repoPath: repo, cache, workdir: ctx.workdir })
-      assert.equal(next.序, 6, JSON.stringify(next))
-      assert.equal(next.dto.nextChapter, 4)
+      assert.equal(next.序, 0, JSON.stringify(next))
+      assert.ok(next.dto.failures.some((failure) => failure.file === '作品契约/作品契约.md'))
     } finally {
       await cache.close()
     }

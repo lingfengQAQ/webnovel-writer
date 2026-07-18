@@ -1,6 +1,7 @@
 import { finalizeChapter } from '../finalize/index.js'
 import { readBatch } from '../staging/index.js'
 import { readJsonInput } from '../util/json-input.js'
+import { applyReviewOutcome } from '../review/outcome.js'
 
 /**
  * finalize <章号> --payload=<定稿包json路径>：原子 commit（正文入定稿、条目/设定/时间线更新、
@@ -33,7 +34,10 @@ export async function run(args, options, ctx) {
     return { ok: false, error: `章号不一致：命令行是 ${chapterNum}，payload 里是 ${payload.chapterNum}` }
   }
 
-  const r = await finalizeChapter(ctx, { ...payload, chapterNum })
+  const reviewed = await applyReviewOutcome(ctx.repoPath, chapterNum, payload)
+  if (!reviewed.ok) return { ok: false, error: reviewed.error }
+
+  const r = await finalizeChapter(ctx, { ...reviewed.payload, chapterNum })
   if (!r.ok) return { ok: false, error: r.error }
 
   const lines = [`第 ${chapterNum} 章已定稿（commit ${String(r.commitHash || '').slice(0, 8)}）。`]

@@ -87,10 +87,10 @@ export async function checkGitHealth(ctx) {
   return { ok: true, fixed, guidance, rescued }
 }
 
-// 扫描 定稿/大纲/文风，找网盘冲突副本（xxx (1).md / xxx 的冲突副本）
+// 扫描源文件目录，找网盘冲突副本（xxx (1).md / xxx 的冲突副本）
 async function findCloudDupes(repoPath) {
   const all = []
-  for (const sub of ['定稿', '大纲', '文风']) {
+  for (const sub of ['作品契约', '定稿', '大纲', '文风']) {
     all.push(...(await walk(path.join(repoPath, sub))))
   }
   return all.filter((f) => /(\(\d+\)\.md$)|的冲突副本/.test(path.basename(f)))

@@ -5,6 +5,7 @@ import { promises as fs } from 'node:fs'
 import { run as stageChapterCmd } from '../../src/commands/stage-chapter.js'
 import { run as batchStatusCmd } from '../../src/commands/batch-status.js'
 import { repoCtx } from './_helper.js'
+import { reviewOutcome } from '../staging/_helper.js'
 
 const 定稿章 = (num) =>
   `---\n章号: ${num}\n标题: 第${num}章\n卷: 1\n书内时间: 春月初${num}\n字数: 100\n章定位: 推进\n钩子: 危机钩-强\n情绪定位: 铺垫\n---\n\n第${num}章正文。`
@@ -15,6 +16,10 @@ const files = {
   '定稿/正文/0002-第2章.md': 定稿章(2),
   '大纲/卷纲/第01卷.md': '# 第01卷\n后三章追查黑影。\n',
   '工作区/审稿.md': '# 第 3 章审稿单\n\n> 完整两审模式。\n> 共 2 个问题：0 阻断。\n',
+  '工作区/评审报告/审稿结果.json': reviewOutcome(3, [
+    { severity: 'low', category: 'pacing', description: '节奏略慢', blocking: false },
+    { severity: 'medium', category: 'structure', description: '转场略硬', blocking: false },
+  ]),
 }
 
 test('stage-chapter 命令：--payload 文件暂存 + 人话输出；batch-status 出全貌', async () => {

@@ -8,6 +8,7 @@ import { promisify } from 'node:util'
 import { CacheManager } from '../../src/cache/index.js'
 import { determineNextState } from '../../src/state-machine/index.js'
 import { runHealthCheck } from '../../src/health-check/index.js'
+import { minimalWorkContract } from './_helper.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -19,7 +20,12 @@ async function makeGitBook(files, { commit = true } = {}) {
   await git(['config', 'user.email', 't@example.com'])
   await git(['config', 'user.name', 'test'])
   await fs.writeFile(path.join(root, '.gitignore'), '.cache/\n工作区/\n', 'utf8')
-  for (const [rel, content] of Object.entries(files)) {
+  const initialFiles = { ...files }
+  if (initialFiles['book.yaml'] && !initialFiles['作品契约/作品契约.md']) {
+    initialFiles['作品契约/作品契约.md'] = minimalWorkContract()
+    initialFiles['作品契约/知识选择记录.md'] = '# 知识选择记录\n'
+  }
+  for (const [rel, content] of Object.entries(initialFiles)) {
     const full = path.join(root, rel)
     await fs.mkdir(path.dirname(full), { recursive: true })
     await fs.writeFile(full, content, 'utf8')

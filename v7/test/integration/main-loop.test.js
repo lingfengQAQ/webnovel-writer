@@ -10,6 +10,7 @@ import { persistCreateBook, persistDraftOutline } from '../../src/state-machine/
 import { runReviews } from '../../src/review/index.js'
 import { finalizeChapter } from '../../src/finalize/index.js'
 import { determineNextState } from '../../src/state-machine/index.js'
+import { minimalCreateBookPayload } from '../state-machine/_helper.js'
 
 const exec = promisify(execFile)
 
@@ -36,11 +37,11 @@ test('主循环：建书→备料→两审(桩)→定稿→next 不重抄最新�
   const git = (a) => exec('git', a, { cwd: root })
   try {
     // 1. 建书：persistCreateBook 内部完成 git init + .gitignore + core.quotepath（P0-2）
-    const r1 = await persistCreateBook(ctx, {
-      book: { spec_version: '7.0', 书名: '测', 卷规模: 40, 体检周期: 50 },
+    const r1 = await persistCreateBook(ctx, minimalCreateBookPayload({
+      book: { 书名: '测', 卷规模: 40, 体检周期: 50 },
       总纲: '# 总纲\n## 结局\nx',
       卷纲: '# 第1卷\n入门',
-    })
+    }))
     assert.equal(r1.ok, true, r1.error)
     // 建书产物 + 角色卡 + 时间线 一起入档（避免序2 手改误触）
     await fs.mkdir(path.join(root, '定稿/设定/角色'), { recursive: true })

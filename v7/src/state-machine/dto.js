@@ -6,6 +6,11 @@ import { readBatch, judgeStop, 章状态 } from '../staging/index.js'
 import { loadRoutes, listChapterIndex, sceneCandidates } from '../knowledge/index.js'
 import { OutlineReader } from '../storage/adapters/OutlineReader.js'
 import { ChapterReader } from '../storage/adapters/ChapterReader.js'
+import {
+  evaluateContractIssueSignals,
+  readContractIssueHistory,
+  summarizeContractIssues,
+} from '../knowledge/contract-issues.js'
 
 /**
  * 为 AI 态组装上下文 DTO（M3 只备料，不调 AI）。M4 吃 DTO 出结构化产物，
@@ -31,9 +36,10 @@ export async function buildDto(ctx, 序, base = {}) {
           题材: routes.filter((r) => r.维度 === '题材').map((r) => r.名称),
           流派: routes.filter((r) => r.维度 === '流派').map((r) => r.名称),
         },
-        知识材料命令: 'knowledge-pack --类型=<题材> --流派=<a,b>（问答收集后运行，取命中知识条目做蒸馏对撞）',
+        知识材料命令:
+          'knowledge-pack --类型=<主题材> --副题材=<a,b> --流派=<a,b>；真实未决的创意问题再用 knowledge-query --维度=创意约束 --问题=<问题>',
         期望产物:
-          '问答生成 book.yaml（含 类型+流派，按知识路由归一）+ 总纲 + 第一卷卷纲 + 题材流派指导（蒸馏契约，四节：骨架约定/差异化点≥3/本书专属毒点/节奏参数含恩怨清算档位；知识未命中则对谈共创并在 front matter 标注来源）（由 M3 落盘 + 登记 books.jsonl）',
+          '作者确认后生成 persist-book JSON：{book（含类型/副题材/流派）,总纲,卷纲,作品契约,知识选择,实际裁决?,作者已确认:true}。作品契约须含版本/生效起章/来源版本与八个必需小节；路由只归一名称，不替作者选择创意。',
       }
     }
     case 2:
@@ -53,12 +59,17 @@ export async function buildDto(ctx, 序, base = {}) {
       }
     case 4: {
       const status = await assembleBookStatus(ctx)
+      const contractHistory = await readContractIssueHistory(ctx.repoPath, { volume: base.卷 })
+      const contractSummary = summarizeContractIssues(contractHistory)
       return {
         state: 'volume-review',
         卷: base.卷,
         全书近况: status.ok ? status.markdown : '',
         悬了太久: status.ok ? status.data.悬了太久 : [],
-        期望产物: '卷摘要 + 下卷卷纲 + 伏笔机会候选（作者勾选后 M3 生成条目）',
+        作品契约复盘: contractSummary.length
+          ? contractSummary
+          : '本卷没有实际记录的作品契约问题，默认保持现契约不变。',
+        期望产物: '卷摘要 + 下卷卷纲 + 伏笔机会候选（作者勾选后 M3 生成条目）+ 作品契约复盘；契约无问题就保持不变，有问题也只提出修订候选，作者确认后才运行 persist-contract',
       }
     }
     case 6: {
@@ -69,12 +80,17 @@ export async function buildDto(ctx, 序, base = {}) {
         当前卷: status.ok ? status.data.当前卷 : 1,
         nextChapter: base.nextChapter,
       })
+      const contractSignals = evaluateContractIssueSignals(
+        await readContractIssueHistory(ctx.repoPath),
+        { volume: status.ok ? status.data.当前卷 : null }
+      )
       return {
         state: 'draft-outline',
         nextChapter: base.nextChapter,
         全书近况: status.ok ? status.markdown : '',
         自动确认细纲,
         ...知识,
+        ...(contractSignals.length ? { 作品契约复盘提示: contractSignals } : {}),
         期望产物: `${
           自动确认细纲
             ? '工作区/细纲.md（含本章定位声明 + 本章要写到的事 + 备选，由 M3 落盘）；自动确认细纲已开：提案直接 persist-outline 生效，不再问作者；卷近尾声时提案可含收卷提议'
@@ -130,10 +146,13 @@ async function batchDetail(ctx, base) {  if (!(base.现存 || []).includes('待�
   if (!batch.exists) return {}
   const 打回 = batch.章列表.filter((r) => r.状态 === 章状态.打回).map((r) => r.章号)
   const 受影响 = batch.章列表.filter((r) => r.状态 === 章状态.受影响).map((r) => r.章号)
+  const 契约变更 = batch.章列表.filter((r) => r.状态 === 章状态.契约变更).map((r) => r.章号)
   const 停止 = await judgeStop(ctx, batch, { heal: false })
   let 建议
   if (打回.length) {
     建议 = `重写打回章（第 ${打回.join('、')} 章）：走写章流程后 stage-chapter 覆盖`
+  } else if (契约变更.length) {
+    建议 = `重做受契约变更影响的章（第 ${契约变更.join('、')} 章）：重新备料、修订、两审后用 stage-chapter 覆盖`
   } else if (受影响.length) {
     建议 = `重审受影响章（第 ${受影响.join('、')} 章）：重跑两审 save-review 后 batch-restage`
   } else if (停止.stop) {
@@ -161,6 +180,7 @@ async function whatsMissing(ctx) {
   for (const [label, rel] of [
     ['book.yaml', 'book.yaml'],
     ['总纲', '大纲/总纲.md'],
+    ['作品契约', '作品契约/作品契约.md'],
   ]) {
     try {
       await fs.access(path.join(ctx.repoPath, rel))

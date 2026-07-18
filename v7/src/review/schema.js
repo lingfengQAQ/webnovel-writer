@@ -22,6 +22,7 @@ export const SCHEMA_EXAMPLE = {
       evidence: '草稿引用 vs 输入数据',
       fix_hint: '修复方向',
       blocking: true,
+      contract_clause: '核心读者承诺',
     },
   ],
   issues_count: 1,
@@ -61,11 +62,22 @@ export function validateReviewReport(report, { reviewType } = {}) {
     for (const f of REQUIRED_FIELDS) {
       if (issue[f] == null || issue[f] === '') errors.push(`${where} 缺字段 ${f}`)
     }
+    let contract_clause = ''
+    if (issue.contract_clause != null && issue.contract_clause !== '') {
+      contract_clause = typeof issue.contract_clause === 'string' ? issue.contract_clause.trim() : ''
+      if (!isContractClause(contract_clause)) {
+        errors.push(`${where} contract_clause 不是作品契约中的有效条款`)
+      }
+    }
     // 阻断规则：只认严格布尔 true,字符串 "false" 不当真（P1-2）
     let blocking = issue.blocking === true
     if (issue.severity === 'critical') blocking = true
     if (issue.category === 'unregistered_thread') blocking = false
-    return { ...issue, blocking }
+    return {
+      ...issue,
+      ...(contract_clause ? { contract_clause } : {}),
+      blocking,
+    }
   })
 
   const blocking_count = normalized.filter((x) => x.blocking).length
@@ -78,3 +90,10 @@ export function validateReviewReport(report, { reviewType } = {}) {
   }
   return { ok: errors.length === 0, report: out, errors }
 }
+
+function isContractClause(value) {
+  return CONTRACT_SECTIONS.some(
+    (section) => value === section || value.startsWith(section + '/')
+  )
+}
+import { CONTRACT_SECTIONS } from '../knowledge/contract.js'

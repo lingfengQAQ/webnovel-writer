@@ -33,7 +33,7 @@ export async function determineNextState(ctx) {
   // 序2 手改补登（检测=脚本;补登执行体也是脚本：relink 命令,作者确认后跑）
   const manualEdits = await d.listManualEdits(repoPath)
   if (manualEdits.length) {
-    return mk(2, 'relink-manual-edits', false, `定稿/大纲 有 ${manualEdits.length} 处未登记的手改，问作者「补登吗」，确认后运行 relink --message=<一句话说明> 入档。`, gitHealth, await buildDto(ctx, 2, { manualEdits }))
+    return mk(2, 'relink-manual-edits', false, `书仓源文件有 ${manualEdits.length} 处未登记的手改，问作者「补登吗」，确认后运行 relink --message=<一句话说明> 入档。`, gitHealth, await buildDto(ctx, 2, { manualEdits }))
   }
 
   // 序3 断点续跑

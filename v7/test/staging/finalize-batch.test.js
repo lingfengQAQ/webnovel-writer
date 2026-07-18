@@ -17,6 +17,7 @@ import { finalizeChapter } from '../../src/finalize/index.js'
 import { determineNextState } from '../../src/state-machine/index.js'
 import { createGit } from '../../src/finalize/git.js'
 import { gitBookCtx } from '../commands/_helper.js'
+import { writeReviewArtifacts } from './_helper.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -47,12 +48,7 @@ function chapterPayload(num, { body, 钩子 = '危机钩-强' } = {}) {
 }
 
 async function stage(ctx, num, opts) {
-  await fs.mkdir(path.join(ctx.repoPath, '工作区'), { recursive: true })
-  await fs.writeFile(
-    path.join(ctx.repoPath, '工作区', '审稿.md'),
-    `# 第 ${num} 章审稿单\n\n> 完整两审模式。\n> 共 0 个问题：0 阻断。\n`,
-    'utf8'
-  )
+  await writeReviewArtifacts(ctx.repoPath, num)
   const r = await stageChapter(ctx, { chapterNum: num, payload: chapterPayload(num, opts) })
   assert.equal(r.ok, true, r.error)
   return r
@@ -152,11 +148,7 @@ test('AC3 注入错误恢复演练：打回传染 → 拒绝定稿 → 重写重
 
     // 重写打回章 → stage 覆盖；受影响章重审 → batch-restage 通道
     await stage(ctx, 4, { body: '第4章正文：重写后的干净版本。' })
-    await fs.writeFile(
-      path.join(ctx.repoPath, '工作区', '审稿.md'),
-      '# 第 5 章审稿单\n\n> 完整两审模式。\n> 共 0 个问题：0 阻断。\n',
-      'utf8'
-    )
+    await writeReviewArtifacts(ctx.repoPath, 5)
     const rs = await restageReview(ctx.repoPath, 5)
     assert.equal(rs.ok, true, rs.error)
 

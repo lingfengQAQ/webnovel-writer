@@ -1,7 +1,7 @@
-import { resolveBookTags } from '../knowledge/index.js'
+import { resolveBookKnowledge } from '../knowledge/index.js'
 
 /**
- * knowledge-pack --类型=<题材> [--流派=a,b]：建书蒸馏材料包（spec §6.3）。
+ * knowledge-pack --类型=<题材> [--副题材=a,b] [--流派=a,b]：建书蒸馏材料包。
  * 按知识路由归一别名后输出命中条目全文；未命中如实列出（对谈共创降级，不报错）。
  * 契约：纯返回 {ok, output?, error?}。
  */
@@ -14,19 +14,30 @@ export async function run(args, options, ctx) {
     options['流派'] && options['流派'] !== true
       ? String(options['流派']).split(/[,，、]/).map((s) => s.trim()).filter(Boolean)
       : []
+  const 副题材 =
+    options['副题材'] && options['副题材'] !== true
+      ? String(options['副题材']).split(/[,，、]/).map((s) => s.trim()).filter(Boolean)
+      : []
 
-  const r = await resolveBookTags(ctx.packageRoot, { 类型, 流派 })
+  const r = await resolveBookKnowledge(ctx.packageRoot, { 类型, 副题材, 流派 })
   const lines = ['# 建书蒸馏材料包', '']
 
   if (r.题材命中) {
-    lines.push(`归一结果：类型=${r.题材命中.名称}${r.流派命中.length ? `；流派=${r.流派命中.map((t) => t.名称).join('、')}` : ''}`)
+    lines.push(
+      `归一结果：类型=${r.题材命中.名称}` +
+        `${r.副题材命中.length ? `；副题材=${r.副题材命中.map((t) => t.名称).join('、')}` : ''}` +
+        `${r.流派命中.length ? `；流派=${r.流派命中.map((t) => t.名称).join('、')}` : ''}`
+    )
   }
   if (r.未命中.length) {
-    lines.push(`知识库未命中：${r.未命中.join('、')}——这部分蒸馏走对谈共创，契约 front matter 的 来源 写「对谈共创」。`)
+    lines.push(
+      `知识库未命中：${r.未命中.map((item) => item.输入).join('、')}（${r.未命中.map((item) => `${item.维度}=${item.输入}`).join('、')}）——这部分走对谈共创，不伪装成知识库正式条目。`
+    )
   }
+  for (const warning of r.兼容提醒) lines.push(`兼容提醒：${warning}`)
   lines.push('')
 
-  const entries = [r.题材命中, ...r.流派命中].filter(Boolean)
+  const entries = [r.题材命中, ...r.副题材命中, ...r.流派命中].filter(Boolean)
   let hasContent = false
   for (const e of entries) {
     if (!e.content) {
@@ -34,18 +45,18 @@ export async function run(args, options, ctx) {
       continue
     }
     hasContent = true
-    lines.push(`<!-- 来源：${e.条目} -->`, e.content.trim(), '')
+    lines.push(`<!-- 来源：${e.来源版本 || e.条目} -->`, e.content.trim(), '')
   }
   if (!hasContent && !r.未命中.length) {
     lines.push('（知识库无可用条目，蒸馏全程对谈共创）')
   }
   lines.push(
     '---',
-    '蒸馏方法：逐节对撞——「库怎么说 → 作者怎么定」，作者的取舍（含不按常规）即蒸馏结果。',
-    '产出 文风/题材流派指导.md（放进 persist-book JSON 的「题材流派指导」字段），固定结构：',
-    'front matter：题材 / 流派（块列表）/ 恩怨清算（有仇必报|宿命必偿|恩怨分明|以直报怨|留有余地，按题材默认与作者对谈定档）/ 来源（块列表：条目路径或「对谈共创」）',
-    '恩怨清算五档语义（从狠到缓）：有仇必报=结仇必清算、代价足额落地；宿命必偿=清算可迟到不缺席、因果闭环由叙事兜底兑现；恩怨分明=有恩报恩有仇报仇、等价对付不扩大化；以直报怨=以公正回应仇怨、威胁未除不滥慈悲、除害不虐杀；留有余地=结算保留回旋空间、允许有代价的宽宥。',
-    '正文四节：## 骨架约定 / ## 差异化点（必填≥3条）/ ## 本书专属毒点 / ## 节奏参数（含恩怨清算档位的本书化表述——只约束主角行动线与恩怨结算，不约束配角人设）'
+    '蒸馏方法：逐节对撞——「库怎么说 → 作者怎么定」。路由只归一名称，不决定创意、人物、剧情或写法。',
+    '创意约束尚未决定时，按真实未决问题运行 knowledge-query --维度=创意约束 --问题=<问题>，最多取 3 条；也可直接自定义。',
+    '最终由作者确认作品契约；persist-book JSON 必须带 作者已确认:true、知识选择和完整作品契约。',
+    '作品契约 front matter：类型 / 副题材 / 流派 / 创意约束 / 来源版本 / 契约版本:1 / 生效起章:1 / 更新原因 / 变更类型:建书。',
+    '正文小节：核心读者承诺 / 骨架约定 / 题材融合协议 / 创意约束落地 / 差异化点（至少3条）/ 冲突与关系结算原则 / 本书专属毒点 / 节奏与兑现参数。'
   )
   return { ok: true, output: lines.join('\n') }
 }

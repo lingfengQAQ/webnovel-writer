@@ -51,6 +51,22 @@ test('编辑审合法 category 通过', async () => {
   assert.equal(r.ok, true)
 })
 
+test('作品契约问题只接受明确的契约条款标识', () => {
+  const valid = validateReviewReport(
+    { chapter: 5, issues: [issue({ contract_clause: '冲突与关系结算原则/主角底线' })] },
+    { reviewType: 'factCheck' }
+  )
+  assert.equal(valid.ok, true)
+  assert.equal(valid.report.issues[0].contract_clause, '冲突与关系结算原则/主角底线')
+
+  const invalid = validateReviewReport(
+    { chapter: 5, issues: [issue({ contract_clause: '模型猜测的条款' })] },
+    { reviewType: 'factCheck' }
+  )
+  assert.equal(invalid.ok, false)
+  assert.ok(invalid.errors.some((error) => error.includes('contract_clause')))
+})
+
 test('缺字段 / 非法 severity → 报错', async () => {
   const r = validateReviewReport(
     { chapter: 5, issues: [{ severity: 'fatal', category: 'setting', description: '' }] },

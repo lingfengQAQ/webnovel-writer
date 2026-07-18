@@ -21,6 +21,7 @@ export function parseBookConfig(yamlString) {
     spec_version: '7.0',
     书名: '未命名',
     类型: '玄幻',
+    副题材: [],
     流派: [],
     每章目标字数: 3000,
     卷规模: 40,
@@ -38,6 +39,10 @@ export function parseBookConfig(yamlString) {
 
   // 合并默认值（只覆盖 undefined 的字段）
   const mergedData = { ...defaults, ...result.data }
+  // 防呆方言中的空块列表会被 YAML 解析为 null；运行时统一给调用者数组。
+  for (const field of ['副题材', '流派']) {
+    if (mergedData[field] == null) mergedData[field] = []
+  }
 
   return {
     ok: true,

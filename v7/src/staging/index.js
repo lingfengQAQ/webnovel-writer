@@ -17,6 +17,12 @@ import {
 } from '../style-stats/index.js'
 import { runHealthCheck } from '../health-check/index.js'
 import { renderBookStatus } from '../prep/book-status.js'
+import { applyReviewOutcome } from '../review/outcome.js'
+import {
+  decodeContractIssue,
+  evaluateContractIssueSignals,
+  readContractIssueHistory,
+} from '../knowledge/contract-issues.js'
 
 /**
  * staging：待定稿批次（自动模式，spec §8.1）。批次真源 = 工作区/待定稿/ 下的文件，
@@ -27,7 +33,12 @@ import { renderBookStatus } from '../prep/book-status.js'
 const BATCH_DIR = path.join('工作区', '待定稿')
 const META = '批次.json'
 
-export const 章状态 = { 待审收: '待审收', 打回: '打回', 受影响: '受影响' }
+export const 章状态 = {
+  待审收: '待审收',
+  打回: '打回',
+  受影响: '受影响',
+  契约变更: '契约变更',
+}
 
 /**
  * 读批次元数据（含与实际章目录的对账）。
@@ -149,9 +160,10 @@ export async function stagedFacts(repoPath, opts = {}) {
   const rows = Number.isInteger(opts.before)
     ? batch.章列表.filter((r) => r.章号 < opts.before)
     : batch.章列表
-  if (!rows.length) return { ...facts, exists: false }
+  const usableRows = rows.filter((row) => row.状态 !== 章状态.契约变更)
+  if (!usableRows.length) return { ...facts, exists: false }
 
-  for (const row of rows) {
+  for (const row of usableRows) {
     const dirP = path.join(repoPath, BATCH_DIR, row.目录)
 
     let fm = {}
@@ -316,6 +328,10 @@ export async function stageChapter(ctx, { chapterNum, payload }) {
       }
     }
 
+    const reviewed = await applyReviewOutcome(repoPath, chapterNum, payload)
+    if (!reviewed.ok) return reviewed
+    payload = reviewed.payload
+
     const 标题 = payload.frontMatter.标题
     const dirName = `${String(chapterNum).padStart(4, '0')}-${sanitizeFileName(标题)}`
     const rel = (f) => path.join(BATCH_DIR, dirName, f)
@@ -411,6 +427,29 @@ export async function judgeStop(ctx, batch, opts = {}) {
   const baseline = await readBaselineFingerprint(cache)
   const q = judgeBatchQuality(staged, baseline, cfg)
   if (!q.过线) reasons.push(...q.原因)
+
+  if (last) {
+    const history = await readContractIssueHistory(repoPath)
+    for (const chapter of staged) {
+      const encoded = Array.isArray(chapter.frontMatter.契约问题)
+        ? chapter.frontMatter.契约问题
+        : []
+      history.push({
+        章号: chapter.章号,
+        卷: Number(chapter.frontMatter.卷) || 1,
+        问题: encoded.map(decodeContractIssue).filter(Boolean),
+      })
+    }
+    const signals = evaluateContractIssueSignals(history, {
+      volume: Number(last.frontMatter.卷) || 1,
+    })
+    for (const signal of signals) {
+      const threshold = signal.连续章.length
+        ? `连续第 ${signal.连续章.join('、')} 章出现`
+        : `本卷已出现 ${signal.卷内次数} 次`
+      reasons.push(`作品契约「${signal.条款}」相关问题${threshold}，批次停在作者确认点复盘`)
+    }
+  }
 
   return { stop: reasons.length > 0, reasons }
 }
@@ -509,20 +548,127 @@ export async function restageReview(repoPath, chapterNum) {
   if (row.状态 === 章状态.打回) {
     return { ok: false, error: `第 ${chapterNum} 章是打回章，要重写后用 stage-chapter 重新暂存，不能只重审` }
   }
+  if (row.状态 === 章状态.契约变更) {
+    return {
+      ok: false,
+      error: `第 ${chapterNum} 章受作品契约变更影响，须重新备料、修订正文并用 stage-chapter 重暂存，不能只换审稿单`,
+    }
+  }
   let 审稿单 = ''
   try {
     审稿单 = await fs.readFile(path.join(repoPath, '工作区', '审稿.md'), 'utf8')
   } catch {
     return { ok: false, error: '工作区没有新审稿单（审稿.md），先重跑两审' }
   }
+  let payload
+  const payloadPath = path.join(BATCH_DIR, row.目录, '定稿包.json')
+  try {
+    payload = JSON.parse(await fs.readFile(path.join(repoPath, payloadPath), 'utf8'))
+  } catch (err) {
+    return { ok: false, error: `第 ${chapterNum} 章定稿包读取失败：${err.message}` }
+  }
+  const reviewed = await applyReviewOutcome(repoPath, chapterNum, payload)
+  if (!reviewed.ok) return reviewed
   await writeAtomicBatch(repoPath, [
     { path: path.join(BATCH_DIR, row.目录, '审稿单.md'), content: 审稿单 },
+    { path: payloadPath, content: JSON.stringify(reviewed.payload, null, 2) },
   ])
   row.状态 = 章状态.待审收
   await writeAtomicBatch(repoPath, [metaFile(batch.章列表)])
   await fs.rm(path.join(repoPath, '工作区', '审稿.md'), { force: true })
   await fs.rm(path.join(repoPath, '工作区', '评审报告'), { recursive: true, force: true })
   return { ok: true, 章号: chapterNum, error: '' }
+}
+
+/**
+ * 契约更新后让未定稿工件失效。批内章必须重备料/重暂存；当前草稿改名保留，
+ * 旧材料与审稿结果删除。失败只返回 warning，不反转已经提交的契约更新。
+ */
+export async function invalidateAfterContractUpdate(
+  repoPath,
+  effectiveChapter,
+  { nextChapter = effectiveChapter } = {}
+) {
+  const result = { 受影响章: [], 当前工作区失效: false, warnings: [] }
+  try {
+    const batch = await readBatch(repoPath)
+    if (batch.exists) {
+      for (const row of batch.章列表) {
+        if (row.章号 < effectiveChapter) continue
+        row.状态 = 章状态.契约变更
+        result.受影响章.push(row.章号)
+      }
+      if (result.受影响章.length) {
+        await writeAtomicBatch(repoPath, [metaFile(batch.章列表)])
+      }
+    }
+  } catch (err) {
+    result.warnings.push(
+      `待定稿批次失效标记失败：${err.message}。契约已经更新，请勿直接批量定稿。`
+    )
+  }
+
+  if (!Number.isInteger(nextChapter) || nextChapter < effectiveChapter) return result
+  const workspace = path.join(repoPath, '工作区')
+  let names = []
+  try {
+    names = await fs.readdir(workspace)
+  } catch {
+    return result
+  }
+  const active = names.filter(
+    (name) =>
+      name.startsWith('草稿') ||
+      name === '本章写作材料.md' ||
+      name === '审稿.md' ||
+      name === '评审报告'
+  )
+  if (!active.length) return result
+  result.当前工作区失效 = true
+
+  for (const name of names.filter((item) => item.startsWith('草稿'))) {
+    try {
+      await fs.rename(
+        path.join(workspace, name),
+        await availableInvalidatedDraftPath(workspace, name)
+      )
+    } catch (err) {
+      result.warnings.push(`旧草稿「${name}」保留改名失败：${err.message}`)
+    }
+  }
+  for (const name of ['本章写作材料.md', '审稿.md', '评审报告']) {
+    try {
+      await fs.rm(path.join(workspace, name), { recursive: true, force: true })
+    } catch (err) {
+      result.warnings.push(`旧工件「${name}」作废失败：${err.message}`)
+    }
+  }
+  try {
+    await writeAtomicBatch(repoPath, [
+      {
+        path: path.join('工作区', '契约更新待重备料.md'),
+        content:
+          '# 契约更新待重备料\n\n作品契约从第 ' +
+          effectiveChapter +
+          ' 章起更新。旧草稿已改名保留；请先核对细纲，再重新备料、修订正文并审查。\n',
+      },
+    ])
+  } catch (err) {
+    result.warnings.push(`重备料标记写入失败：${err.message}`)
+  }
+  return result
+}
+
+async function availableInvalidatedDraftPath(workspace, originalName) {
+  let candidate = path.join(workspace, '契约更新前-' + originalName)
+  for (let index = 2; ; index++) {
+    try {
+      await fs.access(candidate)
+      candidate = path.join(workspace, '契约更新前-' + index + '-' + originalName)
+    } catch {
+      return candidate
+    }
+  }
 }
 
 /**

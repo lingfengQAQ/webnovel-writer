@@ -7,6 +7,8 @@ import { prepareChapterMaterials } from '../../src/prep/index.js'
 import { assembleReviewInput } from '../../src/review/index.js'
 import { mechanicalCheck } from '../../src/mechanical-check/index.js'
 import { repoCtx } from '../commands/_helper.js'
+import { writeReviewArtifacts } from './_helper.js'
+import { minimalWorkContract } from '../state-machine/_helper.js'
 
 // —— AC2 批内依赖：第 3 章预登记（新条目/新角色/时间线/信息差）→ 第 4 章备料/审稿输入/机检可见 ——
 
@@ -18,6 +20,8 @@ const 角色卡 = `---\n姓名: 林晚\n别名:\n  - 晚晚\n状态: 在世\n位
 const bookFiles = () => ({
   'book.yaml':
     'spec_version: "7.0"\n书名: 叠加测试\n类型: 玄幻\n每章目标字数: 3000\n卷规模: 40\n连写批次大小: 8\n',
+  '作品契约/作品契约.md': minimalWorkContract(),
+  '作品契约/知识选择记录.md': '# 知识选择记录\n',
   '定稿/正文/0001-第1章.md': 定稿章(1),
   '定稿/正文/0002-第2章.md': 定稿章(2),
   '定稿/设定/名册.md': '| 正名 | 别名 | 类型 | 首现章 |\n|--|--|--|--|\n| 林晚 | 晚晚 | character | 1 |\n',
@@ -29,12 +33,7 @@ const bookFiles = () => ({
 })
 
 async function stageChapter3(ctx) {
-  await fs.mkdir(path.join(ctx.repoPath, '工作区'), { recursive: true })
-  await fs.writeFile(
-    path.join(ctx.repoPath, '工作区', '审稿.md'),
-    '# 第 3 章审稿单\n\n> 完整两审模式。\n> 共 0 个问题：0 阻断。\n',
-    'utf8'
-  )
+  await writeReviewArtifacts(ctx.repoPath, 3)
   const payload = {
     frontMatter: {
       章号: 3,

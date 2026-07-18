@@ -6,6 +6,7 @@ import { determineNextState } from '../../src/state-machine/index.js'
 import { stageChapter, rejectFrom } from '../../src/staging/index.js'
 import { createGit } from '../../src/finalize/git.js'
 import { gitBookCtx } from '../commands/_helper.js'
+import { writeReviewArtifacts } from '../staging/_helper.js'
 
 // 开关矩阵（PRD #14）：自动确认细纲 × 连写。全关=既有回归（router.test.js 全量）；
 // 本文件测：单开细纲自动确认的序 6 标志、批次进行中的序 3 明细。全开端到端见 finalize-batch.test.js AC1。
@@ -29,12 +30,7 @@ async function setBookYaml(ctx, key, value) {
 }
 
 async function stage3(ctx) {
-  await fs.mkdir(path.join(ctx.repoPath, '工作区'), { recursive: true })
-  await fs.writeFile(
-    path.join(ctx.repoPath, '工作区', '审稿.md'),
-    '# 第 3 章审稿单\n\n> 完整两审模式。\n> 共 0 个问题：0 阻断。\n',
-    'utf8'
-  )
+  await writeReviewArtifacts(ctx.repoPath, 3)
   const r = await stageChapter(ctx, {
     chapterNum: 3,
     payload: {

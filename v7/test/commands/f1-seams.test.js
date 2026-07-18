@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import os from 'node:os'
 import path from 'node:path'
 import { promises as fs } from 'node:fs'
-import { makeGitBook, chapter } from '../state-machine/_helper.js'
+import { makeGitBook, chapter, minimalCreateBookPayload } from '../state-machine/_helper.js'
+import { writeReviewArtifacts } from '../staging/_helper.js'
 import { run as nextRun } from '../../src/commands/next.js'
 import { run as persistOutline } from '../../src/commands/persist-outline.js'
 import { run as persistVolumeReview } from '../../src/commands/persist-volume-review.js'
@@ -127,11 +128,11 @@ test('persist-book：工作目录模式建书+指路 AGENTS.md+登记置当前;�
   const workdir = await fs.mkdtemp(path.join(os.tmpdir(), 'wnw-pb-'))
   try {
     await fs.mkdir(path.join(workdir, '.webnovel'), { recursive: true })
-    const p = await jsonFile(os.tmpdir(), `wnw-pb-${process.pid}.json`, {
-      book: { spec_version: '7.0', 书名: '剑起青云', 卷规模: 40 },
+    const p = await jsonFile(os.tmpdir(), `wnw-pb-${process.pid}.json`, minimalCreateBookPayload({
+      book: { 书名: '剑起青云', 卷规模: 40 },
       总纲: '# 总纲\n## 结局\n登顶。',
       卷纲: '# 第1卷\n入门。',
-    })
+    }))
     const ctx = { workdir, repoPath: null }
     const r = await persistBook([], { file: p }, ctx)
     assert.equal(r.ok, true, r.error)
@@ -154,11 +155,11 @@ test('persist-book：工作目录模式建书+指路 AGENTS.md+登记置当前;�
     assert.ok(badDir.error.includes('不合法'))
 
     // 书名含 Windows 非法字符 → 前置拦截并指路 --dir（P2-4）
-    const badName = await jsonFile(os.tmpdir(), `wnw-pb-bad-${process.pid}.json`, {
-      book: { spec_version: '7.0', 书名: '冒险:开始' },
+    const badName = await jsonFile(os.tmpdir(), `wnw-pb-bad-${process.pid}.json`, minimalCreateBookPayload({
+      book: { 书名: '冒险:开始' },
       总纲: '# 总纲\nx',
       卷纲: '# 第1卷\ny',
-    })
+    }))
     const rBad = await persistBook([], { file: badName }, ctx)
     assert.equal(rBad.ok, false)
     assert.ok(rBad.error.includes('--dir'), '报错应指路 --dir 而不是 mkdir 深处报天书')
@@ -172,11 +173,11 @@ test('persist-book：工作目录模式建书+指路 AGENTS.md+登记置当前;�
 test('persist-book：书仓库直启落 cwd,不登记（开发/测试兼容）', async () => {
   const { root, ctx, cleanup } = await makeGitBook({ 'book.yaml': BOOK })
   try {
-    const p = await jsonFile(os.tmpdir(), `wnw-pb2-${process.pid}.json`, {
-      book: { spec_version: '7.0', 书名: '测' },
+    const p = await jsonFile(os.tmpdir(), `wnw-pb2-${process.pid}.json`, minimalCreateBookPayload({
+      book: { 书名: '测' },
       总纲: '# 总纲\nx',
       卷纲: '# 第1卷\ny',
-    })
+    }))
     const r = await persistBook([], { file: p }, ctx)
     assert.equal(r.ok, true, r.error)
     await fs.access(path.join(root, 'AGENTS.md'))
@@ -274,6 +275,7 @@ test('finalize：--payload 定稿入档 + commit;章号不一致防呆', async (
     '工作区/草稿-A.md': '林晚突破。',
   })
   try {
+    await writeReviewArtifacts(root, 1)
     const payload = await jsonFile(os.tmpdir(), `wnw-fz-${process.pid}.json`, {
       frontMatter: { 章号: 1, 标题: '突破', 卷: 1, 字数: 5, 章定位: '推进' },
       body: '林晚突破。',

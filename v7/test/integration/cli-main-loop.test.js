@@ -6,6 +6,7 @@ import { promises as fs } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { minimalCreateBookPayload } from '../state-machine/_helper.js'
 
 const exec = promisify(execFile)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -42,11 +43,11 @@ test('主循环全程 CLI：建书→写1章→两审→定稿→next 报第2章
     // 2. 建书（persist-book --file）→ 登记为当前书
     await fs.writeFile(
       path.join(workdir, '建书.json'),
-      JSON.stringify({
-        book: { spec_version: '7.0', 书名: '青云试剑', 卷规模: 40, 体检周期: 50 },
+      JSON.stringify(minimalCreateBookPayload({
+        book: { 书名: '青云试剑', 卷规模: 40, 体检周期: 50 },
         总纲: '# 总纲\n## 结局\n林晚登顶。',
         卷纲: '# 第1卷\n入门与试炼。',
-      }),
+      })),
       'utf8'
     )
     const r2 = await run(['persist-book', '--file=建书.json'])

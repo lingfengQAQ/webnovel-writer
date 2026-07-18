@@ -7,6 +7,14 @@ import { parseBookConfig } from '../storage/parsers/book-config.js'
 import { writeAtomicBatch } from '../storage/atomic.js'
 import { createGit } from '../finalize/git.js'
 import { refreshCacheAfterSourceChange } from '../cache/index.js'
+import {
+  KNOWLEDGE_SELECTION_PATH,
+  WORK_CONTRACT_PATH,
+  appendKnowledgeSelectionRecord,
+  createKnowledgeSelectionRecord,
+  validateCreateBookPayload,
+  validateWorkContract,
+} from '../knowledge/contract.js'
 
 /**
  * AI 态产物回流落盘（M3 落盘,AI 不碰文件）。AI 提交结构化 DTO,本层映射到路径写出。
@@ -46,7 +54,7 @@ export function bookAgentsMd(书名) {
   return [
     '# webnovel-writer 书仓库',
     '',
-    `本目录是《${书名}》的书仓库（定稿 / 大纲 / 文风 / 工作区）。AI 工具不要在这里启动——各平台壳装在上一层工作目录。`,
+    `本目录是《${书名}》的书仓库（作品契约 / 定稿 / 大纲 / 文风 / 工作区）。AI 工具不要在这里启动——各平台壳装在上一层工作目录。`,
     '',
     '- 日常写作：回上一层工作目录启动 agent CLI，对它说「继续」。',
     '- 单独 clone 了本仓库：先在期望的工作目录运行 `npx webnovel-writer init`，把本仓库放进工作目录，再运行 `webnovel-writer list-books` 重建书单。',
@@ -56,20 +64,35 @@ export function bookAgentsMd(书名) {
   ].join('\n')
 }
 
-/** 序1 建书 → book.yaml + 大纲/总纲.md + 大纲/卷纲/第01卷.md + 文风/题材流派指导.md（可选，spec §6.3）+ AGENTS.md 指路 + .gitignore + git init + core.quotepath */
-export async function persistCreateBook(ctx, { book, 总纲, 卷纲, 题材流派指导 }) {
+/** 序1 建书：作品契约是必需真源，与 book/大纲/选择记录原子落盘。 */
+export async function persistCreateBook(ctx, payload) {
+  const validation = validateCreateBookPayload(payload)
+  if (!validation.ok) {
+    return {
+      ok: false,
+      written: [],
+      error: `建书产物未通过校验：${validation.errors.join('；')}`,
+    }
+  }
+  const { book, 总纲, 卷纲, 作品契约 } = payload
   try {
     const gitignore = await buildGitignore(ctx.repoPath, ['.cache/', '工作区/'])
     const files = [
       { path: 'book.yaml', content: serializeYAML(book) },
       { path: path.join('大纲', '总纲.md'), content: 总纲 },
       { path: path.join('大纲', '卷纲', '第01卷.md'), content: 卷纲 },
+      { path: WORK_CONTRACT_PATH, content: 作品契约 },
+      {
+        path: KNOWLEDGE_SELECTION_PATH,
+        content: createKnowledgeSelectionRecord({
+          contract: validation.contract,
+          selections: validation.selections,
+          decisions: validation.decisions,
+        }),
+      },
       { path: 'AGENTS.md', content: bookAgentsMd(book?.书名 || '未命名') },
       { path: '.gitignore', content: gitignore },
     ]
-    if (typeof 题材流派指导 === 'string' && 题材流派指导.trim()) {
-      files.push({ path: path.join('文风', '题材流派指导.md'), content: 题材流派指导 })
-    }
     const written = await writeAtomicBatch(ctx.repoPath, files)
     // P0-2：书仓库工程化（spec quality §3.3 钉死建书流程负责 git init + core.quotepath）
     const git = createGit(ctx.repoPath)
@@ -84,6 +107,49 @@ export async function persistCreateBook(ctx, { book, 总纲, 卷纲, 题材流�
     return { ok: true, written, error: '' }
   } catch (err) {
     return { ok: false, written: [], error: `建书落盘失败：${err.message}` }
+  }
+}
+
+/** 作者确认后的契约修订：契约与选择记录原子替换并单独提交。 */
+export async function persistWorkContract(
+  ctx,
+  { book, 作品契约, contract, selections, decisions = [] },
+  opts = {}
+) {
+  const git = opts.git || createGit(ctx.repoPath)
+  let written = []
+  try {
+    let existingRecord = ''
+    try {
+      existingRecord = await fs.readFile(
+        path.join(ctx.repoPath, ...KNOWLEDGE_SELECTION_PATH.split('/')),
+        'utf8'
+      )
+    } catch {
+      // 选择记录缺失时补建标题；不读取任何旧契约路径。
+    }
+    const record = appendKnowledgeSelectionRecord(existingRecord, {
+      contract,
+      selections,
+      decisions,
+    })
+    written = await writeAtomicBatch(ctx.repoPath, [
+      { path: 'book.yaml', content: serializeYAML(book) },
+      { path: WORK_CONTRACT_PATH, content: 作品契约 },
+      { path: KNOWLEDGE_SELECTION_PATH, content: record },
+    ])
+    await git.ensureIdentity()
+    await git.add(written)
+    const hash = await git.commit(
+      `fix(契约): v${contract.frontMatter.契约版本} ${contract.frontMatter.更新原因}`
+    )
+    return { ok: true, written, commitHash: hash, error: '' }
+  } catch (err) {
+    if (written.length) {
+      for (const rel of written) await git.restore([rel])
+      await git.clean(written)
+    }
+    return { ok: false, written: [], error: `作品契约更新失败：${err.message}` }
   }
 }
 
@@ -139,6 +205,10 @@ export async function persistVolumeReview(ctx, { 卷号, 卷摘要, 下卷卷纲
  */
 function validateRepairContent(file, content) {
   const rel = String(file).replaceAll('\\', '/')
+  if (rel === WORK_CONTRACT_PATH) {
+    const r = validateWorkContract(content)
+    return r.ok ? { ok: true } : { ok: false, error: r.errors.join('；') }
+  }
   if (rel === 'book.yaml') {
     const r = parseBookConfig(content)
     return r.ok ? { ok: true } : { ok: false, error: r.error }

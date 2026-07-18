@@ -8,10 +8,12 @@ import { promisify } from 'node:util'
 import {
   persistRepair,
   persistCreateBook,
+  persistWorkContract,
   persistVolumeReview,
   persistDraftOutline,
 } from '../../src/state-machine/persist.js'
-import { makeGitBook } from './_helper.js'
+import { makeGitBook, minimalCreateBookPayload, minimalWorkContract } from './_helper.js'
+import { validateWorkContract } from '../../src/knowledge/contract.js'
 
 async function tmpRepo() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'wnw-persist-'))
@@ -23,11 +25,7 @@ const exec = promisify(execFile)
 test('persistCreateBook（P0-2）→ git init + core.quotepath=false + .gitignore（书仓库工程化）', async () => {
   const { ctx, root, cleanup } = await tmpRepo()
   try {
-    const r = await persistCreateBook(ctx, {
-      book: { spec_version: '7.0', 书名: '测' },
-      总纲: '# 总纲',
-      卷纲: '# 第1卷',
-    })
+    const r = await persistCreateBook(ctx, minimalCreateBookPayload({ book: { 书名: '测' } }))
     assert.equal(r.ok, true, r.error)
     const { stdout: inside } = await exec('git', ['rev-parse', '--is-inside-work-tree'], { cwd: root })
     assert.equal(inside.trim(), 'true', '建书应 git init 出一个仓库')
@@ -42,7 +40,7 @@ test('persistCreateBook（P0-2）→ 已有 .gitignore 追加不覆盖', async (
   const { ctx, root, cleanup } = await tmpRepo()
   try {
     await fs.writeFile(path.join(root, '.gitignore'), 'node_modules/\n', 'utf8')
-    const r = await persistCreateBook(ctx, { book: { 书名: '测' }, 总纲: '# 总纲', 卷纲: '# 第1卷' })
+    const r = await persistCreateBook(ctx, minimalCreateBookPayload({ book: { 书名: '测' } }))
     assert.equal(r.ok, true, r.error)
     const gi = await read(root, '.gitignore')
     assert.ok(gi.includes('node_modules/'), '不应覆盖既有条目')
@@ -62,15 +60,53 @@ test('persistDraftOutline（序6）→ 写 工作区/细纲.md', async () => {
 test('persistCreateBook（序1）→ 写 book.yaml + 总纲 + 第一卷卷纲', async () => {
   const { ctx, root, cleanup } = await tmpRepo()
   try {
-    const r = await persistCreateBook(ctx, {
-      book: { spec_version: '7.0', 书名: '剑起青云', 题材: '仙侠' },
+    const r = await persistCreateBook(ctx, minimalCreateBookPayload({
+      book: { 书名: '剑起青云' },
       总纲: '# 总纲\n主角逆袭。',
       卷纲: '# 第1卷\n入门。',
-    })
+    }))
     assert.equal(r.ok, true)
     assert.match(await read(root, 'book.yaml'), /剑起青云/)
     assert.match(await read(root, '大纲/总纲.md'), /逆袭/)
     assert.match(await read(root, '大纲/卷纲/第01卷.md'), /入门/)
+    assert.match(await read(root, '作品契约/作品契约.md'), /## 核心读者承诺/)
+    assert.match(await read(root, '作品契约/知识选择记录.md'), /题材：玄幻/)
+  } finally { await cleanup() }
+})
+
+test('persistWorkContract：提交失败时三份源文件精确回滚', async () => {
+  const oldContract = minimalWorkContract()
+  const { ctx, root, cleanup } = await makeGitBook({
+    'book.yaml': 'spec_version: "7.0"\n书名: 测\n类型: 玄幻\n副题材:\n流派:\n',
+    '作品契约/作品契约.md': oldContract,
+    '作品契约/知识选择记录.md': '# 知识选择记录\n\n旧记录。\n',
+  })
+  try {
+    const nextContract = minimalWorkContract({ version: 2, effectiveChapter: 1 })
+    const parsed = validateWorkContract(nextContract)
+    const realGit = (await import('../../src/finalize/git.js')).createGit(root)
+    const failingGit = {
+      ...realGit,
+      async commit() { throw new Error('测试提交失败') },
+    }
+    const result = await persistWorkContract(
+      ctx,
+      {
+        book: { spec_version: '7.0', 书名: '测', 类型: '玄幻', 副题材: [], 流派: [] },
+        作品契约: nextContract,
+        contract: parsed.data,
+        selections: [{ 维度: '题材', 名称: '玄幻', 来源: '作者自定义' }],
+      },
+      { git: failingGit }
+    )
+    assert.equal(result.ok, false)
+    assert.equal((await read(root, '作品契约/作品契约.md')).replaceAll('\r\n', '\n'), oldContract)
+    assert.equal(
+      (await read(root, '作品契约/知识选择记录.md')).replaceAll('\r\n', '\n'),
+      '# 知识选择记录\n\n旧记录。\n'
+    )
+    const { stdout } = await exec('git', ['status', '--porcelain'], { cwd: root })
+    assert.equal(stdout.trim(), '')
   } finally { await cleanup() }
 })
 

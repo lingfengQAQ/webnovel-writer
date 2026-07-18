@@ -5,10 +5,11 @@ import { parseMarkdownTable } from '../storage/parsers/markdown-table.js'
 import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
 import { createGit } from '../finalize/git.js'
 import { readBatch } from '../staging/index.js'
+import { validateWorkContract } from '../knowledge/contract.js'
 
 /** 序2/relink/goto 共用的「跟踪面」（决策 D6）：手改检测、relink 补登范围、goto 脏树拒绝
  * 三处同源判定，防双写漂移。文风铁律与 book.yaml 的序0 修复回写由此走序2 补登入档。 */
-export const TRACKED_SOURCE_PREFIXES = ['定稿/', '大纲/', '文风/']
+export const TRACKED_SOURCE_PREFIXES = ['作品契约/', '定稿/', '大纲/', '文风/']
 
 /** @param {string} p git status porcelain 里的仓库相对路径 */
 export function isTrackedSourcePath(p) {
@@ -61,6 +62,22 @@ export async function detectParseFailures(repoPath) {
     if (!parsed.ok) failures.push({ file: '文风/文风铁律.md', error: parsed.error })
   } catch {
     // 无文风铁律
+  }
+
+  // 作品契约是必需源文件；book.yaml 存在时缺失也属于解析失败，不得静默继续。
+  try {
+    await fs.access(path.join(repoPath, 'book.yaml'))
+    try {
+      const contract = await fs.readFile(path.join(repoPath, '作品契约', '作品契约.md'), 'utf8')
+      const parsed = validateWorkContract(contract)
+      if (!parsed.ok) {
+        failures.push({ file: '作品契约/作品契约.md', error: parsed.errors.join('；') })
+      }
+    } catch {
+      failures.push({ file: '作品契约/作品契约.md', error: '作品契约文件不存在' })
+    }
+  } catch {
+    // 无 book.yaml 时属于建书态，不要求契约先存在。
   }
 
   // 名册表（文件可选，缺失跳过；与重建器的软跳过互补——这里是作者面对的修复确认）
@@ -133,13 +150,20 @@ export async function unfinishedWorkDetail(repoPath) {
     files = []
   }
   const 现存 = files.filter(
-    (f) => f.startsWith('草稿') || f === '审稿.md' || f === '细纲.md' || f === '本章写作材料.md'
+    (f) =>
+      f.startsWith('草稿') ||
+      f === '审稿.md' ||
+      f === '细纲.md' ||
+      f === '本章写作材料.md' ||
+      f === '契约更新待重备料.md'
   )
   // 待定稿现存与 readBatch.exists 同口径（D6）：目录里只有杂项文件不算批次——
   // 否则 DTO 出「待定稿批次续跑」却无批次明细可跑。heal:false——检测器是只读路径
   if ((await readBatch(repoPath, { heal: false })).exists) 现存.push('待定稿/')
   const 从哪继续 = 现存.includes('待定稿/')
     ? '待定稿批次续跑'
+    : 现存.includes('契约更新待重备料.md')
+      ? '作品契约已更新，核对细纲后重新备料'
     : 现存.includes('审稿.md')
       ? '等作者裁决（接受/改完接受/打回）'
       : 现存.some((f) => f.startsWith('草稿'))

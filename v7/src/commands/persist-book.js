@@ -3,6 +3,7 @@ import path from 'node:path'
 import { persistCreateBook } from '../state-machine/persist.js'
 import { registerBook } from '../session/index.js'
 import { readJsonInput } from '../util/json-input.js'
+import { validateCreateBookPayload } from '../knowledge/contract.js'
 
 /**
  * persist-book --file=<json> [--dir=<目录名>]：序1 建书产物回流。
@@ -15,19 +16,15 @@ export const scope = 'workdir-or-book'
 export async function run(args, options, ctx) {
   const spec = await readJsonInput(ctx, options.file, 'file')
   if (!spec.ok) return { ok: false, error: spec.error }
-  const { book, 总纲, 卷纲, 题材流派指导 } = spec.data
-  if (!book || typeof book !== 'object' || !book.书名) {
-    return { ok: false, error: 'JSON 需含对象字段「book」（book.yaml 内容,至少有 书名）' }
+  const validation = validateCreateBookPayload(spec.data)
+  if (!validation.ok) {
+    return { ok: false, error: `建书产物未通过校验：\n- ${validation.errors.join('\n- ')}` }
   }
-  if (typeof 总纲 !== 'string' || !总纲.trim()) return { ok: false, error: 'JSON 需含非空字符串字段「总纲」' }
-  if (typeof 卷纲 !== 'string' || !卷纲.trim()) return { ok: false, error: 'JSON 需含非空字符串字段「卷纲」' }
-  if (题材流派指导 !== undefined && typeof 题材流派指导 !== 'string') {
-    return { ok: false, error: '字段「题材流派指导」须是字符串（文风/题材流派指导.md 全文，可省略）' }
-  }
+  const { book } = spec.data
 
   // 书仓库直启：落当前书仓库
   if (ctx.repoPath) {
-    const r = await persistCreateBook(ctx, { book, 总纲, 卷纲, 题材流派指导 })
+    const r = await persistCreateBook(ctx, spec.data)
     return r.ok
       ? { ok: true, output: `建书完成：${r.written.join('、')}` }
       : { ok: false, error: r.error }
@@ -53,7 +50,7 @@ export async function run(args, options, ctx) {
   } catch {
     // 目录不存在或还不是书——可建
   }
-  const r = await persistCreateBook({ repoPath }, { book, 总纲, 卷纲, 题材流派指导 })
+  const r = await persistCreateBook({ repoPath }, spec.data)
   if (!r.ok) return { ok: false, error: r.error }
   const reg = await registerBook(ctx.workdir, { 书名: String(book.书名), 目录: dirName })
   if (!reg.ok) {

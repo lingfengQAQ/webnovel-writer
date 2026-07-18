@@ -11,8 +11,9 @@ import { ThreadLedgerReader } from '../storage/adapters/ThreadLedgerReader.js'
 import { writeAtomicBatch } from '../storage/atomic.js'
 import { validateReviewReport } from './schema.js'
 import { stagedFacts, overlayBookStatus } from '../staging/index.js'
-import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
-import { parseOutlineDeclarations, findDeclared, resolveBookTags, readEntry } from '../knowledge/index.js'
+import { ContractReader } from '../storage/adapters/ContractReader.js'
+import { parseOutlineDeclarations, findDeclared } from '../knowledge/index.js'
+import { reviewOutcomeFile } from './outcome.js'
 
 const 兼容声明 = '本次使用兼容模式（单上下文顺序审稿），审稿隔离度低于完整两审模式。'
 const 完整声明 = '完整两审模式（事实审查/编辑审各自独立上下文）。'
@@ -20,43 +21,12 @@ const 完整声明 = '完整两审模式（事实审查/编辑审各自独立上
 const 类型英文 = { 伏笔: 'foreshadow', 悬念: 'suspense', 感情线: 'romance' }
 
 /**
- * 毒点清单四源（spec §6.3/§8）：①契约（本书专属毒点 + 恩怨清算档位）②题材/流派条目 front matter 毒点
- * ③细纲声明命中的节拍/钩子/场景条目（毒点 + 审稿时节）。任一源缺失静默跳过——旁路降级。
+ * 细纲声明命中的章级审查切片。书级规则只读本书作品契约，不回读通用题材/流派。
  */
-async function assemblePoisonPoints(ctx, outlineText) {
+async function assembleKnowledgeChecks(ctx, outlineText) {
   const out = []
-  try {
-    const raw = await fs.readFile(path.join(ctx.repoPath, '文风', '题材流派指导.md'), 'utf8')
-    const fm = parseFrontMatter(raw)
-    if (fm.ok && fm.data?.恩怨清算) {
-      out.push(`【契约】恩怨清算档位：${fm.data.恩怨清算}——只判主角行动线与恩怨结算结果，不判配角人设`)
-    }
-    const 专属 = extractSection(fm.ok ? fm.body : raw, '本书专属毒点')
-    if (专属) {
-      for (const line of 专属.split('\n')) {
-        const t = line.trim().replace(/^-\s*/, '')
-        if (t) out.push(`【契约】${t}`)
-      }
-    }
-  } catch {
-    // 无契约文件
-  }
   if (!ctx.packageRoot) return out
   try {
-    const config = ctx.repoPath ? await new BookConfigReader(ctx.repoPath).read() : { ok: false }
-    if (config.ok) {
-      const tags = await resolveBookTags(ctx.packageRoot, {
-        类型: config.data.类型,
-        流派: config.data.流派,
-      })
-      for (const e of [tags.题材命中, ...tags.流派命中].filter(Boolean)) {
-        const entry = e.条目 ? await readEntry(ctx.packageRoot, e.条目) : null
-        if (!entry) continue
-        for (const p of Array.isArray(entry.fm.毒点) ? entry.fm.毒点 : []) {
-          out.push(`【${e.名称}】${p}`)
-        }
-      }
-    }
     const decl = parseOutlineDeclarations(outlineText)
     const hits = [
       ['节拍', decl.节拍 ? [decl.节拍] : []],
@@ -67,9 +37,6 @@ async function assemblePoisonPoints(ctx, outlineText) {
       for (const d of decls) {
         const entry = await findDeclared(ctx.packageRoot, dir, d)
         if (!entry) continue
-        for (const p of Array.isArray(entry.fm.毒点) ? entry.fm.毒点 : []) {
-          out.push(`【${entry.fm.名称 || d}】${p}`)
-        }
         if (entry.审稿时) out.push(`【${entry.fm.名称 || d}·核对】${entry.审稿时.replace(/\n+/g, ' ')}`)
       }
     }
@@ -89,6 +56,10 @@ async function assemblePoisonPoints(ctx, outlineText) {
 export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
   try {
     const { repoPath, cache } = ctx
+    const contract = await new ContractReader(repoPath).readReviewSections()
+    if (!contract.ok) {
+      return { ok: false, input: null, error: `组装审稿输入停止：${contract.error}` }
+    }
     const facts = await stagedFacts(repoPath, { before: chapterNum })
 
     // resolve 而非 join：draftPath 传绝对路径时 join 会拼出坏路径
@@ -108,8 +79,7 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
       // 无细纲
     }
 
-    // 毒点清单（spec §8 第 6 步编辑审核对项）：契约专属毒点 + 题材/流派条目毒点 + 细纲声明命中条目毒点
-    const 毒点清单 = await assemblePoisonPoints(ctx, outlineText)
+    const 知识审查 = await assembleKnowledgeChecks(ctx, outlineText)
 
     const status = overlayBookStatus(await assembleBookStatus(ctx), facts)
     const 当前卷 = status.ok ? status.data.当前卷 : 1
@@ -241,7 +211,8 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
         名册,
         时间线片段,
         信息差候选,
-        毒点清单,
+        作品契约: contract.content,
+        知识审查,
       },
       error: '',
     }
@@ -311,6 +282,7 @@ export async function persistReviewReport(ctx, { chapterNum, merged, draft, 待�
   const files = [
     { path: path.join('工作区', '评审报告', '事实审查.json'), content: JSON.stringify(merged.事实审查 ?? {}, null, 2) },
     { path: path.join('工作区', '评审报告', '编辑审.json'), content: JSON.stringify(merged.编辑审 ?? {}, null, 2) },
+    reviewOutcomeFile(merged),
   ]
   if (raw) {
     files.push({ path: path.join('工作区', '评审报告', '事实审查.raw.json'), content: JSON.stringify(raw.factCheck ?? {}, null, 2) })

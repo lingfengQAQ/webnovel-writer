@@ -14,6 +14,7 @@ import {
   章状态,
 } from '../../src/staging/index.js'
 import { repoCtx } from '../commands/_helper.js'
+import { writeReviewArtifacts } from './_helper.js'
 
 // —— fixture：已有 2 章定稿的书，批次从第 3 章起 ——
 
@@ -43,8 +44,6 @@ function bookFiles({ 批次大小 = 3, 卷纲 = true } = {}) {
   return files
 }
 
-const 审稿单 = (num) => `# 第 ${num} 章审稿单\n\n> 完整两审模式（事实审查/编辑审各自独立上下文）。\n> 共 0 个问题：0 阻断。\n`
-
 function mkPayload(num, { 标题 = `第${num}章`, 钩子 = '危机钩-强', 书内时间 = `1023夏月初${num}`, 伏笔 = null, 收卷 = null, body = null } = {}) {
   const frontMatter = {
     章号: num,
@@ -69,9 +68,9 @@ function mkPayload(num, { 标题 = `第${num}章`, 钩子 = '危机钩-强', 书
 }
 
 async function stage(ctx, num, opts) {
-  await fs.mkdir(path.join(ctx.repoPath, '工作区'), { recursive: true })
-  await fs.writeFile(path.join(ctx.repoPath, '工作区', '审稿.md'), 审稿单(num), 'utf8')
-  return stageChapter(ctx, { chapterNum: num, payload: mkPayload(num, opts) })
+  const { 审稿问题 = [], ...payloadOptions } = opts || {}
+  await writeReviewArtifacts(ctx.repoPath, num, 审稿问题)
+  return stageChapter(ctx, { chapterNum: num, payload: mkPayload(num, payloadOptions) })
 }
 
 test('stage 首章：三件套落位、meta 记录、工作区清、停止未命中', async () => {
@@ -180,6 +179,42 @@ test('停止条件：连续 3 章无条目变动（默认上限），有变动�
   }
 })
 
+test('作品契约问题连续两章后才在批次作者确认点呈报', async () => {
+  const { ctx, cleanup } = await repoCtx(null, bookFiles({ 批次大小: 8 }))
+  const contractIssue = {
+    severity: 'medium',
+    category: 'pacing',
+    location: '结尾',
+    description: '本章没有兑现约定推进',
+    evidence: '正文与作品契约',
+    fix_hint: '核对兑现方式',
+    blocking: false,
+    contract_clause: '节奏与兑现参数',
+  }
+  try {
+    const first = await stage(ctx, 3, {
+      伏笔: ['推进 伏笔-001'],
+      审稿问题: [contractIssue],
+    })
+    assert.equal(first.停止.stop, false, JSON.stringify(first.停止))
+    const second = await stage(ctx, 4, {
+      伏笔: ['推进 伏笔-001'],
+      审稿问题: [contractIssue],
+    })
+    assert.equal(second.停止.stop, true)
+    assert.ok(second.停止.reasons.some((reason) => reason.includes('作品契约') && reason.includes('连续')))
+    const payload = JSON.parse(
+      await fs.readFile(
+        path.join(ctx.repoPath, '工作区', '待定稿', '0004-第4章', '定稿包.json'),
+        'utf8'
+      )
+    )
+    assert.deepEqual(payload.frontMatter.契约问题, ['节奏与兑现参数｜中｜本章没有兑现约定推进'])
+  } finally {
+    await cleanup()
+  }
+})
+
 // —— 批次质检（纯函数）——
 
 const 质检章 = (num, { 钩子 = '危机钩-强', 书内时间 = 'x', body = '正文。' } = {}) => ({
@@ -253,7 +288,7 @@ test('rejectFrom：K 打回清工件，K+1..N 受影响；restageReview 回待�
     assert.equal(bad.ok, false)
     assert.match(bad.error, /重写/)
     // 受影响章重审：新审稿单 → 待审收
-    await fs.writeFile(path.join(ctx.repoPath, '工作区', '审稿.md'), 审稿单(5), 'utf8')
+    await writeReviewArtifacts(ctx.repoPath, 5)
     const ok5 = await restageReview(ctx.repoPath, 5)
     assert.equal(ok5.ok, true, ok5.error)
     assert.equal((await readBatch(ctx.repoPath)).章列表.find((x) => x.章号 === 5).状态, 章状态.待审收)
@@ -293,8 +328,7 @@ test('discardBatch：整批丢弃，工作区批次消失', async () => {
 test('stagedFacts：声明与定稿包合并出条目/名册/时间线/信息差事实', async () => {
   const { ctx, cleanup } = await repoCtx(null, bookFiles({ 批次大小: 8 }))
   try {
-    await fs.mkdir(path.join(ctx.repoPath, '工作区'), { recursive: true })
-    await fs.writeFile(path.join(ctx.repoPath, '工作区', '审稿.md'), 审稿单(3), 'utf8')
+    await writeReviewArtifacts(ctx.repoPath, 3)
     const p = mkPayload(3, { 伏笔: ['埋下 伏笔-009'] })
     p.threadCreates = [
       { id: '伏笔-009', 短题: '古钟', frontMatter: { 强度: '中', 状态: '进行', 开启章: 3 }, body: '## 描述\n古钟。\n' },

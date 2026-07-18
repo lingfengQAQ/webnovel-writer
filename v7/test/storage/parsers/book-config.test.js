@@ -40,6 +40,13 @@ test('缺字段时使用默认值', () => {
   assert.equal(result.data.连写批次大小, 8) // 默认值
 })
 
+test('空块列表统一为数组', () => {
+  const result = parseBookConfig('书名: 最小配置\n副题材:\n流派:\n')
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data.副题材, [])
+  assert.deepEqual(result.data.流派, [])
+})
+
 test('边界：YAML 语法错误', () => {
   const yaml = `书名: "未闭合`
 
