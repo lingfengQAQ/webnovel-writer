@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-0.md`
-- **Total Sessions**: 4
-- **Last Active**: 2026-07-05
+- **Total Sessions**: 5
+- **Last Active**: 2026-07-18
 <!-- @@@/auto:current-status -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 5 | 2026-07-18 | 完成十维知识运行时框架 | `c6a0146`, `d8b73a6`, `5dabc8d`, `5713a1b`, `a48fd6c` | `v7` |
 | 4 | 2026-07-05 | M7 导出与 v6 迁移：全里程碑完成，v7 进入 beta | `5ba85a5`, `8615d91`, `e14545a`, `557bd42` | `v7` |
 | 3 | 2026-07-05 | M6 P4 收口：状态机批次感知、SKILL 自动模式段、spec 0.12 回填与全 AC 达成 | `28acfd2`, `f514a31` | `v7` |
 | 2 | 2026-07-03 | v7 边界收口：九项代码修复全落地（A格式/B判定/C缺料/D审计） | `d593f0e`, `b0ddc9c`, `54f59d4` | `v7` |
