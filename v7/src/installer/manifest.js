@@ -1,6 +1,8 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { createHash } from 'node:crypto'
+import { sha256 } from '../util/hash.js'
+
+export { sha256 } from '../util/hash.js'
 
 /**
  * 模板哈希清单（multi-agent spec §8.2）：.webnovel/manifest.json 记录安装器写出的每个文件的
@@ -9,10 +11,6 @@ import { createHash } from 'node:crypto'
  */
 
 const MANIFEST_REL = path.join('.webnovel', 'manifest.json')
-
-export function sha256(content) {
-  return createHash('sha256').update(content, 'utf8').digest('hex')
-}
 
 export async function readManifest(workdir) {
   try {
