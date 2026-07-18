@@ -5,7 +5,8 @@ import { readJsonInput } from '../util/json-input.js'
 
 /**
  * save-review <章号> --file=<两审json> [--draft=<repo相对路径>]：两审产物入库。
- * JSON：{factCheck|事实审查, editorial|编辑审, mode?, 待确认新专名?, 章摘要?}。
+ * JSON：{factCheck|事实审查, editorial|编辑审, mode?, 待确认新专名?, 章摘要?}；
+ * 事实审查可带顶层 factChanges，schema 归一化与正式报告必须原样保留。
  * schema 校验 → 合并 → 落 工作区/审稿.md + 评审报告/（原始输出与归一化分存）。
  * 契约：纯返回 {ok, output?, error?}。
  */

@@ -52,12 +52,12 @@
 
 ## 阶段 5：分发与文档一次性切换
 
-- [ ] 5.1 更新 CLI help、webnovel-writer skill、编辑审 role 和 host shells，删除题材流派指导与恩怨档位话术。
-- [ ] 5.2 更新 sample-book、命令/state/prep/review/finalize fixtures 和测试到 0.17 目标书仓。
-- [ ] 5.3 installer vendoring 加入 `docs/knowledge/`，验证安装后 references README 的治理链接存在。
-- [ ] 5.4 激活 story repo spec 0.17，更新架构文档当前态；不留下“待运行时实施”的错误状态。
-- [ ] 5.5 全库搜索旧路径、旧字段、全量菜单和无消费者字段，允许的历史归档材料单独列明。
-- [ ] 5.6 运行完整质量门后提交“分发收口”单元。
+- [x] 5.1 更新 CLI help、webnovel-writer skill、编辑审 role 和 host shells，删除题材流派指导与恩怨档位话术。
+- [x] 5.2 更新 sample-book、命令/state/prep/review/finalize fixtures 和测试到 0.17 目标书仓。
+- [x] 5.3 installer vendoring 加入 `docs/knowledge/`，验证安装后 references README 的治理链接存在。
+- [x] 5.4 激活 story repo spec 0.17，更新架构文档当前态；不留下“待运行时实施”的错误状态。
+- [x] 5.5 全库搜索旧路径、旧字段、全量菜单和无消费者字段，允许的历史归档材料单独列明。
+- [x] 5.6 运行完整质量门后提交“分发收口”单元。
 
 ## 质量门
 

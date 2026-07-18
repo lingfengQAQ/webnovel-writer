@@ -25,9 +25,15 @@ test('生成 claude-code 壳：hasHooks 块入、unless 块去；两审完整模
   assert.match(skill, /独立 subagent/)
   assert.ok(!skill.includes('兼容模式'), 'agentCapable=true 应去掉兼容模式块')
   assert.match(skill, /node \.webnovel\/bin\/webnovel-writer\.js next --json/, '命令引用变量应渲染为 vendored 调用')
-  for (const cmdName of ['review-input', 'save-review', 'finalize', 'persist-book', 'persist-outline']) {
+  for (const cmdName of [
+    'review-input', 'save-review', 'finalize', 'persist-book', 'persist-outline',
+    'knowledge-query', 'persist-contract', 'persist-design', 'read-design',
+  ]) {
     assert.ok(skill.includes(cmdName), `写章流程应接 F1 命令 ${cmdName}`)
   }
+  assert.match(skill, /本章技法/)
+  assert.match(skill, /factChanges/)
+  assert.doesNotMatch(skill, /题材流派指导|恩怨清算|章尾钩子|节拍索引/)
   assert.ok(!skill.includes('{{'), '占位符应全部渲染')
 })
 
@@ -43,10 +49,14 @@ test('生成 codex 壳：无 hook → unless 块入；角色输出 TOML', async 
 
 test('角色占位符注入 category（来自 schema.js 单源）', async () => {
   const out = await generateHostShells(V7)
-  const role = out['claude-code']['agents/事实审查.md']
-  assert.match(role, /unregistered_thread/)
-  assert.ok(!role.includes('{{categories'), 'category 占位符已渲染')
-  assert.ok(!role.includes('{{schema'), 'schema 占位符已渲染')
+  const factRole = out['claude-code']['agents/事实审查.md']
+  const editorialRole = out['claude-code']['agents/编辑审.md']
+  assert.match(factRole, /unregistered_thread/)
+  assert.match(factRole, /factChanges/)
+  assert.match(editorialRole, /作品契约/)
+  assert.doesNotMatch(`${factRole}\n${editorialRole}`, /题材流派指导|恩怨清算默认|恩怨清算:/)
+  assert.ok(!factRole.includes('{{categories'), 'category 占位符已渲染')
+  assert.ok(!factRole.includes('{{schema'), 'schema 占位符已渲染')
 })
 
 test('drift check：同输入连跑两次逐字节一致', async () => {

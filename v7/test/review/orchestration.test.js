@@ -81,6 +81,35 @@ test('runReviews：DI 注入两审 → 校验+合并+落盘审稿单与评审报
   } finally { await cleanup() }
 })
 
+test('事实审查顶层 factChanges 穿过 schema 归一化并写入正式报告', async () => {
+  const { ctx, cleanup, root } = await makeReviewBook()
+  try {
+    const factChanges = [{
+      planPath: '大纲/创作设计/设定/ITEM-002-玄阶令牌.md',
+      factPath: '定稿/设定/物品/玄阶令牌.md',
+      content: '---\n名称: 玄阶令牌\n---\n正文已建立的事实。\n',
+      decision: '无冲突',
+      removePlan: true,
+    }]
+    const reviewers = {
+      factCheck: async (input) => ({ chapter: input.章号, issues: [], factChanges }),
+      editorial: async (input) => ({ chapter: input.章号, issues: [] }),
+    }
+    const result = await runReviews(ctx, {
+      chapterNum: 2,
+      draftPath: '工作区/草稿.md',
+      mode: 'complete',
+      reviewers,
+    })
+    assert.equal(result.ok, true)
+    assert.deepEqual(result.merged.事实审查.factChanges, factChanges, 'schema 归一化不得丢顶层事实差异')
+    const saved = JSON.parse(
+      await fs.readFile(path.join(root, '工作区', '评审报告', '事实审查.json'), 'utf8')
+    )
+    assert.deepEqual(saved.factChanges, factChanges, '正式事实审查报告必须保留 factChanges')
+  } finally { await cleanup() }
+})
+
 test('runReviews：降级模式 → 审稿单含兼容声明', async () => {
   const { ctx, cleanup, root } = await makeReviewBook()
   try {

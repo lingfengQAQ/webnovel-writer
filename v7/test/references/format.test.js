@@ -62,15 +62,12 @@ test('书级条目三节齐全（骨架约定/读者预期/毒点展开）', asy
   }
 })
 
-test('题材条目必有 恩怨清算默认 且取值合法', async () => {
-  const 合法档位 = ['有仇必报', '宿命必偿', '恩怨分明', '以直报怨', '留有余地']
+test('题材条目不携带关系结算枚举或题材默认值', async () => {
   for (const f of await mdFiles('题材')) {
     const raw = await fs.readFile(path.join(ROOT, '题材', f), 'utf8')
     const fm = parseFrontMatter(raw)
-    assert.ok(
-      合法档位.includes(fm.data.恩怨清算默认),
-      `题材/${f} 恩怨清算默认 取值不合法：${fm.data.恩怨清算默认}`
-    )
+    assert.equal('恩怨清算默认' in fm.data, false, `题材/${f} 仍有已删除的题材默认值`)
+    assert.equal('恩怨清算' in fm.data, false, `题材/${f} 仍有已删除的关系结算枚举`)
   }
 })
 
@@ -93,7 +90,7 @@ test('路由表：名称唯一、别名不与任何名称冲突、维度合法�
   }
 })
 
-test('毒点措辞不误伤角色设计（恩怨清算红线只判叙事与主角）', async () => {
+test('毒点措辞不以禁止某类角色替代叙事结果核对', async () => {
   for (const dir of [...章级目录, ...书级目录]) {
     for (const f of await mdFiles(dir)) {
       const raw = await fs.readFile(path.join(ROOT, dir, f), 'utf8')
@@ -101,7 +98,7 @@ test('毒点措辞不误伤角色设计（恩怨清算红线只判叙事与主�
       for (const p of fm.data.毒点 || []) {
         assert.ok(
           !/不得出现.{0,6}角色/.test(p),
-          `${dir}/${f} 毒点「${p}」疑似禁角色人设——毒点只判叙事结果与主角行为`
+          `${dir}/${f} 毒点「${p}」疑似用禁角色人设替代叙事结果核对`
         )
       }
     }

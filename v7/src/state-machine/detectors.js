@@ -23,8 +23,8 @@ export function isTrackedSourcePath(p) {
 }
 
 /**
- * 序0：扫描源文件解析失败。清单钉死于 spec 0.9 §10（实现不得自行增减）：
- * 六目录 front matter + book.yaml + 文风铁律 front matter + 名册表 + 时间线表。
+ * 序0：扫描源文件解析失败。清单钉死于现行 spec §10（实现不得自行增减）：
+ * 六目录 front matter + 计划对象 + book.yaml + 必需作品契约 + 文风铁律 + 名册/时间线表。
  * 任一清单文件解析失败都不得静默降级为默认值。
  */
 export async function detectParseFailures(repoPath) {

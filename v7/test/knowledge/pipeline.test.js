@@ -342,6 +342,16 @@ test('installer vendoring 含 references（A4，目录结构规范 4.3）', asyn
   const files = await collectRuntimeFiles(packageRoot)
   assert.ok(files['.webnovel/references/路由.csv'])
   assert.ok(files['.webnovel/references/节拍/PA-001-压抑蓄力爆发.md'])
+  for (const name of ['维度宪章.md', '调用者与字段矩阵.md', '策展规则.md']) {
+    assert.ok(files[`.webnovel/docs/knowledge/${name}`], `安装包缺治理文档 ${name}`)
+  }
+  const readme = files['.webnovel/references/README.md']
+  const governanceLinks = [...readme.matchAll(/\]\((\.\.\/docs\/knowledge\/[^)]+)\)/g)]
+  assert.equal(governanceLinks.length, 3, 'references README 应明确链接三份治理真源')
+  for (const match of governanceLinks) {
+    const target = path.posix.normalize(path.posix.join('.webnovel/references', match[1]))
+    assert.ok(files[target], `references README 链接失效：${match[1]}`)
+  }
 })
 
 test('知识库整体缺失时序1/序6 DTO 零报错（A3）', async () => {

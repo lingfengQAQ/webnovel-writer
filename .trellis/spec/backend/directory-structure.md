@@ -1,6 +1,6 @@
 # 目录结构规范
 
-> 版本：基线 1.1（2026-06-27，M0 仓库骨架落地，回填 §2/§4）。依据：v7 PRD 1.0、story-repo-spec 0.8。
+> 版本：基线 1.2（2026-07-18，十维知识运行时与治理文档分发生效）。依据：v7 PRD 1.6、story-repo-spec 0.17。
 
 ---
 
@@ -68,7 +68,7 @@ v7/
 
 4.2 模块为按职责（Use Case）划分，**非通用工具层**；端口拆小，禁止上帝对象（spec §1.5）。
 
-4.3 知识库真源存放于 `v7/references/`（M4 平移）；7.0 运行时尚未接线，**不进 npm files 白名单**——接线里程碑必须同步把它加入白名单并补安装链路断言。
+4.3 十维知识真源存放于 `v7/references/`，治理真源存放于 `v7/docs/knowledge/`；两者都必须进入 npm `files` 和 vendored `.webnovel/`。`references/README.md` 指向的三份治理文档必须在安装产物中存在，具体命令与测试契约见 [知识运行时](./knowledge-runtime.md)。
 
 4.4 命令分级协议（M5）：命令模块可选导出 `scope`——`'book'`（缺省，得 `{repoPath, cache}`）/ `'workdir'`（得 `{workdir, packageRoot}`，不建缓存）/ `'workdir-or-book'` / `'anywhere'`；空工作目录仍可跑的命令导出 `allowNoBook = true`（当前仅 `next`，状态机以 `repoPath=null` 判序 1 建书）。定位三分支见 `src/runtime/locate.js`：cwd 含 `book.yaml` 直启 → cwd 含 `.webnovel/` 按当前书解析 → 否则人话提示。
 

@@ -67,6 +67,9 @@ try {
     '.webnovel/books.jsonl',
     '.webnovel/references/路由.csv',
     '.webnovel/references/节拍/PA-001-压抑蓄力爆发.md',
+    '.webnovel/docs/knowledge/维度宪章.md',
+    '.webnovel/docs/knowledge/调用者与字段矩阵.md',
+    '.webnovel/docs/knowledge/策展规则.md',
     '.claude/skills/webnovel-writer/SKILL.md',
     '.claude/agents/事实审查.md',
     '.claude/settings.json',
@@ -81,9 +84,55 @@ try {
   await fs.writeFile(
     path.join(workdir, '建书.json'),
     JSON.stringify({
-      book: { spec_version: '7.0', 书名: '雪落长安', 卷规模: 40, 体检周期: 50 },
+      book: {
+        spec_version: '7.0',
+        书名: '雪落长安',
+        类型: '玄幻',
+        副题材: [],
+        流派: [],
+        卷规模: 40,
+        体检周期: 50,
+      },
       总纲: '# 总纲\n## 结局\n终成一代大家。',
       卷纲: '# 第1卷\n初入长安。',
+      作品契约: [
+        '---',
+        '类型: 玄幻',
+        '副题材:',
+        '流派:',
+        '创意约束:',
+        '来源版本:',
+        '  - 作者自定义',
+        '契约版本: 1',
+        '生效起章: 1',
+        '更新原因: 初始建书',
+        '变更类型: 建书',
+        '---',
+        '## 核心读者承诺',
+        '成长与选择都有可见后果。',
+        '## 骨架约定',
+        '按卷推进长期目标。',
+        '## 题材融合协议',
+        '本书暂不混合副题材。',
+        '## 创意约束落地',
+        '主线困境不由临时奖励解决。',
+        '## 差异化点',
+        '- 线索改变人物关系。',
+        '- 成长代价延续到后文。',
+        '- 反派掌握先手信息。',
+        '## 冲突与关系结算原则',
+        '- 主角底线：不牺牲无辜。',
+        '- 伤害后果：责任必须可见。',
+        '- 和解条件：先有修复行动。',
+        '- 救赎条件：持续付出代价。',
+        '- 允许余地：善良与克制可以成立。',
+        '## 本书专属毒点',
+        '- 不用旁白直接揭谜。',
+        '## 节奏与兑现参数',
+        '每三章推进一次主线。',
+      ].join('\n'),
+      知识选择: [{ 维度: '题材', 名称: '玄幻', 来源: '作者自定义' }],
+      作者已确认: true,
     }),
     'utf8'
   )
@@ -91,6 +140,8 @@ try {
   check(pb.stdout.includes('已登记为当前书'), '建书并登记为当前书（vendored bin）')
   check(await exists(path.join(workdir, '雪落长安', 'book.yaml')), '书仓库 book.yaml')
   check(await exists(path.join(workdir, '雪落长安', 'AGENTS.md')), '书仓库指路 AGENTS.md')
+  check(await exists(path.join(workdir, '雪落长安', '作品契约', '作品契约.md')), '书仓库作品契约真源')
+  check(await exists(path.join(workdir, '雪落长安', '作品契约', '知识选择记录.md')), '书仓库知识选择记录')
 
   // 5. next --json → 序6 起草第 1 章
   const nx = await node(vendoredBin, ['next', '--json'])
