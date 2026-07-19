@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-0.md`
-- **Total Sessions**: 6
+- **Total Sessions**: 7
 - **Last Active**: 2026-07-19
 <!-- @@@/auto:current-status -->
 
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 7 | 2026-07-19 | 故事对象知识策展收口 | `a37170c`, `a3cf59e`, `1523f8d`, `16acb2e` | `v7` |
 | 6 | 2026-07-19 | 完成书级知识校准与策展 | `33f2e64`, `9cf534a`, `247cdf9` | `v7` |
 | 5 | 2026-07-18 | 完成十维知识运行时框架 | `c6a0146`, `d8b73a6`, `5dabc8d`, `5713a1b`, `a48fd6c` | `v7` |
 | 4 | 2026-07-05 | M7 导出与 v6 迁移：全里程碑完成，v7 进入 beta | `5ba85a5`, `8615d91`, `e14545a`, `557bd42` | `v7` |
