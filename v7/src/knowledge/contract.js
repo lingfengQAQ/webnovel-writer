@@ -35,6 +35,17 @@ const SETTLEMENT_ITEMS = ['主角底线', '伤害后果', '和解条件', '救�
 const BOOK_DIMENSIONS = new Set(['题材', '流派', '创意约束'])
 const CUSTOM_SOURCES = new Set(['对谈共创', '作者自定义'])
 const SOURCE_RE = /^(题材|流派|创意约束)\/[^/@]+\.md@sha256:[0-9a-f]{64}$/
+export const CANONICAL_TOPIC_NAMES = Object.freeze([
+  '都市', '现实', '现言', '年代', '历史', '古言', '武侠', '军事', '玄幻', '仙侠',
+  '奇幻', '幻言', '科幻', '末世', '悬疑', '灵异', '游戏', '体育', '衍生',
+])
+const CANONICAL_TOPIC_SET = new Set(CANONICAL_TOPIC_NAMES)
+const PACING_QUOTA_RE = /(?:\d+(?:\.\d+)?(?:\s*[-~—至到]\s*\d+(?:\.\d+)?)?\s*%|\d+\s*[:：]\s*\d+|(?:每|第|前|后)\s*(?:\d+|[零〇一二两三四五六七八九十百千万]+)(?:\s*[-~—至到]\s*(?:\d+|[零〇一二两三四五六七八九十百千万]+))?\s*(?:章|节|场|次|卷)|每\s*(?:章|节|场|卷)\s*[^。；;\n]{0,16}?(?:\d+|[零〇一二两三四五六七八九十百千万]+)\s*(?:个|次|章|节|场|卷)|(?:章数|频率|间隔|占比|比例)\s*[:：]\s*(?:\d+|[零〇一二两三四五六七八九十百千万]+))/u
+const PACING_QUOTA_CONTEXT = Object.freeze([
+  /^\s*(?:[-*+]\s*)?统计对象\s*[:：]\s*\S/u,
+  /^\s*(?:[-*+]\s*)?使用目的\s*[:：]\s*\S/u,
+  /^\s*(?:[-*+]\s*)?失效条件\s*[:：]\s*\S/u,
+])
 
 export function validateCreateBookPayload(payload) {
   const errors = []
@@ -125,11 +136,27 @@ export function validateWorkContract(
     }
   }
 
-  if (!stringValue(fm.类型)) errors.push('作品契约 front matter 缺非空「类型」')
+  const mainTopic = stringValue(fm.类型)
+  if (!mainTopic) {
+    errors.push('作品契约 front matter 缺非空「类型」')
+  } else if (!CANONICAL_TOPIC_SET.has(mainTopic)) {
+    errors.push('作品契约「类型」须使用知识路由中的正式题材名称')
+  }
   for (const field of CONTRACT_LIST_FIELDS) {
     validateStringList(fm[field], '作品契约.' + field, errors, {
       allowNullAsEmpty: field !== '来源版本',
     })
+  }
+  const secondaryTopics = normalizeList(fm.副题材)
+  const invalidSecondaryTopics = secondaryTopics.filter((topic) => !CANONICAL_TOPIC_SET.has(topic))
+  if (invalidSecondaryTopics.length) {
+    errors.push('作品契约「副题材」含非正式题材名称「' + invalidSecondaryTopics.join('、') + '」')
+  }
+  if (
+    mainTopic === '衍生' &&
+    !secondaryTopics.some((topic) => topic !== '衍生' && CANONICAL_TOPIC_SET.has(topic))
+  ) {
+    errors.push('作品契约选择「衍生」时，至少需要一个实际世界副题材')
   }
   if (!Number.isInteger(fm.契约版本) || fm.契约版本 < 1) {
     errors.push('作品契约「契约版本」必须是正整数')
@@ -149,6 +176,14 @@ export function validateWorkContract(
   const settlement = sections.get('冲突与关系结算原则') || ''
   for (const item of SETTLEMENT_ITEMS) {
     if (!settlement.includes(item)) errors.push('冲突与关系结算原则缺「' + item + '」')
+  }
+  const pacing = sections.get('节奏与兑现参数') || ''
+  const pacingLines = pacing.split(/\r?\n/)
+  if (
+    PACING_QUOTA_RE.test(pacing) &&
+    !PACING_QUOTA_CONTEXT.every((pattern) => pacingLines.some((line) => pattern.test(line)))
+  ) {
+    errors.push('作品契约「节奏与兑现参数」使用数值配额时，须同时写明统计对象、使用目的和失效条件')
   }
 
   if (mode === 'create') {

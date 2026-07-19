@@ -58,15 +58,22 @@ async function writeAll(root, files = {}) {
 export const chapter = (n, body = '正文。', vol = 1) =>
   `---\n章号: ${n}\n标题: 第${n}章\n卷: ${vol}\n字数: 100\n章定位: 推进\n钩子: 危机钩-强\n情绪定位: 铺垫\n---\n${body}`
 
-export function minimalWorkContract({ version = 1, effectiveChapter = 1 } = {}) {
+export function minimalWorkContract({
+  version = 1,
+  effectiveChapter = 1,
+  type = '玄幻',
+  secondaryTopics = [],
+  pacing = '按因果节点推进，不设固定章数。',
+} = {}) {
   return [
     '---',
-    '类型: 玄幻',
+    `类型: ${type}`,
     '副题材:',
+    ...secondaryTopics.map((topic) => `  - ${topic}`),
     '流派:',
     '创意约束:',
     '来源版本:',
-    '  - 作者自定义',
+    ...Array.from({ length: 1 + secondaryTopics.length }, () => '  - 作者自定义'),
     `契约版本: ${version}`,
     `生效起章: ${effectiveChapter}`,
     version === 1 ? '更新原因: 初始建书' : '更新原因: 测试修订',
@@ -93,7 +100,7 @@ export function minimalWorkContract({ version = 1, effectiveChapter = 1 } = {}) 
     '## 本书专属毒点',
     '- 不用旁白直接揭谜。',
     '## 节奏与兑现参数',
-    '每三章推进一次主线。',
+    pacing,
   ].join('\n')
 }
 

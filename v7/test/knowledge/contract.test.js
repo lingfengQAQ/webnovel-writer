@@ -36,6 +36,68 @@ test('建书契约：book、最终选择和来源版本必须是同一份答案'
   assert.ok(result.errors.some((error) => error.includes('流派不一致')))
 })
 
+test('衍生契约：必须同时选择至少一个实际世界副题材', () => {
+  const missing = minimalCreateBookPayload({
+    book: { 类型: '衍生', 副题材: [] },
+    作品契约: minimalWorkContract({ type: '衍生' }),
+    知识选择: [{ 维度: '题材', 名称: '衍生', 来源: '作者自定义' }],
+  })
+  const rejected = validateCreateBookPayload(missing)
+  assert.equal(rejected.ok, false)
+  assert.ok(rejected.errors.some((error) => error.includes('实际世界副题材')))
+
+  const nonTopic = validateCreateBookPayload(minimalCreateBookPayload({
+    book: { 类型: '衍生', 副题材: ['快穿流'] },
+    作品契约: minimalWorkContract({ type: '衍生', secondaryTopics: ['快穿流'] }),
+    知识选择: [
+      { 维度: '题材', 名称: '衍生', 来源: '作者自定义' },
+      { 维度: '题材', 名称: '快穿流', 来源: '作者自定义' },
+    ],
+  }))
+  assert.equal(nonTopic.ok, false)
+  assert.ok(nonTopic.errors.some((error) => error.includes('非正式题材名称')))
+  assert.ok(nonTopic.errors.some((error) => error.includes('实际世界副题材')))
+
+  const valid = minimalCreateBookPayload({
+    book: { 类型: '衍生', 副题材: ['玄幻'] },
+    作品契约: minimalWorkContract({ type: '衍生', secondaryTopics: ['玄幻'] }),
+    知识选择: [
+      { 维度: '题材', 名称: '衍生', 来源: '作者自定义' },
+      { 维度: '题材', 名称: '玄幻', 来源: '作者自定义' },
+    ],
+  })
+  assert.equal(validateCreateBookPayload(valid).ok, true)
+})
+
+test('节奏数值配额：必须同时写明统计对象、使用目的和失效条件', () => {
+  const invalidCases = [
+    '每三章推进一次主线。',
+    '每章安排 2 个兑现。',
+    '每卷至少 1 次转折。',
+    ['统计对象：', '使用目的：', '失效条件：', '每三章推进一次主线。'].join('\n'),
+  ]
+  for (const pacing of invalidCases) {
+    const incomplete = validateWorkContract(minimalWorkContract({ pacing }))
+    assert.equal(incomplete.ok, false, pacing)
+    assert.ok(
+      incomplete.errors.some((error) => error.includes('统计对象、使用目的和失效条件')),
+      pacing
+    )
+  }
+
+  const complete = validateWorkContract(
+    minimalWorkContract({
+      pacing: [
+        '统计对象：主线发生不可逆变化的章节。',
+        '使用目的：防止中段主线停滞。',
+        '失效条件：进入终局连续兑现阶段。',
+        '本书配额：每三章至少推进一次。',
+      ].join('\n'),
+    })
+  )
+  assert.equal(complete.ok, true)
+})
+
 test('契约更新：版本严格加一、生效章不倒退，核心分类变化需确认影响分析', () => {
   const previous = validateWorkContract(minimalWorkContract()).data
   const unchanged = {

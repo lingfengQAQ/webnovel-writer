@@ -57,6 +57,9 @@ const 契约 = [
   '## 本书专属毒点',
   '- 主角不得靠系统白给渡过主线危机',
   '## 节奏与兑现参数',
+  '- 统计对象：首次展示核心能力的章节',
+  '- 使用目的：保证开篇承诺及时可见',
+  '- 失效条件：核心能力首次完整展示后',
   '- 首打章数：3',
 ].join('\n')
 
@@ -334,6 +337,19 @@ test('knowledge-pack 命令：归一 + 材料 + 未命中如实（A1 未命中�
   assert.match(r.output, /归一结果：类型=仙侠；流派=系统流/)
   assert.match(r.output, /知识库未命中：自创门派流/)
   assert.match(r.output, /对谈共创/)
+
+  const compound = await knowledgePack(
+    [],
+    { 类型: '修仙', 副题材: '末日', 流派: '系统' },
+    { packageRoot }
+  )
+  assert.equal(compound.ok, true)
+  assert.match(compound.output, /题材融合协议检查/)
+  for (const item of ['共同核心冲突', '主题材承诺与主线因果', '副题材介入条件与独立贡献', '规则兼容或隔离', '主副线职责', '冲突解决方式', '主要失焦风险']) {
+    assert.match(compound.output, new RegExp(item))
+  }
+  assert.doesNotMatch(compound.output, /7\s*[:：]\s*3|60\s*[-~—至到]\s*70\s*%/)
+
   const bad = await knowledgePack([], {}, { packageRoot })
   assert.equal(bad.ok, false)
 })

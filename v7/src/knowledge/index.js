@@ -145,7 +145,7 @@ export async function resolveBookKnowledge(
   if (selectedTopics.size) {
     for (const genre of 流派命中) {
       const allowed = String(genre.题材 || '').split('|').map((name) => name.trim()).filter(Boolean)
-      if (allowed.includes('全部') || allowed.some((name) => selectedTopics.has(name))) continue
+      if (!allowed.length || allowed.some((name) => selectedTopics.has(name))) continue
       兼容提醒.push(
         '流派“' + genre.名称 + '”的已知兼容题材为 ' + allowed.join('、') +
           '；保留作者选择，但需在融合协议中解释。'
