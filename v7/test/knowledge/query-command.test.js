@@ -24,3 +24,14 @@ test('knowledge-query：无命中不回退全量菜单；非法维度前置拒�
   assert.equal(invalid.ok, false)
   assert.match(invalid.error, /维度/)
 })
+
+test('knowledge-query：创意约束按未决问题给材料，不按题材固定选择', async () => {
+  const result = await run(
+    [],
+    { 维度: '创意约束', 问题: '知道答案就能成功，知识可以直接变现，缺少现实阻力' },
+    { packageRoot }
+  )
+  assert.equal(result.ok, true)
+  assert.match(result.output, /知识转化有门槛/)
+  assert.match(result.output, /选择、组合、修改、拒绝或自定义/)
+})
