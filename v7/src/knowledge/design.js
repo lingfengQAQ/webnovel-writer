@@ -5,9 +5,14 @@ import { sanitizeFileName } from '../util/filename.js'
 export const DESIGN_CLASSES = Object.freeze(['设定', '人物'])
 export const DESIGN_ROOT = '大纲/创作设计'
 
+export const DESIGN_OBJECT_TYPES = Object.freeze({
+  设定: Object.freeze(['世界', '规则', '机制', '能力', '物品', '组织', '制度', '地点']),
+  人物: Object.freeze(['角色', '关系']),
+})
+
 const OBJECT_TYPES = Object.freeze({
-  设定: new Set(['世界', '规则', '机制', '能力', '物品', '组织', '制度', '地点']),
-  人物: new Set(['角色', '关系']),
+  设定: new Set(DESIGN_OBJECT_TYPES.设定),
+  人物: new Set(DESIGN_OBJECT_TYPES.人物),
 })
 const REQUIRED_SECTIONS = ['本书设计', '一致性边界']
 const ID_RE = /^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)+$/u

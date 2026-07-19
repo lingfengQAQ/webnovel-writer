@@ -1,4 +1,10 @@
-import { KNOWLEDGE_DIMENSIONS, MAX_KNOWLEDGE_CANDIDATES, queryKnowledge } from '../knowledge/index.js'
+import {
+  KNOWLEDGE_DIMENSIONS,
+  KNOWLEDGE_FILTER_FIELDS,
+  KNOWLEDGE_FILTER_VALUES,
+  MAX_KNOWLEDGE_CANDIDATES,
+  queryKnowledge,
+} from '../knowledge/index.js'
 
 /**
  * knowledge-query --维度=<十维之一> --问题=<当前未决问题> [--类型=<对象子类>]：
@@ -17,8 +23,12 @@ export async function run(args, options, ctx) {
     return { ok: false, error: '请提供 --问题=<当前未决问题>；对象知识也可同时给 --类型=<对象子类>' }
   }
 
-  const filterField = { 设定: '对象类型', 人物: '人物类别', 命名: '命名对象', 技法: '类别' }[维度]
+  const filterField = KNOWLEDGE_FILTER_FIELDS[维度]
   const 筛选 = filterField && 类型 ? { [filterField]: 类型 } : {}
+  const allowedTypes = KNOWLEDGE_FILTER_VALUES[维度]
+  if (类型 && allowedTypes && !allowedTypes.includes(类型)) {
+    return { ok: false, error: `--类型 在${维度}中只能是：${allowedTypes.join('、')}` }
+  }
   const candidates = await queryKnowledge(ctx.packageRoot, 维度, { 问题, 筛选 })
   const lines = [`# ${维度}知识候选`, '']
   if (!candidates.length) {

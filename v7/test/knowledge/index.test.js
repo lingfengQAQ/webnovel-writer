@@ -14,6 +14,8 @@ import {
   readEntry,
   listKnowledgeEntries,
   queryKnowledge,
+  KNOWLEDGE_FILTER_FIELDS,
+  KNOWLEDGE_FILTER_VALUES,
 } from '../../src/knowledge/index.js'
 
 // 真源知识库（v7 包根）——样例条目即测试夹具
@@ -25,6 +27,12 @@ test('十维注册表：三阶段边界完整且没有兜底维度', () => {
   assert.deepEqual(KNOWLEDGE_GROUPS.篇章执行, ['节拍', '场景', '技法', '追读'])
   assert.equal(new Set(KNOWLEDGE_DIMENSIONS).size, 10)
   assert.equal(getDimensionDefinition('桥段'), null)
+  assert.deepEqual(getDimensionDefinition('人物').索引字段, ['名称', '人物类别', '一句话'])
+  assert.equal(getDimensionDefinition('人物').索引字段.includes('关系类别'), false)
+  assert.deepEqual(KNOWLEDGE_FILTER_FIELDS, { 设定: '对象类型', 人物: '人物类别', 命名: '命名对象', 技法: '类别' })
+  assert.deepEqual(KNOWLEDGE_FILTER_VALUES.设定, ['世界', '规则', '机制', '能力', '物品', '组织', '制度', '地点'])
+  assert.deepEqual(KNOWLEDGE_FILTER_VALUES.人物, ['角色', '关系'])
+  assert.deepEqual(KNOWLEDGE_FILTER_VALUES.命名, ['书名', '卷名', '章节名', '角色', '地点', '组织', '能力', '物品', '制度', '术语', '任务', '副本', '赛事', '代号'])
 })
 
 test('loadRoutes 读路由表：题材/流派两维齐全', async () => {
@@ -169,11 +177,67 @@ test('queryKnowledge：对象子类筛选有消费者，缺目录与非法维度
       ['---', '名称: 组织层级', '对象类型: 组织', '一句话: 设计组织权力层级', '---', '## 设计时', '', '先定权力。'].join('\n'),
       'utf8'
     )
+    const personDir = path.join(tmp, 'references', '人物')
+    const namingDir = path.join(tmp, 'references', '命名')
+    await mkdir(personDir, { recursive: true })
+    await mkdir(namingDir, { recursive: true })
+    await writeFile(
+      path.join(personDir, '角色欲望.md'),
+      ['---', '名称: 角色欲望', '人物类别: 角色', '一句话: 用不可替代欲望驱动长期选择', '---', '## 规划时', '', '锁定欲望、底线和可观察行动。'].join('\n'),
+      'utf8'
+    )
+    await writeFile(
+      path.join(personDir, '关系阻力.md'),
+      ['---', '名称: 关系阻力', '人物类别: 关系', '一句话: 用利益错位维持关系张力', '---', '## 规划时', '', '锁定双方利益与变化条件。'].join('\n'),
+      'utf8'
+    )
+    await writeFile(
+      path.join(namingDir, '角色命名.md'),
+      ['---', '名称: 角色命名', '命名对象:', '  - 角色', '一句话: 让名字承担身份和辨识功能', '---', '## 规划时', '', '先列语系、功能和近名冲突。'].join('\n'),
+      'utf8'
+    )
     const hits = await queryKnowledge(tmp, '设定', { 筛选: { 对象类型: '能力' } })
     assert.deepEqual(hits.map((entry) => entry.名称), ['能力代价'])
-    assert.deepEqual(await queryKnowledge(tmp, '人物', { 问题: '反派关系' }), [])
+    assert.deepEqual((await queryKnowledge(tmp, '人物', { 筛选: { 人物类别: '关系' }, 问题: '关系' })).map((entry) => entry.名称), ['关系阻力'])
+    assert.deepEqual((await queryKnowledge(tmp, '命名', { 筛选: { 命名对象: '角色' }, 问题: '角色' })).map((entry) => entry.名称), ['角色命名'])
+    assert.deepEqual((await queryKnowledge(tmp, '人物', { 筛选: { 人物类别: '角色' } })).map((entry) => entry.名称), ['角色欲望'])
     assert.deepEqual(await queryKnowledge(tmp, '桥段', { 问题: '冲突' }), [])
   } finally {
     await rm(tmp, { recursive: true, force: true })
+  }
+})
+
+test('queryKnowledge：正式故事对象条目按真实未决问题命中且不超过三条', async () => {
+  const cases = [
+    ['设定', '能力太万能，能力没有代价，使用后还有后遗症', '能力代价与使用边界'],
+    ['人物', '反派只因邪恶行动，理念没有内部逻辑', '价值自洽反派与现实代价'],
+    ['命名', '名称之间近名重名和正名别名未校验', '名册近名与别名校验'],
+  ]
+  for (const [dimension, problem, expected] of cases) {
+    const hits = await queryKnowledge(packageRoot, dimension, { 问题: problem, limit: 99 })
+    assert.ok(hits.length > 0, `${dimension} 未命中真实问题`)
+    assert.ok(hits.length <= 3, `${dimension} 超过候选上限`)
+    assert.equal(hits[0].名称, expected)
+    assert.ok(hits[0].规划)
+  }
+})
+
+test('queryKnowledge：每条正式故事对象条目均可按未决问题与受控类型调用', async () => {
+  for (const dimension of ['设定', '人物', '命名']) {
+    const field = KNOWLEDGE_FILTER_FIELDS[dimension]
+    const entries = await listKnowledgeEntries(packageRoot, dimension)
+    assert.ok(entries.length > 0, `${dimension} 没有正式条目`)
+    for (const entry of entries) {
+      const values = Array.isArray(entry[field]) ? entry[field] : [entry[field]]
+      assert.ok(values[0], `${dimension}/${entry.名称} 缺少 ${field}`)
+      const hits = await queryKnowledge(packageRoot, dimension, {
+        问题: entry.一句话,
+        筛选: { [field]: values[0] },
+        limit: 99,
+      })
+      assert.equal(hits[0]?.名称, entry.名称, `${dimension}/${entry.名称} 无法精确调用`)
+      assert.ok(hits.length <= 3, `${dimension}/${entry.名称} 超过候选上限`)
+      assert.ok(hits[0]?.规划, `${dimension}/${entry.名称} 缺少规划切片`)
+    }
   }
 })

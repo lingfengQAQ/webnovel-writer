@@ -3,6 +3,7 @@ import path from 'node:path'
 import { parseFrontMatter } from '../storage/parsers/front-matter.js'
 import { extractSection } from '../util/markdown.js'
 import { sha256 } from '../util/hash.js'
+import { DESIGN_OBJECT_TYPES } from './design.js'
 
 const REF = 'references'
 export const MAX_KNOWLEDGE_CANDIDATES = 3
@@ -17,6 +18,36 @@ export const KNOWLEDGE_DIMENSIONS = Object.freeze(
   Object.values(KNOWLEDGE_GROUPS).flat()
 )
 
+export const NAMING_OBJECT_TYPES = Object.freeze([
+  '书名',
+  '卷名',
+  '章节名',
+  '角色',
+  '地点',
+  '组织',
+  '能力',
+  '物品',
+  '制度',
+  '术语',
+  '任务',
+  '副本',
+  '赛事',
+  '代号',
+])
+
+export const KNOWLEDGE_FILTER_FIELDS = Object.freeze({
+  设定: '对象类型',
+  人物: '人物类别',
+  命名: '命名对象',
+  技法: '类别',
+})
+
+export const KNOWLEDGE_FILTER_VALUES = Object.freeze({
+  设定: DESIGN_OBJECT_TYPES.设定,
+  人物: DESIGN_OBJECT_TYPES.人物,
+  命名: NAMING_OBJECT_TYPES,
+})
+
 const DEFINITIONS = Object.freeze({
   题材: Object.freeze({ 阶段: '作品契约', 索引字段: Object.freeze(['名称']) }),
   流派: Object.freeze({ 阶段: '作品契约', 索引字段: Object.freeze(['名称']) }),
@@ -30,7 +61,7 @@ const DEFINITIONS = Object.freeze({
   }),
   人物: Object.freeze({
     阶段: '故事对象',
-    索引字段: Object.freeze(['名称', '人物类别', '关系类别', '一句话']),
+    索引字段: Object.freeze(['名称', '人物类别', '一句话']),
   }),
   命名: Object.freeze({
     阶段: '故事对象',
@@ -304,7 +335,6 @@ function adaptIndexFields(dimension, fm) {
     return {
       ...base,
       人物类别: fm.人物类别 ? String(fm.人物类别) : '',
-      关系类别: fm.关系类别 ? String(fm.关系类别) : '',
     }
   }
   if (dimension === '命名') {

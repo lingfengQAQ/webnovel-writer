@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { promises as fs } from 'node:fs'
 import { parseFrontMatter } from '../../src/storage/parsers/front-matter.js'
 import { extractSection } from '../../src/util/markdown.js'
-import { loadRoutes } from '../../src/knowledge/index.js'
+import { KNOWLEDGE_FILTER_VALUES, loadRoutes } from '../../src/knowledge/index.js'
 import { CANONICAL_TOPIC_NAMES } from '../../src/knowledge/contract.js'
 
 /**
@@ -21,6 +21,12 @@ const 书级格式 = Object.freeze({
   创意约束: Object.freeze({ 字段: ['名称', '一句话'], 小节: ['约束机制', '适用边界', '本书化问题', '失败模式'] }),
 })
 const 书级目录 = Object.keys(书级格式)
+const 故事对象格式 = Object.freeze({
+  设定: Object.freeze({ 字段: ['名称', '对象类型', '一句话'] }),
+  人物: Object.freeze({ 字段: ['名称', '人物类别', '一句话'] }),
+  命名: Object.freeze({ 字段: ['名称', '命名对象', '一句话'] }),
+})
+const 故事对象目录 = Object.keys(故事对象格式)
 const canonicalTopicSet = new Set(CANONICAL_TOPIC_NAMES)
 
 async function mdFiles(dir) {
@@ -32,12 +38,38 @@ async function mdFiles(dir) {
 }
 
 test('知识条目 front matter 全部可解析且有 名称', async () => {
-  for (const dir of [...章级目录, ...书级目录]) {
+  for (const dir of [...章级目录, ...书级目录, ...故事对象目录]) {
     for (const f of await mdFiles(dir)) {
       const raw = await fs.readFile(path.join(ROOT, dir, f), 'utf8')
       const fm = parseFrontMatter(raw)
       assert.equal(fm.ok, true, `${dir}/${f} front matter 解析失败：${fm.error}`)
       assert.ok(fm.data?.名称, `${dir}/${f} 缺 名称`)
+    }
+  }
+})
+
+test('故事对象条目只保留最小索引字段和规划时切片', async () => {
+  for (const dir of 故事对象目录) {
+    const files = await mdFiles(dir)
+    assert.ok(files.length > 0, `${dir} 尚未形成正式条目`)
+    for (const f of files) {
+      const raw = await fs.readFile(path.join(ROOT, dir, f), 'utf8')
+      const fm = parseFrontMatter(raw)
+      assert.deepEqual(
+        Object.keys(fm.data).sort(),
+        [...故事对象格式[dir].字段].sort(),
+        `${dir}/${f} front matter 含无消费者字段`
+      )
+      assert.ok(extractSection(fm.body, '规划时'), `${dir}/${f} 缺「规划时」节`)
+      const allowed = KNOWLEDGE_FILTER_VALUES[dir]
+      const field = dir === '设定' ? '对象类型' : dir === '人物' ? '人物类别' : '命名对象'
+      const values = Array.isArray(fm.data[field]) ? fm.data[field] : [fm.data[field]]
+      assert.ok(values.length > 0 && values.every((value) => allowed.includes(String(value))), `${dir}/${f} 含未登记受控值`)
+      assert.ok(!values.includes('全部'), `${dir}/${f} 不得使用“全部”占位`)
+      assert.doesNotMatch(raw, /编号:|适用技能:|分类:|层级:|关键词:|意图与同义词:|适用题材:|大模型指令:|毒点:|正例:|反例:|来源:|状态:/u)
+      for (const forbidden of ['落笔时', '审稿时']) {
+        assert.equal(extractSection(fm.body, forbidden), '', `${dir}/${f} 不应携带「${forbidden}」死切片`)
+      }
     }
   }
 })
@@ -140,7 +172,7 @@ test('路由表：名称/别名唯一、维度合法，19 个题材和 24 个流
 })
 
 test('毒点措辞不以禁止某类角色替代叙事结果核对', async () => {
-  for (const dir of [...章级目录, ...书级目录]) {
+  for (const dir of [...章级目录, ...书级目录, ...故事对象目录]) {
     for (const f of await mdFiles(dir)) {
       const raw = await fs.readFile(path.join(ROOT, dir, f), 'utf8')
       const fm = parseFrontMatter(raw)
