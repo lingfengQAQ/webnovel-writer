@@ -23,6 +23,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import (
+    get_codex_dispatch_mode,
     get_packages,
     get_session_auto_commit,
     is_monorepo,
@@ -50,6 +51,7 @@ from .safe_commit import (
 from .task_utils import (
     archive_task_complete,
     find_task_by_name,
+    is_within_tasks_dir,
     resolve_task_dir,
     run_task_hooks,
 )
@@ -113,13 +115,13 @@ def _repo_relative_path(path: Path, repo_root: Path) -> str:
 
 # Config directories of platforms that consume implement.jsonl / check.jsonl.
 # Keep in sync with src/types/ai-tools.ts AI_TOOLS entries — these are the
-# platforms listed in workflow.md's "agent-capable" Skill Routing block
-# (Class-1 hook-inject + Class-2 pull-based preludes). Kilo / Antigravity /
-# Devin are NOT in this list: they do not consume JSONL.
+# platforms listed in workflow.md's "agent-capable" Skill Routing block.
+# Codex is checked separately because default inline mode does not consume
+# JSONL. Kilo / Antigravity / Devin are NOT in this list either: they load
+# specs through skills instead of JSONL.
 _SUBAGENT_CONFIG_DIRS: tuple[str, ...] = (
     ".claude",
     ".cursor",
-    ".codex",
     ".kiro",
     ".gemini",
     ".opencode",
@@ -129,7 +131,10 @@ _SUBAGENT_CONFIG_DIRS: tuple[str, ...] = (
     ".github/copilot",
     ".pi",        # Pi Agent
     ".trae",      # Trae IDE
+    ".omp",       # Oh My Pi
+    ".zcode",     # ZCode
 )
+_CODEX_CONFIG_DIR = ".codex"
 
 _SEED_EXAMPLE = (
     "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. "
@@ -142,13 +147,15 @@ _SEED_EXAMPLE = (
 def _has_subagent_platform(repo_root: Path) -> bool:
     """Return True if any sub-agent-capable platform is configured.
 
-    Detected by probing well-known config directories at the repo root. Used
-    only to decide whether ``task.py create`` should seed empty
-    ``implement.jsonl`` / ``check.jsonl`` files.
+    Detected by probing well-known config directories at the repo root. Codex
+    only counts when ``codex.dispatch_mode`` explicitly opts into
+    ``sub-agent``; inline mode loads context through skills, not JSONL.
     """
     for config_dir in _SUBAGENT_CONFIG_DIRS:
         if (repo_root / config_dir).is_dir():
             return True
+    if (repo_root / _CODEX_CONFIG_DIR).is_dir():
+        return get_codex_dispatch_mode(repo_root) == "sub-agent"
     return False
 
 
@@ -240,6 +247,34 @@ def cmd_create(args: argparse.Namespace) -> int:
     # Create task directory with MM-DD-slug format
     tasks_dir = get_tasks_dir(repo_root)
     date_prefix = generate_task_date_prefix()
+
+    # Guard against date-prefixed --slug (e.g. a full task dir name pasted in),
+    # which would otherwise produce MM-DD-MM-DD-slug (issue #377). Only an
+    # explicit --slug is guarded; title-derived slugs are left untouched.
+    if args.slug:
+        m = re.match(r"^(\d{2})-(\d{2})-(.+)$", slug)
+        if m and 1 <= int(m.group(1)) <= 12 and 1 <= int(m.group(2)) <= 31:
+            slug_prefix = f"{m.group(1)}-{m.group(2)}"
+            if slug_prefix == date_prefix:
+                slug = m.group(3)
+                print(
+                    colored(
+                        f'warning: --slug should not include the MM-DD prefix; normalized to "{slug}"',
+                        Colors.YELLOW,
+                    ),
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    colored(
+                        f"Error: --slug starts with a date prefix ({slug_prefix}-), but task.py create always uses today's date ({date_prefix}).",
+                        Colors.RED,
+                    ),
+                    file=sys.stderr,
+                )
+                print(f"Pass only the slug body, e.g. --slug {m.group(3)}", file=sys.stderr)
+                return 1
+
     dir_name = f"{date_prefix}-{slug}"
     task_dir = tasks_dir / dir_name
     task_json_path = task_dir / FILE_TASK_JSON
@@ -262,11 +297,21 @@ def cmd_create(args: argparse.Namespace) -> int:
     _, branch_out, _ = run_git(["branch", "--show-current"], cwd=repo_root)
     current_branch = branch_out.strip() or "main"
 
+    description = (args.description or "").strip()
+    if not description.strip():
+        print(
+            colored(
+                "warning: task description is empty; pass --description to improve search and later audits.",
+                Colors.YELLOW,
+            ),
+            file=sys.stderr,
+        )
+
     task_data = {
         "id": slug,
         "name": slug,
         "title": args.title,
-        "description": args.description or "",
+        "description": description,
         "status": "planning",
         "dev_type": None,
         "scope": None,
@@ -294,7 +339,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     prd_path = task_dir / "prd.md"
     if not prd_path.exists():
         prd_path.write_text(
-            _default_prd_content(args.title, args.description),
+            _default_prd_content(args.title, description),
             encoding="utf-8",
         )
 
@@ -337,16 +382,31 @@ def cmd_create(args: argparse.Namespace) -> int:
     # outside an AI session) — the task is still created, the user can run
     # task.py start later. Pointer is session-scoped so this never affects
     # other AI sessions.
-    try:
-        from .active_task import resolve_context_key, set_active_task
-        if resolve_context_key():
-            try:
-                rel_dir = task_dir.relative_to(repo_root).as_posix()
-            except ValueError:
-                rel_dir = str(task_dir)
-            set_active_task(rel_dir, repo_root)
-    except Exception:
-        pass
+    if getattr(args, "no_start", False):
+        print(
+            colored(
+                "Skipped session activation (--no-start); run task.py start when ready.",
+                Colors.YELLOW,
+            ),
+            file=sys.stderr,
+        )
+    else:
+        try:
+            from .active_task import resolve_context_key, set_active_task
+            if resolve_context_key():
+                try:
+                    rel_dir = task_dir.relative_to(repo_root).as_posix()
+                except ValueError:
+                    rel_dir = str(task_dir)
+                active = set_active_task(rel_dir, repo_root)
+                if active:
+                    print(
+                        colored(f"Activated task for this session: {active.task_path}", Colors.GREEN),
+                        file=sys.stderr,
+                    )
+                    print(f"Source: {active.source}", file=sys.stderr)
+        except Exception:
+            pass
 
     print(colored(f"Created task: {dir_name}", Colors.GREEN), file=sys.stderr)
     print("", file=sys.stderr)
@@ -394,6 +454,17 @@ def cmd_archive(args: argparse.Namespace) -> int:
         from .tasks import iter_active_tasks
         for t in iter_active_tasks(tasks_dir):
             print(f"  - {t.dir_name}/", file=sys.stderr)
+        return 1
+
+    # Refuse to archive anything that isn't a real task directly under
+    # .trellis/tasks/. A mistyped name (e.g. "src") resolves to repo_root/src,
+    # which is a dir but not a task — without this guard archive would move the
+    # user's source directory out of the repo.
+    if not is_within_tasks_dir(task_dir, repo_root):
+        print(colored(
+            f"Error: refusing to archive '{task_name}': "
+            f"{task_dir} is not a task under {tasks_dir}",
+            Colors.RED), file=sys.stderr)
         return 1
 
     dir_name = task_dir.name

@@ -4,7 +4,7 @@
 Task Management Script.
 
 Usage:
-    python task.py create "<title>" [--slug <name>] [--assignee <dev>] [--priority P0|P1|P2|P3] [--parent <dir>] [--package <pkg>]
+    python task.py create "<title>" [--slug <name>] [--assignee <dev>] [--priority P0|P1|P2|P3] [--parent <dir>] [--package <pkg>] [--no-start]
     python task.py add-context <dir> <file> <path> [reason] # Add jsonl entry
     python task.py validate <dir>              # Validate jsonl files
     python task.py list-context <dir>          # List jsonl entries
@@ -307,6 +307,7 @@ Usage:
   python task.py create <title>                     Create new task directory
   python task.py create <title> --package <pkg>     Create task for a specific package
   python task.py create <title> --parent <dir>      Create task as child of parent
+  python task.py create <title> --no-start          Create without making it active in this session
   python task.py add-context <dir> <jsonl> <path> [reason]  Add entry to jsonl
   python task.py validate <dir>                     Validate jsonl files
   python task.py list-context <dir>                 List jsonl entries
@@ -392,12 +393,17 @@ def main() -> int:
     # create
     p_create = subparsers.add_parser("create", help="Create new task")
     p_create.add_argument("title", help="Task title")
-    p_create.add_argument("--slug", "-s", help="Task slug")
+    p_create.add_argument("--slug", "-s", help="Task slug without the MM-DD date prefix")
     p_create.add_argument("--assignee", "-a", help="Assignee developer")
     p_create.add_argument("--priority", "-p", default="P2", help="Priority (P0-P3)")
     p_create.add_argument("--description", "-d", help="Task description")
     p_create.add_argument("--parent", help="Parent task directory (establishes subtask link)")
     p_create.add_argument("--package", help="Package name for monorepo projects")
+    p_create.add_argument(
+        "--no-start",
+        action="store_true",
+        help="Create the task without making it active in this session",
+    )
 
     # add-context
     p_add = subparsers.add_parser("add-context", help="Add context entry")
