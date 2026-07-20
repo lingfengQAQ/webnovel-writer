@@ -1,6 +1,7 @@
 .claude/
 .agents/
 .codex/
+.opencode/
 .gemini/
 /AGENTS.md
 
