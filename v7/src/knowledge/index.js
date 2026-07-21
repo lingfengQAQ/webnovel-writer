@@ -227,7 +227,7 @@ export async function readEntry(packageRoot, relPath) {
     来源版本: versionedPath(rel, raw),
     fm: fm.data,
     body: fm.body,
-    规划: extractSection(fm.body, '规划这一章时') || extractSection(fm.body, '规划时'),
+    规划: extractSection(fm.body, '规划时'),
     落笔时: extractSection(fm.body, '落笔时'),
     审稿时: extractSection(fm.body, '审稿时'),
   }

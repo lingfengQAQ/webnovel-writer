@@ -104,6 +104,9 @@ test('备料注入：契约常驻 + 声明命中切片 + 自定义声明降级�
     assert.match(c, /爆发必须改写局面/)
     assert.match(c, /### 本章场景：拍卖会/)
     assert.match(c, /竞价过程写节点不写流水/)
+    // 只注入「落笔时」切片，不带规划/审稿切片
+    assert.doesNotMatch(c, /信息位排布三件套/)
+    assert.doesNotMatch(c, /核对是否存在逐口报价/)
     assert.match(c, /### 本章追读：悬念钩/)
     // 自定义声明降级：声明本身即知识
     assert.match(c, /### 本章场景：自定义梦境回廊\n（自定义选择，按细纲声明执行）/)
@@ -152,6 +155,9 @@ test('审稿输入：冻结契约 + 声明命中的审稿切片，不回读当�
     assert.match(r.input.作品契约, /主角不得靠系统白给/)
     assert.ok(r.input.知识审查.some((item) => item.startsWith('【压抑蓄力爆发·核对】')))
     assert.ok(r.input.知识审查.some((item) => item.startsWith('【拍卖会·核对】')))
+    // 只注入「审稿时」切片，不带落笔/规划切片
+    assert.ok(!r.input.知识审查.some((item) => item.includes('竞价过程写节点不写流水')))
+    assert.ok(!r.input.知识审查.some((item) => item.includes('信息位排布三件套')))
     assert.ok(r.input.知识审查.some((item) => item.includes('【技法·自定义】')))
     assert.ok(r.input.知识审查.some((item) => item.includes('【知识变体】')))
     assert.equal(r.input.毒点清单, undefined)
@@ -282,7 +288,7 @@ test('序6 DTO：技法维度使用同一候选接口，并把规划切片交给
         '  - 信息误导',
         '一句话: 只给视角人物能确认的信息',
         '---',
-        '## 规划这一章时',
+        '## 规划时',
         '先列出视角人物知道与不知道的事实。',
         '## 落笔时',
         '不得越过视角人物认知补叙真相。',

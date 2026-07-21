@@ -92,6 +92,76 @@ test('近期历史合并定稿章与批内前章，按章倒序且不读取额�
   }
 })
 
+async function fs_rm(p) {
+  await fs.rm(p, { recursive: true, force: true })
+}
+
+// 端到端样例（目标 schema 夹具）：声明 → 命中 → 章档案 → 近期历史 → 软降权
+test('细纲声明到近期软降权闭环：未选候选不持久化、自定义不阻断', async () => {
+  const { queryKnowledge } = await import('../../src/knowledge/index.js')
+  const pkg = await fs.mkdtemp(path.join(os.tmpdir(), 'wnw-chapter-e2e-pkg-'))
+  const repoPath = await fs.mkdtemp(path.join(os.tmpdir(), 'wnw-chapter-e2e-repo-'))
+  try {
+    const entry = (dir, file, fmLines) => fs.writeFile(
+      path.join(pkg, 'references', dir, file),
+      ['---', ...fmLines, '---', '## 规划时', '', '选用判据。', '', '## 落笔时', '', '落笔动作。', '', '## 审稿时', '', '核对判据。'].join('\n'),
+      'utf8'
+    )
+    for (const dir of ['节拍', '场景', '技法', '追读']) {
+      await fs.mkdir(path.join(pkg, 'references', dir), { recursive: true })
+    }
+    await entry('节拍', 'PA-901-蓄压释放.md', ['编号: PA-901', '名称: 蓄压释放', '一句话: 先蓄压后释放的章内曲线', '关键词:', '  - 蓄压', '  - 释放'])
+    await entry('场景', '暗市交易.md', ['名称: 暗市交易', '一句话: 以非法交易为容器的多方博弈', '关键词:', '  - 暗市', '  - 交易'])
+    await entry('场景', '未选容器.md', ['名称: 未选容器', '一句话: 本章未选择的候选场景', '关键词:', '  - 未选'])
+    await entry('技法', '限制视角.md', ['名称: 限制视角', '类别: 视角', '作用层级: 场', '触发问题:', '  - 信息误导', '一句话: 只写视角人物能确认的信息'])
+    await entry('追读', '悬念压钩.md', ['名称: 悬念压钩', '一句话: 章尾留未解悬念压力', '关键词:', '  - 悬念'])
+
+    const e2eOutline = [
+      '## 本章提案',
+      '本章节拍：PA-901 蓄压释放',
+      '本章场景：暗市交易',
+      '本章技法：限制视角、自定义镜像独白',
+      '本章追读：悬念压钩',
+      '知识变体：暗市交易只写交易破裂后的追捕',
+    ].join('\n')
+
+    // 声明命中：正式条目精确命中，自定义原样保留且不阻断
+    const resolved = await resolveChapterDeclarations(pkg, e2eOutline)
+    assert.equal(resolved.selections.find((item) => item.声明.startsWith('PA-901')).条目.名称, '蓄压释放')
+    assert.equal(resolved.selections.find((item) => item.声明 === '自定义镜像独白').条目, null)
+
+    // 章档案平铺保存最终选择与真实变体；未选候选不持久化
+    const archive = await buildChapterKnowledgeArchive(pkg, e2eOutline)
+    assert.deepEqual(archive, [
+      '节拍｜蓄压释放',
+      '场景｜暗市交易',
+      '技法｜限制视角',
+      '技法｜自定义镜像独白',
+      '追读｜悬念压钩',
+      '变体｜暗市交易只写交易破裂后的追捕',
+    ])
+    assert.ok(!archive.some((item) => item.includes('未选容器')))
+
+    // 近期历史：批内前章视图 → queryKnowledge 软降权与重复提醒
+    const history = await readRecentChapterKnowledge(repoPath, {
+      before: 8,
+      stagedChapters: [{ 章号: 7, frontMatter: { 知识选择: archive } }],
+    })
+    assert.ok(history.some((item) => item.维度 === '场景' && item.名称 === '暗市交易' && item.章号 === 7))
+
+    const hits = await queryKnowledge(pkg, '场景', { 问题: '本章在暗市完成交易后被人追捕', 近期: history })
+    const used = hits.find((item) => item.名称 === '暗市交易')
+    assert.ok(used, '近期用过的合适候选仍保留')
+    assert.deepEqual(used.近期使用, [{ 章号: 7, 变体: '暗市交易只写交易破裂后的追捕' }])
+    assert.match(used.重复提醒, /软降权/)
+    const unused = hits.find((item) => item.名称 === '未选容器')
+    assert.ok(!unused || !unused.近期使用, '未选候选不产生使用记录')
+  } finally {
+    await fs_rm(pkg)
+    await fs_rm(repoPath)
+  }
+})
+
 test('归档以工作区确认细纲为准；细纲不存在时保留暂存 payload', async () => {
   const repoPath = await fs.mkdtemp(path.join(os.tmpdir(), 'wnw-chapter-archive-'))
   try {

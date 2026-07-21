@@ -113,10 +113,27 @@ test('readEntry 三节切片；文件缺失返回 null', async () => {
   assert.ok(e.规划.length > 0)
   assert.ok(e.落笔时.length > 0)
   assert.ok(e.审稿时.length > 0)
-  assert.ok(Array.isArray(e.fm.毒点) && e.fm.毒点.length > 0)
   assert.match(e.来源版本, /^场景\/拍卖会\.md@sha256:[0-9a-f]{64}$/)
   assert.equal(await readEntry(packageRoot, '场景/不存在.md'), null)
   assert.equal(await readEntry(packageRoot, '../README.md'), null)
+})
+
+test('readEntry 规划切片只认「规划时」标题，不再双读旧标题', async () => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'wnw-slice-title-'))
+  try {
+    const dir = path.join(tmp, 'references', '场景')
+    await mkdir(dir, { recursive: true })
+    await writeFile(
+      path.join(dir, '旧标题.md'),
+      ['---', '名称: 旧标题', '一句话: 使用旧规划标题的条目', '---', '## 规划这一章时', '', '旧内容。', '', '## 落笔时', '', '落笔。', '', '## 审稿时', '', '核对。'].join('\n'),
+      'utf8'
+    )
+    const e = await readEntry(tmp, '场景/旧标题.md')
+    assert.equal(e.规划, '', '旧标题「规划这一章时」不应再被读取')
+    assert.ok(e.落笔时.length > 0)
+  } finally {
+    await rm(tmp, { recursive: true, force: true })
+  }
 })
 
 test('listKnowledgeEntries：只读十维直接目录，不递归吞治理文档', async () => {
@@ -124,7 +141,9 @@ test('listKnowledgeEntries：只读十维直接目录，不递归吞治理文档
   assert.ok(beats.length > 0)
   assert.ok(beats.every((entry) => entry.文件.startsWith('节拍/')))
   assert.deepEqual(await listKnowledgeEntries(packageRoot, '桥段'), [])
-  assert.deepEqual(await listKnowledgeEntries(packageRoot, '技法'), [])
+  const techniques = await listKnowledgeEntries(packageRoot, '技法')
+  assert.ok(techniques.length > 0)
+  assert.ok(techniques.every((entry) => entry.文件.startsWith('技法/')))
 })
 
 test('queryKnowledge：按真实问题机械命中、最多三条、近期只软降权提醒', async () => {

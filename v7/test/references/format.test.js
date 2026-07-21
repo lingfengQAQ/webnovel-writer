@@ -7,14 +7,25 @@ import { parseFrontMatter } from '../../src/storage/parsers/front-matter.js'
 import { extractSection } from '../../src/util/markdown.js'
 import { KNOWLEDGE_FILTER_VALUES, loadRoutes } from '../../src/knowledge/index.js'
 import { CANONICAL_TOPIC_NAMES } from '../../src/knowledge/contract.js'
+import { LEGACY_CHAPTER_ENTRIES } from './legacy-chapter-entries.js'
 
 /**
- * 知识库格式校验（验收 A5）：front matter 可解析、分维正确、节齐全、路由键唯一、
- * 内容纪律的机器可查部分（毒点非空于章级条目）。内容质量本身走人工审查关（A6-A8），不在此测。
+ * 知识库格式校验（验收 A5）：front matter 可解析、分维正确、节齐全、路由键唯一。
+ * 章级四维按 design 3.1 目标 schema 校验；旧格式存量以 LEGACY_CHAPTER_ENTRIES 显式冻结,
+ * 随批次 2/3/5 清空。内容质量本身走人工审查关（A6-A8），不在此测。
  */
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../references')
-const 章级目录 = ['节拍', '追读', '场景']
+const 章级目录 = ['节拍', '场景', '技法', '追读']
+const 章级格式 = Object.freeze({
+  节拍: Object.freeze({ 字段: ['编号', '名称', '一句话', '关键词'] }),
+  场景: Object.freeze({ 字段: ['名称', '一句话', '关键词'] }),
+  技法: Object.freeze({ 字段: ['名称', '类别', '作用层级', '触发问题', '一句话'] }),
+  追读: Object.freeze({ 字段: ['名称', '一句话', '关键词'] }),
+})
+const 技法类别受控值 = Object.freeze(['对白', '描写', '视角', '信息', '情感', '结构', '战斗', '设定执行'])
+const 技法作用层级受控值 = Object.freeze(['书', '卷', '跨章', '章', '场'])
+const 章级禁用字段 = /毒点:|适用题材:|正例:|反例:|来源:|状态:|适用技能:|大模型指令:/u
 const 书级格式 = Object.freeze({
   题材: Object.freeze({ 字段: ['名称'], 小节: ['核心承诺', '选择边界', '本书化问题', '失败模式'] }),
   流派: Object.freeze({ 字段: ['名称'], 小节: ['推进引擎', '组合边界', '本书化问题', '失败模式'] }),
@@ -74,16 +85,53 @@ test('故事对象条目只保留最小索引字段和规划时切片', async ()
   }
 })
 
-test('章级条目三节齐全（规划这一章时/落笔时/审稿时）且毒点非空', async () => {
+test('章级条目三切片齐全（规划时/落笔时/审稿时），空目录不阻断', async () => {
   for (const dir of 章级目录) {
     for (const f of await mdFiles(dir)) {
       const raw = await fs.readFile(path.join(ROOT, dir, f), 'utf8')
       const fm = parseFrontMatter(raw)
-      for (const sec of ['规划这一章时', '落笔时', '审稿时']) {
+      for (const sec of ['规划时', '落笔时', '审稿时']) {
         assert.ok(extractSection(fm.body, sec), `${dir}/${f} 缺「${sec}」节`)
       }
-      assert.ok(Array.isArray(fm.data.毒点) && fm.data.毒点.length > 0, `${dir}/${f} 毒点为空`)
+      assert.equal(extractSection(fm.body, '规划这一章时'), '', `${dir}/${f} 残留旧标题「规划这一章时」`)
       assert.ok(fm.data.一句话, `${dir}/${f} 缺 一句话（紧凑索引展示用）`)
+    }
+  }
+})
+
+test('章级旧格式冻结清单只减不增，且不含清单外文件', async () => {
+  for (const dir of 章级目录) {
+    const files = new Set(await mdFiles(dir))
+    for (const legacy of LEGACY_CHAPTER_ENTRIES[dir]) {
+      assert.ok(files.has(legacy), `${dir}/${legacy} 已不存在，须同步从 LEGACY_CHAPTER_ENTRIES 移除`)
+    }
+  }
+  // 批次 2/3/5 完成后对应维度清单应清空；此断言防止收口后清单被遗忘
+  assert.deepEqual(LEGACY_CHAPTER_ENTRIES.技法, [], '技法从空目录起步，不允许旧格式条目')
+})
+
+test('章级条目 front matter 只含目标 schema 字段，禁用字段与「全部」占位不得回流', async () => {
+  for (const dir of 章级目录) {
+    const legacy = new Set(LEGACY_CHAPTER_ENTRIES[dir])
+    for (const f of await mdFiles(dir)) {
+      if (legacy.has(f)) continue // 批次 2/3/5 待迁移存量,迁移后从清单删除即受本测试约束
+      const raw = await fs.readFile(path.join(ROOT, dir, f), 'utf8')
+      const fm = parseFrontMatter(raw)
+      assert.deepEqual(
+        Object.keys(fm.data).sort(),
+        [...章级格式[dir].字段].sort(),
+        `${dir}/${f} front matter 与目标 schema 不符`
+      )
+      assert.doesNotMatch(raw, 章级禁用字段, `${dir}/${f} 含已删除的无消费者字段`)
+      for (const [field, value] of Object.entries(fm.data)) {
+        const values = Array.isArray(value) ? value : [value]
+        assert.ok(values.length > 0 && values.every((item) => String(item).trim()), `${dir}/${f} 字段 ${field} 为空`)
+        assert.ok(!values.map(String).includes('全部'), `${dir}/${f} 字段 ${field} 不得使用“全部”占位`)
+      }
+      if (dir === '技法') {
+        assert.ok(技法类别受控值.includes(String(fm.data.类别)), `${dir}/${f} 类别「${fm.data.类别}」不在受控值中`)
+        assert.ok(技法作用层级受控值.includes(String(fm.data.作用层级)), `${dir}/${f} 作用层级「${fm.data.作用层级}」不在受控值中`)
+      }
     }
   }
 })
