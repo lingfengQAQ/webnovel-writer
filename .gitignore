@@ -63,3 +63,4 @@ C*tool-results*.txt
 # Test / diagnostic files
 test_gemini.env
 test_gemini_diag.py
+.zcode/
