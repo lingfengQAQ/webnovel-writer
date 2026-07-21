@@ -1,1 +1,7 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/index.md", "reason": "backend 规范入口与质量门"}
+{"file": ".trellis/spec/backend/knowledge-runtime.md", "reason": "章级知识运行时契约：声明、切片、查询、历史"}
+{"file": "v7/docs/knowledge/维度宪章.md", "reason": "节拍/场景/技法/追读边界与压力样例的治理真源"}
+{"file": "v7/docs/knowledge/调用者与字段矩阵.md", "reason": "四维索引字段、条件式字段与切片调用者"}
+{"file": "v7/docs/knowledge/策展规则.md", "reason": "近重复、拆分、合并、废弃与签收流程"}
+{"file": ".trellis/tasks/07-10-knowledge-taxonomy-governance/research/v6候选资产裁决模板.md", "reason": "308 条 v6 候选的逐条裁决模板与处置规则"}
+{"file": ".trellis/tasks/07-10-knowledge-taxonomy-governance/research/决策状态清单.md", "reason": "章级已知未决项与近重复组清单"}
