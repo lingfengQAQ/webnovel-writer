@@ -1,1 +1,6 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "v7/docs/knowledge/维度宪章.md", "reason": "十维边界与新增门槛,结构审计判据"}
+{"file": "v7/docs/knowledge/调用者与字段矩阵.md", "reason": "字段消费者与切片契约,行为审计判据"}
+{"file": "v7/docs/knowledge/策展规则.md", "reason": "近重复与架构变更两级治理流程"}
+{"file": ".trellis/spec/backend/knowledge-runtime.md", "reason": "运行时契约与错误矩阵,降级路径核对"}
+{"file": ".trellis/tasks/07-10-knowledge-taxonomy-governance/prd.md", "reason": "父 PRD A1–A32,证据映射目标"}
+{"file": ".trellis/tasks/archive/2026-07/07-10-chapter-knowledge-migration/research/签收抽查报告.md", "reason": "S 建议项与终测卡点挂账来源"}

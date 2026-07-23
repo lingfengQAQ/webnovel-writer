@@ -52,20 +52,21 @@
 
 依赖：章级候选、细纲声明、精准切片和近期历史接口冻结。
 
-- [ ] 5.1 清理现有节拍、场景和追读的错维、近重复与无消费者字段。
-- [ ] 5.2 建立 `技法/`，策展对白、描写、视角、信息、情感、结构、战斗和设定执行方法。
-- [ ] 5.3 逐条审计 v6 场景、技法和桥段资产；可迁移原理归位，成品剧情模板删除。
-- [ ] 5.4 验证规划、落笔、审稿切片均有消费者，整体确认和合法复用不被硬禁。
+- [x] 5.1 清理现有节拍、场景和追读的错维、近重复与无消费者字段。（节拍 102→63、场景 16→37、追读 10→11；FM 删毒点/适用题材）
+- [x] 5.2 建立 `技法/`，策展对白、描写、视角、信息、情感、结构、战斗和设定执行方法。（0→49，八类受控）
+- [x] 5.3 逐条审计 v6 场景、技法和桥段资产；可迁移原理归位，成品剧情模板删除。（96+104+108 全裁；桥段零增量经对抗抽查+全量返修成立）
+- [x] 5.4 验证规划、落笔、审稿切片均有消费者，整体确认和合法复用不被硬禁。（切片单读规划时；行为测试齐；子任务 2026-07-21 签收归档）
 
 ## 阶段 6：集成审计子任务
 
 依赖：阶段 2 至 5 全部完成并签收。
 
-- [ ] 6.1 全库唯一路径、canonical 名称、别名冲突和跨维近重复审计。
-- [ ] 6.2 建书、对象创建、章节规划、写作、审稿、finalize 和卷末复盘全链行为审计。
-- [ ] 6.3 同题材多书、复合题材、明确作者和空白作者四类场景的反同质化测试。
-- [ ] 6.4 验证运行时不存在旧书兼容层、知识评分、作者投稿、自动扩库和无消费者字段。
-- [ ] 6.5 对齐 README、治理文档、spec、技能、代码、测试、installer 与 fixture，未决清单清零。
+- [x] 6.1 全库唯一路径、canonical 名称、别名冲突和跨维近重复审计。
+- [x] 6.2 建书、对象创建、章节规划、写作、审稿、finalize 和卷末复盘全链行为审计。
+- [x] 6.3 同题材多书、复合题材、明确作者和空白作者四类场景的反同质化测试。
+- [x] 6.4 验证运行时不存在旧 v7 知识路径双读或知识 schema 兼容层、知识评分、作者投稿、自动扩库和无消费者字段；既有 v6→v7 书仓迁移不在此断言范围。
+- [x] 6.5 对齐 README、治理文档、spec、技能、代码、测试、installer 与 fixture，未决清单清零。
+- [x] 6.6 完成集成对抗纠偏：章级来源确认时冻结、事实 `applyChange` 真 no-op、卷复盘写边界契约闸门、契约失效到 commit confirmed 的持久待提交证明生命周期，以及完整 ReviewInput 令牌对旧两审结果延迟回流和上下文漂移的 fail-closed 绑定。
 
 ## 验证命令
 
@@ -73,10 +74,13 @@
 
 ```powershell
 Set-Location v7
+node scripts/build-host-shells.mjs
+node scripts/build-host-shells.mjs --check
 npm test
 npm run e2e:install
-node scripts/build-host-shells.mjs --check
 Set-Location ..
+python ./.trellis/scripts/task.py validate 07-10-knowledge-integration-audit
+python ./.trellis/scripts/task.py validate 07-10-knowledge-taxonomy-governance
 git diff --check
 ```
 
@@ -98,6 +102,8 @@ git diff --check
 | 生成/审查漂移 | `src/prep/index.js`、`src/review/index.js` | 同一提交改读源与测试，禁止单侧切换 |
 | 事实转正原子性 | `src/finalize/`、`src/storage/`、实体/时间线 writer | 故障注入测试覆盖正文与事实全成或全不成 |
 | 章级候选同质化 | `src/knowledge/index.js`、`state-machine/dto.js`、细纲持久化 | 先行为测试后替换全量菜单；保留自定义降级 |
+| 章级来源冻结 | `src/knowledge/chapter.js`、`state-machine/persist.js`、staging/finalize | 细纲与快照、归档校验、清理及失效必须整体回退 |
+| 契约失效守卫 | `commands/persist-contract.js`、`staging/`、`finalize/`、review 草稿绑定 | 待重做/待提交证明/commit 释放作为同一状态机整体回退；禁止单侧撤销 |
 | installer 漂移 | `src/installer/`、`scripts/pack-install-e2e.mjs`、host shells | 每阶段执行打包安装 e2e，源码与 vendored 产物同验 |
 | 批量内容误归类 | `v7/references/` 十维目录 | 按维度/批次独立提交，逐条裁决清单可回溯 |
 
