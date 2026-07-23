@@ -33,7 +33,6 @@ const bookFiles = () => ({
 })
 
 async function stageChapter3(ctx) {
-  await writeReviewArtifacts(ctx.repoPath, 3)
   const payload = {
     frontMatter: {
       章号: 3,
@@ -73,6 +72,7 @@ async function stageChapter3(ctx) {
     commitLines: {},
     workspaceFiles: [],
   }
+  await writeReviewArtifacts(ctx.repoPath, 3, [], [], payload)
   const r = await stageChapter(ctx, { chapterNum: 3, payload })
   assert.equal(r.ok, true, r.error)
 }

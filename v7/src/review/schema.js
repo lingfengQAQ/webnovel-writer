@@ -13,6 +13,7 @@ export const SEVERITIES = ['critical', 'high', 'medium', 'low']
 /** 审稿单 JSON 形态范例（单源:生成器注入角色任务书,角色与校验器不双表） */
 export const SCHEMA_EXAMPLE = {
   chapter: 100,
+  审稿输入令牌: 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
   issues: [
     {
       severity: 'critical',
@@ -46,6 +47,11 @@ export function validateReviewReport(report, { reviewType } = {}) {
 
   if (!report || !Array.isArray(report.issues)) {
     return { ok: false, report: null, errors: [...errors, 'report.issues 缺失或非数组'] }
+  }
+
+  if (reviewType === 'factCheck') {
+    const factChangeValidation = validateFactChangeDecisionDetails(report.factChanges)
+    errors.push(...factChangeValidation.errors)
   }
 
   const normalized = report.issues.map((issue, i) => {
@@ -92,8 +98,13 @@ export function validateReviewReport(report, { reviewType } = {}) {
 }
 
 function isContractClause(value) {
+  if (value === '差异化点') return false
+  if (value.startsWith('差异化点/')) {
+    return value.slice('差异化点/'.length).trim().length > 0
+  }
   return CONTRACT_SECTIONS.some(
     (section) => value === section || value.startsWith(section + '/')
   )
 }
 import { CONTRACT_SECTIONS } from '../knowledge/contract.js'
+import { validateFactChangeDecisionDetails } from '../knowledge/fact-changes.js'

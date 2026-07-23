@@ -233,3 +233,11 @@ test('毒点措辞不以禁止某类角色替代叙事结果核对', async () =>
     }
   }
 })
+
+test('样例书文风夹具不恢复题材默认的关系结算或角色标签', async () => {
+  const fixture = await fs.readFile(
+    path.join(ROOT, '..', 'test', 'fixtures', 'sample-book', '文风', '文风铁律.md'),
+    'utf8'
+  )
+  assert.doesNotMatch(fixture, /恩怨清算|反和解（按题材配浓度）|禁主角圣母/)
+})

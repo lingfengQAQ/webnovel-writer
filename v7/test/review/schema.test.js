@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { validateReviewReport } from '../../src/review/schema.js'
+import { SCHEMA_EXAMPLE, validateReviewReport } from '../../src/review/schema.js'
 
 const issue = (over = {}) => ({
   severity: 'high',
@@ -11,6 +11,13 @@ const issue = (over = {}) => ({
   fix_hint: '改回练气',
   blocking: false,
   ...over,
+})
+
+test('角色 schema 示例含可原样回传的合法审稿输入令牌', () => {
+  assert.match(SCHEMA_EXAMPLE.审稿输入令牌, /^sha256:[0-9a-f]{64}$/)
+  const r = validateReviewReport(SCHEMA_EXAMPLE, { reviewType: 'factCheck' })
+  assert.equal(r.ok, true, r.errors.join('；'))
+  assert.equal(r.report.审稿输入令牌, SCHEMA_EXAMPLE.审稿输入令牌)
 })
 
 test('合法事实审查报告：通过 + 计数复算', async () => {
@@ -65,6 +72,39 @@ test('作品契约问题只接受明确的契约条款标识', () => {
   )
   assert.equal(invalid.ok, false)
   assert.ok(invalid.errors.some((error) => error.includes('contract_clause')))
+})
+
+test('差异化 issue 用 差异化点/<具体项> 口径可通过正式 schema', () => {
+  const clause = '差异化点/系统情报只在行动前有效'
+  const valid = validateReviewReport(
+    {
+      chapter: 5,
+      issues: [issue({
+        category: 'commercial',
+        description: '系统答案永久正确，差异机制未形成行动因果',
+        evidence: '契约要求情报只在行动前有效，正文却让答案永久有效',
+        fix_hint: '让行动改变条件，并迫使角色重新验证情报',
+        contract_clause: clause,
+      })],
+    },
+    { reviewType: 'editorial' }
+  )
+  assert.equal(valid.ok, true, valid.errors.join('；'))
+  assert.equal(valid.report.issues[0].contract_clause, clause)
+
+  for (const contract_clause of [
+    '差异化点',
+    '差异化点/',
+    '差异化点/   ',
+    '差异化点：系统情报只在行动前有效',
+  ]) {
+    const invalid = validateReviewReport(
+      { chapter: 5, issues: [issue({ category: 'commercial', contract_clause })] },
+      { reviewType: 'editorial' }
+    )
+    assert.equal(invalid.ok, false)
+    assert.ok(invalid.errors.some((error) => error.includes('contract_clause')))
+  }
 })
 
 test('缺字段 / 非法 severity → 报错', async () => {

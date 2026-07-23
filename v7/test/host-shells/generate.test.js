@@ -59,6 +59,37 @@ test('角色占位符注入 category（来自 schema.js 单源）', async () => 
   assert.ok(!factRole.includes('{{schema'), 'schema 占位符已渲染')
 })
 
+test('所有生成壳都保留审稿输入令牌与批内重审草稿绑定协议', async () => {
+  const out = await generateHostShells(V7)
+  for (const [host, files] of Object.entries(out)) {
+    const skill = files['skills/webnovel-writer/SKILL.md']
+    assert.match(
+      skill,
+      /\{"审稿输入令牌","事实审查","编辑审","mode","待确认新专名","章摘要"\}/,
+      `${host} SKILL 应声明带令牌的 save-review 外层`,
+    )
+    assert.match(skill, /外层令牌同样逐字复制 ReviewInput/)
+    assert.match(skill, /必须与两份报告内令牌相等/)
+    assert.match(skill, /禁止重算、改写或省略/)
+    assert.match(skill, /batch-status --json/)
+    assert.match(skill, /草稿路径/)
+    assert.match(skill, /review-input <章号> --draft=<草稿路径>/)
+    assert.match(skill, /save-review <章号> --file=<json路径> --draft=<同一路径>/)
+    assert.match(skill, /禁止默认使用 `草稿-A\.md`/)
+
+    for (const roleName of ['事实审查', '编辑审']) {
+      const entry = Object.entries(files).find(([rel]) => rel.startsWith(`agents/${roleName}.`))
+      assert.ok(entry, `${host} 应生成 ${roleName} 任务书`)
+      const role = entry[1]
+      assert.match(role, /作品契约版本/)
+      assert.match(role, /审稿输入令牌/)
+      assert.match(role, /逐字原样复制 ReviewInput/)
+      assert.match(role, /禁止重算、改写或省略/)
+      assert.match(role, /"审稿输入令牌": "sha256:[0-9a-f]{64}"/)
+    }
+  }
+})
+
 test('drift check：同输入连跑两次逐字节一致', async () => {
   const a = await generateHostShells(V7)
   const b = await generateHostShells(V7)

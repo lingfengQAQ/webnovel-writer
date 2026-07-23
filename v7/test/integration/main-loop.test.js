@@ -16,8 +16,16 @@ const exec = promisify(execFile)
 
 // 桩两审：零问题通过，用于驱动主循环不引入真模型
 const stubReviewers = {
-  factCheck: async () => ({ chapter: 1, issues: [] }),
-  editorial: async () => ({ chapter: 1, issues: [] }),
+  factCheck: async (input) => ({
+    审稿输入令牌: input.审稿输入令牌,
+    chapter: 1,
+    issues: [],
+  }),
+  editorial: async (input) => ({
+    审稿输入令牌: input.审稿输入令牌,
+    chapter: 1,
+    issues: [],
+  }),
 }
 
 const charCard = `---\n姓名: 林晚\n状态: 在世\n位置: 青云宗\n境界: 练气三层\n---\n## 设定\n玉佩线索。`

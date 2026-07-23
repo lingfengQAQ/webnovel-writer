@@ -21,8 +21,13 @@ export async function determineNextState(ctx) {
 
   // 序0 修复确认（检测=脚本，提议=AI）
   const failures = await d.detectParseFailures(repoPath)
-  if (failures.length) {
-    return mk(0, 'repair-confirm', true, `检测到 ${failures.length} 个源文件解析失败，需逐个修复确认。`, gitHealth, await buildDto(ctx, 0, { failures }))
+  // 作品契约缺/坏由序4、序6的同一 ContractReader 阻断，不送进 AI 修复或创作态。
+  // 若还有其他源文件错误，仍保持既有序0修复确认语义。
+  const repairFailures = failures.filter(
+    (failure) => failure.file !== '作品契约/作品契约.md'
+  )
+  if (repairFailures.length) {
+    return mk(0, 'repair-confirm', true, `检测到 ${repairFailures.length} 个源文件解析失败，需逐个修复确认。`, gitHealth, await buildDto(ctx, 0, { failures: repairFailures }))
   }
 
   // 序1 建书引导
@@ -67,9 +72,21 @@ export async function determineNextState(ctx) {
 
   // 序4 卷复盘（收卷声明制，spec 0.9 §10：最新定稿章声明了收卷；复盘完成以卷摘要存在为准，防重复触发。对谈=AI）
   if (last && last.is_volume_end && !(await d.volumeReviewDone(repoPath, last.volume_num))) {
-    return mk(4, 'volume-review', true, `第 ${last.chapter_num} 章已收卷，进入第 ${last.volume_num} 卷复盘。`, gitHealth, await buildDto(ctx, 4, {
+    const volumeDto = await buildDto(ctx, 4, {
       卷: last.volume_num,
-    }))
+    })
+    if (volumeDto.阻断原因) {
+      return {
+        ok: false,
+        序: 4,
+        state: 'volume-review-blocked',
+        needsAI: false,
+        gitHealth,
+        dto: volumeDto,
+        message: volumeDto.阻断原因,
+      }
+    }
+    return mk(4, 'volume-review', true, `第 ${last.chapter_num} 章已收卷，进入第 ${last.volume_num} 卷复盘。`, gitHealth, volumeDto)
   }
 
   // 序5 体检（距上次体检 ≥ 体检周期；记录存缓存 meta，丢失重测无害。统计项随 M5.5，最小体检=health-check 命令）
@@ -79,9 +96,21 @@ export async function determineNextState(ctx) {
   }
 
   // 序6 起草新章细纲（近况=脚本，拟提案=AI）
-  return mk(6, 'draft-outline', true, `起草第 ${maxChapter + 1} 章细纲。`, gitHealth, await buildDto(ctx, 6, {
+  const draftDto = await buildDto(ctx, 6, {
     nextChapter: maxChapter + 1,
-  }))
+  })
+  if (draftDto.阻断原因) {
+    return {
+      ok: false,
+      序: 6,
+      state: 'draft-outline-blocked',
+      needsAI: false,
+      gitHealth,
+      dto: draftDto,
+      message: draftDto.阻断原因,
+    }
+  }
+  return mk(6, 'draft-outline', true, `起草第 ${maxChapter + 1} 章细纲。`, gitHealth, draftDto)
 }
 
 function mk(序, state, needsAI, message, gitHealth, dto) {

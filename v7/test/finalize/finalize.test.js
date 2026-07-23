@@ -8,6 +8,7 @@ import { finalizeChapter } from '../../src/finalize/index.js'
 import { createGit } from '../../src/finalize/git.js'
 import { gitBookCtx } from '../commands/_helper.js'
 import { mechanicalCheck } from '../../src/mechanical-check/index.js'
+import { CHAPTER_KNOWLEDGE_SNAPSHOT_PATH } from '../../src/knowledge/chapter.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -56,6 +57,45 @@ test('finalizeChapter 正常定稿：落档 + git commit + 清工作区', async 
     assert.equal(await git.revCount(), before + 1)
 
     await assert.rejects(() => fs.access(path.join(ctx.repoPath, '工作区/细纲.md')))
+    await assert.rejects(() => fs.access(path.join(ctx.repoPath, CHAPTER_KNOWLEDGE_SNAPSHOT_PATH)))
+  } finally {
+    await cleanup()
+  }
+})
+
+test('finalizeChapter 无细纲时拒绝旧两段式知识选择，且零写入零提交', async () => {
+  const { ctx, cleanup } = await gitBookCtx()
+  try {
+    await fs.rm(path.join(ctx.repoPath, '工作区', '细纲.md'), { force: true })
+    await fs.rm(path.join(ctx.repoPath, CHAPTER_KNOWLEDGE_SNAPSHOT_PATH), { force: true })
+    const p = payload()
+    p.frontMatter.知识选择 = ['场景｜旧两段式']
+    p.workspaceFiles = []
+    const git = createGit(ctx.repoPath)
+    const before = await git.revCount()
+
+    const result = await finalizeChapter(ctx, p)
+    assert.equal(result.ok, false)
+    assert.match(result.error, /章档案知识选择格式不正确/)
+    assert.equal(await git.revCount(), before)
+    await assert.rejects(() => fs.access(path.join(ctx.repoPath, '定稿', '正文', '0003-初露.md')))
+  } finally {
+    await cleanup()
+  }
+})
+
+test('finalizeChapter 拒绝细纲与冻结快照 hash 不一致，且零写入零提交', async () => {
+  const { ctx, cleanup } = await gitBookCtx()
+  try {
+    await fs.appendFile(path.join(ctx.repoPath, '工作区', '细纲.md'), '\n本章场景：已被改写。\n', 'utf8')
+    const git = createGit(ctx.repoPath)
+    const before = await git.revCount()
+
+    const result = await finalizeChapter(ctx, payload())
+    assert.equal(result.ok, false)
+    assert.match(result.error, /与冻结快照不一致.*重新确认/)
+    assert.equal(await git.revCount(), before)
+    await assert.rejects(() => fs.access(path.join(ctx.repoPath, '定稿', '正文', '0003-初露.md')))
   } finally {
     await cleanup()
   }

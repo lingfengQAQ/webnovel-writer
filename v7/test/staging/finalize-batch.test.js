@@ -16,6 +16,7 @@ import {
 import { finalizeChapter } from '../../src/finalize/index.js'
 import { determineNextState } from '../../src/state-machine/index.js'
 import { createGit } from '../../src/finalize/git.js'
+import { persistDraftOutline } from '../../src/state-machine/persist.js'
 import { gitBookCtx } from '../commands/_helper.js'
 import { writeReviewArtifacts } from './_helper.js'
 
@@ -48,9 +49,11 @@ function chapterPayload(num, { body, 钩子 = '危机钩-强' } = {}) {
 }
 
 async function stage(ctx, num, opts) {
-  await fs.writeFile(path.join(ctx.repoPath, '工作区', '细纲.md'), chapterOutline(num), 'utf8')
-  await writeReviewArtifacts(ctx.repoPath, num)
-  const r = await stageChapter(ctx, { chapterNum: num, payload: chapterPayload(num, opts) })
+  const confirmed = await persistDraftOutline(ctx, { 细纲: chapterOutline(num) })
+  assert.equal(confirmed.ok, true, confirmed.error)
+  const payload = chapterPayload(num, opts)
+  await writeReviewArtifacts(ctx.repoPath, num, [], [], payload)
+  const r = await stageChapter(ctx, { chapterNum: num, payload })
   assert.equal(r.ok, true, r.error)
   return r
 }
@@ -134,11 +137,8 @@ test('AC1 批次端到端：stage×3 → finalize-batch 逐章 commit，入档�
 
     // 手动模式同 payload 逐章定稿 → 定稿/大纲 全树逐字段一致
     for (const n of [3, 4, 5]) {
-      await fs.writeFile(
-        path.join(manualRepo.ctx.repoPath, '工作区', '细纲.md'),
-        chapterOutline(n),
-        'utf8'
-      )
+      const confirmed = await persistDraftOutline(manualRepo.ctx, { 细纲: chapterOutline(n) })
+      assert.equal(confirmed.ok, true, confirmed.error)
       const m = await finalizeChapter(manualRepo.ctx, chapterPayload(n))
       assert.equal(m.ok, true, m.error)
     }
@@ -150,7 +150,10 @@ test('AC1 批次端到端：stage×3 → finalize-batch 逐章 commit，入档�
       path.join(batchRepo.ctx.repoPath, '定稿', '正文', '0003-连写3.md'),
       'utf8'
     )
-    assert.match(chapter3, /知识选择:\n  - 节拍｜压抑蓄力爆发/)
+    assert.match(
+      chapter3,
+      /节拍｜压抑蓄力爆发｜节拍\/PA-001-压抑蓄力爆发\.md@sha256:[0-9a-f]{64}/
+    )
     assert.match(chapter3, /变体｜第 3 章按递进关系落地/)
     assert.doesNotMatch(chapter3, /不得覆盖批内选择/)
   } finally {
@@ -181,7 +184,13 @@ test('AC3 注入错误恢复演练：打回传染 → 拒绝定稿 → 重写重
 
     // 重写打回章 → stage 覆盖；受影响章重审 → batch-restage 通道
     await stage(ctx, 4, { body: '第4章正文：重写后的干净版本。' })
-    await writeReviewArtifacts(ctx.repoPath, 5)
+    const batch = await readBatch(ctx.repoPath)
+    const dir5 = batch.章列表.find((x) => x.章号 === 5).目录
+    const staged5 = JSON.parse(await fs.readFile(
+      path.join(ctx.repoPath, '工作区', '待定稿', dir5, '定稿包.json'),
+      'utf8'
+    ))
+    await writeReviewArtifacts(ctx.repoPath, 5, [], [], staged5)
     const rs = await restageReview(ctx.repoPath, 5)
     assert.equal(rs.ok, true, rs.error)
 
@@ -203,7 +212,7 @@ test('AC3 注入错误恢复演练：打回传染 → 拒绝定稿 → 重写重
   }
 })
 
-test('中途失败按章保留：坏定稿包停在该章，已入档保留、剩余原样可续跑', async () => {
+test('整批预检：任一坏定稿包都在首个 commit 前阻断并完整保留批次', async () => {
   const { ctx, cleanup } = await gitBookCtx()
   try {
     await stage(ctx, 3)
@@ -214,14 +223,14 @@ test('中途失败按章保留：坏定稿包停在该章，已入档保留、�
 
     const r = await finalizeBatch(ctx)
     assert.equal(r.ok, false)
-    assert.deepEqual(r.已入档.map((x) => x.章号), [3])
+    assert.deepEqual(r.已入档.map((x) => x.章号), [])
     assert.match(r.error, /第 4 章/)
-    assert.match(r.error, /已入档保留/)
+    assert.match(r.error, /整批尚未开始定稿/)
 
     const rows = await ctx.cache.query('SELECT MAX(chapter_num) AS m FROM chapters')
-    assert.equal(rows[0].m, 3, '第 3 章已入档并刷新缓存')
+    assert.equal(rows[0].m, 2, '整批预检失败时不得先提交第 3 章')
     const after = await readBatch(ctx.repoPath)
-    assert.deepEqual(after.章列表.map((x) => x.章号), [4], '失败章留在批次里')
+    assert.deepEqual(after.章列表.map((x) => x.章号), [3, 4], '整批原样保留')
   } finally {
     await cleanup()
   }

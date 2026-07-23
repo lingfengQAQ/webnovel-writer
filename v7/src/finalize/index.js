@@ -6,12 +6,32 @@ import { EntityWriter } from '../storage/adapters/EntityWriter.js'
 import { TimelineWriter } from '../storage/adapters/TimelineWriter.js'
 import { SecretWriter } from '../storage/adapters/SecretWriter.js'
 import { SummaryWriter } from '../storage/adapters/SummaryWriter.js'
-import { createGit } from './git.js'
+import {
+  captureCommitExpectation,
+  createGit,
+  probeCommitAfterError,
+} from './git.js'
 import { refreshCacheAfterSourceChange } from '../cache/index.js'
 import { normalizeWorkspaceRel } from '../util/workspace-path.js'
-import { validateFactChanges } from '../knowledge/fact-changes.js'
+import {
+  formatFactChangeValidationError,
+  validateFactChanges,
+} from '../knowledge/fact-changes.js'
 import { sanitizeFileName } from '../util/filename.js'
-import { archiveChapterKnowledgeFromOutline } from '../knowledge/chapter.js'
+import {
+  archiveChapterKnowledgeFromOutline,
+  cleanConfirmedOutlineArtifacts,
+  validateChapterKnowledgeArchive,
+} from '../knowledge/chapter.js'
+import {
+  acquireContractMutationLock,
+  checkChapterContractInvalidation,
+  holdsContractMutationLock,
+  overlapsMachineWorkspaceState,
+  releaseContractInvalidationChapterAfterCommit,
+  verifyPendingCommitProofFile,
+  workspaceRemovalIsContained,
+} from '../staging/contract-invalidation.js'
 
 /**
  * 定稿：原子 commit（D3）。写工作树 → git add → commit → 最后清工作区。
@@ -25,15 +45,87 @@ import { archiveChapterKnowledgeFromOutline } from '../knowledge/chapter.js'
  * @returns {Promise<{ok: boolean, commitHash?: string, error?: string}>}
  */
 export async function finalizeChapter(ctx, payload, opts = {}) {
+  if (holdsContractMutationLock(opts.contractMutationLock, ctx.repoPath)) {
+    return finalizeChapterLocked(ctx, payload, opts)
+  }
+  const lock = await acquireContractMutationLock(ctx.repoPath, '章节定稿')
+  if (!lock.ok) return { ok: false, error: lock.error }
+  try {
+    return await finalizeChapterLocked(ctx, payload, opts)
+  } finally {
+    await lock.release()
+  }
+}
+
+async function finalizeChapterLocked(ctx, payload, opts = {}) {
   const { repoPath } = ctx
   const git = opts.git || createGit(repoPath)
+
+  // 1. 校验（不过则什么都没写，天然原样）
+  if (!Number.isInteger(payload?.chapterNum)) return { ok: false, error: '章号必须是整数' }
+  if (!payload?.frontMatter?.标题) return { ok: false, error: '缺少章档案或标题' }
+  const chapterNum = payload.chapterNum
+  let confirmedOutlineFound = false
+  const contractCheck = await checkChapterContractInvalidation(repoPath, chapterNum, { payload })
+  if (!contractCheck.ok) {
+    if (contractCheck.kind === 'corrupt') {
+      return { ok: false, error: '契约失效记录损坏，不能确认本章是否已重做，请先修复工作区状态' }
+    }
+    if (contractCheck.kind === 'stale') {
+      return {
+        ok: false,
+        error: `第 ${chapterNum} 章受作品契约更新影响，不能沿用旧工件定稿：${contractCheck.error}`,
+      }
+    }
+    return {
+      ok: false,
+      error: `第 ${chapterNum} 章受作品契约更新影响，须先重新起草或核对细纲、备料并审查，不能沿用旧工件定稿`,
+    }
+  }
+  let pendingCommitProof = null
+  if (contractCheck.proof) {
+    if (opts.fromBatch !== true || !opts.contractCommitProof) {
+      return {
+        ok: false,
+        error: `第 ${chapterNum} 章已有待提交证据，只能由 finalize-batch 校验原始定稿包后入档`,
+      }
+    }
+    const verified = await verifyPendingCommitProofFile(repoPath, contractCheck.guard, chapterNum, {
+      batchDir: opts.contractCommitProof.批次目录,
+      expectedProof: opts.contractCommitProof,
+    })
+    if (!verified.ok) {
+      return { ok: false, error: `第 ${chapterNum} 章待提交证据复核失败：${verified.error}` }
+    }
+    try {
+      const provenPayload = JSON.parse(verified.content.toString('utf8'))
+      if (
+        provenPayload?.chapterNum !== chapterNum ||
+        !provenPayload?.frontMatter?.标题
+      ) {
+        return { ok: false, error: `第 ${chapterNum} 章待提交定稿包的章号或章档案不对应` }
+      }
+      payload = { ...provenPayload, workspaceFiles: [] }
+    } catch (err) {
+      return { ok: false, error: `第 ${chapterNum} 章待提交定稿包解析失败：${err.message}` }
+    }
+    pendingCommitProof = verified.proof
+  }
+
   if (opts.archiveOutline !== false) {
     const archived = await archiveChapterKnowledgeFromOutline(ctx, payload)
     if (!archived.ok) return { ok: false, error: `定稿停止：${archived.error}` }
     payload = archived.payload
+    confirmedOutlineFound = archived.found
+  }
+  const chapterKnowledge = validateChapterKnowledgeArchive(payload.frontMatter.知识选择)
+  if (!chapterKnowledge.ok) {
+    return {
+      ok: false,
+      error: `定稿停止：章档案知识选择格式不正确：${chapterKnowledge.errors.join('；')}`,
+    }
   }
   const {
-    chapterNum,
     frontMatter,
     body = '',
     summary = null,
@@ -48,14 +140,14 @@ export async function finalizeChapter(ctx, payload, opts = {}) {
     workspaceFiles = [],
   } = payload
 
-  // 1. 校验（不过则什么都没写，天然原样）
-  if (!Number.isInteger(chapterNum)) return { ok: false, error: '章号必须是整数' }
-  if (!frontMatter || !frontMatter.标题) return { ok: false, error: '缺少章档案或标题' }
   const factValidation = await validateFactChanges(repoPath, factChanges)
   if (!factValidation.ok) {
-    return { ok: false, error: `事实转正停止：${factValidation.errors.join('；')}` }
+    return { ok: false, error: `事实转正停止：${formatFactChangeValidationError(factValidation)}` }
   }
-  const factTargetCollisions = findFactTargetCollisions(factValidation.changes, {
+  const appliedFactChanges = factValidation.changes.filter(
+    (change) => change.applyChange === true
+  )
+  const factTargetCollisions = findFactTargetCollisions(appliedFactChanges, {
     characterUpdates,
     rosterUpserts,
     timelineRows,
@@ -68,7 +160,12 @@ export async function finalizeChapter(ctx, payload, opts = {}) {
   const stageFiles = []
   const rollbackFiles = []
   const chapterBackups = []
+  const warnings = []
   let cacheRefresh = null
+  let commitHash = ''
+  let commitConfirmed = false
+  let commitExpectation = null
+  let contractGuardReleased = pendingCommitProof === null
   try {
     // 2. 写工作树（全部落 定稿/大纲，非 工作区）
     const cw = await new ChapterWriter(repoPath).writeChapter(chapterNum, frontMatter, body, {
@@ -142,7 +239,7 @@ export async function finalizeChapter(ctx, payload, opts = {}) {
       rollbackFiles.push(r.filePath)
     }
 
-    for (const change of factValidation.changes) {
+    for (const change of appliedFactChanges) {
       const factFile = path.join(repoPath, ...change.factPath.split('/'))
       await fs.mkdir(path.dirname(factFile), { recursive: true })
       await fs.writeFile(factFile, change.content, 'utf8')
@@ -161,7 +258,25 @@ export async function finalizeChapter(ctx, payload, opts = {}) {
     // 3. git add + commit（原子点）
     const relFiles = [...new Set(stageFiles)].map((f) => path.relative(repoPath, f))
     await git.add(relFiles)
-    const commitHash = await git.commit(buildCommitMessage(chapterNum, frontMatter.标题, commitLines))
+    const commitMessage = buildCommitMessage(chapterNum, frontMatter.标题, commitLines)
+    commitExpectation = await captureCommitExpectation(git, commitMessage)
+    try {
+      commitHash = await git.commit(commitMessage)
+      commitConfirmed = true
+    } catch (err) {
+      const commitProbe = await probeCommitAfterError(git, commitExpectation)
+      if (commitProbe.state === 'committed') {
+        commitConfirmed = true
+        commitHash = commitProbe.commitHash
+      } else if (commitProbe.state === 'unknown') {
+        return {
+          ok: false,
+          error: `定稿提交结果无法确认：${err.message}。为避免误删已入档内容，工作树和契约失效守卫均已保留，请先检查书仓库状态。`,
+        }
+      } else {
+        throw err
+      }
+    }
 
     for (const b of chapterBackups) {
       try {
@@ -171,16 +286,36 @@ export async function finalizeChapter(ctx, payload, opts = {}) {
       }
     }
 
+    if (contractCheck.kind === 'fresh' || contractCheck.kind === 'ready') {
+      const released = await releaseContractInvalidationChapterAfterCommit(
+        repoPath,
+        chapterNum,
+        pendingCommitProof
+      )
+      if (!released.ok) {
+        warnings.push(`本章已入档，但${released.error}，契约失效守卫仍保留。`)
+      }
+      if (pendingCommitProof) contractGuardReleased = released.ok
+      warnings.push(...released.warnings.map((warning) => `本章已入档，但${warning}`))
+    }
+
     // P0-1：定稿后同步刷新缓存，避免 next 读旧章号重抄本章。
     // 重建失败不阻断定稿（已 commit 入档），但不能继续保留旧缓存，否则 next 会读旧章号。
     cacheRefresh = await refreshCacheAfterSourceChange(ctx)
 
     // 4. 清工作区（必须在 commit 成功之后；失败只记 warning——
     //    commit 已经发生，任何清理问题都不得把结果反转成"失败/已回滚"（R4））
-    const warnings = await cleanWorkspaceFiles(repoPath, workspaceFiles)
+    if (confirmedOutlineFound) {
+      warnings.push(...await cleanConfirmedOutlineArtifacts(repoPath))
+    }
+    warnings.push(...await cleanWorkspaceFiles(repoPath, workspaceFiles))
 
-    return { ok: true, commitHash, cacheRefresh, warnings, error: '' }
+    return { ok: true, commitHash, cacheRefresh, contractGuardReleased, warnings, error: '' }
   } catch (err) {
+    if (commitConfirmed) {
+      warnings.push(`本章已入档，但入档后的收尾未完成（${err.message}），请检查工作区与缓存状态。`)
+      return { ok: true, commitHash, cacheRefresh, contractGuardReleased, warnings, error: '' }
+    }
     // commit 前中断：回滚本次 stage/rollback 集合（非整棵 定稿/大纲 子树,避免误伤同子树其他章手改）。
     // 逐文件 restore:新章文件未跟踪会让整条 restore 报错被吞,逐个跑才能精确复原已跟踪文件。
     const relStageFiles = [...new Set(stageFiles)].map((f) => path.relative(repoPath, f))
@@ -227,7 +362,7 @@ function findFactTargetCollisions(
     if (secret?.id) managed.add(`定稿/设定/信息差/${secret.id}.md`)
   }
   return changes
-    .filter((change) => managed.has(change.factPath))
+    .filter((change) => change.applyChange === true && managed.has(change.factPath))
     .map((change) => `${change.factPath} 同时出现在 factChanges 与其他事实写入字段中`)
 }
 
@@ -250,6 +385,14 @@ async function cleanWorkspaceFiles(repoPath, workspaceFiles) {
     const name = normalizeWorkspaceRel(wf)
     if (!name) {
       warnings.push(`工作区清理跳过可疑路径「${wf}」（不在工作区内）。`)
+      continue
+    }
+    if (await overlapsMachineWorkspaceState(repoPath, name)) {
+      warnings.push(`工作区清理跳过系统状态路径「${wf}」。`)
+      continue
+    }
+    if (!(await workspaceRemovalIsContained(repoPath, name))) {
+      warnings.push(`工作区清理跳过指向工作区外的路径「${wf}」。`)
       continue
     }
     try {

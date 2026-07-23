@@ -4,6 +4,7 @@ import {
   createKnowledgeSelectionRecord,
   validateContractUpdatePayload,
   validateCreateBookPayload,
+  validateKnowledgeSelections,
   validateWorkContract,
 } from '../../src/knowledge/contract.js'
 import { minimalCreateBookPayload, minimalWorkContract } from '../state-machine/_helper.js'
@@ -29,11 +30,48 @@ test('建书契约：作者确认、八个小节、三项差异化和五项结�
   assert.ok(incomplete.errors.some((error) => error.includes('救赎条件')))
 })
 
+test('作品契约 front matter 严格拒绝白名单之外的平铺字段', () => {
+  const content = minimalWorkContract().replace(
+    '变更类型: 建书',
+    '变更类型: 建书\n僵尸字段: 不应被运行时接受'
+  )
+  const result = validateWorkContract(content)
+  assert.equal(result.ok, false)
+  assert.ok(result.errors.some((error) => error.includes('未知字段「僵尸字段」')))
+})
+
 test('建书契约：book、最终选择和来源版本必须是同一份答案', () => {
   const payload = minimalCreateBookPayload({ book: { 流派: ['系统流'] } })
   const result = validateCreateBookPayload(payload)
   assert.equal(result.ok, false)
   assert.ok(result.errors.some((error) => error.includes('流派不一致')))
+})
+
+test('书级知识选择只接受同维的安全 canonical 来源路径', () => {
+  const hash = 'a'.repeat(64)
+  const valid = validateKnowledgeSelections([
+    { 维度: '题材', 名称: '玄幻', 来源: `题材/玄幻.md@sha256:${hash}` },
+    { 维度: '流派', 名称: '系统流', 来源: '对谈共创' },
+  ])
+  assert.equal(valid.ok, true)
+
+  const invalidSources = [
+    `题材/../流派/系统流.md@sha256:${hash}`,
+    `题材\\玄幻.md@sha256:${hash}`,
+    `C:/题材/玄幻.md@sha256:${hash}`,
+    `题材/分类/玄幻.md@sha256:${hash}`,
+  ]
+  for (const source of invalidSources) {
+    const result = validateKnowledgeSelections([{ 维度: '题材', 名称: '玄幻', 来源: source }])
+    assert.equal(result.ok, false, source)
+    assert.ok(result.errors.some((error) => error.includes('.来源')), source)
+  }
+
+  const wrongDimension = validateKnowledgeSelections([
+    { 维度: '题材', 名称: '玄幻', 来源: `流派/系统流.md@sha256:${hash}` },
+  ])
+  assert.equal(wrongDimension.ok, false)
+  assert.ok(wrongDimension.errors.some((error) => error.includes('必须来自「题材」维度')))
 })
 
 test('衍生契约：必须同时选择至少一个实际世界副题材', () => {
@@ -98,11 +136,13 @@ test('节奏数值配额：必须同时写明统计对象、使用目的和失�
   assert.equal(complete.ok, true)
 })
 
-test('契约更新：版本严格加一、生效章不倒退，核心分类变化需确认影响分析', () => {
+test('契约更新：版本严格加一且必须从下一未定稿章立即生效，核心分类变化需确认影响分析', () => {
   const previous = validateWorkContract(minimalWorkContract()).data
   const unchanged = {
     作品契约: minimalWorkContract({ version: 2, effectiveChapter: 3 }),
     知识选择: [{ 维度: '题材', 名称: '玄幻', 来源: '作者自定义' }],
+    证据: '第 1—2 章审稿均指出核心承诺表述容易误解。',
+    影响范围: '第 3 章起的细纲、写作材料与编辑审。',
     作者已确认: true,
   }
   assert.equal(
@@ -115,6 +155,19 @@ test('契约更新：版本严格加一、生效章不倒退，核心分类变�
     { previous, nextChapter: 3 }
   )
   assert.ok(early.errors.some((error) => error.includes('第 3 章')))
+
+  const late = validateContractUpdatePayload(
+    { ...unchanged, 作品契约: minimalWorkContract({ version: 2, effectiveChapter: 4 }) },
+    { previous, nextChapter: 3 }
+  )
+  assert.ok(late.errors.some((error) => error.includes('不能提前或延后')))
+
+  const missingAuditTrail = validateContractUpdatePayload(
+    { ...unchanged, 证据: '  ', 影响范围: '' },
+    { previous, nextChapter: 3 }
+  )
+  assert.ok(missingAuditTrail.errors.some((error) => error.includes('非空「证据」')))
+  assert.ok(missingAuditTrail.errors.some((error) => error.includes('非空「影响范围」')))
 
   const changedContract = minimalWorkContract({ version: 2, effectiveChapter: 3 })
     .replace('类型: 玄幻', '类型: 都市')

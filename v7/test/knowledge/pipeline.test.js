@@ -8,7 +8,7 @@ import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises'
 import { prepareChapterMaterials } from '../../src/prep/index.js'
 import { assembleReviewInput } from '../../src/review/index.js'
 import { buildDto } from '../../src/state-machine/dto.js'
-import { persistCreateBook } from '../../src/state-machine/persist.js'
+import { persistCreateBook, persistDraftOutline } from '../../src/state-machine/persist.js'
 import { collectRuntimeFiles } from '../../src/installer/vendor.js'
 import { run as knowledgePack } from '../../src/commands/knowledge-pack.js'
 import { tempBookCtx } from '../commands/_helper.js'
@@ -97,6 +97,8 @@ test('备料注入：契约常驻 + 声明命中切片 + 自定义声明降级�
     const c = r.content
     assert.match(c, /## 作品契约（本章所需）/)
     assert.match(c, /系统信息不可靠/)
+    assert.match(c, /### 差异化点/)
+    assert.match(c, /反派全程知情/)
     assert.match(c, /主角不得靠系统白给渡过主线危机/)
     assert.doesNotMatch(c, /恩怨清算档位/)
     // 声明命中：四维选择只注入各自的「落笔时」节
@@ -152,7 +154,15 @@ test('审稿输入：冻结契约 + 声明命中的审稿切片，不回读当�
     const r = await assembleReviewInput(ctx, { chapterNum: 3, draftPath: path.join('工作区', '草稿-A.md') })
     assert.equal(r.ok, true)
     assert.match(r.input.作品契约, /系统信息不可靠/)
+    assert.match(r.input.作品契约, /## 差异化点/)
+    assert.match(r.input.作品契约, /反派全程知情/)
     assert.match(r.input.作品契约, /主角不得靠系统白给/)
+    assert.ok(r.input.知识审查.some((item) =>
+      item.includes('【差异化点·连接核对】') &&
+      item.includes('本章大纲任务') &&
+      item.includes('人物选择') &&
+      item.includes('设定机制')
+    ))
     assert.ok(r.input.知识审查.some((item) => item.startsWith('【压抑蓄力爆发·核对】')))
     assert.ok(r.input.知识审查.some((item) => item.startsWith('【拍卖会·核对】')))
     // 只注入「审稿时」切片，不带落笔/规划切片
@@ -193,6 +203,15 @@ test('序1 DTO：知识路由菜单 + 蒸馏期望产物（A1）', async () => {
   assert.match(dto.期望产物, /作者已确认:true/)
 })
 
+test('序1 DTO：明确作者只补缺，空白作者只收少量整体方向包', async () => {
+  const dto = await buildDto({ repoPath: null, cache: null, packageRoot }, 1)
+  assert.match(dto.作者状态分流.明确构想, /只对真实未决项补缺/)
+  assert.match(dto.作者状态分流.明确构想, /不得强制发散/)
+  assert.match(dto.作者状态分流.想法模糊, /少量整体方向包/)
+  assert.match(dto.作者状态分流.完全空白, /少量整体方向包/)
+  assert.match(dto.作者状态分流.完全空白, /不得展示十维全量菜单/)
+})
+
 test('序6 DTO：四维只给按本章语料命中的少量候选，不暴露全量菜单', async () => {
   const { ctx, cleanup } = await tempBookCtx()
   try {
@@ -203,6 +222,11 @@ test('序6 DTO：四维只给按本章语料命中的少量候选，不暴露全
       'utf8'
     )
     const dto = await buildDto(ctx, 6, { nextChapter: 3 })
+    assert.match(dto.作品契约, /来源版本:/)
+    assert.match(dto.作品契约, /## 骨架约定/)
+    assert.match(dto.作品契约, /## 差异化点/)
+    assert.match(dto.作品契约, /## 本书专属毒点/)
+    assert.match(dto.作品契约, /## 节奏与兑现参数/)
     assert.ok(dto.章级知识候选.节拍.some((item) => item.编号 === 'PA-001'))
     assert.ok(dto.章级知识候选.场景.some((item) => item.名称 === '拍卖会'))
     assert.ok(dto.章级知识候选.追读.some((item) => item.名称 === '悬念钩'))
@@ -222,6 +246,27 @@ test('序6 DTO：四维只给按本章语料命中的少量候选，不暴露全
   }
 })
 
+test('序6 DTO：作品契约缺失或损坏时阻断规划，不补造旧真源', async () => {
+  const { ctx, cleanup } = await tempBookCtx()
+  try {
+    ctx.packageRoot = packageRoot
+    const contractPath = path.join(ctx.repoPath, '作品契约', '作品契约.md')
+    await fs.rm(contractPath)
+    await fs.writeFile(path.join(ctx.repoPath, '文风', '题材流派指导.md'), '旧路径内容。', 'utf8')
+    const missing = await buildDto(ctx, 6, { nextChapter: 3 })
+    assert.match(missing.阻断原因, /起草细纲停止.*作品契约.*不存在/)
+    assert.match(missing.期望产物, /不得起草或保存细纲/)
+    assert.equal(missing.作品契约, undefined)
+
+    await fs.writeFile(contractPath, '---\n类型: 玄幻\n---\n坏契约', 'utf8')
+    const damaged = await buildDto(ctx, 6, { nextChapter: 3 })
+    assert.match(damaged.阻断原因, /起草细纲停止.*作品契约结构不完整/)
+    assert.equal(damaged.作品契约, undefined)
+  } finally {
+    await cleanup()
+  }
+})
+
 test('序6 DTO：批内前章选择只触发软重复信号，不硬排除合法复用', async () => {
   const { ctx, cleanup } = await tempBookCtx()
   try {
@@ -230,27 +275,30 @@ test('序6 DTO：批内前章选择只触发软重复信号，不硬排除合法
       '# 第 3 章细纲',
       '## 本章提案',
       '本章场景：拍卖会',
+      '本章追读：悬念钩',
       '知识变体：第 3 章只写竞价，第 4 章承接会后追踪',
       '## 本章要写到的事（确认即生效）',
       '- [ ] 完成拍卖竞价',
     ].join('\n')
-    await fs.writeFile(path.join(ctx.repoPath, '工作区', '细纲.md'), stagedOutline, 'utf8')
-    await writeReviewArtifacts(ctx.repoPath, 3)
+    const confirmed = await persistDraftOutline(ctx, { 细纲: stagedOutline })
+    assert.equal(confirmed.ok, true, confirmed.error)
+    const chapterPayload = {
+      frontMatter: {
+        章号: 3,
+        标题: '拍卖落槌',
+        卷: 1,
+        书内时间: '春月初三',
+        字数: 100,
+        章定位: '推进',
+        钩子: '悬念钩-中',
+        情绪定位: '抬升',
+      },
+      body: '竞价落槌后，林晚发现有人跟踪。',
+    }
+    await writeReviewArtifacts(ctx.repoPath, 3, [], [], chapterPayload)
     const staged = await stageChapter(ctx, {
       chapterNum: 3,
-      payload: {
-        frontMatter: {
-          章号: 3,
-          标题: '拍卖落槌',
-          卷: 1,
-          书内时间: '春月初三',
-          字数: 100,
-          章定位: '推进',
-          钩子: '悬念钩-中',
-          情绪定位: '抬升',
-        },
-        body: '竞价落槌后，林晚发现有人跟踪。',
-      },
+      payload: chapterPayload,
     })
     assert.equal(staged.ok, true, staged.error)
     await fs.appendFile(
@@ -262,12 +310,100 @@ test('序6 DTO：批内前章选择只触发软重复信号，不硬排除合法
     const dto = await buildDto(ctx, 6, { nextChapter: 4 })
     const auction = dto.章级知识候选.场景.find((item) => item.名称 === '拍卖会')
     assert.ok(auction, '近期用过的合适候选仍须保留')
-    assert.deepEqual(auction.近期使用, [
-      { 章号: 3, 变体: '第 3 章只写竞价，第 4 章承接会后追踪' },
-    ])
+    assert.deepEqual(auction.近期使用, [{ 章号: 3 }])
     assert.match(auction.重复提醒, /软降权/)
+    assert.match(auction.重复提醒, /有实质递进，允许复用/)
+
+    const history = dto.近期知识历史
+    assert.equal(history[0].章号, 3)
+    assert.deepEqual(history[0].选择.map(({ 维度, 名称 }) => ({ 维度, 名称 })), [
+      { 维度: '场景', 名称: '拍卖会' },
+      { 维度: '追读', 名称: '悬念钩' },
+    ])
+    assert.ok(history.some((chapter) =>
+      chapter.章号 === 2 && chapter.选择.some((item) => item.名称 === '真相揭露')
+    ),
+      '全局历史不得只保留与当前候选同名的条目')
+    for (const chapter of history) {
+      for (const item of chapter.选择) {
+        assert.equal(typeof item.叙事功能, 'string')
+        assert.equal(typeof item.实现方式, 'string')
+        assert.equal(item.推进或变体, undefined)
+      }
+    }
+    assert.ok(history[0].选择.every((item) =>
+      item.叙事功能.length > 0 &&
+      item.实现方式.length > 0 &&
+      typeof item.来源 === 'string' && item.来源.includes('@sha256:')
+    ))
+    assert.deepEqual(history[0].本章整体变体, [
+      '第 3 章只写竞价，第 4 章承接会后追踪',
+    ])
+    const comparison = dto.近期知识比较要求.join('\n')
+    assert.match(comparison, /选择.*名称、叙事功能、实现方式.*本章整体变体/)
+    assert.match(comparison, /同名知识.*本章整体变体.*实质递进.*允许复用/)
+    assert.match(comparison, /名称不同.*实现方式实质相同.*同质化提醒/)
+    assert.match(comparison, /禁止.*复制或臆造归属.*任一选择/)
+
+    const repeated = await buildDto(ctx, 6, { nextChapter: 4 })
+    assert.deepEqual(repeated.近期知识历史, history, '相同源文件必须确定性传输近期历史')
   } finally {
     await cleanup()
+  }
+})
+
+test('序6 DTO：历史来源条目缺失时保留章级谱系，语义字段空值降级', async () => {
+  const { ctx, cleanup } = await tempBookCtx()
+  const emptyPackage = await mkdtemp(path.join(os.tmpdir(), 'wnw-missing-history-ref-'))
+  try {
+    ctx.packageRoot = emptyPackage
+    const missingSource = `场景/已删除场景.md@sha256:${'a'.repeat(64)}`
+    await fs.writeFile(
+      path.join(ctx.repoPath, '定稿', '正文', '0002-初遇.md'),
+      [
+        '---',
+        '章号: 2',
+        '标题: 初遇',
+        '卷: 1',
+        '字数: 100',
+        '章定位: 推进',
+        '钩子: 悬念钩-中',
+        '情绪定位: 铺垫',
+        '知识选择:',
+        `  - 场景｜已删除场景｜${missingSource}`,
+        '  - 技法｜作者临场技法｜作者自定义',
+        '  - 变体｜本章把两种选择合成一次误导',
+        '---',
+        '正文。',
+      ].join('\n'),
+      'utf8'
+    )
+
+    const dto = await buildDto(ctx, 6, { nextChapter: 3, 本章任务: '承接上一章误导' })
+    const chapter = dto.近期知识历史.find((item) => item.章号 === 2)
+    assert.deepEqual(chapter, {
+      章号: 2,
+      选择: [
+        {
+          维度: '场景',
+          名称: '已删除场景',
+          来源: missingSource,
+          叙事功能: '',
+          实现方式: '',
+        },
+        {
+          维度: '技法',
+          名称: '作者临场技法',
+          来源: '作者自定义',
+          叙事功能: '',
+          实现方式: '',
+        },
+      ],
+      本章整体变体: ['本章把两种选择合成一次误导'],
+    })
+  } finally {
+    await cleanup()
+    await rm(emptyPackage, { recursive: true, force: true })
   }
 })
 
@@ -303,7 +439,9 @@ test('序6 DTO：技法维度使用同一候选接口，并把规划切片交给
       本章任务: '本章用限制视角误导隐藏真相',
     })
     assert.equal(dto.章级知识候选.技法[0].名称, '限制视角误导')
+    assert.equal(dto.章级知识候选.技法[0].叙事功能, '只给视角人物能确认的信息')
     assert.match(dto.章级知识候选.技法[0].规划, /知道与不知道/)
+    assert.match(dto.章级知识候选.技法[0].实现方式, /知道与不知道/)
     assert.match(dto.章级知识候选.技法[0].来源, /^技法\/限制视角误导\.md@sha256:/)
   } finally {
     await cleanup()

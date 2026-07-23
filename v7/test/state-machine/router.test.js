@@ -14,7 +14,7 @@ import { designFixture } from '../knowledge/_design-fixture.js'
 const execFileAsync = promisify(execFile)
 
 // 造 git 书仓库 + 缓存。files = {相对路径: 内容}；committed=true 时初始全部提交
-async function makeGitBook(files, { commit = true } = {}) {
+async function makeGitBook(files, { commit = true, includeContract = true } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'wnw-sm-'))
   const git = (a) => execFileAsync('git', a, { cwd: root })
   await git(['init', '-q'])
@@ -22,7 +22,7 @@ async function makeGitBook(files, { commit = true } = {}) {
   await git(['config', 'user.name', 'test'])
   await fs.writeFile(path.join(root, '.gitignore'), '.cache/\n工作区/\n', 'utf8')
   const initialFiles = { ...files }
-  if (initialFiles['book.yaml'] && !initialFiles['作品契约/作品契约.md']) {
+  if (includeContract && initialFiles['book.yaml'] && !initialFiles['作品契约/作品契约.md']) {
     initialFiles['作品契约/作品契约.md'] = minimalWorkContract()
     initialFiles['作品契约/知识选择记录.md'] = '# 知识选择记录\n'
   }
@@ -77,6 +77,22 @@ test('序6：健康书、无异常 → 起草新章细纲', async () => {
     const r = await determineNextState(ctx)
     assert.equal(r.序, 6, `实际：${JSON.stringify(r)}`)
     assert.equal(r.state, 'draft-outline')
+  } finally {
+    await cleanup()
+  }
+})
+
+test('序6：作品契约损坏时真实 next 阻断，状态机不进入 AI', async () => {
+  const { ctx, cleanup } = await makeGitBook(healthyBook({
+    '作品契约/作品契约.md': '---\n类型: 玄幻\n---\n坏契约',
+  }))
+  try {
+    const r = await determineNextState(ctx)
+    assert.equal(r.ok, false)
+    assert.equal(r.序, 6)
+    assert.equal(r.state, 'draft-outline-blocked')
+    assert.equal(r.needsAI, false)
+    assert.match(r.message, /起草细纲停止.*作品契约结构不完整/)
   } finally {
     await cleanup()
   }
@@ -146,6 +162,26 @@ test('序4：最新定稿章声明收卷 → 卷复盘（声明制）', async ()
     assert.equal(r.序, 4, `实际：${JSON.stringify(r)}`)
     assert.equal(r.state, 'volume-review')
     assert.equal(r.dto.卷, 1)
+    assert.match(r.dto.作品契约, /## 差异化点/)
+  } finally {
+    await cleanup()
+  }
+})
+
+test('序4：作品契约缺失时真实 next 阻断，状态机不进入 AI', async () => {
+  const { ctx, cleanup } = await makeGitBook({
+    'book.yaml': 'spec_version: "7.0"\n书名: 测\n卷规模: 40\n体检周期: 50\n',
+    '大纲/总纲.md': '# 总纲',
+    '定稿/正文/0001-第1章.md': ch(1, 1, '推进', true),
+  }, { includeContract: false })
+  try {
+    const r = await determineNextState(ctx)
+    assert.equal(r.ok, false)
+    assert.equal(r.序, 4)
+    assert.equal(r.state, 'volume-review-blocked')
+    assert.equal(r.needsAI, false)
+    assert.match(r.message, /卷复盘停止.*作品契约.*不存在/)
+    assert.equal(r.dto.作品契约, undefined)
   } finally {
     await cleanup()
   }

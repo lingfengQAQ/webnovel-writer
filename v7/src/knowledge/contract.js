@@ -17,6 +17,7 @@ export const CONTRACT_SECTIONS = Object.freeze([
 export const CONTRACT_WRITING_SECTIONS = Object.freeze([
   '核心读者承诺',
   '创意约束落地',
+  '差异化点',
   '冲突与关系结算原则',
   '本书专属毒点',
   '节奏与兑现参数',
@@ -26,15 +27,27 @@ export const CONTRACT_REVIEW_SECTIONS = Object.freeze([
   '核心读者承诺',
   '题材融合协议',
   '创意约束落地',
+  '差异化点',
   '冲突与关系结算原则',
   '本书专属毒点',
 ])
 
 const CONTRACT_LIST_FIELDS = ['副题材', '流派', '创意约束', '来源版本']
+const CONTRACT_FRONT_MATTER_FIELDS = new Set([
+  '类型',
+  '副题材',
+  '流派',
+  '创意约束',
+  '来源版本',
+  '契约版本',
+  '生效起章',
+  '更新原因',
+  '变更类型',
+])
 const SETTLEMENT_ITEMS = ['主角底线', '伤害后果', '和解条件', '救赎条件', '允许余地']
 const BOOK_DIMENSIONS = new Set(['题材', '流派', '创意约束'])
 const CUSTOM_SOURCES = new Set(['对谈共创', '作者自定义'])
-const SOURCE_RE = /^(题材|流派|创意约束)\/[^/@]+\.md@sha256:[0-9a-f]{64}$/
+const SOURCE_RE = /^(题材|流派|创意约束)\/([^<>:"/\\|?*\u0000-\u001f@]+\.md)@sha256:[0-9a-f]{64}$/u
 export const CANONICAL_TOPIC_NAMES = Object.freeze([
   '都市', '现实', '现言', '年代', '历史', '古言', '武侠', '军事', '玄幻', '仙侠',
   '奇幻', '幻言', '科幻', '末世', '悬疑', '灵异', '游戏', '体育', '衍生',
@@ -89,6 +102,10 @@ export function validateCreateBookPayload(payload) {
 export function validateContractUpdatePayload(payload, { previous, nextChapter }) {
   const errors = []
   if (payload?.作者已确认 !== true) errors.push('作品契约修订尚未得到作者确认，不能落盘')
+  const evidence = stringValue(payload?.证据)
+  const impactScope = stringValue(payload?.影响范围)
+  if (!evidence) errors.push('作品契约修订需提供非空「证据」')
+  if (!impactScope) errors.push('作品契约修订需提供非空「影响范围」')
   const selections = validateKnowledgeSelections(payload?.知识选择)
   errors.push(...selections.errors)
   const decisions = validateActualDecisions(payload?.实际裁决)
@@ -116,6 +133,7 @@ export function validateContractUpdatePayload(payload, { previous, nextChapter }
     contract: contract.data,
     selections: selections.data,
     decisions: decisions.data,
+    revision: { 证据: evidence, 影响范围: impactScope },
   }
 }
 
@@ -131,6 +149,9 @@ export function validateWorkContract(
     return { ok: false, errors: ['作品契约 front matter 必须是平铺对象'], data: null }
   }
   for (const [key, value] of Object.entries(fm)) {
+    if (!CONTRACT_FRONT_MATTER_FIELDS.has(key)) {
+      errors.push('作品契约 front matter 含未知字段「' + key + '」')
+    }
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       errors.push('作品契约 front matter 字段「' + key + '」不能是嵌套对象')
     }
@@ -196,8 +217,12 @@ export function validateWorkContract(
     if (!Number.isInteger(previousVersion) || fm.契约版本 !== previousVersion + 1) {
       errors.push('新契约版本必须从 ' + (previousVersion ?? '当前版本') + ' 严格递增 1')
     }
-    if (Number.isInteger(nextChapter) && fm.生效起章 < nextChapter) {
-      errors.push('新契约默认只能从未定稿的第 ' + nextChapter + ' 章或之后生效')
+    if (Number.isInteger(nextChapter) && fm.生效起章 !== nextChapter) {
+      errors.push(
+        '当前作品契约只有一个生效版本，新契约必须从下一未定稿的第 ' +
+          nextChapter +
+          ' 章立即生效，不能提前或延后'
+      )
     }
   }
 
@@ -233,10 +258,13 @@ export function validateKnowledgeSelections(value) {
     const dimension = stringValue(item.维度)
     const name = stringValue(item.名称)
     const source = stringValue(item.来源)
+    const formalSource = parseFormalKnowledgeSource(source)
     if (!BOOK_DIMENSIONS.has(dimension)) errors.push(where + '.维度 只能是题材、流派或创意约束')
     if (!name) errors.push(where + ' 缺非空「名称」')
-    if (!source || (!CUSTOM_SOURCES.has(source) && !SOURCE_RE.test(source))) {
+    if (!source || (!CUSTOM_SOURCES.has(source) && !formalSource)) {
       errors.push(where + '.来源 需为正式条目路径@sha256、对谈共创或作者自定义')
+    } else if (formalSource && BOOK_DIMENSIONS.has(dimension) && formalSource.dimension !== dimension) {
+      errors.push(where + `.来源 必须来自「${dimension}」维度`)
     }
     const key = dimension + '\0' + name
     if (dimension && name && seen.has(key)) errors.push(where + ' 与前项重复：' + dimension + '/' + name)
@@ -251,6 +279,12 @@ export function validateKnowledgeSelections(value) {
     })
   }
   return { ok: errors.length === 0, errors, data }
+}
+
+function parseFormalKnowledgeSource(source) {
+  const match = SOURCE_RE.exec(source)
+  if (!match || match[2].includes('..')) return null
+  return { dimension: match[1] }
 }
 
 export function validateActualDecisions(value) {
@@ -281,17 +315,17 @@ export function validateActualDecisions(value) {
   return { ok: errors.length === 0, errors, data }
 }
 
-export function renderKnowledgeSelectionRecord({ contract, selections, decisions = [] }) {
+export function renderKnowledgeSelectionRecord({ contract, selections, decisions = [], revision = null }) {
   const fm = contract.frontMatter
   const lines = [
     '## 契约版本 ' + fm.契约版本 + '（第 ' + fm.生效起章 + ' 章起）',
     '',
     '- 更新原因：' + singleLine(fm.更新原因),
     '- 变更类型：' + singleLine(fm.变更类型),
-    '',
-    '### 最终采用与来源',
-    '',
   ]
+  if (stringValue(revision?.证据)) lines.push('- 修订证据：' + singleLine(revision.证据))
+  if (stringValue(revision?.影响范围)) lines.push('- 影响范围：' + singleLine(revision.影响范围))
+  lines.push('', '### 最终采用与来源', '')
   for (const item of selections) {
     lines.push('- ' + item.维度 + '：' + singleLine(item.名称))
     lines.push('  - 来源：' + singleLine(item.来源))

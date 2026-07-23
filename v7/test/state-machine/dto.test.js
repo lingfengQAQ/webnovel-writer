@@ -92,8 +92,40 @@ test('契约重复问题在细纲停顿点呈报，卷末固定汇总；无问�
     const volume = await buildDto(ctx, 4, { 卷: 1 })
     assert.equal(volume.作品契约复盘[0].次数, 2)
     assert.deepEqual(volume.作品契约复盘[0].章, [1, 2])
-    assert.match(volume.期望产物, /作者确认后才运行 persist-contract/)
+    assert.match(volume.作品契约, /## 差异化点/)
+    assert.match(volume.作品契约, /契约版本: 1/)
+    assert.match(volume.期望产物, /作者确认.*证据.*影响范围.*persist-contract/)
   } finally {
     await cleanup()
+  }
+})
+
+test('序4 DTO 与序6共用契约读取闸门：缺失或损坏均返回阻断且不携伪造契约', async () => {
+  const missingBook = await makeGitBook({
+    'book.yaml': 'spec_version: "7.0"\n书名: 测\n卷规模: 40\n',
+    '大纲/总纲.md': '# 总纲',
+    '定稿/正文/0001-收卷.md': chapter(1),
+  }, { includeContract: false })
+  try {
+    const missing = await buildDto(missingBook.ctx, 4, { 卷: 1 })
+    assert.match(missing.阻断原因, /卷复盘停止.*作品契约.*不存在/)
+    assert.match(missing.期望产物, /不得进行卷复盘或修订契约/)
+    assert.equal(missing.作品契约, undefined)
+  } finally {
+    await missingBook.cleanup()
+  }
+
+  const damagedBook = await makeGitBook({
+    'book.yaml': 'spec_version: "7.0"\n书名: 测\n卷规模: 40\n',
+    '大纲/总纲.md': '# 总纲',
+    '作品契约/作品契约.md': '---\n类型: 玄幻\n---\n坏契约',
+    '定稿/正文/0001-收卷.md': chapter(1),
+  })
+  try {
+    const damaged = await buildDto(damagedBook.ctx, 4, { 卷: 1 })
+    assert.match(damaged.阻断原因, /卷复盘停止.*作品契约结构不完整/)
+    assert.equal(damaged.作品契约, undefined)
+  } finally {
+    await damagedBook.cleanup()
   }
 })

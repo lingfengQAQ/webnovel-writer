@@ -17,7 +17,14 @@ export async function run(args, options, ctx) {
   const 章 = []
   for (const row of batch.章列表) {
     const 审稿 = await reviewDigest(ctx.repoPath, row.目录)
-    章.push({ 章号: row.章号, 标题: row.标题, 状态: row.状态, 审稿: 审稿 })
+    const 草稿路径 = await stagedDraftPath(ctx.repoPath, row)
+    章.push({
+      章号: row.章号,
+      标题: row.标题,
+      状态: row.状态,
+      审稿,
+      ...(草稿路径 ? { 草稿路径 } : {}),
+    })
   }
 
   if (options.json) {
@@ -30,7 +37,8 @@ export async function run(args, options, ctx) {
   const 尾章 = batch.章列表[batch.章列表.length - 1].章号
   const lines = [`待定稿批次：第 ${batch.起章}-${尾章} 章，共 ${章.length} 章。`, '']
   for (const c of 章) {
-    lines.push(`- 第 ${c.章号} 章《${c.标题}》｜${c.状态}｜${c.审稿}`)
+    const 草稿 = c.草稿路径 ? `｜草稿路径：${c.草稿路径}` : ''
+    lines.push(`- 第 ${c.章号} 章《${c.标题}》｜${c.状态}｜${c.审稿}${草稿}`)
   }
   lines.push('')
   if (停止.stop) {
@@ -54,5 +62,17 @@ async function reviewDigest(repoPath, dirName) {
     return '审稿：已附审稿单'
   } catch {
     return '审稿：无审稿单（打回待重写或工件缺失）'
+  }
+}
+
+async function stagedDraftPath(repoPath, row) {
+  if (!/^\d{4}-[^\\/]*$/.test(String(row.目录 || ''))) return ''
+
+  const relative = path.posix.join('工作区', '待定稿', row.目录, '草稿.md')
+  try {
+    const stat = await fs.stat(path.join(repoPath, ...relative.split('/')))
+    return stat.isFile() ? relative : ''
+  } catch {
+    return ''
   }
 }

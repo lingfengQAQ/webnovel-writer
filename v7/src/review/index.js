@@ -18,6 +18,13 @@ import {
   parseChapterDeclarations,
   resolveChapterDeclarations,
 } from '../knowledge/chapter.js'
+import { formatFactChangeDecisionRequests } from '../knowledge/fact-changes.js'
+import {
+  bindReviewInput,
+  readCurrentReviewInput,
+  reviewInputFile,
+} from './input-binding.js'
+import { acquireContractMutationLock } from '../staging/contract-invalidation.js'
 
 const 兼容声明 = '本次使用兼容模式（单上下文顺序审稿），审稿隔离度低于完整两审模式。'
 const 完整声明 = '完整两审模式（事实审查/编辑审各自独立上下文）。'
@@ -27,8 +34,13 @@ const 类型英文 = { 伏笔: 'foreshadow', 悬念: 'suspense', 感情线: 'rom
 /**
  * 细纲声明命中的章级审查切片。书级规则只读本书作品契约，不回读通用题材/流派。
  */
-async function assembleKnowledgeChecks(ctx, outlineText) {
+async function assembleKnowledgeChecks(ctx, outlineText, contract) {
   const out = []
+  if (contract?.data?.sections?.get('差异化点')) {
+    out.push(
+      '【差异化点·连接核对】逐条核对作品契约的差异化点，是否与本章大纲任务、人物选择或关系、设定机制形成具体因果连接；只换标签或措辞不算兑现。'
+    )
+  }
   try {
     const { declarations, selections } = await resolveChapterDeclarations(ctx.packageRoot, outlineText)
     for (const selection of selections) {
@@ -80,7 +92,7 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
       // 无细纲
     }
 
-    const 知识审查 = await assembleKnowledgeChecks(ctx, outlineText)
+    const 知识审查 = await assembleKnowledgeChecks(ctx, outlineText, contract)
     const designDeclarations = parseChapterDeclarations(outlineText).对象
     const designObjects = designDeclarations.length
       ? await new DesignReader(repoPath).readMany(designDeclarations, {
@@ -208,10 +220,13 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
       }
     }
 
-    return {
-      ok: true,
-      input: {
+    const contractVersion = contract.data?.frontMatter?.契约版本
+    if (!Number.isInteger(contractVersion) || contractVersion < 1) {
+      return { ok: false, input: null, error: '组装审稿输入停止：作品契约版本无效' }
+    }
+    const input = bindReviewInput({
         章号: chapterNum,
+        作品契约版本: contractVersion,
         草稿全文,
         本章要写到的事,
         全书近况: status.ok ? status.markdown : '',
@@ -245,9 +260,8 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
         ...(designObjects.missing.length
           ? { 计划对象缺失提醒: `未找到：${designObjects.missing.join('、')}。按正文实际内容审查，不要求临时对象补档。` }
           : {}),
-      },
-      error: '',
-    }
+    })
+    return { ok: true, input, error: '' }
   } catch (err) {
     return { ok: false, input: null, error: `组装审稿输入失败：${err.message}` }
   }
@@ -258,13 +272,17 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
  * @param {{factCheck: object, editorial: object}} reports
  * @param {{mode: 'complete'|'degraded', chapterNum: number}} opts
  */
-export function mergeReviews({ factCheck, editorial }, { mode, chapterNum }) {
+export function mergeReviews(
+  { factCheck, editorial },
+  { mode, chapterNum, reviewInputToken }
+) {
   const fIssues = factCheck?.issues || []
   const eIssues = editorial?.issues || []
   const issues = [...fIssues, ...eIssues]
   const blocking_count = issues.filter((x) => x.blocking).length
   return {
     章号: chapterNum,
+    审稿输入令牌: reviewInputToken,
     mode,
     模式声明: mode === 'degraded' ? 兼容声明 : 完整声明,
     事实审查: factCheck,
@@ -289,6 +307,9 @@ export async function persistReviewReport(ctx, { chapterNum, merged, draft, 待�
         .map((i) => `- [${i.severity}/${i.category}${i.blocking ? '/阻断' : ''}] ${i.location}：${i.description}（修复：${i.fix_hint}）`)
         .join('\n')
     : '（无问题）'
+  const factDecisionRequest = formatFactChangeDecisionRequests(
+    merged.事实审查?.factChanges
+  )
 
   const md = [
     `# 第 ${chapterNum} 章审稿单`,
@@ -299,6 +320,7 @@ export async function persistReviewReport(ctx, { chapterNum, merged, draft, 待�
     '## 两审意见',
     issueLines,
     '',
+    ...(factDecisionRequest ? ['## 待裁决事实', factDecisionRequest, ''] : []),
     '## 待确认新专名',
     待确认新专名.length ? 待确认新专名.map((n) => `- ${n}`).join('\n') : '（无）',
     '',
@@ -314,7 +336,7 @@ export async function persistReviewReport(ctx, { chapterNum, merged, draft, 待�
   const files = [
     { path: path.join('工作区', '评审报告', '事实审查.json'), content: JSON.stringify(merged.事实审查 ?? {}, null, 2) },
     { path: path.join('工作区', '评审报告', '编辑审.json'), content: JSON.stringify(merged.编辑审 ?? {}, null, 2) },
-    reviewOutcomeFile(merged),
+    reviewOutcomeFile(merged, draft),
   ]
   if (raw) {
     files.push({ path: path.join('工作区', '评审报告', '事实审查.raw.json'), content: JSON.stringify(raw.factCheck ?? {}, null, 2) })
@@ -331,24 +353,72 @@ export async function persistReviewReport(ctx, { chapterNum, merged, draft, 待�
 /**
  * 两审产物入库：schema 校验 → 合并 → 落盘。runReviews 与 save-review CLI 共用,不双写。
  * @param {{repoPath}} ctx
- * @param {{chapterNum, rawFact, rawEdit, mode?, 待确认新专名?, 章摘要?, draft}} args
+ * @param {{chapterNum, rawFact, rawEdit, reviewInputToken, draftPath, mode?, 待确认新专名?, 章摘要?}} args
  */
-export async function saveReviews(ctx, { chapterNum, rawFact, rawEdit, mode = 'complete', 待确认新专名 = [], 章摘要 = '', draft }) {
+export async function saveReviews(
+  ctx,
+  {
+    chapterNum,
+    rawFact,
+    rawEdit,
+    reviewInputToken,
+    mode = 'complete',
+    待确认新专名 = [],
+    章摘要 = '',
+    draftPath,
+  }
+) {
   const vFact = validateReviewReport(rawFact, { reviewType: 'factCheck' })
   const vEdit = validateReviewReport(rawEdit, { reviewType: 'editorial' })
   const errors = [...vFact.errors, ...vEdit.errors]
+  if (!/^sha256:[0-9a-f]{64}$/.test(reviewInputToken || '')) {
+    errors.push('save-review 缺少有效的审稿输入令牌')
+  }
+  if (rawFact?.审稿输入令牌 !== reviewInputToken) {
+    errors.push('事实审查回传的审稿输入令牌与当前输入不一致')
+  }
+  if (rawEdit?.审稿输入令牌 !== reviewInputToken) {
+    errors.push('编辑审回传的审稿输入令牌与当前输入不一致')
+  }
   if (errors.length) return { ok: false, errors }
 
-  const merged = mergeReviews({ factCheck: vFact.report, editorial: vEdit.report }, { mode, chapterNum })
-  const saved = await persistReviewReport(ctx, {
-    chapterNum,
-    merged,
-    draft,
-    待确认新专名,
-    章摘要,
-    raw: { factCheck: rawFact, editorial: rawEdit },
-  })
-  return { ok: true, merged, 审稿路径: saved.审稿路径, errors: [] }
+  const lock = await acquireContractMutationLock(ctx.repoPath, '保存两审结果')
+  if (!lock.ok) return { ok: false, errors: [lock.error] }
+  try {
+    const current = await assembleReviewInput(ctx, { chapterNum, draftPath })
+    if (!current.ok) return { ok: false, errors: [current.error] }
+
+    const sidecar = await readCurrentReviewInput(ctx.repoPath, {
+      chapterNum,
+      draft: current.input.草稿全文,
+      expectedToken: reviewInputToken,
+    })
+    if (!sidecar.ok) {
+      return { ok: false, errors: [`审稿输入绑定校验失败：${sidecar.error}`] }
+    }
+    if (current.input.审稿输入令牌 !== sidecar.token) {
+      return {
+        ok: false,
+        errors: ['当前审稿上下文与已发出的审稿输入不一致，请基于当前审稿输入重新审查'],
+      }
+    }
+
+    const merged = mergeReviews(
+      { factCheck: vFact.report, editorial: vEdit.report },
+      { mode, chapterNum, reviewInputToken }
+    )
+    const saved = await persistReviewReport(ctx, {
+      chapterNum,
+      merged,
+      draft: current.input.草稿全文,
+      待确认新专名,
+      章摘要,
+      raw: { factCheck: rawFact, editorial: rawEdit },
+    })
+    return { ok: true, merged, 审稿路径: saved.审稿路径, errors: [] }
+  } finally {
+    await lock.release()
+  }
 }
 
 /**
@@ -357,7 +427,17 @@ export async function saveReviews(ctx, { chapterNum, rawFact, rawEdit, mode = 'c
  * @param {{chapterNum, draftPath, mode, reviewers, 待确认新专名?, 章摘要?}} args
  */
 export async function runReviews(ctx, { chapterNum, draftPath, mode = 'complete', reviewers, 待确认新专名, 章摘要 }) {
-  const inp = await assembleReviewInput(ctx, { chapterNum, draftPath })
+  const initialLock = await acquireContractMutationLock(ctx.repoPath, '组装审稿输入')
+  if (!initialLock.ok) return { ok: false, errors: [initialLock.error] }
+  let inp
+  try {
+    inp = await assembleReviewInput(ctx, { chapterNum, draftPath })
+    if (inp.ok) {
+      await writeAtomicBatch(ctx.repoPath, [reviewInputFile(inp.input)])
+    }
+  } finally {
+    await initialLock.release()
+  }
   if (!inp.ok) return { ok: false, errors: [inp.error] }
 
   let rawFact
@@ -378,9 +458,10 @@ export async function runReviews(ctx, { chapterNum, draftPath, mode = 'complete'
     chapterNum,
     rawFact,
     rawEdit,
+    reviewInputToken: inp.input.审稿输入令牌,
     mode,
     待确认新专名,
     章摘要,
-    draft: inp.input.草稿全文,
+    draftPath,
   })
 }

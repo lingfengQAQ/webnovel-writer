@@ -14,7 +14,17 @@ const OBJECT_TYPES = Object.freeze({
   设定: new Set(DESIGN_OBJECT_TYPES.设定),
   人物: new Set(DESIGN_OBJECT_TYPES.人物),
 })
-const REQUIRED_SECTIONS = ['本书设计', '一致性边界']
+const REQUIRED_SECTIONS = ['本书设计', '一致性边界', '知识依据']
+const CUSTOM_KNOWLEDGE_SOURCES = new Set(['作者自定义', '对谈共创'])
+const SOURCE_DIMENSIONS = Object.freeze({
+  设定: new Set(['设定', '命名']),
+  人物: new Set(['人物', '命名']),
+})
+const SOURCE_LINE_PREFIX = '来源：'
+const ADAPTATION_LINE_PREFIX = '本书适配：'
+const SOURCE_HASH_MARKER = '@sha256:'
+const REFERENCE_FILE_RE = /^[^<>:"/\\|?*\u0000-\u001f@]+\.md$/u
+const SHA256_RE = /^[0-9a-f]{64}$/
 const ID_RE = /^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)+$/u
 
 export function validateDesignPayload(payload) {
@@ -102,6 +112,8 @@ export function validateDesignContent(content, { classification = '' } = {}) {
   for (const section of REQUIRED_SECTIONS) {
     if (!stringValue(sections.get(section))) errors.push(`缺「## ${section}」`)
   }
+  const knowledgeBasis = stringValue(sections.get('知识依据'))
+  if (knowledgeBasis) errors.push(...validateKnowledgeBasis(knowledgeBasis, classification))
 
   const names = uniqueStrings([name, canonicalName, ...aliases])
   if (names.length !== [name, canonicalName, ...aliases].filter(Boolean).length) {
@@ -219,6 +231,57 @@ export function normalizePosixRelative(value) {
   const normalized = path.posix.normalize(rel)
   if (normalized !== rel || normalized.startsWith('../') || normalized.includes('/../')) return ''
   return normalized
+}
+
+function validateKnowledgeBasis(value, classification) {
+  const errors = []
+  let sourceCount = 0
+  let adaptationCount = 0
+  for (const rawLine of String(value || '').split(/\r?\n/)) {
+    if (!rawLine.trim()) continue
+    if (rawLine !== rawLine.trim()) {
+      errors.push('「## 知识依据」的来源与本书适配必须各占完整独立行，不能有首尾空白')
+      continue
+    }
+    if (rawLine.startsWith(SOURCE_LINE_PREFIX)) {
+      sourceCount++
+      const source = rawLine.slice(SOURCE_LINE_PREFIX.length)
+      if (CUSTOM_KNOWLEDGE_SOURCES.has(source)) continue
+      errors.push(...validateVersionedKnowledgeSource(source, classification))
+      continue
+    }
+    if (rawLine.startsWith(ADAPTATION_LINE_PREFIX)) {
+      adaptationCount++
+      if (!rawLine.slice(ADAPTATION_LINE_PREFIX.length).trim()) {
+        errors.push('「## 知识依据」的「本书适配」必须是非空说明')
+      }
+      continue
+    }
+    errors.push('「## 知识依据」只允许「来源：…」与「本书适配：…」独立行')
+  }
+  if (!sourceCount) errors.push('「## 知识依据」至少需要一行「来源：…」')
+  if (adaptationCount !== 1) errors.push('「## 知识依据」必须且只能有一行非空「本书适配：…」')
+  return errors
+}
+
+function validateVersionedKnowledgeSource(source, classification) {
+  const parts = source.split(SOURCE_HASH_MARKER)
+  if (parts.length !== 2 || !parts[0] || !SHA256_RE.test(parts[1])) {
+    return ['知识来源须为安全 canonical 路径@sha256:64位小写十六进制']
+  }
+  const rel = normalizePosixRelative(parts[0])
+  const pathParts = rel ? rel.split('/') : []
+  if (!rel || rel !== parts[0] || parts[0].includes('..') ||
+      pathParts.length !== 2 || !REFERENCE_FILE_RE.test(pathParts[1])) {
+    return ['知识来源路径须为维度目录下的直接 canonical Markdown 文件，禁止路径逃逸']
+  }
+  const allowedDimensions = classification
+    ? SOURCE_DIMENSIONS[classification]
+    : new Set(['设定', '人物', '命名'])
+  if (!allowedDimensions?.has(pathParts[0])) {
+    return [`「${classification}」计划对象的知识来源只能来自${[...(allowedDimensions || [])].join('或')}`]
+  }
+  return []
 }
 
 function normalizeStringList(value, label, errors) {

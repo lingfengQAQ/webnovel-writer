@@ -14,6 +14,7 @@ import {
   parseChapterDeclarations,
   resolveChapterDeclarations,
 } from '../knowledge/chapter.js'
+import { acquireContractMutationLock } from '../staging/contract-invalidation.js'
 
 /**
  * 备料：组装 工作区/本章写作材料.md（spec §8 step3，默认精准片段）。
@@ -25,6 +26,16 @@ import {
  * @returns {Promise<{ok: boolean, filePath: string, content: string, error: string}>}
  */
 export async function prepareChapterMaterials(ctx, { chapterNum }) {
+  const lock = await acquireContractMutationLock(ctx.repoPath, '章节备料')
+  if (!lock.ok) return { ok: false, filePath: '', content: '', error: lock.error }
+  try {
+    return await prepareChapterMaterialsLocked(ctx, { chapterNum })
+  } finally {
+    await lock.release()
+  }
+}
+
+async function prepareChapterMaterialsLocked(ctx, { chapterNum }) {
   try {
     const { repoPath, cache } = ctx
     const contract = await new ContractReader(repoPath).readWritingSections()
@@ -178,7 +189,6 @@ export async function prepareChapterMaterials(ctx, { chapterNum }) {
     await fs.mkdir(dir, { recursive: true })
     const filePath = path.join(dir, '本章写作材料.md')
     await fs.writeFile(filePath, content, 'utf8')
-    await fs.rm(path.join(dir, '契约更新待重备料.md'), { force: true })
 
     return { ok: true, filePath, content, error: '' }
   } catch (err) {

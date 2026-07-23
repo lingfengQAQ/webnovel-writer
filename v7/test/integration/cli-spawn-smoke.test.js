@@ -18,6 +18,14 @@ const fixtureRoot = path.join(__dirname, '../fixtures/sample-book')
  * 全走真子进程；finally 的 rm 兼作 cache.close 探针（db 未关 Windows 会 EBUSY/EPERM）。
  */
 
+test('bin --help：说明审稿输入令牌的三处原样回传约束', async () => {
+  const r = await exec(process.execPath, [BIN, '--help'], { encoding: 'utf8' })
+  assert.match(r.stdout, /review-input .*契约版本\/令牌/)
+  assert.match(r.stdout, /save-review <章号> --file=<两审json> \[--draft=<路径>\]/)
+  assert.match(r.stdout, /save-review .*外层\+两份报告原样回传令牌/)
+  assert.match(r.stdout, /禁止重算/)
+})
+
 test('bin spawn 冒烟：export 单章（书仓库直启）+ 坏参数人话退出', async () => {
   const repo = await fs.mkdtemp(path.join(os.tmpdir(), 'wnw-spawn-book-'))
   await fs.cp(fixtureRoot, repo, { recursive: true })

@@ -15,7 +15,7 @@ export async function run(args, options, ctx) {
   const lines = [`第 ${chapterNum} 章已打回（批内工件清空，重写后用 stage-chapter 重新暂存）。`]
   if (r.受影响.length) {
     lines.push(
-      `第 ${r.受影响.join('、')} 章标记为「受影响」：前章重写会改变它们依赖的事实，重跑两审并 save-review 后运行 batch-restage <章号> 收回「待审收」。`
+      `第 ${r.受影响.join('、')} 章标记为「受影响」：先运行 batch-status --json 读取对应章的「草稿路径」，再依次运行 review-input <章号> --draft=<草稿路径>、save-review <章号> --file=<json路径> --draft=<草稿路径>，最后运行 batch-restage <章号> 收回「待审收」；两条审稿命令都不能默认使用草稿-A.md。`
     )
   }
   return { ok: true, output: lines.join('\n') }

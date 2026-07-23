@@ -21,6 +21,38 @@ export function createGit(repoPath) {
       const { stdout } = await run(['rev-parse', 'HEAD'])
       return stdout.trim()
     },
+    async head() {
+      try {
+        const { stdout } = await run(['rev-parse', '--verify', 'HEAD'])
+        return stdout.trim() || null
+      } catch {
+        return null
+      }
+    },
+    async writeTree() {
+      const { stdout } = await run(['write-tree'])
+      return stdout.trim()
+    },
+    async commitInfo(ref = 'HEAD') {
+      try {
+        return await readCommitInfo(run, ref)
+      } catch {
+        return null
+      }
+    },
+    async commitInfosAfter(parent) {
+      try {
+        const range = parent ? `${parent}..HEAD` : 'HEAD'
+        const { stdout } = await run(['rev-list', '--reverse', range])
+        const infos = []
+        for (const hash of stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)) {
+          infos.push(await readCommitInfo(run, hash))
+        }
+        return infos
+      } catch {
+        return []
+      }
+    },
     /** 仓库初始化（幂等：已存在则 reinit，无害） */
     async init() {
       await run(['init', '-q'])
@@ -141,4 +173,84 @@ export function createGit(repoPath) {
       await run(['reset', '--hard', ref])
     },
   }
+}
+
+export async function captureCommitExpectation(git, message) {
+  if (
+    typeof git?.head !== 'function' ||
+    typeof git?.writeTree !== 'function' ||
+    typeof git?.commitInfo !== 'function'
+  ) return null
+  try {
+    return {
+      parent: await git.head(),
+      tree: await git.writeTree(),
+      message: normalizeCommitMessage(message),
+    }
+  } catch {
+    return null
+  }
+}
+
+export async function probeCommitAfterError(git, expected) {
+  if (!expected || typeof git?.commitInfo !== 'function') {
+    return { state: 'unknown', commitHash: '' }
+  }
+  let current
+  try {
+    current = await git.commitInfo('HEAD')
+  } catch {
+    return { state: 'unknown', commitHash: '' }
+  }
+  if (!current) {
+    return expected.parent === null
+      ? { state: 'not-committed', commitHash: '' }
+      : { state: 'unknown', commitHash: '' }
+  }
+  if (current.hash === expected.parent) {
+    return { state: 'not-committed', commitHash: '' }
+  }
+  let candidates = [current]
+  if (typeof git.commitInfosAfter === 'function') {
+    try {
+      candidates = await git.commitInfosAfter(expected.parent)
+    } catch {
+      return { state: 'unknown', commitHash: '' }
+    }
+  }
+  const expectedParents = expected.parent === null ? [] : [expected.parent]
+  for (const candidate of candidates) {
+    const parentsMatch = candidate.parents.length === expectedParents.length &&
+      candidate.parents.every((parent, index) => parent === expectedParents[index])
+    if (
+      parentsMatch &&
+      candidate.tree === expected.tree &&
+      candidate.message === expected.message
+    ) {
+      return { state: 'committed', commitHash: candidate.hash }
+    }
+  }
+  return { state: 'unknown', commitHash: '' }
+}
+
+async function readCommitInfo(run, ref) {
+  const { stdout } = await run([
+    'show',
+    '-s',
+    '--no-patch',
+    '--format=%H%x00%P%x00%T%x00%B',
+    ref,
+  ])
+  const [hash = '', parents = '', tree = '', message = ''] = stdout.split('\0')
+  if (!hash) return null
+  return {
+    hash,
+    parents: parents.split(/\s+/).filter(Boolean),
+    tree,
+    message: normalizeCommitMessage(message),
+  }
+}
+
+function normalizeCommitMessage(message) {
+  return String(message).replace(/\r\n/g, '\n').replace(/\n+$/, '')
 }

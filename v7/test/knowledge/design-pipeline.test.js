@@ -109,8 +109,8 @@ test('故事对象候选只在规划阶段本书化；prep/review 不回读通�
       '## 一致性边界',
       '顾衡不会用牺牲无辜换取胜利。',
       '## 知识依据',
-      `${candidates[0].来源版本}`,
-      '只采用价值排序检查，不采用固定反派身份。',
+      `来源：${candidates[0].来源版本}`,
+      '本书适配：只采用价值排序检查，不采用固定反派身份。',
     ].join('\n')
     const payloadPath = path.join(ctx.repoPath, '工作区', '对象设计.json')
     await fs.writeFile(payloadPath, JSON.stringify({ 作者已确认: true, 对象: [{ 分类: '人物', 内容: planContent }] }), 'utf8')

@@ -1,10 +1,19 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { parseFrontMatter } from '../storage/parsers/front-matter.js'
+import { sha256 } from '../util/hash.js'
 import { KNOWLEDGE_GROUPS, readEntry } from './index.js'
 
 export const CHAPTER_KNOWLEDGE_DIMENSIONS = KNOWLEDGE_GROUPS.篇章执行
 export const RECENT_KNOWLEDGE_CHAPTER_LIMIT = 8
+export const CHAPTER_OUTLINE_NAME = '细纲.md'
+export const CHAPTER_KNOWLEDGE_SNAPSHOT_NAME = '细纲知识快照.json'
+export const CHAPTER_OUTLINE_PATH = path.join('工作区', CHAPTER_OUTLINE_NAME)
+export const CHAPTER_KNOWLEDGE_SNAPSHOT_PATH = path.join(
+  '工作区',
+  CHAPTER_KNOWLEDGE_SNAPSHOT_NAME
+)
 
 export const CHAPTER_KNOWLEDGE_LABELS = Object.freeze({
   节拍: '本章节拍',
@@ -21,6 +30,11 @@ const LABEL_TO_KEY = Object.freeze({
   知识变体: '变体',
   本章对象: '对象',
 })
+const CUSTOM_CHAPTER_SOURCES = new Set(['作者自定义', '对谈共创'])
+const CHAPTER_SOURCE_RE = /^(节拍|场景|技法|追读)\/([^<>:"/\\|?*\u0000-\u001f@]+\.md)@sha256:[0-9a-f]{64}$/u
+const CHAPTER_KNOWLEDGE_SNAPSHOT_SCHEMA_VERSION = 1
+const DEFAULT_PACKAGE_ROOT = fileURLToPath(new URL('../../', import.meta.url))
+const SNAPSHOT_KEYS = Object.freeze(['schemaVersion', 'outlineSha256', '知识选择'].sort())
 
 /** 确认细纲的六类声明位；四维知识都可空、可多选，变体按完整行保留。 */
 export function parseChapterDeclarations(outline) {
@@ -62,40 +76,152 @@ export async function resolveChapterDeclarations(packageRoot, outlineOrDeclarati
   return { declarations, selections }
 }
 
-/** 章档案使用平铺列表：`维度｜名称` 与真实发生的 `变体｜说明`。 */
+/**
+ * 章档案使用平铺列表：`维度｜名称｜来源` 与真实发生的 `变体｜说明`。
+ * 正式条目只留最小 `路径@sha256`，自定义选择显式标明作者自定义。
+ */
 export async function buildChapterKnowledgeArchive(packageRoot, outline) {
   const { declarations, selections } = await resolveChapterDeclarations(packageRoot, outline)
   const archived = []
   for (const selection of selections) {
     const name = selection.条目?.名称 || selection.声明
-    pushUnique(archived, `${selection.维度}｜${name}`)
+    const source = selection.条目?.来源版本 || '作者自定义'
+    pushUnique(archived, `${selection.维度}｜${name}｜${source}`)
   }
   for (const variant of declarations.变体) pushUnique(archived, `变体｜${variant}`)
   return archived
 }
 
-/** 解析定稿章的最小历史，供候选软降权与重复提醒使用。 */
-export function parseChapterKnowledgeArchive(value, { chapterNum } = {}) {
-  if (!Array.isArray(value)) return []
-  const selections = []
-  const variants = []
-  for (const raw of value) {
-    const text = typeof raw === 'string' ? raw.trim() : ''
-    const split = text.indexOf('｜')
-    if (split <= 0 || split === text.length - 1) continue
-    const dimension = text.slice(0, split).trim()
-    const name = text.slice(split + 1).trim()
-    if (dimension === '变体') variants.push(name)
-    else if (CHAPTER_KNOWLEDGE_DIMENSIONS.includes(dimension)) {
-      selections.push({ 维度: dimension, 名称: name })
+/** 细纲确认时冻结正式来源；运行时缺 packageRoot 的测试/嵌入调用使用当前分发包根。 */
+export async function buildChapterKnowledgeSnapshot(ctx, outline) {
+  const text = String(outline ?? '')
+  const archive = await buildChapterKnowledgeArchive(
+    ctx?.packageRoot || DEFAULT_PACKAGE_ROOT,
+    text
+  )
+  const archiveValidation = validateChapterKnowledgeArchive(archive)
+  if (!archiveValidation.ok) {
+    throw new Error(`冻结知识选择格式不正确：${archiveValidation.errors.join('；')}`)
+  }
+  return {
+    schemaVersion: CHAPTER_KNOWLEDGE_SNAPSHOT_SCHEMA_VERSION,
+    outlineSha256: sha256(text),
+    知识选择: archive,
+  }
+}
+
+export function chapterKnowledgeSnapshotFile(snapshot) {
+  return {
+    path: CHAPTER_KNOWLEDGE_SNAPSHOT_PATH,
+    content: JSON.stringify(snapshot, null, 2) + '\n',
+  }
+}
+
+/** 快照只接受当前 schema；缺字段、旧字段和细纲 hash 漂移都要求重新确认。 */
+export function validateChapterKnowledgeSnapshot(snapshot, outline) {
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
+    return { ok: false, data: null, error: '冻结快照必须是 JSON 对象' }
+  }
+  const keys = Object.keys(snapshot).sort()
+  if (keys.length !== SNAPSHOT_KEYS.length || keys.some((key, index) => key !== SNAPSHOT_KEYS[index])) {
+    return { ok: false, data: null, error: '冻结快照结构不正确，须重新确认细纲' }
+  }
+  if (snapshot.schemaVersion !== CHAPTER_KNOWLEDGE_SNAPSHOT_SCHEMA_VERSION) {
+    return { ok: false, data: null, error: '冻结快照版本不受支持，须重新确认细纲' }
+  }
+  if (!/^[0-9a-f]{64}$/.test(snapshot.outlineSha256 || '')) {
+    return { ok: false, data: null, error: '冻结快照缺少有效的细纲 sha256' }
+  }
+  const archiveValidation = validateChapterKnowledgeArchive(snapshot.知识选择)
+  if (!archiveValidation.ok) {
+    return {
+      ok: false,
+      data: null,
+      error: `冻结快照知识选择格式不正确：${archiveValidation.errors.join('；')}`,
     }
   }
-  const variant = variants.join('；')
-  return selections.map((selection) => ({
-    ...selection,
+  if (snapshot.outlineSha256 !== sha256(String(outline ?? ''))) {
+    return { ok: false, data: null, error: '细纲内容与冻结快照不一致，须重新确认细纲' }
+  }
+  return {
+    ok: true,
+    data: {
+      schemaVersion: snapshot.schemaVersion,
+      outlineSha256: snapshot.outlineSha256,
+      知识选择: [...snapshot.知识选择],
+    },
+    error: '',
+  }
+}
+
+export function parseChapterKnowledgeSnapshot(content, outline) {
+  let snapshot
+  try {
+    snapshot = JSON.parse(String(content || ''))
+  } catch (err) {
+    return { ok: false, data: null, error: `冻结快照不是有效 JSON：${err.message}` }
+  }
+  return validateChapterKnowledgeSnapshot(snapshot, outline)
+}
+
+/** 解析单章档案；每项最终选择必须带来源，整体变体不复制到任一选择。 */
+export function parseChapterKnowledgeArchive(value, { chapterNum } = {}) {
+  const selections = []
+  const variants = []
+  for (const raw of Array.isArray(value) ? value : []) {
+    const parsed = parseChapterKnowledgeArchiveItem(raw)
+    if (!parsed.ok) continue
+    if (parsed.variant) {
+      pushUnique(variants, parsed.variant)
+      continue
+    }
+    const selection = parsed.selection
+    if (!selections.some((item) =>
+      item.维度 === selection.维度 &&
+      item.名称 === selection.名称 &&
+      (item.来源 || '') === (selection.来源 || '')
+    )) {
+      selections.push(selection)
+    }
+  }
+  return {
     ...(Number.isInteger(chapterNum) ? { 章号: chapterNum } : {}),
-    ...(variant ? { 变体: variant } : {}),
-  }))
+    选择: selections,
+    本章整体变体: variants,
+  }
+}
+
+/** 写盘前严格校验章档案；读取端可跳过坏项，写入端禁止制造不可读的新数据。 */
+export function validateChapterKnowledgeArchive(value) {
+  if (value === undefined) return { ok: true, errors: [] }
+  if (!Array.isArray(value)) {
+    return { ok: false, errors: ['「知识选择」必须是列表'] }
+  }
+  const errors = []
+  for (let index = 0; index < value.length; index++) {
+    const parsed = parseChapterKnowledgeArchiveItem(value[index])
+    if (!parsed.ok) errors.push(`知识选择[${index}]${parsed.error}`)
+  }
+  return { ok: errors.length === 0, errors }
+}
+
+/** 按章历史转成机械同名降权所需的扁平选择；整体变体不进入逐项数据。 */
+export function flattenRecentChapterKnowledge(history) {
+  const flattened = []
+  for (const chapter of Array.isArray(history) ? history : []) {
+    if (Array.isArray(chapter?.选择)) {
+      for (const selection of chapter.选择) {
+        if (!selection?.维度 || !selection?.名称) continue
+        flattened.push({
+          ...(Number.isInteger(chapter.章号) ? { 章号: chapter.章号 } : {}),
+          维度: selection.维度,
+          名称: selection.名称,
+          来源: selection.来源,
+        })
+      }
+    }
+  }
+  return flattened
 }
 
 /** 最近若干章的选择历史；stagedChapters 覆盖同章定稿视图并参与统一倒序截断。 */
@@ -138,25 +264,62 @@ export async function readRecentChapterKnowledge(
         continue
       }
     }
-    history.push(...parseChapterKnowledgeArchive(frontMatter?.知识选择, { chapterNum }))
+    const chapter = parseChapterKnowledgeArchive(frontMatter?.知识选择, { chapterNum })
+    if (chapter.选择.length || chapter.本章整体变体.length) history.push(chapter)
   }
   return history
 }
 
 /** 有确认细纲时以其覆盖 payload 里的知识选择；批量定稿无细纲时保留暂存值。 */
 export async function archiveChapterKnowledgeFromOutline(ctx, payload) {
-  let outline
-  try {
-    outline = await fs.readFile(path.join(ctx.repoPath, '工作区', '细纲.md'), 'utf8')
-  } catch (err) {
-    if (err.code === 'ENOENT') return { ok: true, payload, found: false, error: '' }
-    return { ok: false, payload, found: false, error: `确认细纲读取失败：${err.message}` }
+  const [outlineFile, snapshotFile] = await Promise.all([
+    readOptionalWorkspaceFile(ctx.repoPath, CHAPTER_OUTLINE_PATH),
+    readOptionalWorkspaceFile(ctx.repoPath, CHAPTER_KNOWLEDGE_SNAPSHOT_PATH),
+  ])
+  if (!outlineFile.ok) {
+    return { ok: false, payload, found: false, error: `确认细纲读取失败：${outlineFile.error}` }
+  }
+  if (!snapshotFile.ok) {
+    return { ok: false, payload, found: outlineFile.exists, error: `冻结快照读取失败：${snapshotFile.error}` }
+  }
+  if (!outlineFile.exists && !snapshotFile.exists) {
+    const validation = validateChapterKnowledgeArchive(payload?.frontMatter?.知识选择)
+    if (!validation.ok) {
+      return {
+        ok: false,
+        payload,
+        found: false,
+        error: `章档案知识选择格式不正确：${validation.errors.join('；')}`,
+      }
+    }
+    return { ok: true, payload, found: false, error: '' }
+  }
+  if (!outlineFile.exists) {
+    return {
+      ok: false,
+      payload,
+      found: false,
+      error: '存在细纲知识冻结快照但确认细纲缺失，须重新确认细纲',
+    }
+  }
+  if (!snapshotFile.exists) {
+    return {
+      ok: false,
+      payload,
+      found: true,
+      error: '确认细纲缺少知识冻结快照，须重新确认细纲',
+    }
+  }
+
+  const snapshot = parseChapterKnowledgeSnapshot(snapshotFile.content, outlineFile.content)
+  if (!snapshot.ok) {
+    return { ok: false, payload, found: true, error: snapshot.error }
   }
 
   try {
     const frontMatter = { ...(payload?.frontMatter || {}) }
-    const archive = await buildChapterKnowledgeArchive(ctx.packageRoot, outline)
-    if (archive.length) frontMatter.知识选择 = archive
+    const archive = snapshot.data.知识选择
+    if (archive.length) frontMatter.知识选择 = [...archive]
     else delete frontMatter.知识选择
     return {
       ok: true,
@@ -165,7 +328,34 @@ export async function archiveChapterKnowledgeFromOutline(ctx, payload) {
       error: '',
     }
   } catch (err) {
-    return { ok: false, payload, found: true, error: `确认细纲知识解析失败：${err.message}` }
+    return { ok: false, payload, found: true, error: `冻结细纲知识归档失败：${err.message}` }
+  }
+}
+
+/** 定稿 commit 后由系统清理已消费的细纲与快照，不经 payload.workspaceFiles。 */
+export async function cleanConfirmedOutlineArtifacts(repoPath) {
+  const warnings = []
+  for (const name of [CHAPTER_OUTLINE_NAME, CHAPTER_KNOWLEDGE_SNAPSHOT_NAME]) {
+    try {
+      await fs.rm(path.join(repoPath, '工作区', name), { force: true })
+    } catch (err) {
+      warnings.push(`工作区/${name} 清理失败（${err.message}）——本章已入档，稍后手动删除即可。`)
+    }
+  }
+  return warnings
+}
+
+async function readOptionalWorkspaceFile(repoPath, relPath) {
+  try {
+    return {
+      ok: true,
+      exists: true,
+      content: await fs.readFile(path.join(repoPath, relPath), 'utf8'),
+      error: '',
+    }
+  } catch (err) {
+    if (err.code === 'ENOENT') return { ok: true, exists: false, content: '', error: '' }
+    return { ok: false, exists: false, content: '', error: err.message }
   }
 }
 
@@ -215,6 +405,42 @@ function normalizeList(value) {
 
 function pushUnique(values, value) {
   if (value && !values.includes(value)) values.push(value)
+}
+
+function parseChapterKnowledgeArchiveItem(raw) {
+  const text = typeof raw === 'string' ? raw.trim() : ''
+  if (!text) return { ok: false, error: '必须是非空字符串' }
+  const parts = text.split('｜').map((part) => part.trim())
+  if (parts[0] === '变体') {
+    if (parts.length !== 2 || !parts[1]) {
+      return { ok: false, error: '必须使用「变体｜说明」格式，且说明不能为空' }
+    }
+    return { ok: true, variant: parts[1] }
+  }
+  if (parts.length !== 3) {
+    return { ok: false, error: '必须使用「维度｜名称｜来源」格式' }
+  }
+  const [dimension, name, source] = parts
+  if (!CHAPTER_KNOWLEDGE_DIMENSIONS.includes(dimension)) {
+    return { ok: false, error: `维度必须是${CHAPTER_KNOWLEDGE_DIMENSIONS.join('、')}之一` }
+  }
+  if (!name) return { ok: false, error: '名称不能为空' }
+  if (!CUSTOM_CHAPTER_SOURCES.has(source)) {
+    const match = source.match(CHAPTER_SOURCE_RE)
+    if (!match || match[2].includes('..')) {
+      return {
+        ok: false,
+        error: '正式来源必须是直接 canonical 路径并带 64 位小写 sha256',
+      }
+    }
+    if (match[1] !== dimension) {
+      return { ok: false, error: `来源维度「${match[1]}」与选择维度「${dimension}」不一致` }
+    }
+  }
+  return {
+    ok: true,
+    selection: { 维度: dimension, 名称: name, 来源: source },
+  }
 }
 
 function compareCodePoints(a, b) {

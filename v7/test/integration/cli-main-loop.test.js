@@ -78,9 +78,29 @@ test('主循环全程 CLI：建书→写1章→两审→定稿→next 报第2章
     // 6. 备料 + 草稿 + 机检（草稿是 AI 产物,落工作区不经 CLI）
     const r6 = await run(['prepare-chapter', '1'])
     assert.ok(r6.stdout.includes('本章写作材料'), r6.stdout)
+    const chapterFrontMatter = {
+      章号: 1,
+      标题: '初入青云',
+      卷: 1,
+      字数: 30,
+      章定位: '铺垫',
+      钩子: '悬念钩-中',
+      情绪定位: '铺垫',
+    }
     await fs.writeFile(
       path.join(repo, '工作区', '草稿-A.md'),
-      '---\n章号: 1\n标题: 初入青云\n---\n林晚背着行囊踏入青云宗山门,腰间玉佩微微发烫。',
+      [
+        '---',
+        '章号: 1',
+        '标题: 初入青云',
+        '卷: 1',
+        '字数: 30',
+        '章定位: 铺垫',
+        '钩子: 悬念钩-中',
+        '情绪定位: 铺垫',
+        '---',
+        '林晚背着行囊踏入青云宗山门,腰间玉佩微微发烫。',
+      ].join('\n'),
       'utf8'
     )
     const r6b = await run(['mechanical-check', '1'])
@@ -95,8 +115,9 @@ test('主循环全程 CLI：建书→写1章→两审→定稿→next 报第2章
     await fs.writeFile(
       path.join(workdir, '两审.json'),
       JSON.stringify({
-        事实审查: { chapter: 1, issues: [] },
-        编辑审: { chapter: 1, issues: [] },
+        审稿输入令牌: input.审稿输入令牌,
+        事实审查: { 审稿输入令牌: input.审稿输入令牌, chapter: 1, issues: [] },
+        编辑审: { 审稿输入令牌: input.审稿输入令牌, chapter: 1, issues: [] },
         章摘要: '林晚入宗,玉佩异动。',
       }),
       'utf8'
@@ -109,7 +130,7 @@ test('主循环全程 CLI：建书→写1章→两审→定稿→next 报第2章
     await fs.writeFile(
       path.join(workdir, '定稿包.json'),
       JSON.stringify({
-        frontMatter: { 章号: 1, 标题: '初入青云', 卷: 1, 字数: 30, 章定位: '铺垫', 钩子: '悬念钩-中', 情绪定位: '铺垫' },
+        frontMatter: chapterFrontMatter,
         body: '林晚背着行囊踏入青云宗山门,腰间玉佩微微发烫。',
         summary: '林晚入宗,玉佩异动。',
         commitLines: {},

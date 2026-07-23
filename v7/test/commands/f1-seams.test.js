@@ -95,6 +95,46 @@ test('persist-volume-review：卷摘要+下卷卷纲落盘;坏卷号报错', asy
   }
 })
 
+test('persist-volume-review：作品契约缺失或损坏时拒绝写入', async () => {
+  const cases = [
+    {
+      name: '缺失',
+      files: { 'book.yaml': BOOK, '文风/题材流派指导.md': '旧路径内容。' },
+      options: { includeContract: false },
+      error: /作品契约.*不存在/,
+    },
+    {
+      name: '损坏',
+      files: {
+        'book.yaml': BOOK,
+        '作品契约/作品契约.md': '---\n类型: 玄幻\n---\n坏契约',
+      },
+      options: {},
+      error: /作品契约结构不完整/,
+    },
+  ]
+  for (const item of cases) {
+    const { root, ctx, git, cleanup } = await makeGitBook(item.files, item.options)
+    try {
+      const input = await jsonFile(os.tmpdir(), `wnw-vr-contract-${item.name}-${process.pid}.json`, {
+        卷号: 1,
+        卷摘要: '# 第一卷\n不应写入。',
+        下卷卷纲: '# 第2卷\n不应写入。',
+      })
+      const { stdout: before } = await git(['rev-list', '--count', 'HEAD'])
+      const result = await persistVolumeReview([], { file: input }, ctx)
+      assert.equal(result.ok, false)
+      assert.match(result.error, item.error)
+      await assert.rejects(() => fs.access(path.join(root, '定稿', '摘要', '卷摘要', '第01卷.md')))
+      await assert.rejects(() => fs.access(path.join(root, '大纲', '卷纲', '第02卷.md')))
+      const { stdout: after } = await git(['rev-list', '--count', 'HEAD'])
+      assert.equal(after.trim(), before.trim(), `${item.name}契约不得产生 commit`)
+    } finally {
+      await cleanup()
+    }
+  }
+})
+
 test('persist-repair：修检测失败清单内文件;清单外拒绝', async () => {
   const { root, ctx, cleanup } = await makeGitBook({ 'book.yaml': BOOK })
   try {
@@ -200,6 +240,8 @@ test('review-input：落 工作区/审稿输入.json（含草稿全文与章号�
     const raw = await fs.readFile(path.join(root, '工作区', '审稿输入.json'), 'utf8')
     const input = JSON.parse(raw)
     assert.equal(input.章号, 1)
+    assert.equal(input.作品契约版本, 1)
+    assert.match(input.审稿输入令牌, /^sha256:[0-9a-f]{64}$/)
     assert.ok(input.草稿全文.includes('玉佩'))
     assert.ok(input.相关角色.some((c) => c.姓名 === '林晚' || c.正名 === '林晚'))
 
@@ -220,9 +262,16 @@ test('save-review：两审 JSON 入库落审稿单;schema 不过人话报错', a
     '工作区/草稿-A.md': '林晚握紧玉佩。',
   })
   try {
+    const prepared = await reviewInput(['1'], {}, ctx)
+    assert.equal(prepared.ok, true, prepared.error)
+    const token = JSON.parse(
+      await fs.readFile(path.join(root, '工作区', '审稿输入.json'), 'utf8')
+    ).审稿输入令牌
     const good = await jsonFile(os.tmpdir(), `wnw-sr-${process.pid}.json`, {
-      事实审查: { chapter: 1, issues: [] },
+      审稿输入令牌: token,
+      事实审查: { 审稿输入令牌: token, chapter: 1, issues: [] },
       编辑审: {
+        审稿输入令牌: token,
         chapter: 1,
         issues: [
           {
@@ -246,16 +295,17 @@ test('save-review：两审 JSON 入库落审稿单;schema 不过人话报错', a
     await fs.access(path.join(root, '工作区', '评审报告', '事实审查.json'))
 
     const bad = await jsonFile(os.tmpdir(), `wnw-sr-bad-${process.pid}.json`, {
-      事实审查: { chapter: 1, issues: [{ severity: '不存在的级别' }] },
-      编辑审: { chapter: 1, issues: [] },
+      审稿输入令牌: token,
+      事实审查: { 审稿输入令牌: token, chapter: 1, issues: [{ severity: '不存在的级别' }] },
+      编辑审: { 审稿输入令牌: token, chapter: 1, issues: [] },
     })
     const rb = await saveReview(['1'], { file: bad }, ctx)
     assert.equal(rb.ok, false)
-    assert.ok(rb.error.includes('schema'))
+    assert.ok(rb.error.includes('severity'))
 
     const noDraft = await saveReview(['1'], { file: good, draft: '工作区/无.md' }, ctx)
     assert.equal(noDraft.ok, false)
-    assert.ok(noDraft.error.includes('草稿'))
+    assert.match(noDraft.error, /审稿输入|无\.md/)
 
     // --draft 传绝对路径也要能读（P2-2：resolve 而非 join）
     const absDraft = await saveReview(
@@ -275,14 +325,15 @@ test('finalize：--payload 定稿入档 + commit;章号不一致防呆', async (
     '工作区/草稿-A.md': '林晚突破。',
   })
   try {
-    await writeReviewArtifacts(root, 1)
-    const payload = await jsonFile(os.tmpdir(), `wnw-fz-${process.pid}.json`, {
+    const reviewedPayload = {
       frontMatter: { 章号: 1, 标题: '突破', 卷: 1, 字数: 5, 章定位: '推进' },
       body: '林晚突破。',
       summary: '林晚突破练气四层。',
       commitLines: {},
       workspaceFiles: ['工作区/草稿-A.md'],
-    })
+    }
+    await writeReviewArtifacts(root, 1, [], [], reviewedPayload)
+    const payload = await jsonFile(os.tmpdir(), `wnw-fz-${process.pid}.json`, reviewedPayload)
     const r = await finalizeCmd(['1'], { payload }, ctx)
     assert.equal(r.ok, true, r.error)
     assert.ok(r.output.includes('已定稿'))

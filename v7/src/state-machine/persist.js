@@ -5,8 +5,13 @@ import { parseFrontMatter } from '../storage/parsers/front-matter.js'
 import { parseMarkdownTable } from '../storage/parsers/markdown-table.js'
 import { parseBookConfig } from '../storage/parsers/book-config.js'
 import { writeAtomicBatch } from '../storage/atomic.js'
-import { createGit } from '../finalize/git.js'
+import {
+  captureCommitExpectation,
+  createGit,
+  probeCommitAfterError,
+} from '../finalize/git.js'
 import { refreshCacheAfterSourceChange } from '../cache/index.js'
+import { ContractReader } from '../storage/adapters/ContractReader.js'
 import {
   KNOWLEDGE_SELECTION_PATH,
   WORK_CONTRACT_PATH,
@@ -16,6 +21,12 @@ import {
   validateWorkContract,
 } from '../knowledge/contract.js'
 import { isDesignPath, validateDesignContent } from '../knowledge/design.js'
+import {
+  buildChapterKnowledgeSnapshot,
+  CHAPTER_OUTLINE_PATH,
+  chapterKnowledgeSnapshotFile,
+} from '../knowledge/chapter.js'
+import { acquireContractMutationLock } from '../staging/contract-invalidation.js'
 
 /**
  * AI 态产物回流落盘（M3 落盘,AI 不碰文件）。AI 提交结构化 DTO,本层映射到路径写出。
@@ -38,11 +49,27 @@ async function buildGitignore(repoPath, required) {
   return lines.join('\n') + '\n'
 }
 
-/** 序6 起草细纲 → 工作区/细纲.md */
+/** 序6 起草细纲 → 契约校验后原子写细纲与采用时知识来源快照。 */
 export async function persistDraftOutline(ctx, { 细纲 }) {
+  const lock = await acquireContractMutationLock(ctx.repoPath, '确认细纲')
+  if (!lock.ok) return { ok: false, written: [], error: lock.error }
   try {
+    return await persistDraftOutlineLocked(ctx, { 细纲 })
+  } finally {
+    await lock.release()
+  }
+}
+
+async function persistDraftOutlineLocked(ctx, { 细纲 }) {
+  const contract = await new ContractReader(ctx.repoPath).read()
+  if (!contract.ok) {
+    return { ok: false, written: [], error: `起草细纲停止：${contract.error}` }
+  }
+  try {
+    const snapshot = await buildChapterKnowledgeSnapshot(ctx, 细纲)
     const written = await writeAtomicBatch(ctx.repoPath, [
-      { path: path.join('工作区', '细纲.md'), content: 细纲 },
+      { path: CHAPTER_OUTLINE_PATH, content: 细纲 },
+      chapterKnowledgeSnapshotFile(snapshot),
     ])
     return { ok: true, written, error: '' }
   } catch (err) {
@@ -111,14 +138,18 @@ export async function persistCreateBook(ctx, payload) {
   }
 }
 
-/** 作者确认后的契约修订：契约与选择记录原子替换并单独提交。 */
+/** 作者确认后的契约修订：契约、选择记录与调用方提供的失效状态原子替换并单独提交。 */
 export async function persistWorkContract(
   ctx,
-  { book, 作品契约, contract, selections, decisions = [] },
+  { book, 作品契约, contract, selections, decisions = [], revision = null },
   opts = {}
 ) {
   const git = opts.git || createGit(ctx.repoPath)
+  const writeBatch = opts.writeBatch || writeAtomicBatch
+  const trackedFiles = []
   let written = []
+  let commitAttempted = false
+  let commitExpectation = null
   try {
     let existingRecord = ''
     try {
@@ -133,22 +164,64 @@ export async function persistWorkContract(
       contract,
       selections,
       decisions,
+      revision,
     })
-    written = await writeAtomicBatch(ctx.repoPath, [
+    trackedFiles.push(
       { path: 'book.yaml', content: serializeYAML(book) },
       { path: WORK_CONTRACT_PATH, content: 作品契约 },
       { path: KNOWLEDGE_SELECTION_PATH, content: record },
+    )
+    written = await writeBatch(ctx.repoPath, [
+      ...trackedFiles,
+      ...(Array.isArray(opts.additionalWrites) ? opts.additionalWrites : []),
     ])
     await git.ensureIdentity()
-    await git.add(written)
-    const hash = await git.commit(
+    await git.add(trackedFiles.map((file) => file.path))
+    const commitMessage =
       `fix(契约): v${contract.frontMatter.契约版本} ${contract.frontMatter.更新原因}`
-    )
-    return { ok: true, written, commitHash: hash, error: '' }
+    commitExpectation = await captureCommitExpectation(git, commitMessage)
+    commitAttempted = true
+    const hash = await git.commit(commitMessage)
+    return {
+      ok: true,
+      written: trackedFiles.map((file) => file.path),
+      commitHash: hash,
+      error: '',
+    }
   } catch (err) {
+    if (commitAttempted) {
+      const commitProbe = await probeCommitAfterError(git, commitExpectation)
+      if (commitProbe.state === 'committed') {
+        return {
+          ok: true,
+          written: trackedFiles.map((file) => file.path),
+          commitHash: commitProbe.commitHash,
+          error: '',
+        }
+      }
+      if (commitProbe.state === 'unknown') {
+        return {
+          ok: false,
+          written: [],
+          error: `作品契约提交结果无法确认：${err.message}。为防旧批次误定稿，失效状态已保留，请先检查书仓库状态。`,
+        }
+      }
+    }
     if (written.length) {
-      for (const rel of written) await git.restore([rel])
-      await git.clean(written)
+      const trackedPaths = trackedFiles.map((file) => file.path)
+      for (const rel of trackedPaths) await git.restore([rel])
+      await git.clean(trackedPaths)
+      if (typeof opts.rollbackAdditionalWrites === 'function') {
+        try {
+          await opts.rollbackAdditionalWrites()
+        } catch (rollbackError) {
+          return {
+            ok: false,
+            written: [],
+            error: `作品契约更新失败：${err.message}；工作区失效状态回滚失败：${rollbackError.message}`,
+          }
+        }
+      }
     }
     return { ok: false, written: [], error: `作品契约更新失败：${err.message}` }
   }
@@ -204,6 +277,10 @@ export async function persistDesignChanges(ctx, plan, opts = {}) {
  * 产物随手 commit（`vol(NN): 复盘与下卷规划`,spec §9）——与建书同理,不 commit 会让 next 误触序2 手改检测；
  * 新伏笔条目改了源,同步刷缓存,否则 list-threads/备料/两审要等下次定稿才看得见。 */
 export async function persistVolumeReview(ctx, { 卷号, 卷摘要, 下卷卷纲, 伏笔条目 = [] }) {
+  const contract = await new ContractReader(ctx.repoPath).read()
+  if (!contract.ok) {
+    return { ok: false, written: [], error: `卷复盘停止：${contract.error}` }
+  }
   try {
     const files = []
     const nn = String(卷号).padStart(2, '0')

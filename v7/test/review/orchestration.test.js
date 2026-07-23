@@ -26,6 +26,10 @@ const edIssue = (over = {}) => ({
   severity: 'low', category: 'pacing', location: '全章',
   description: '节奏平', evidence: '无爽点', fix_hint: '加钩子', blocking: false, ...over,
 })
+const reviewedReport = (input, report) => ({
+  审稿输入令牌: input.审稿输入令牌,
+  ...report,
+})
 
 test('assembleReviewInput：DTO 含草稿+要写到的事+相关角色,不泄漏路径', async () => {
   const { ctx, cleanup } = await makeReviewBook()
@@ -34,6 +38,8 @@ test('assembleReviewInput：DTO 含草稿+要写到的事+相关角色,不泄漏
     assert.equal(r.ok, true)
     assert.match(r.input.草稿全文, /突破到练气四层/)
     assert.match(r.input.本章要写到的事, /练气四层/)
+    assert.equal(r.input.作品契约版本, 1)
+    assert.match(r.input.审稿输入令牌, /^sha256:[0-9a-f]{64}$/)
     assert.ok(r.input.相关角色.some((c) => c.正名 === '林晚'))
     const json = JSON.stringify(r.input)
     assert.ok(!json.includes(ctx.repoPath), '不泄漏仓库绝对路径')
@@ -44,7 +50,7 @@ test('assembleReviewInput：DTO 含草稿+要写到的事+相关角色,不泄漏
 test('mergeReviews：降级模式含兼容声明', () => {
   const m = mergeReviews(
     { factCheck: { issues: [] }, editorial: { issues: [] } },
-    { mode: 'degraded', chapterNum: 2 }
+    { mode: 'degraded', chapterNum: 2, reviewInputToken: 'sha256:test' }
   )
   assert.match(m.模式声明, /兼容模式/)
   assert.match(m.模式声明, /隔离度/)
@@ -56,7 +62,7 @@ test('mergeReviews：完整模式 + 合并计数', () => {
       factCheck: { issues: [fcIssue({ severity: 'critical', blocking: true })] },
       editorial: { issues: [edIssue()] },
     },
-    { mode: 'complete', chapterNum: 2 }
+    { mode: 'complete', chapterNum: 2, reviewInputToken: 'sha256:test' }
   )
   assert.equal(m.issues_count, 2)
   assert.equal(m.blocking_count, 1)
@@ -68,8 +74,8 @@ test('runReviews：DI 注入两审 → 校验+合并+落盘审稿单与评审报
   const { ctx, cleanup, root } = await makeReviewBook()
   try {
     const reviewers = {
-      factCheck: async (input) => ({ chapter: input.章号, issues: [fcIssue()] }),
-      editorial: async (input) => ({ chapter: input.章号, issues: [edIssue()] }),
+      factCheck: async (input) => reviewedReport(input, { chapter: input.章号, issues: [fcIssue()] }),
+      editorial: async (input) => reviewedReport(input, { chapter: input.章号, issues: [edIssue()] }),
     }
     const r = await runReviews(ctx, { chapterNum: 2, draftPath: '工作区/草稿.md', mode: 'complete', reviewers })
     assert.equal(r.ok, true)
@@ -92,8 +98,8 @@ test('事实审查顶层 factChanges 穿过 schema 归一化并写入正式报�
       removePlan: true,
     }]
     const reviewers = {
-      factCheck: async (input) => ({ chapter: input.章号, issues: [], factChanges }),
-      editorial: async (input) => ({ chapter: input.章号, issues: [] }),
+      factCheck: async (input) => reviewedReport(input, { chapter: input.章号, issues: [], factChanges }),
+      editorial: async (input) => reviewedReport(input, { chapter: input.章号, issues: [] }),
     }
     const result = await runReviews(ctx, {
       chapterNum: 2,
@@ -115,9 +121,13 @@ test('runReviews：降级模式 → 审稿单含兼容声明', async () => {
   try {
     let calls = 0
     const reviewers = {
-      degraded: async () => {
+      degraded: async (input) => {
         calls++
-        return { factCheck: { issues: [] }, editorial: { issues: [] } }
+        return {
+          审稿输入令牌: input.审稿输入令牌,
+          factCheck: reviewedReport(input, { issues: [] }),
+          editorial: reviewedReport(input, { issues: [] }),
+        }
       },
       factCheck: async () => {
         throw new Error('降级模式不应单独调用事实审查')
@@ -178,11 +188,12 @@ test('P1-3：原始输出与归一化结果分存（.raw.json 保留模型原话
     // stub 返回 critical+blocking:false;归一化会把 blocking 改 true,raw 保留 false
     const reviewers = {
       factCheck: async (input) => ({
+        审稿输入令牌: input.审稿输入令牌,
         chapter: input.章号,
         ai_meta: 'raw-marker',
         issues: [fcIssue({ severity: 'critical', blocking: false })],
       }),
-      editorial: async () => ({ issues: [] }),
+      editorial: async (input) => reviewedReport(input, { issues: [] }),
     }
     const r = await runReviews(ctx, { chapterNum: 2, draftPath: '工作区/草稿.md', mode: 'complete', reviewers })
     assert.equal(r.ok, true)

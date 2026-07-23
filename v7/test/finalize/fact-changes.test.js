@@ -7,6 +7,25 @@ import { makeGitBook } from '../state-machine/_helper.js'
 import { designFixture } from '../knowledge/_design-fixture.js'
 import { FACT_PATH, PLAN_PATH, factFixture } from '../knowledge/_fact-fixture.js'
 
+const DECISION_DETAILS = {
+  difference: '计划中的林晚还是练气三层，正文已经写成练气四层。',
+  impact: '接受变化会抬高后续战力基线，并改变下一章对手安排。',
+  options: [
+    {
+      optionId: 'keep-plan',
+      label: '保留原计划',
+      description: '改正文，仍按练气三层推进。',
+      applyChange: false,
+    },
+    {
+      optionId: 'accept-draft',
+      label: '接受正文突破',
+      description: '更新角色事实与后续安排。',
+      applyChange: true,
+    },
+  ],
+}
+
 function payload(decision = '无冲突') {
   return {
     chapterNum: 1,
@@ -25,6 +44,7 @@ function payload(decision = '无冲突') {
       factPath: FACT_PATH,
       content: factFixture(),
       decision,
+      ...(decision === '无冲突' ? {} : DECISION_DETAILS),
       removePlan: true,
     }],
   }
@@ -62,6 +82,10 @@ test('finalize：冲突零写入；写入后故障会恢复计划并清掉章节
     const blocked = await finalizeChapter(conflictRepo.ctx, payload('冲突'))
     assert.equal(blocked.ok, false)
     assert.match(blocked.error, /作者裁决/)
+    assert.match(blocked.error, /计划中的林晚还是练气三层/)
+    assert.match(blocked.error, /抬高后续战力基线/)
+    assert.match(blocked.error, /keep-plan：保留原计划/)
+    assert.match(blocked.error, /accept-draft：接受正文突破/)
     await fs.access(path.join(conflictRepo.root, ...PLAN_PATH.split('/')))
     await assert.rejects(() => fs.access(path.join(conflictRepo.root, ...FACT_PATH.split('/'))))
     await assert.rejects(() => fs.access(path.join(conflictRepo.root, '定稿', '正文', '0001-初见林晚.md')))
@@ -79,6 +103,38 @@ test('finalize：冲突零写入；写入后故障会恢复计划并清掉章节
     assert.equal((await faultRepo.git(['status', '--porcelain'])).stdout.trim(), '')
   } finally {
     await faultRepo.cleanup()
+  }
+})
+
+test('finalize：冲突呈报缺字段零写入；裁决重提须携带命中的 optionId', async () => {
+  const { ctx, root, cleanup } = await repo()
+  try {
+    const incomplete = payload('冲突')
+    delete incomplete.factChanges[0].impact
+    const missing = await finalizeChapter(ctx, incomplete)
+    assert.equal(missing.ok, false)
+    assert.match(missing.error, /\.impact/)
+    await fs.access(path.join(root, ...PLAN_PATH.split('/')))
+    await assert.rejects(() => fs.access(path.join(root, ...FACT_PATH.split('/'))))
+    await assert.rejects(() => fs.access(path.join(root, '定稿', '正文', '0001-初见林晚.md')))
+
+    const resolved = payload('作者已裁决')
+    resolved.factChanges[0].resolution = '作者选择接受本章突破，后续按练气四层续写。'
+    resolved.factChanges[0].optionId = 'not-an-option'
+    const invalidChoice = await finalizeChapter(ctx, resolved)
+    assert.equal(invalidChoice.ok, false)
+    assert.match(invalidChoice.error, /optionId 必须对应 options/)
+    await fs.access(path.join(root, ...PLAN_PATH.split('/')))
+    await assert.rejects(() => fs.access(path.join(root, ...FACT_PATH.split('/'))))
+
+    resolved.factChanges[0].optionId = 'accept-draft'
+    const accepted = await finalizeChapter(ctx, resolved)
+    assert.equal(accepted.ok, true, accepted.error)
+    await fs.access(path.join(root, ...FACT_PATH.split('/')))
+    await fs.access(path.join(root, '定稿', '正文', '0001-初见林晚.md'))
+    await assert.rejects(() => fs.access(path.join(root, ...PLAN_PATH.split('/'))))
+  } finally {
+    await cleanup()
   }
 })
 

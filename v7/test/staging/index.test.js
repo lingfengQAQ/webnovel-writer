@@ -69,8 +69,9 @@ function mkPayload(num, { 标题 = `第${num}章`, 钩子 = '危机钩-强', 书
 
 async function stage(ctx, num, opts) {
   const { 审稿问题 = [], ...payloadOptions } = opts || {}
-  await writeReviewArtifacts(ctx.repoPath, num, 审稿问题)
-  return stageChapter(ctx, { chapterNum: num, payload: mkPayload(num, payloadOptions) })
+  const payload = mkPayload(num, payloadOptions)
+  await writeReviewArtifacts(ctx.repoPath, num, 审稿问题, [], payload)
+  return stageChapter(ctx, { chapterNum: num, payload })
 }
 
 test('stage 首章：三件套落位、meta 记录、工作区清、停止未命中', async () => {
@@ -288,10 +289,17 @@ test('rejectFrom：K 打回清工件，K+1..N 受影响；restageReview 回待�
     assert.equal(bad.ok, false)
     assert.match(bad.error, /重写/)
     // 受影响章重审：新审稿单 → 待审收
-    await writeReviewArtifacts(ctx.repoPath, 5)
+    const staged5 = JSON.parse(await fs.readFile(
+      path.join(ctx.repoPath, '工作区', '待定稿', '0005-第5章', '定稿包.json'),
+      'utf8'
+    ))
+    await writeReviewArtifacts(ctx.repoPath, 5, [], [], staged5)
     const ok5 = await restageReview(ctx.repoPath, 5)
     assert.equal(ok5.ok, true, ok5.error)
     assert.equal((await readBatch(ctx.repoPath)).章列表.find((x) => x.章号 === 5).状态, 章状态.待审收)
+    await assert.rejects(() => fs.access(path.join(ctx.repoPath, '工作区', '审稿输入.json')))
+    await assert.rejects(() => fs.access(path.join(ctx.repoPath, '工作区', '审稿.md')))
+    await assert.rejects(() => fs.access(path.join(ctx.repoPath, '工作区', '评审报告')))
   } finally {
     await cleanup()
   }
@@ -328,8 +336,8 @@ test('discardBatch：整批丢弃，工作区批次消失', async () => {
 test('stagedFacts：声明与定稿包合并出条目/名册/时间线/信息差事实', async () => {
   const { ctx, cleanup } = await repoCtx(null, bookFiles({ 批次大小: 8 }))
   try {
-    await writeReviewArtifacts(ctx.repoPath, 3)
     const p = mkPayload(3, { 伏笔: ['埋下 伏笔-009'] })
+    await writeReviewArtifacts(ctx.repoPath, 3, [], [], p)
     p.threadCreates = [
       { id: '伏笔-009', 短题: '古钟', frontMatter: { 强度: '中', 状态: '进行', 开启章: 3 }, body: '## 描述\n古钟。\n' },
     ]

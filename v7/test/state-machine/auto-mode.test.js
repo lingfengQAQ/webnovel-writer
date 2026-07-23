@@ -7,6 +7,7 @@ import { stageChapter, rejectFrom } from '../../src/staging/index.js'
 import { createGit } from '../../src/finalize/git.js'
 import { gitBookCtx } from '../commands/_helper.js'
 import { writeReviewArtifacts } from '../staging/_helper.js'
+import { CHAPTER_KNOWLEDGE_SNAPSHOT_PATH } from '../../src/knowledge/chapter.js'
 
 // 开关矩阵（PRD #14）：自动确认细纲 × 连写。全关=既有回归（router.test.js 全量）；
 // 本文件测：单开细纲自动确认的序 6 标志、批次进行中的序 3 明细。全开端到端见 finalize-batch.test.js AC1。
@@ -14,6 +15,7 @@ import { writeReviewArtifacts } from '../staging/_helper.js'
 async function reachOutline(ctx) {
   // sample-book 工作区自带细纲 → 会命中序 3，清掉以到达序 6
   await fs.rm(path.join(ctx.repoPath, '工作区', '细纲.md'), { force: true })
+  await fs.rm(path.join(ctx.repoPath, CHAPTER_KNOWLEDGE_SNAPSHOT_PATH), { force: true })
 }
 
 async function setBookYaml(ctx, key, value) {
@@ -30,24 +32,25 @@ async function setBookYaml(ctx, key, value) {
 }
 
 async function stage3(ctx) {
-  await writeReviewArtifacts(ctx.repoPath, 3)
+  const payload = {
+    frontMatter: {
+      章号: 3,
+      标题: '连写3',
+      卷: 1,
+      书内时间: '夏月初三',
+      字数: 100,
+      章定位: '推进',
+      钩子: '危机钩-强',
+      情绪定位: '铺垫',
+      伏笔: ['推进 伏笔-001'],
+    },
+    body: '第3章正文。',
+    workspaceFiles: [],
+  }
+  await writeReviewArtifacts(ctx.repoPath, 3, [], [], payload)
   const r = await stageChapter(ctx, {
     chapterNum: 3,
-    payload: {
-      frontMatter: {
-        章号: 3,
-        标题: '连写3',
-        卷: 1,
-        书内时间: '夏月初三',
-        字数: 100,
-        章定位: '推进',
-        钩子: '危机钩-强',
-        情绪定位: '铺垫',
-        伏笔: ['推进 伏笔-001'],
-      },
-      body: '第3章正文。',
-      workspaceFiles: [],
-    },
+    payload,
   })
   assert.equal(r.ok, true, r.error)
 }

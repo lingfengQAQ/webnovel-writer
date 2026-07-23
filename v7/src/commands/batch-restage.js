@@ -11,5 +11,7 @@ export async function run(args, options, ctx) {
 
   const r = await restageReview(ctx.repoPath, chapterNum)
   if (!r.ok) return { ok: false, error: r.error }
-  return { ok: true, output: `第 ${chapterNum} 章重审完成，已收回「待审收」。批内全部待审收后即可 finalize-batch。` }
+  const lines = [`第 ${chapterNum} 章重审完成，已收回「待审收」。批内全部待审收后即可 finalize-batch。`]
+  if (r.warnings?.length) lines.push(...r.warnings)
+  return { ok: true, output: lines.join('\n') }
 }
