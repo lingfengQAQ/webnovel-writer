@@ -1,0 +1,8 @@
+{"file":".trellis/spec/backend/index.md","reason":"后端规范入口与文档先行要求"}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"v7 包边界、生成壳真源和 npm 分发约束"}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"六表缓存、指纹基线与工作区暂存约束"}
+{"file":".trellis/spec/backend/error-handling.md","reason":"CLI 人话错误、宁停勿崩与 hook ask 语义"}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Node/依赖、AI 调用预算、跨平台和质量门"}
+{"file":".trellis/spec/backend/knowledge-runtime.md","reason":"契约守卫与完整 ReviewInput 绑定不可回退的运行时契约"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"本整改横跨文档、CLI、生成器、安装器与发布元数据"}
+{"file":".trellis/tasks/07-23-v7-global-review-remediation/research/评审核验基线.md","reason":"两份评审删除后保留的事实裁定、证据和否决理由"}

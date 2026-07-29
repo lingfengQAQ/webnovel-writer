@@ -1,6 +1,6 @@
 # 质量规范
 
-> 版本：基线 1.0（2026-06-12）。依据：PRD §1.4 产品原则 2/5、§5 非功能需求、§7 发布判据；story-repo-spec 0.6 §2.2。
+> 版本：基线 1.2（2026-07-23，补持久重试预算、alpha hook 边界与严格 npm 文档白名单）。依据：PRD 1.7 §1.4/§3.7/§5；story-repo-spec 0.18。
 
 ---
 
@@ -16,7 +16,7 @@
 
 2.1 **脚本能做的归脚本，做不到的归 AI 语义判断**：可计数项（字数、频次、格式校验、关键词命中）必须用脚本实现，禁止让模型估算；语义判断（是否真泄密、正文是否写到了某事）必须归 AI，**禁止用正则硬凑语义判断**。
 
-2.2 机检必须零 token；AI 调用每章预算：**完整两审 = 2 次**（事实审查 1 + 编辑审 1，各自独立上下文）；**降级模式 = 1 次**（单上下文顺序审）。超预算由宿主壳/编排层拒绝，不在 `runReviews` 内硬凑。
+2.2 机检必须零 token；首次失败后最多自动修复两个不同草稿版本，同一草稿内容 hash（含章档案 front matter，行尾归一）重检幂等——只改 front matter 也是一次修复，必须消耗额度。两审的自动预算按轮计：**完整模式**初审 2 次调用（事实审查 1 + 编辑审 1）并最多整对重跑一次，自动上限 4 次；**降级模式**初审 1 个顺序审上下文并最多重跑一次，自动上限 2 个。`工作区/重试预算.json` 按章持久化，`review-input`/`runReviews` 必须在调用模型前预约额度；超限转作者，禁止只靠宿主提示软约束。作者用同一 ReviewInput 重提裁决不计重审；显式批准的额外轮次（`--author-approved`/`--author-confirmed`）单独记账，不恢复自动额度。
 
 2.3 **精准读取**：每类数据文件必须配"定位读到所需一段"的脚本接口；写作材料组装默认用片段，禁止默认整文件读取。
 
@@ -66,3 +66,55 @@
 6.5 版本号：`v7/package.json` 在 M5 发版前为预发版号（`7.0.0-alpha`）；发版时升 `7.0.0` 并与 README 徽章、`.claude-plugin/marketplace.json`、`plugin.json`、`CHANGELOG.md` 一致——README 版本表是 `plugin-version.yml` CI 硬约束，发版必须同步。
 
 6.6 宿主通道 I/O（M5）：AI 产物回流命令的 JSON 输入一律走 `--file`/`--payload` 文件路径，禁止 stdin（Windows 中文管道编码不可靠）；小体量 DTO 输出走 stdout（`next --json`），含正文全文的大 JSON 落工作区文件（`review-input`）。相对路径相对书仓库根（无书时相对工作目录）解析。
+
+## 7. 场景：CLI 文件 URL 与 npm 发布可移植性
+
+### 7.1 Scope / Trigger
+
+- CLI 把本地命令模块路径交给动态 `import()` 时适用。
+- 修改 `v7/package.json`、lockfile、许可证或 npm `files` 白名单时适用。
+
+### 7.2 Signatures
+
+- 文件路径转模块 URL：`pathToFileURL(commandPath).href`，其中 `commandPath` 是 `path.join` 得到的绝对文件系统路径。
+- 版本契约：`package.json.version === package-lock.json.version === package-lock.json.packages[''].version`。
+- 许可证契约：包与 lockfile 根包的 SPDX 均为 `GPL-3.0-only`；`v7/LICENSE` 与根 `LICENSE` 字节等值。
+
+### 7.3 Contracts
+
+- 禁止手拼 `file:///` 或只替换反斜杠；`#`、`%`、空格和中文必须由标准 URL API 编码。
+- npm `files` 必须包含 `LICENSE`，文档项只允许 `docs/knowledge/` 与 `docs/migration-guide.md`，禁止宽泛 `docs/`；pack 产物必须包含许可证，不得包含 v6 `webnovel-writer/` 树、`story-repo-spec` 文件或 `docs/architecture/`。
+- 命令模块不存在时保持既有作者面契约：退出码 1、中文“未知命令”、不输出堆栈。
+
+### 7.4 Validation & Error Matrix
+
+| 条件 | 必须结果 |
+|---|---|
+| 包路径含 `#`/`%`/空格/中文，命令存在 | 动态导入成功，命令正常执行 |
+| 命令不存在 | 退出码 1，中文人话错误，stderr 无堆栈 |
+| 包/lockfile 版本或 SPDX 漂移 | 元数据测试失败，禁止发布 |
+| `v7/LICENSE` 缺失或与根文件不等值 | 元数据测试失败，禁止发布 |
+| tarball 缺许可证或混入 v6 树 | pack 发布门禁失败 |
+| tarball/安装目录出现 story-repo-spec 或 `docs/architecture/` | pack/install 发布门禁失败 |
+
+### 7.5 Good / Base / Bad Cases
+
+- Good：真实子进程从同时含四类特殊字符的包路径运行已知命令，并验证未知命令错误契约。
+- Base：普通 ASCII 路径行为不变。
+- Bad：用字符串拼出 `file:///`；只在 `package.json` 声明许可证却不验证随包文件；用仓库根文件清单代替 tarball 清单。
+
+### 7.6 Tests Required
+
+- `v7/test/integration/cli-spawn-smoke.test.js`：复制真实 `bin/src/node_modules` 到特殊路径，断言已知/未知命令。
+- `v7/test/package-metadata.test.js`：断言三处版本、两处 SPDX、精确 docs 白名单和许可证字节等值。
+- `npm pack --dry-run --json`：断言 tarball 含 `LICENSE`，不含 v6、story spec 或架构文档；`npm --prefix v7 run e2e:install` 对安装包与 `.webnovel/` 重复负向断言。
+
+### 7.7 Wrong vs Correct
+
+```js
+// Wrong: # 和 % 会被当作 URL 语义，Windows 盘符处理也不可靠。
+const commandUrl = new URL(`file:///${commandPath.replace(/\\/g, '/')}`).href
+
+// Correct: 把文件系统路径交给 Node 标准 API 编码。
+const commandUrl = pathToFileURL(commandPath).href
+```

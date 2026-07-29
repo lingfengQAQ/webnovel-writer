@@ -2,6 +2,7 @@
   "name": "webnovel-writer",
   "version": "7.0.0-alpha",
   "description": "AI 网文写作工作流（v7 重写，M5 发版前预发版号）",
+  "license": "GPL-3.0-only",
   "type": "module",
   "engines": {
     "node": ">=22.13.0"
@@ -10,6 +11,7 @@
     "webnovel-writer": "bin/webnovel-writer.js"
   },
   "files": [
+    "LICENSE",
     "bin/",
     "src/",
     "roles/",
@@ -17,7 +19,8 @@
     "skills/",
     "adapters/",
     "templates/",
-    "docs/"
+    "docs/knowledge/",
+    "docs/migration-guide.md"
   ],
   "scripts": {
     "test": "node --test",

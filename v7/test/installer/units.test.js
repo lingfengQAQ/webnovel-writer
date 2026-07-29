@@ -89,3 +89,23 @@ test('mergeClaudeSettings：新建/保留用户配置/幂等/坏 JSON 不动', (
   assert.ok(d.error)
   assert.equal(d.content, '{坏的')
 })
+
+test('mergeClaudeSettings：只安装 SessionStart，保留用户 PreToolUse 且不跨区误判幂等', () => {
+  const userPreToolUse = [
+    { matcher: 'Write|Edit', hooks: [{ type: 'command', command: SESSION_HOOK_COMMAND }] },
+  ]
+  const user = JSON.stringify({ hooks: { PreToolUse: userPreToolUse } })
+  const merged = mergeClaudeSettings(user, SESSION_HOOK_COMMAND)
+  assert.equal(merged.changed, true)
+  const parsed = JSON.parse(merged.content)
+  assert.deepEqual(parsed.hooks.PreToolUse, userPreToolUse)
+  assert.equal(parsed.hooks.SessionStart.length, 1)
+  assert.deepEqual(parsed.hooks.SessionStart[0].hooks[0], {
+    type: 'command',
+    command: SESSION_HOOK_COMMAND,
+  })
+
+  const again = mergeClaudeSettings(merged.content, SESSION_HOOK_COMMAND)
+  assert.equal(again.changed, false)
+  assert.deepEqual(JSON.parse(again.content).hooks.PreToolUse, userPreToolUse)
+})

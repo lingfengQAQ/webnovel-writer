@@ -1,4 +1,5 @@
 import { parseFrontMatter } from '../storage/parsers/front-matter.js'
+import { 文体基线默认区间 } from '../storage/parsers/book-config.js'
 
 export const WORK_CONTRACT_PATH = '作品契约/作品契约.md'
 export const KNOWLEDGE_SELECTION_PATH = '作品契约/知识选择记录.md'
@@ -70,6 +71,7 @@ export function validateCreateBookPayload(payload) {
   if (!stringValue(book.类型)) errors.push('book 需含归一后的「类型」')
   validateStringList(book.副题材, 'book.副题材', errors, { optional: true })
   validateStringList(book.流派, 'book.流派', errors, { optional: true })
+  validateBaselineRange(book, errors)
   if (!stringValue(payload.总纲)) errors.push('JSON 需含非空字符串字段「总纲」')
   if (!stringValue(payload.卷纲)) errors.push('JSON 需含非空字符串字段「卷纲」')
   if (payload.作者已确认 !== true) errors.push('作品契约尚未得到作者确认，不能完成建书')
@@ -359,6 +361,18 @@ export function renderContractSections(contract, sectionNames) {
     if (stringValue(body)) parts.push('## ' + name + '\n' + body)
   }
   return parts.join('\n\n')
+}
+
+// 文体基线区间随 book.yaml 一起落盘，写盘前按解析侧同一语义校验（storage/parsers/book-config.js）：
+// 缺字段套解析默认值，出现即须是正整数且起不大于止，非法值不进 book.yaml。
+function validateBaselineRange(book, errors) {
+  const start = book.文体基线起 === undefined ? 文体基线默认区间.文体基线起 : book.文体基线起
+  const end = book.文体基线止 === undefined ? 文体基线默认区间.文体基线止 : book.文体基线止
+  const startOk = Number.isInteger(start) && start >= 1
+  const endOk = Number.isInteger(end) && end >= 1
+  if (!startOk) errors.push('book「文体基线起」必须是正整数')
+  if (!endOk) errors.push('book「文体基线止」必须是正整数')
+  if (startOk && endOk && start > end) errors.push('book「文体基线起」不能大于「文体基线止」')
 }
 
 function compareBookFields(book, fm, errors) {

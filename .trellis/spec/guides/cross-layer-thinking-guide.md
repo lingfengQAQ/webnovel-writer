@@ -100,6 +100,22 @@ In Trellis, command templates (e.g., `record-session.md`) exist in **multiple pl
 
 ---
 
+## Filesystem Path to URL Boundary
+
+Node 文件系统路径和 URL 是两个协议层。只要本地路径进入动态 `import()`、Worker 或其他 URL 消费方，就先核对这条边界。
+
+### Checklist
+
+- [ ] 用 `pathToFileURL(absolutePath).href` 转换文件路径，禁止拼接 `file:///` 或手工替换路径分隔符
+- [ ] 反向转换使用 `fileURLToPath()`，禁止从 `url.pathname` 猜本地路径
+- [ ] 真实子进程测试同时覆盖 `#`、`%`、空格、中文和 Windows 盘符语义
+- [ ] 已知命令与不存在命令都走测试，确认错误仍是既有退出码和作者面人话
+- [ ] 发布边界从 `npm pack --dry-run --json` 的 tarball 清单验证，不用工作树目录推断包内容
+
+具体实现、错误矩阵和测试断言见后端 [质量规范 §7](../backend/quality-guidelines.md#7-场景cli-文件-url-与-npm-发布可移植性)。
+
+---
+
 ## Generated Runtime Template Upgrade Consistency
 
 Some generated files are both documentation and runtime input. In Trellis,

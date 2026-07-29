@@ -36,7 +36,7 @@ const 定稿章 = (num) =>
 
 function bookFiles({ 批次大小 = 3, 卷纲 = true } = {}) {
   const files = {
-    'book.yaml': `spec_version: "7.0"\n书名: 连写测试\n类型: 玄幻\n每章目标字数: 3000\n卷规模: 40\n连写批次大小: ${批次大小}\n`,
+    'book.yaml': `spec_version: "7.0"\n书名: 连写测试\n类型: 玄幻\n每章目标字数: 3000\n卷规模: 40\n文体基线起: 1\n文体基线止: 30\n连写批次大小: ${批次大小}\n`,
     '定稿/正文/0001-第1章.md': 定稿章(1),
     '定稿/正文/0002-第2章.md': 定稿章(2),
   }
@@ -262,6 +262,23 @@ test('批次质检：句式 vs 基线 29% 不停 31% 停；无基线跳过', asy
   assert.equal(judgeBatchQuality(at31, null, {}).过线, true, '无基线句式判据跳过')
 })
 
+test('停止条件：只读取当前配置的精确基线，忽略更晚的陈旧 active 行', async () => {
+  const { ctx, cleanup } = await repoCtx(null, bookFiles())
+  try {
+    await ctx.cache.run(
+      "INSERT INTO fingerprints (chapter_range_start, chapter_range_end, is_baseline, avg_sentence_length, sentence_length_variance, avg_paragraph_length, common_phrase_frequency, vocabulary_richness, fingerprint_data) VALUES (1, 30, 1, 1, 0, 20, '{}', 0.5, '{}')"
+    )
+    await ctx.cache.run(
+      "INSERT INTO fingerprints (chapter_range_start, chapter_range_end, is_baseline, avg_sentence_length, sentence_length_variance, avg_paragraph_length, common_phrase_frequency, vocabulary_richness, fingerprint_data) VALUES (31, 40, 1, 100, 0, 20, '{}', 0.5, '{}')"
+    )
+    const r = await stage(ctx, 3, { 伏笔: ['推进 伏笔-001'] })
+    assert.equal(r.ok, true, r.error)
+    assert.ok(r.停止.reasons.some((reason) => reason.includes('批内平均句长')), JSON.stringify(r.停止))
+  } finally {
+    await cleanup()
+  }
+})
+
 // —— 打回 / 重审 / 丢弃 / 对账 ——
 
 test('rejectFrom：K 打回清工件，K+1..N 受影响；restageReview 回待审收', async () => {
@@ -323,11 +340,27 @@ test('discardBatch：整批丢弃，工作区批次消失', async () => {
   const { ctx, cleanup } = await repoCtx(null, bookFiles())
   try {
     await stage(ctx, 3)
+    await fs.writeFile(
+      path.join(ctx.repoPath, '工作区', '重试预算.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        chapters: {
+          3: { mechanical: { attempts: [{ draftHash: `sha256:${'a'.repeat(64)}`, route: 'initial', result: 'fail' }] }, review: { attempts: [] } },
+          99: { mechanical: { attempts: [{ draftHash: `sha256:${'b'.repeat(64)}`, route: 'initial', result: 'fail' }] }, review: { attempts: [] } },
+        },
+      }),
+      'utf8'
+    )
     const r = await discardBatch(ctx.repoPath)
     assert.equal(r.ok, true)
     assert.equal(r.章数, 1)
     assert.equal((await readBatch(ctx.repoPath)).exists, false)
     await assert.rejects(() => fs.access(path.join(ctx.repoPath, '工作区', '待定稿')))
+    const budget = JSON.parse(
+      await fs.readFile(path.join(ctx.repoPath, '工作区', '重试预算.json'), 'utf8')
+    )
+    assert.equal(budget.chapters['3'], undefined, '丢批清该批章的重试预算')
+    assert.ok(budget.chapters['99'], '批外章的重试预算保留')
   } finally {
     await cleanup()
   }

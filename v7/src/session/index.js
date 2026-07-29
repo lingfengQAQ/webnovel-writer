@@ -4,7 +4,8 @@ import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
 
 /**
  * SessionStart 注入与书单登记（story-repo-spec §2.0）。
- * 有 hook 宿主（Claude Code）启动调本层;无 hook 宿主由状态机入口调同一函数,行为等价。
+ * Claude Code 的 hook 与无 hook 宿主生成壳都调用 session-context；next 另走状态机序 2
+ * 做事后手改检测，不能把两者描述成 PreToolUse 写前拦截。
  * 读侧 + 扫描重建自愈（M4）与写侧（登记/换书/最后打开,M5）同模块,books.jsonl 格式单源。
  */
 
@@ -152,8 +153,8 @@ export async function touchLastOpened(workdir, 目录) {
 }
 
 /**
- * 组装 SessionStart 注入文本（当前在写哪本/共几本/全书近况入口）。
- * 登记缺失或为空 → 扫描重建。两个宿主入口调本函数 → 注入逐字一致。
+ * 组装会话上下文文本（当前在写哪本/共几本/全书近况入口）。
+ * 登记缺失或为空 → 扫描重建。SessionStart 与生成壳显式入口调本函数 → 文本逐字一致。
  */
 export async function assembleSessionContext(workdir) {
   const { books, rebuilt, needsAuthorPick } = await loadBooks(workdir)

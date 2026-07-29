@@ -32,14 +32,41 @@ const exists = async (p) => {
     return false
   }
 }
+const listRelativeFiles = async (root) => {
+  const files = []
+  const walk = async (dir, base = '') => {
+    for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+      const rel = base ? `${base}/${entry.name}` : entry.name
+      if (entry.isDirectory()) await walk(path.join(dir, entry.name), rel)
+      else if (entry.isFile()) files.push(rel)
+    }
+  }
+  await walk(root)
+  return files
+}
+const parsePackResult = (stdout) => {
+  const parsed = JSON.parse(stdout)
+  return Array.isArray(parsed) ? parsed[0] : Object.values(parsed)[0]
+}
 
 const cleanups = []
 try {
   // 1. pack（发布产物 = npx 消费的同一份包内容）
   const packDest = await fs.mkdtemp(path.join(os.tmpdir(), 'wnw-pack-'))
   cleanups.push(packDest)
-  const packOut = await npm(['pack', '--pack-destination', packDest], { cwd: pkgRoot })
-  const tgzName = packOut.stdout.trim().split('\n').at(-1).trim()
+  const packOut = await npm(['pack', '--json', '--pack-destination', packDest], { cwd: pkgRoot })
+  const pack = parsePackResult(packOut.stdout)
+  const packFiles = (pack?.files || []).map((entry) => (typeof entry === 'string' ? entry : entry.path))
+  const packedDocs = packFiles.filter((rel) => rel.startsWith('docs/'))
+  check(packFiles.includes('LICENSE'), 'pack 清单含 GPL 许可证')
+  check(packFiles.includes('docs/migration-guide.md'), 'pack 清单含迁移指南')
+  check(
+    packedDocs.every((rel) => rel.startsWith('docs/knowledge/') || rel === 'docs/migration-guide.md'),
+    'pack 清单 docs 仅含 knowledge 与 migration-guide',
+  )
+  check(!packFiles.some((rel) => rel.toLowerCase().includes('story-repo-spec')), 'pack 清单不含 story-repo-spec')
+  check(!packFiles.some((rel) => rel.startsWith('docs/architecture/')), 'pack 清单不含 docs/architecture')
+  const tgzName = pack?.filename
   const tgz = path.join(packDest, tgzName)
   check(await exists(tgz), `npm pack 产物：${tgzName}`)
 
@@ -48,13 +75,31 @@ try {
   cleanups.push(sandbox)
   await npm(['install', tgz, '--prefix', sandbox, '--no-audit', '--no-fund'], { cwd: sandbox })
   const installedBin = path.join(sandbox, 'node_modules', 'webnovel-writer', 'bin', 'webnovel-writer.js')
+  const installedRoot = path.join(sandbox, 'node_modules', 'webnovel-writer')
   check(await exists(installedBin), '安装产物 bin 存在')
+  const installedFiles = await listRelativeFiles(installedRoot)
+  const installedDocs = installedFiles.filter((rel) => rel.startsWith('docs/'))
+  check(
+    installedDocs.every((rel) => rel.startsWith('docs/knowledge/') || rel === 'docs/migration-guide.md'),
+    '安装包 docs 仅含 knowledge 与 migration-guide',
+  )
+  check(!installedFiles.some((rel) => rel.toLowerCase().includes('story-repo-spec')), '安装包不含 story-repo-spec')
+  check(!installedFiles.some((rel) => rel.startsWith('docs/architecture/')), '安装包不含 docs/architecture')
 
   // 3. 中文用户名模拟路径里 init（一条命令装出工作目录）
   const base = await fs.mkdtemp(path.join(os.tmpdir(), '中文用户名-'))
   cleanups.push(base)
   const workdir = path.join(base, '工作目录')
   await fs.mkdir(workdir, { recursive: true })
+  const userPreToolUse = [
+    { matcher: 'Write|Edit', hooks: [{ type: 'command', command: 'node 用户自己的写前检查.mjs' }] },
+  ]
+  await fs.mkdir(path.join(workdir, '.claude'), { recursive: true })
+  await fs.writeFile(
+    path.join(workdir, '.claude', 'settings.json'),
+    JSON.stringify({ hooks: { PreToolUse: userPreToolUse } }, null, 2) + '\n',
+    'utf8',
+  )
   const node = (bin, args) =>
     exec(process.execPath, [bin, ...args], { cwd: workdir, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
 
@@ -78,6 +123,25 @@ try {
   ]) {
     check(await exists(path.join(workdir, rel)), `init 布局：${rel}`)
   }
+  const initializedFiles = await listRelativeFiles(path.join(workdir, '.webnovel'))
+  const initializedDocs = initializedFiles.filter((rel) => rel.startsWith('docs/'))
+  check(
+    initializedDocs.every((rel) => rel.startsWith('docs/knowledge/')),
+    'init 后 .webnovel/docs 仅含知识治理文档',
+  )
+  check(!initializedFiles.some((rel) => rel.toLowerCase().includes('story-repo-spec')), 'init 后不含 story-repo-spec')
+  check(!initializedFiles.some((rel) => rel.startsWith('docs/architecture/')), 'init 后不含 docs/architecture')
+  const initializedSettings = JSON.parse(await fs.readFile(path.join(workdir, '.claude/settings.json'), 'utf8'))
+  check(
+    JSON.stringify(initializedSettings.hooks.PreToolUse) === JSON.stringify(userPreToolUse),
+    'init 保留用户自有 PreToolUse',
+  )
+  check(
+    Array.isArray(initializedSettings.hooks.SessionStart)
+      && initializedSettings.hooks.SessionStart.length === 1
+      && initializedSettings.hooks.SessionStart[0]?.hooks?.[0]?.command?.endsWith('session-context'),
+    'alpha 只新增 SessionStart 上下文 hook',
+  )
 
   // 4. vendored bin 建第一本书（干净环境一条命令装出并建书 = AC1 链路）
   const vendoredBin = path.join(workdir, '.webnovel', 'bin', 'webnovel-writer.js')
@@ -154,6 +218,16 @@ try {
   // 6. update 幂等重跑
   const up = await node(installedBin, ['update'])
   check(/升级完成|安装完成/.test(up.stdout), 'update 幂等可重跑')
+  const afterUpdateSettings = JSON.parse(await fs.readFile(path.join(workdir, '.claude/settings.json'), 'utf8'))
+  check(
+    JSON.stringify(afterUpdateSettings.hooks.PreToolUse) === JSON.stringify(userPreToolUse),
+    'update 保留用户自有 PreToolUse',
+  )
+  check(
+    Array.isArray(afterUpdateSettings.hooks.SessionStart)
+      && afterUpdateSettings.hooks.SessionStart.length === 1,
+    'update 不重复安装 SessionStart',
+  )
 
   if (failed) {
     console.error('\n安装链路 e2e 存在失败项')

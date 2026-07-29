@@ -16,10 +16,10 @@
 
 | 规范 | 内容 | 状态 |
 |-------|-------------|--------|
-| [目录结构](./directory-structure.md) | 分支策略、仓库布局、v7 代码布局原则 | 基线 1.0 |
+| [目录结构](./directory-structure.md) | 分支策略、仓库布局、v7 代码布局原则 | 基线 1.3 |
 | [数据与存储](./database-guidelines.md) | 真源原则、`.cache/index.db`、防呆方言 | 基线 1.0 |
 | [错误处理](./error-handling.md) | 永不崩溃、错误分级、原子性、错误文案 | 基线 1.0 |
-| [质量规范](./quality-guidelines.md) | 零依赖、职责分界、CI 要求、评审清单 | 基线 1.0 |
+| [质量规范](./quality-guidelines.md) | 零依赖、职责分界、CI 要求、评审清单 | 基线 1.1 |
 | [输出与日志](./logging-guidelines.md) | 作者界面域/机器域分离、报告文风 | 基线 1.0 |
 | [知识运行时](./knowledge-runtime.md) | 十维查询、作品契约、计划对象、章级选择、事实转正与分发契约 | 基线 1.5 |
 

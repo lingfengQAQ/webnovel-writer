@@ -22,7 +22,8 @@ function files(draftBody, { fm, extra } = {}) {
     fm ??
     `章号: 3\n标题: 测试章\n卷: 1\n字数: ${[...draftBody.replace(/\s+/g, '')].length}\n章定位: 推进\n钩子: 危机钩-强\n情绪定位: 铺垫`
   return {
-    'book.yaml': 'spec_version: "7.0"\n书名: 测\n每章目标字数: 50\n',
+    'book.yaml':
+      'spec_version: "7.0"\n书名: 测\n每章目标字数: 50\n文体基线起: 1\n文体基线止: 2\n',
     '文风/文风铁律.md': 文风铁律,
     '定稿/设定/名册.md': 名册,
     '定稿/设定/信息差/信息差-001-x.md': 信息差,
@@ -254,7 +255,9 @@ const 基线指纹 = (avg, variance) => (ctx) =>
     [avg, variance]
   )
 
-const 目标字数 = (n) => ({ 'book.yaml': `spec_version: "7.0"\n书名: 测\n每章目标字数: ${n}\n` })
+const 目标字数 = (n) => ({
+  'book.yaml': `spec_version: "7.0"\n书名: 测\n每章目标字数: ${n}\n文体基线起: 1\n文体基线止: 2\n`,
+})
 
 test('机检 高频意象命中（体检缓存）→ 候选非阻断，pass 不受影响', async () => {
   const seed = (ctx) =>
@@ -305,6 +308,26 @@ test('机检 句式偏离边界：平均句长偏 31% 报（非阻断）', async
     assert.ok(c, JSON.stringify(r.candidates))
     assert.match(c.description, /偏了 31%/)
     assert.ok(!r.issues.some((i) => i.check === '句式偏离'), '句式偏离只进候选不进 issues')
+  } finally {
+    await cleanup()
+  }
+})
+
+test('机检 只消费当前配置的精确基线区间，忽略更晚的陈旧 active 行', async () => {
+  const body = sentencesOfLengths([13, 13, 13, 13, 13, 13, 13, 13, 13, 14])
+  const seed = async (ctx) => {
+    await 基线指纹(10, 0)(ctx)
+    await ctx.cache.run(
+      "INSERT INTO fingerprints (chapter_range_start, chapter_range_end, is_baseline, avg_sentence_length, sentence_length_variance, avg_paragraph_length, common_phrase_frequency, vocabulary_richness, fingerprint_data) VALUES (10, 20, 1, 13.1, 0, 20, '{}', 0.5, '{}')"
+    )
+  }
+  const { r, cleanup } = await runWithCache(body, { extra: 目标字数(130), seed })
+  try {
+    const candidate = r.candidates.find(
+      (item) => item.type === '句式偏离' && item.value === '平均句长'
+    )
+    assert.ok(candidate, JSON.stringify(r.candidates))
+    assert.match(candidate.description, /基线 10\.0 字/)
   } finally {
     await cleanup()
   }

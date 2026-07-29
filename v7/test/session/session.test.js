@@ -71,6 +71,8 @@ test('assembleSessionContext：有登记 → 注入含当前书与本数', async
     assert.equal(r.ok, true)
     assert.match(r.text, /剑起青云/)
     assert.match(r.text, /2 本/)
+    assert.match(r.text, /全书近况/)
+    assert.doesNotMatch(r.text, /PreToolUse|写前拦截|手改补登|relink/)
     assert.equal(r.current.书名, '剑起青云')
   } finally { await cleanup() }
 })
@@ -132,12 +134,12 @@ test('writeBooksRegistry：写 JSONL 逐行,可被 readBooksRegistry 读回', as
   } finally { await cleanup() }
 })
 
-test('无 hook 等价:hook 入口与状态机入口调同一函数 → 注入文本逐字一致', async () => {
+test('SessionStart 与无 hook SKILL 的 session-context 调同一函数 → 文本逐字一致', async () => {
   const { root, cleanup } = await tmpWorkdir()
   try {
     await writeRegistry(root, [JSON.stringify({ 书名: '剑起青云', 目录: '剑起青云', 当前: true })])
     const hookText = (await assembleSessionContext(root)).text // Claude Code SessionStart hook
-    const smText = (await assembleSessionContext(root)).text // 无 hook 宿主由状态机入口调
-    assert.equal(hookText, smText)
+    const skillText = (await assembleSessionContext(root)).text // 无 hook SKILL 显式运行 session-context
+    assert.equal(hookText, skillText)
   } finally { await cleanup() }
 })

@@ -34,6 +34,7 @@ These guides help you **ask the right questions before coding**.
 - [ ] Data format changes between layers
 - [ ] Multiple consumers need the same data
 - [ ] You're not sure where to put some logic
+- [ ] A filesystem path crosses into a URL-based API or published package boundary
 
 → Read [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md)
 

@@ -184,7 +184,7 @@ test('体检 单项失败不炸整体：正文文件读不到 → 三统计节�
   }
 })
 
-test('体检 基线段与近段重合（全书尚在基线区间）→ 只落基线行，如实说明', async () => {
+test('体检 配置基线区间未齐 → 不写部分前缀基线，也不比较漂移', async () => {
   const files = fixtureFiles({
     bookYaml:
       'spec_version: "7.0"\n书名: 体检测试书\n类型: 玄幻\n每章目标字数: 3000\n卷规模: 40\n文体基线起: 1\n文体基线止: 30\n体检周期: 50\n',
@@ -193,15 +193,151 @@ test('体检 基线段与近段重合（全书尚在基线区间）→ 只落基
   try {
     const r = await runHealthCheck(ctx)
     assert.equal(r.ok, true, r.error)
+    const rows = await ctx.cache.query('SELECT * FROM fingerprints WHERE is_baseline = 1')
+    assert.equal(rows.length, 0)
+    const report = await fs.readFile(r.filePath, 'utf8')
+    assert.match(report, /文体基线尚未建立.*第 1-30 章.*5\/30 章/)
+    assert.equal(r.data.指纹, null)
+  } finally {
+    await cleanup()
+  }
+})
+
+test('体检 完整基线恰与近段重合 → 只写配置区间的基线行', async () => {
+  const files = fixtureFiles({
+    bookYaml:
+      'spec_version: "7.0"\n书名: 体检测试书\n类型: 玄幻\n文体基线起: 1\n文体基线止: 5\n体检周期: 50\n',
+  })
+  const { ctx, cleanup } = await repoCtx(null, files)
+  try {
+    const r = await runHealthCheck(ctx)
+    assert.equal(r.ok, true, r.error)
     const rows = await ctx.cache.query('SELECT * FROM fingerprints')
     assert.equal(rows.length, 1)
-    assert.equal(rows[0].is_baseline, 1)
-    assert.equal(rows[0].chapter_range_start, 1)
-    assert.equal(rows[0].chapter_range_end, 5)
+    assert.deepEqual(
+      [rows[0].chapter_range_start, rows[0].chapter_range_end, rows[0].is_baseline],
+      [1, 5, 1]
+    )
     const report = await fs.readFile(r.filePath, 'utf8')
     assert.match(report, /基线与近段重合，暂无漂移可比/)
     assert.equal(r.data.指纹.近段, null)
     assert.equal(r.data.指纹.delta, null)
+  } finally {
+    await cleanup()
+  }
+})
+
+test('体检 配置切换到未齐区间 → 移除旧 active 基线，不回退历史范围', async () => {
+  const { ctx, cleanup } = await repoCtx(null, fixtureFiles())
+  try {
+    const first = await runHealthCheck(ctx)
+    assert.equal(first.ok, true, first.error)
+    assert.deepEqual(
+      (await ctx.cache.query('SELECT chapter_range_start, chapter_range_end FROM fingerprints WHERE is_baseline = 1'))
+        .map((row) => [row.chapter_range_start, row.chapter_range_end]),
+      [[1, 2]]
+    )
+
+    await fs.writeFile(
+      path.join(ctx.repoPath, 'book.yaml'),
+      'spec_version: "7.0"\n书名: 体检测试书\n类型: 玄幻\n文体基线起: 1\n文体基线止: 6\n体检周期: 3\n',
+      'utf8'
+    )
+    const second = await runHealthCheck(ctx)
+    assert.equal(second.ok, true, second.error)
+    assert.equal(
+      (await ctx.cache.query('SELECT COUNT(*) AS c FROM fingerprints WHERE is_baseline = 1'))[0].c,
+      0
+    )
+    assert.equal(second.data.指纹, null)
+  } finally {
+    await cleanup()
+  }
+})
+
+test('体检 配置区间中间缺章 → 即使止章已定稿也不建立基线', async () => {
+  const files = fixtureFiles({
+    bookYaml:
+      'spec_version: "7.0"\n书名: 体检测试书\n类型: 玄幻\n文体基线起: 1\n文体基线止: 3\n体检周期: 3\n',
+  })
+  delete files['定稿/正文/0002-第2章.md']
+  const { ctx, cleanup } = await repoCtx(null, files)
+  try {
+    const r = await runHealthCheck(ctx)
+    assert.equal(r.ok, true, r.error)
+    assert.equal(
+      (await ctx.cache.query('SELECT COUNT(*) AS c FROM fingerprints WHERE is_baseline = 1'))[0].c,
+      0
+    )
+    const report = await fs.readFile(r.filePath, 'utf8')
+    assert.match(report, /文体基线尚未建立.*2\/3 章/)
+    assert.equal(r.data.指纹, null)
+  } finally {
+    await cleanup()
+  }
+})
+
+test('体检 正文读不到 → 保留已建立的基线，恢复后结果与首次逐字段一致', async () => {
+  const { ctx, cleanup } = await repoCtx(null, fixtureFiles())
+  try {
+    const 首次 = await runHealthCheck(ctx)
+    assert.equal(首次.ok, true, 首次.error)
+    const q =
+      'SELECT * FROM fingerprints ORDER BY is_baseline DESC, chapter_range_start, chapter_range_end'
+    const rows1 = await ctx.cache.query(q)
+
+    // 缓存里仍有第 5 章的行，文件没了 → 语料读取失败，三统计降级
+    const 第5章 = path.join(ctx.repoPath, '定稿', '正文', '0005-第5章.md')
+    const 原文 = await fs.readFile(第5章, 'utf8')
+    await fs.rm(第5章)
+    const 降级 = await runHealthCheck(ctx)
+    assert.equal(降级.ok, true, 降级.error)
+    assert.equal(降级.data.指纹, null)
+    assert.deepEqual(
+      (
+        await ctx.cache.query(
+          'SELECT chapter_range_start, chapter_range_end FROM fingerprints WHERE is_baseline = 1'
+        )
+      ).map((row) => [row.chapter_range_start, row.chapter_range_end]),
+      [[1, 2]],
+      '语料读取失败不该连带清掉基线'
+    )
+
+    await fs.writeFile(第5章, 原文, 'utf8')
+    const 恢复 = await runHealthCheck(ctx)
+    assert.equal(恢复.ok, true, 恢复.error)
+    assert.deepStrictEqual(await ctx.cache.query(q), rows1)
+  } finally {
+    await cleanup()
+  }
+})
+
+test('体检 配置切换到另一个齐全区间 → 旧基线行移除，新基线落新章段', async () => {
+  const { ctx, cleanup } = await repoCtx(null, fixtureFiles())
+  try {
+    const 首次 = await runHealthCheck(ctx)
+    assert.equal(首次.ok, true, 首次.error)
+    assert.deepEqual(首次.data.指纹.基线.范围, [1, 2])
+
+    await fs.writeFile(
+      path.join(ctx.repoPath, 'book.yaml'),
+      'spec_version: "7.0"\n书名: 体检测试书\n类型: 玄幻\n文体基线起: 2\n文体基线止: 4\n体检周期: 3\n',
+      'utf8'
+    )
+    const 切换后 = await runHealthCheck(ctx)
+    assert.equal(切换后.ok, true, 切换后.error)
+    assert.deepEqual(
+      (
+        await ctx.cache.query(
+          'SELECT chapter_range_start, chapter_range_end FROM fingerprints WHERE is_baseline = 1'
+        )
+      ).map((row) => [row.chapter_range_start, row.chapter_range_end]),
+      [[2, 4]]
+    )
+    assert.deepEqual(切换后.data.指纹.基线.范围, [2, 4])
+    assert.deepEqual(切换后.data.指纹.近段.范围, [3, 5])
+    const report = await fs.readFile(切换后.filePath, 'utf8')
+    assert.match(report, /基线（第 2-4 章）/)
   } finally {
     await cleanup()
   }

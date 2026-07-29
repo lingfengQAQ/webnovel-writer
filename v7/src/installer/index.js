@@ -199,7 +199,11 @@ function buildReport({ workdir, version, hosts, detected, registry, written, ski
       const tier = cfg.tier ? `${cfg.tier === 1 ? '一' : cfg.tier === 2 ? '二' : '三'}级${cfg.verified ? `（${cfg.verified}）` : ''}` : ''
       const cap = []
       cap.push(cfg.agentCapable ? '两审=独立 subagent' : '两审=兼容模式（顺序自审，如实声明）')
-      cap.push(cfg.hasHooks ? '启动自动注入书单（SessionStart）' : '启动由入口读书单（与 hook 等价）')
+      cap.push(
+        cfg.hasHooks
+          ? 'SessionStart 只注入当前书、本数与全书近况入口'
+          : '启动时由 SKILL 显式运行 session-context'
+      )
       lines.push(`  - ${h} → ${cfg.install_dir}/  ${tier}；${cap.join('；')}${detected.includes(h) ? '' : '（未在 PATH 检测到，按既装/指定生成）'}`)
     }
   } else {

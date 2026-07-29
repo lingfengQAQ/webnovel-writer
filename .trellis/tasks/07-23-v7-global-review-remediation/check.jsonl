@@ -1,0 +1,6 @@
+{"file":".trellis/spec/backend/index.md","reason":"按后端索引执行最终全范围质量检查"}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"全量测试、生成器、安装 e2e 与特殊路径质量门"}
+{"file":".trellis/spec/backend/error-handling.md","reason":"确认 CLI 修复不破坏中文错误与失败契约"}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"确认基线/缓存行为与六表真源一致"}
+{"file":".trellis/spec/backend/knowledge-runtime.md","reason":"防止契约 guard、ReviewInput 令牌和批次状态回归"}
+{"file":".trellis/tasks/07-23-v7-global-review-remediation/research/评审核验基线.md","reason":"对照已核实问题、纠正项和明确不采纳的简化"}

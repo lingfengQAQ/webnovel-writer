@@ -1,8 +1,8 @@
 # Webnovel Writer 多宿主与多智能体适配 Spec
 
-> 日期：2026-06-05（v3 修订：2026-06-11；v3.1：同日，hook 语义 deny → ask，依据 #113；v3.2：2026-06-12，按 PRD 1.0 §10.2 修订——安装器重写为工作目录布局、AGENTS.md 公约数层、SessionStart 注入、模板条件块、放弃插件市场；v3.3：2026-06-26，RFC 后续决策——两审模式、审稿清单定义；v3.4：2026-06-27，RFC 深度核验——事实审查增 D3 未登记伏笔检测 category；v3.5：2026-07-02，设计边界回顾——§6.1 目录图角色清单同步两审实态；v3.6：2026-07-03，M1-M5 review S-2——§7.1 registry 示例补 M5 实态字段 detect_bin/install_dir 等，照抄示例不再被 validator 打回；v3.7：2026-07-04，M6 自动模式——SKILL.md 单源增「自动模式（连写）」段并重渲染各宿主壳，§5.1 补批次暂存不开第二条写入路径；v3.8：2026-07-07，知识库重构（story-repo-spec 0.15）——§8.1 工作目录布局补知识库 references vendoring，SKILL.md 单源同步知识声明位与建书蒸馏并重渲染各宿主壳；v3.9：2026-07-18，story-repo-spec 0.17——宿主壳切换到作品契约、计划对象、四维章级选择与事实转正，安装器同时分发十维知识治理文档）
-> 状态：草案 v3.9
-> 基线：**v7 story repo**（`story-repo-spec-2026-06-10.md` 0.17）+ **PRD**（`v7-prd.md` 1.6，产品法律文本，冲突时以 PRD 为准）。v2 的基线是 v6.1.0 Python runtime，该架构已被 v7 推翻；本版继承 v2 的元层纪律，重写全部基座层。
+> 日期：2026-06-05（v3 修订：2026-06-11；v3.1-v3.9 历史见 git；v3.10：2026-07-23，发布审计明确重试预算、alpha 延后 PreToolUse，并封闭 story-repo-spec 包边界；v3.11：2026-07-28，重试段改按命令返回 action 协议表述，并补记账与 ReviewInput 共锁的并发提示说明）
+> 状态：草案 v3.11
+> 基线：**v7 story repo**（`story-repo-spec-2026-06-10.md` 0.18）+ **PRD**（`v7-prd.md` 1.7，产品法律文本，冲突时以 PRD 为准）。v2 的基线是 v6.1.0 Python runtime，该架构已被 v7 推翻；本版继承 v2 的元层纪律，重写全部基座层。
 > 来源：v2（基于 PR #110 review 重写）+ 2026-06 多平台调研核验 + Trellis 多宿主机制调研（2026-06-11）+ PRD 1.0 + RFC 后续决策（2026-06-26）+ RFC 深度核验（2026-06-27）
 > 定位：把 v7 的格式层（story repo）原封不动地暴露给多个 agent 宿主——格式平台无关，本 spec 只管入口怎么落、角色怎么生成、安装怎么零门槛、支持等级怎么诚实。
 
@@ -154,11 +154,13 @@ Claude Code 的使用体验是其他宿主的对照基准。**插件市场渠道
 
 **降级诚实条款（继承 v2）**：不允许声称调用了不存在的能力；机检与定稿是脚本，不参与降级。
 
-### 5.5 Hook 只是 Claude Code 上的自动兜底
+**每章重试预算**：机检与两审的自动循环有硬上限，宿主按命令返回的 `action`/预算字段行动（`revise-and-recheck` 继续、`hand-off-to-author`/`request-author-confirmation` 停下交作者），不得自行把修稿重检解释为无限循环。机检初次失败后最多自动修复两轮；两审最多自动执行初审一轮和整轮重审一次。完整模式每轮两次独立调用，兼容模式每轮一个顺序审上下文，但两者都只消耗一轮编排额度。脚本在 `工作区/重试预算.json` 按章、草稿 hash 和 ReviewInput 令牌持久记账；同输入恢复不重复扣。自动额度耗尽后宿主必须停下呈报作者，只有明确作者批准（`--author-confirmed`/`--author-approved`）才能再开一轮且不得重置自动额度。作者对同一报告完成事实裁决并重新 `save-review` 不属于重审。记账与 ReviewInput 签发共用作品状态锁；机检、审稿命令与暂存/定稿并发时会提示「已有作品状态写入正在处理」，稍后重试即可，属预期保护而非故障。
 
-- **SessionStart 注入**：读工作目录 `.webnovel/books.jsonl`，注入"当前在写哪本、共几本书、全书近况入口"；再读当前书状态报全书近况。无 hook 宿主由状态机入口启动时读同一文件，行为等价。
-- **Hook 语义是 ask，不是 deny**：PreToolUse 检测到直写 `定稿/` 或 `大纲/伏笔|悬念|感情线/` 时提醒"这是定稿区，确认直写还是走写章流程？"，确认后放行；事后由手改检测（story repo spec §9）提议补登兜底。deny 式 hook 无法区分"绕过定稿破坏一致性"和"替作者批量修数据"，被拦的往往是后者——v6 的 state.json guard 即此教训（#113，已于 73447d7 放开）。这与 story repo spec 不变量 1（"检测手改并提议补登，永不报错拒绝"）和"可靠性来自自愈，不来自门禁"原则自洽。
-- 任何关键能力不得只存在于 hook 中；无 hook 宿主由状态机入口（每次启动先跑全书近况与手改检测）补足，行为等价。
+### 5.5 Alpha hook 边界与跨宿主自愈
+
+- **SessionStart 只注入上下文**：Claude Code 读取工作目录 `.webnovel/books.jsonl`，注入“当前在写哪本、共几本书、全书近况入口”，不读取或替作者总结全书近况。无 hook 宿主由生成的 SKILL 显式调用 `session-context` 得到同一信息。
+- **PreToolUse 明确延后**：`7.0.0-alpha` 不生成、不安装 PreToolUse，也不得声称直写前会弹 ask。所有宿主在执行 `next` 时，由状态机序 2 在进入后续创作态前检测定稿/大纲/文风的未登记手改并提议 `relink`；这是事后自愈，不是与写前 hook 时机等价的拦截。
+- **未来语义边界**：若以后实现 PreToolUse，只能 ask 后放行，不能 deny；并须单独核验宿主兼容性、全新安装、合并用户配置和无 hook 降级。关键正确性始终不得依赖 hook。
 
 ### 5.6 零依赖与 UTF-8 First（Node 口径）
 
@@ -272,7 +274,7 @@ node scripts/build-host-shells.mjs --check     # drift check，CI 必跑
 ### 8.1 init
 
 1. **检测环境**：Node ≥ 22（不足时人话提示升级）；识别已安装的 agent CLI（按 registry 顺序探测）。
-2. **生成工作目录布局**（story repo spec §2.0）：`AGENTS.md`（公约数层，标记块）、`.webnovel/`（Node 脚本、角色定义、十维知识 `references/`、治理真源 `docs/knowledge/`、模板哈希清单、`books.jsonl`）、检测到的各平台壳（`.claude/`、`.codex/` 等，由生成器按 §5.9 条件块编译）。
+2. **生成工作目录布局**（story repo spec §2.0）：`AGENTS.md`（公约数层，标记块）、`.webnovel/`（Node 脚本、角色定义、十维知识 `references/`、治理真源 `docs/knowledge/`、模板哈希清单、`books.jsonl`）、检测到的各平台壳（`.claude/`、`.codex/` 等，由生成器按 §5.9 条件块编译）。`story-repo-spec` 的完整稿、精简稿和任何重命名副本都不进入 npm 包或 `.webnovel/`。
 3. **输出报告**：装到了哪、各宿主支持等级、降级说明、下一步（打开 agent CLI 说"开始写书"）。
 
 ### 8.2 update
@@ -290,6 +292,7 @@ node scripts/build-host-shells.mjs --check     # drift check，CI 必跑
 
 - **drift check**：`build-host-shells.mjs --check`，验证生成器输出确定性（同输入必同输出），CI 必跑。
 - **package validator**：registry schema、逐宿主 support.md 存在性、smoke 命令声明、生成物无本机绝对路径、skill description 长度（Codex 8k 预算）。
+- **package boundary**：npm 文档只允许 `docs/knowledge/**` 与 `docs/migration-guide.md`；pack、install 和 init 后产物均须负向断言不存在 `story-repo-spec` 与 `docs/architecture/`。
 - **行为 smoke**（每个一级宿主）：discover（skill 可发现）→ npx init → 建书 → 全书近况 → 写一章全流程（细纲→定稿）→ 删 `.cache/` 重建。Windows 中文路径全链路必测。
 - **降级验收**：至少一个无 subagent 环境跑通两审兼容模式，且输出含兼容模式声明。
 
@@ -328,7 +331,7 @@ node scripts/build-host-shells.mjs --check     # drift check，CI 必跑
 - [ ] update 哈希追踪：改过的文件不被静默覆盖。
 - [ ] registry 三级分级，一级宿主有 support.md + 过 smoke。
 - [ ] 无 subagent 宿主跑通两审兼容模式且如实声明。
-- [ ] hook 缺席的宿主核心流程行为等价（含 books.jsonl 上下文注入的等价路径）。
+- [ ] hook 缺席的宿主核心流程可用：生成壳显式调用 `session-context`，所有宿主的 `next` 序 2 均能发现未登记手改；不把事后自愈冒充 PreToolUse 写前拦截。
 
 ## 13. 简短结论
 

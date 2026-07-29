@@ -1,8 +1,9 @@
 import { assembleSessionContext, touchLastOpened } from '../session/index.js'
 
 /**
- * session-context：输出 SessionStart 注入文本（当前在写哪本/共几本/入口）。
- * Claude Code SessionStart hook 与无 hook 宿主状态机入口都调这里 → 注入逐字一致。
+ * session-context：输出会话上下文（当前在写哪本/共几本/入口）。
+ * Claude Code SessionStart 与无 hook 宿主生成壳显式调用这里；next 的序 2 是另一条
+ * 事后手改自愈路径，不冒充写前 hook。
  * 契约：纯返回 {ok, output?, error?}。
  */
 export const scope = 'workdir'

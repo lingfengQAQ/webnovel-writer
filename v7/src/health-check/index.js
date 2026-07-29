@@ -5,6 +5,7 @@ import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
 import { TimelineReader } from '../storage/adapters/TimelineReader.js'
 import { parseFrontMatter } from '../storage/parsers/front-matter.js'
 import { extractImagery, extractFingerprint, styleMetrics } from '../style-stats/index.js'
+import { configuredBaselineRange } from './baseline.js'
 
 // 高频意象入 meta/报告的条数（提醒不拦截，硬编码合理默认）
 const IMAGERY_TOP = 20
@@ -41,9 +42,8 @@ export async function runHealthCheck(ctx) {
 
     const config = await new BookConfigReader(repoPath).read()
     const bookConfig = config.ok ? config.data : {}
+    const baselineRange = config.ok ? configuredBaselineRange(bookConfig) : null
     const 体检周期 = bookConfig.体检周期 || 50
-    const 基线起 = bookConfig.文体基线起 || 1
-    const 基线止 = bookConfig.文体基线止 || 30
     // 近段窗口只依赖书状态不依赖 meta：缓存/体检记录丢失不改变体检输出（确定性）
     const 近段起 = Math.max(1, maxChapter - 体检周期 + 1)
 
@@ -68,6 +68,10 @@ export async function runHealthCheck(ctx) {
     } catch (err) {
       corpusFail = `定稿正文读取失败：${err.message}`
     }
+
+    // 基线是当前 book.yaml 区间的派生物。配置切换或区间未齐时，先移除所有旧 active 行，
+    // 避免任何消费者继续读到历史基线；语料读不到时本轮无从判断该不该清，保留已有基线。
+    if (!corpusFail) await cache.run('DELETE FROM fingerprints WHERE is_baseline = 1')
 
     let 意象节 = ''
     let 句式节 = ''
@@ -109,8 +113,8 @@ export async function runHealthCheck(ctx) {
       // 文体指纹：基线段 + 近段各算一份 upsert 入表，报告出漂移对比
       try {
         const r = await compareFingerprints(cache, corpus, exclude, {
-          基线起,
-          基线止,
+          baselineRange,
+          baselineConfigError: config.ok ? '' : config.error,
           近段起,
           maxChapter,
         })
@@ -199,23 +203,40 @@ async function readExcludeNames(cache) {
   return names
 }
 
-async function compareFingerprints(cache, corpus, exclude, { 基线起, 基线止, 近段起, maxChapter }) {
-  if (maxChapter < 基线起) {
-    return { text: `- 章数不足基线区间（基线从第 ${基线起} 章起），暂不对比。`, data: null }
+async function compareFingerprints(
+  cache,
+  corpus,
+  exclude,
+  { baselineRange, baselineConfigError, 近段起, maxChapter }
+) {
+  if (!baselineRange) {
+    return {
+      text: `- 文体基线配置无效${baselineConfigError ? `：${baselineConfigError}` : ''}，尚未建立基线。`,
+      data: null,
+    }
   }
-  const 基线终 = Math.min(基线止, maxChapter)
+  const { start: 基线起, end: 基线止 } = baselineRange
   const inRange = (s, e) => corpus.filter((c) => c.num >= s && c.num <= e)
 
-  const baseFp = extractFingerprint(inRange(基线起, 基线终), exclude)
-  await upsertFingerprint(cache, 基线起, 基线终, 1, baseFp)
-  const 基线 = fpSummary(基线起, 基线终, baseFp)
+  const baselineChapters = inRange(基线起, 基线止)
+  const expectedCount = 基线止 - 基线起 + 1
+  if (baselineChapters.length !== expectedCount) {
+    return {
+      text: `- 文体基线尚未建立：配置区间为第 ${基线起}-${基线止} 章，当前仅找到 ${baselineChapters.length}/${expectedCount} 章，暂不比较。`,
+      data: null,
+    }
+  }
+
+  const baseFp = extractFingerprint(baselineChapters, exclude)
+  await upsertFingerprint(cache, 基线起, 基线止, 1, baseFp)
+  const 基线 = fpSummary(基线起, 基线止, baseFp)
 
   // 基线段与近段完全重合（全书尚在基线区间内）：只落基线行，避免同主键行被近段覆盖掉基线标记
-  if (基线起 === 近段起 && 基线终 === maxChapter) {
+  if (基线起 === 近段起 && 基线止 === maxChapter) {
     return {
       text: [
         '- 全书尚在基线区间内，基线与近段重合，暂无漂移可比。',
-        `- 基线（第 ${基线起}-${基线终} 章）：${fpLine(baseFp)}`,
+        `- 基线（第 ${基线起}-${基线止} 章）：${fpLine(baseFp)}`,
       ].join('\n'),
       data: { 基线, 近段: null, delta: null },
     }
@@ -231,10 +252,10 @@ async function compareFingerprints(cache, corpus, exclude, { 基线起, 基线�
     词汇丰富度: recentFp.vocabulary_richness - baseFp.vocabulary_richness,
   }
   const text = [
-    `- 基线（第 ${基线起}-${基线终} 章）：${fpLine(baseFp)}`,
+    `- 基线（第 ${基线起}-${基线止} 章）：${fpLine(baseFp)}`,
     `- 近段（第 ${近段起}-${maxChapter} 章）：${fpLine(recentFp)}`,
     `- 漂移：平均句长 ${deltaLine(delta.平均句长, baseFp.avg_sentence_length, '字')}，句长方差 ${deltaLine(delta.句长方差, baseFp.sentence_length_variance, '')}，平均段长 ${deltaLine(delta.平均段长, baseFp.avg_paragraph_length, '字')}，词汇丰富度 ${signed(delta.词汇丰富度, 3)}`,
-    `- 若感觉文风漂了：回读基线章（第 ${基线起}-${基线终} 章）找回手感；若新写法更合心意：把 book.yaml 里的 文体基线起/文体基线止 改成新章段。这一步由你决定，脚本不自动改。`,
+    `- 若感觉文风漂了：回读基线章（第 ${基线起}-${基线止} 章）找回手感；若新写法更合心意：把 book.yaml 里的 文体基线起/文体基线止 改成新章段。这一步由你决定，脚本不自动改。`,
   ].join('\n')
   return { text, data: { 基线, 近段, delta } }
 }

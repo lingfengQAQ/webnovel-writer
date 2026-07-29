@@ -1,6 +1,6 @@
 # 目录结构规范
 
-> 版本：基线 1.2（2026-07-18，十维知识运行时与治理文档分发生效）。依据：v7 PRD 1.6、story-repo-spec 0.17。
+> 版本：基线 1.4（2026-07-23，封闭 story-repo-spec npm 分发边界；1.3 同日补 GPL v3 许可证边界）。依据：v7 PRD 1.7、story-repo-spec 0.18。
 
 ---
 
@@ -43,8 +43,9 @@ webnovel-writer/                # 仓库根
 
 ```
 v7/
+├── LICENSE                 # 根 LICENSE 的字节等值 GPL v3 副本，进入 npm tarball
 ├── package.json            # name=webnovel-writer, type=module, engines.node>=22.13.0
-│                           # files 白名单：bin/ src/ roles/ skills/ adapters/ templates/（npm 包=安装源）
+│                           # files 白名单：LICENSE + bin/src/roles/references/skills/adapters/templates + 精确 docs 子项
 ├── bin/
 │   └── webnovel-writer.js  # CLI 入口：版本门槛先行 + 工作目录定位 + 子命令分发
 ├── src/
@@ -68,8 +69,10 @@ v7/
 
 4.2 模块为按职责（Use Case）划分，**非通用工具层**；端口拆小，禁止上帝对象（spec §1.5）。
 
-4.3 十维知识真源存放于 `v7/references/`，治理真源存放于 `v7/docs/knowledge/`；两者都必须进入 npm `files` 和 vendored `.webnovel/`。`references/README.md` 指向的三份治理文档必须在安装产物中存在，具体命令与测试契约见 [知识运行时](./knowledge-runtime.md)。
+4.3 十维知识真源存放于 `v7/references/`，治理真源存放于 `v7/docs/knowledge/`；两者都必须进入 npm `files` 和 vendored `.webnovel/`。npm 文档白名单只允许 `docs/knowledge/` 与 `docs/migration-guide.md`，禁止宽泛 `docs/`。`story-repo-spec` 的完整稿、精简稿或重命名副本均属开发仓库法律文本，不得进入 tarball 或 `.webnovel/`。`references/README.md` 指向的三份治理文档必须在安装产物中存在，具体命令与测试契约见 [知识运行时](./knowledge-runtime.md)。
 
 4.4 命令分级协议（M5）：命令模块可选导出 `scope`——`'book'`（缺省，得 `{repoPath, cache}`）/ `'workdir'`（得 `{workdir, packageRoot}`，不建缓存）/ `'workdir-or-book'` / `'anywhere'`；空工作目录仍可跑的命令导出 `allowNoBook = true`（当前仅 `next`，状态机以 `repoPath=null` 判序 1 建书）。定位三分支见 `src/runtime/locate.js`：cwd 含 `book.yaml` 直启 → cwd 含 `.webnovel/` 按当前书解析 → 否则人话提示。
 
-4.5 工作目录 `.webnovel/` 为 vendored 运行时（自包含离线可跑）：`bin/ src/ roles/ package.json + node_modules/<运行时依赖及传递依赖> + manifest.json（哈希清单）+ books.jsonl（用户数据，安装器只保底不覆盖）`。哈希清单键一律正斜杠（跨平台可移植）。
+4.5 工作目录 `.webnovel/` 为 vendored 运行时（自包含离线可跑）：`bin/ src/ roles/ references/ docs/knowledge/ package.json + node_modules/<运行时依赖及传递依赖> + manifest.json（哈希清单）+ books.jsonl（用户数据，安装器只保底不覆盖）`。哈希清单键一律正斜杠（跨平台可移植）。
+
+4.6 v7 npm 包沿用根仓库 GPL v3：`package.json` 与 lockfile 根包 SPDX 均为 `GPL-3.0-only`，`v7/LICENSE` 必须与根 `LICENSE` 字节等值并进入 `files` 白名单。package/lockfile 三处版本必须一致；发布前从 `npm pack --dry-run --json` 的 tarball 清单验证许可证存在，且 v6 `webnovel-writer/`、`story-repo-spec` 和 `docs/architecture/` 均未混入，不能用工作树目录推断发布内容。

@@ -5,6 +5,7 @@ import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
 import { parseThreadDeclarations, VERBS, OPENING_VERBS } from '../util/thread-declarations.js'
 import { styleMetrics, AVG_SENTENCE_LEN_TOLERANCE, SENTENCE_VARIANCE_TOLERANCE } from '../style-stats/index.js'
 import { stagedFacts } from '../staging/index.js'
+import { readCurrentBaselineFingerprint } from '../health-check/baseline.js'
 
 // front matter 章档案必填字段（§4.1 机器消费部分）
 const REQUIRED_FM = ['章号', '标题', '卷', '字数', '章定位', '钩子', '情绪定位']
@@ -44,7 +45,7 @@ export async function mechanicalCheck(ctx, { chapterNum, draftPath }) {
     await checkSecretKeywords(body, cache, candidates, staged) // 7（候选）
     await checkThreadDeclarations(fm, cache, issues, staged) // 8（条目变动，只查形式）
     await checkImageryHits(body, cache, candidates) // 9（候选，消费体检的高频意象清单）
-    await checkStyleDeviation(body, cache, candidates) // 10（候选，vs 基线指纹）
+    await checkStyleDeviation(body, cache, candidates, bookConfig) // 10（候选，vs 当前配置基线指纹）
 
     return { ok: true, pass: issues.length === 0, issues, candidates, error: '' }
   } catch (err) {
@@ -252,16 +253,8 @@ async function checkImageryHits(body, cache, candidates) {
 }
 
 // 本章句式 vs 基线指纹（体检 upsert 的基线行）：平均句长偏 ≥30% 或句长方差偏 ≥50% → 非阻断提醒；无基线 → 静默跳过
-async function checkStyleDeviation(body, cache, candidates) {
-  let base = null
-  try {
-    const rows = await cache.query(
-      'SELECT avg_sentence_length, sentence_length_variance FROM fingerprints WHERE is_baseline = 1 ORDER BY chapter_range_end DESC LIMIT 1'
-    )
-    base = rows[0] || null
-  } catch {
-    return
-  }
+async function checkStyleDeviation(body, cache, candidates, config) {
+  const base = await readCurrentBaselineFingerprint(cache, config)
   if (!base) return
   const m = styleMetrics(body)
   if (base.avg_sentence_length > 0) {

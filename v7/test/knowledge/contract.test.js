@@ -8,6 +8,8 @@ import {
   validateWorkContract,
 } from '../../src/knowledge/contract.js'
 import { minimalCreateBookPayload, minimalWorkContract } from '../state-machine/_helper.js'
+import { parseBookConfig } from '../../src/storage/parsers/book-config.js'
+import { serializeYAML } from '../../src/storage/serializers/yaml-dialect.js'
 
 test('建书契约：作者确认、八个小节、三项差异化和五项结算全部有效才通过', () => {
   const valid = minimalCreateBookPayload()
@@ -187,8 +189,56 @@ test('契约更新：版本严格加一且必须从下一未定稿章立即生�
   )
 })
 
-test('知识选择记录只保存最终采用和真实裁决，不制造评分或空反馈', () => {
-  const contract = validateWorkContract(minimalWorkContract()).data
+test('建书 book：文体基线区间必须是正整数闭区间，非法值不落 book.yaml', () => {
+  const 非法 = [
+    [{ 文体基线起: 0 }, '「文体基线起」必须是正整数'],
+    [{ 文体基线止: 0 }, '「文体基线止」必须是正整数'],
+    [{ 文体基线起: -1 }, '「文体基线起」必须是正整数'],
+    [{ 文体基线起: 1.5 }, '「文体基线起」必须是正整数'],
+    [{ 文体基线止: '1' }, '「文体基线止」必须是正整数'],
+    [{ 文体基线起: 5, 文体基线止: 3 }, '不能大于'],
+    // 只写起点：止套解析侧默认值 30，超出即区间倒置
+    [{ 文体基线起: 40 }, '不能大于'],
+  ]
+  for (const [book, 关键词] of 非法) {
+    const result = validateCreateBookPayload(minimalCreateBookPayload({ book }))
+    assert.equal(result.ok, false, JSON.stringify(book))
+    assert.ok(
+      result.errors.some((error) => error.includes('book') && error.includes(关键词)),
+      `${JSON.stringify(book)} 应报「${关键词}」，实际：${result.errors.join('；')}`
+    )
+  }
+
+  const 合法 = [{}, { 文体基线起: 1, 文体基线止: 30 }, { 文体基线起: 5 }, { 文体基线止: 10 }]
+  for (const book of 合法) {
+    const result = validateCreateBookPayload(minimalCreateBookPayload({ book }))
+    assert.equal(result.ok, true, `${JSON.stringify(book)}：${result.errors.join('；')}`)
+  }
+})
+
+test('建书 book 的文体基线校验与 book.yaml 解析侧同判（缺字段套同一默认值）', () => {
+  const cases = [
+    {},
+    { 文体基线起: 1, 文体基线止: 30 },
+    { 文体基线起: 0 },
+    { 文体基线止: 0 },
+    { 文体基线起: -1 },
+    { 文体基线起: 1.5 },
+    { 文体基线止: '1' },
+    { 文体基线起: 5, 文体基线止: 3 },
+    { 文体基线起: 40 },
+    { 文体基线起: 5 },
+    { 文体基线止: 10 },
+  ]
+  for (const book of cases) {
+    const payload = minimalCreateBookPayload({ book })
+    const 写盘前 = validateCreateBookPayload(payload)
+    const 读回 = parseBookConfig(serializeYAML(payload.book))
+    assert.equal(写盘前.ok, 读回.ok, `${JSON.stringify(book)} 两侧判定不一致`)
+  }
+})
+
+test('知识选择记录只保存最终采用和真实裁决，不制造评分或空反馈', () => {  const contract = validateWorkContract(minimalWorkContract()).data
   const content = createKnowledgeSelectionRecord({
     contract,
     selections: [{ 维度: '题材', 名称: '玄幻', 来源: '作者自定义' }],

@@ -41,6 +41,7 @@ export async function run(args, options, ctx) {
   const lines = [
     `审稿单已落 ${path.join('工作区', '审稿.md')}：共 ${r.merged.issues_count} 个问题，${r.merged.blocking_count} 个阻断${r.merged.has_blocking ? '（有阻断，需处理后再定稿）' : ''}`,
   ]
+  if (Array.isArray(r.warnings)) lines.push(...r.warnings.map((w) => `提醒：${w}`))
   const factDecisionRequest = formatFactChangeDecisionRequests(
     r.merged.事实审查?.factChanges
   )

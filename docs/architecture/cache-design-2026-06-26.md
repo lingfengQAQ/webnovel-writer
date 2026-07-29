@@ -1,6 +1,6 @@
 # `.cache/index.db` 设计与精准读取接口
 
-> 日期：2026-06-26（0.2 修订：2026-06-27，按 review 修派生数据物化策略）
+> 日期：2026-06-26（0.3 勘误：2026-07-23，对齐现行 `organization` 与含 `entity_aliases` 的六表；0.2 修订：2026-06-27，按 review 修派生数据物化策略）
 > 状态：设计文档（O4 消解）
 > 上游：`story-repo-spec-2026-06-10.md` 0.8、`v7-prd.md` 1.0
 > 目的：补全 spec §11 的表 DDL 和精准读取接口完整清单，作为 M1 实施的输入
@@ -111,7 +111,7 @@ CREATE INDEX idx_secrets_reader_knows ON secrets(reader_knows);
 ```sql
 CREATE TABLE entities (
   id TEXT PRIMARY KEY,                 -- 正名
-  type TEXT NOT NULL,                  -- character | location | item | faction
+  type TEXT NOT NULL,                  -- character | location | item | organization
   status TEXT,                         -- 在世|已死|失踪|封印...（角色专用）
   location TEXT,                       -- 最后已知位置（角色专用）
   realm TEXT,                          -- 境界（角色专用）
@@ -167,8 +167,9 @@ CREATE INDEX idx_fingerprints_baseline ON fingerprints(is_baseline);
 
 **说明**：
 - **指纹是确定性派生物**：同一章段（定稿不可改）任何时候重算都一样，所以身份只用 `(章段起, 章段止)`——**不带时间戳**。带 `computed_at` 会让"删 `.cache` 重建"对不上（时间戳无法复现），破坏不变量 2。
-- 何时算哪段由调用方决定（体检/卷复盘），算出来按章段 upsert；删缓存后这些行从定稿文本原样重算
-- 基线指纹由 `book.yaml` 的 `文体基线起/止` 决定
+- 何时算哪段由调用方决定（体检/卷复盘），算出来按章段 upsert；缓存重建先清空本表，下一次体检从定稿文本原样重算
+- 基线指纹由 `book.yaml` 的 `文体基线起/止` 决定；二者必须是正整数且起不大于止，闭区间每章都存在才写基线，禁止用 `起..当前最大章` 的部分前缀冒充
+- 基线消费者必须按当前配置精确查询起止；作者修改范围时旧活动基线删除，完整后才写新范围。后续新章不得扩大既有范围
 - 基线段与近段章段完全重合时（全书尚在基线区间内），调用方只落基线行——同主键两次 upsert 会让后写的一行翻转 `is_baseline` 标记（M5.5 体检的写入约定）
 
 ---
@@ -305,7 +306,7 @@ AI 角色与自动模式：
 
 ### 4.2 输出
 
-- 五表全量重建：删除旧数据 → 扫描源文件 → INSERT
+- 六表结构统一重建；`chapters`/`threads`/`secrets`/`entities`/`entity_aliases` 删除旧数据后扫描源文件并 INSERT，`fingerprints` 只清空，由后续体检按当前完整基线区间和近章窗口确定性重算
 - 触发时机：`.cache/index.db` 不存在或损坏时
 
 ### 4.3 校验
@@ -368,7 +369,7 @@ INSERT INTO secrets (...) VALUES (...);
 
 ## 7. 实施检查清单
 
-- [ ] 五表 DDL 在 SQLite 中可执行（语法检查）
+- [ ] 六表 DDL 在 SQLite 中可执行（语法检查）
 - [ ] 所有表都有主键和必要索引
 - [ ] 重建器逻辑明确：输入/输出/校验/边界
 - [ ] 精准读取接口清单完整（41 个接口）

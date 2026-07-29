@@ -17,6 +17,7 @@ import {
   SENTENCE_VARIANCE_TOLERANCE,
 } from '../style-stats/index.js'
 import { runHealthCheck } from '../health-check/index.js'
+import { readCurrentBaselineFingerprint } from '../health-check/baseline.js'
 import { renderBookStatus } from '../prep/book-status.js'
 import { applyReviewOutcome } from '../review/outcome.js'
 import {
@@ -53,6 +54,7 @@ import {
   verifyPendingCommitProofFile,
   workspaceRemovalIsContained,
 } from './contract-invalidation.js'
+import { clearRetryPolicyChapters } from '../retry-policy/index.js'
 
 /**
  * staging：待定稿批次（自动模式，spec §8.1）。批次真源 = 工作区/待定稿/ 下的文件，
@@ -610,7 +612,7 @@ export async function judgeStop(ctx, batch, opts = {}) {
     reasons.push(`连续 ${连续无变动} 章无条目变动（上限 ${无变动上限}）——剧情可能在原地踏步`)
   }
 
-  const baseline = await readBaselineFingerprint(cache)
+  const baseline = await readCurrentBaselineFingerprint(cache, config.ok ? cfg : null)
   const q = judgeBatchQuality(staged, baseline, cfg)
   if (!q.过线) reasons.push(...q.原因)
 
@@ -638,17 +640,6 @@ export async function judgeStop(ctx, batch, opts = {}) {
   }
 
   return { stop: reasons.length > 0, reasons }
-}
-
-async function readBaselineFingerprint(cache) {
-  try {
-    const rows = await cache.query(
-      'SELECT avg_sentence_length, sentence_length_variance FROM fingerprints WHERE is_baseline = 1 ORDER BY chapter_range_end DESC LIMIT 1'
-    )
-    return rows[0] || null
-  } catch {
-    return null
-  }
 }
 
 /**
@@ -1504,5 +1495,19 @@ async function discardBatchLocked(repoPath) {
       }
     }
   }
-  return { ok: true, 章数: batch.章列表.length, error: '' }
+
+  // 整批丢弃即放弃这些章的当前稿：清重试预算（决策 2026-07-23），否则重写同一
+  // 章号会顶着旧计数直接被挡。失败只记 warning，批次本体已经丢弃成功。
+  const warnings = []
+  try {
+    const cleared = await clearRetryPolicyChapters(repoPath, [...discardedChapters])
+    if (!cleared.ok) {
+      warnings.push(`批次已丢弃，但重试预算清理失败：${cleared.error}；重写这些章前请手动删除 工作区/重试预算.json 中对应章记录。`)
+    } else if (cleared.file) {
+      await writeAtomicBatch(repoPath, [cleared.file])
+    }
+  } catch (err) {
+    warnings.push(`批次已丢弃，但重试预算清理失败（${err.message}）；重写这些章前请手动删除 工作区/重试预算.json 中对应章记录。`)
+  }
+  return { ok: true, 章数: batch.章列表.length, warnings, error: '' }
 }

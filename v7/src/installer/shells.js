@@ -20,7 +20,7 @@ export async function buildShellFiles(packageRoot, registry, hosts) {
 
 /**
  * claude-code SessionStart hook 接线：对 .claude/settings.json 做保留式合并——
- * 只按 command 字符串幂等追加本项,用户已有 hooks/权限配置原样保留。
+ * 只在 SessionStart 内按 command 精确判重,用户已有 hooks/权限配置原样保留。
  * settings.json 是用户主权文件,不进哈希清单,update 重复调用无副作用。
  * @returns {{content: string, changed: boolean, error?: string}}
  */
@@ -36,11 +36,15 @@ export function mergeClaudeSettings(existingText, command) {
       return { content: existingText, changed: false, error: 'settings.json 结构异常，跳过 hook 接线' }
     }
   }
-  if (JSON.stringify(settings).includes(command)) {
-    return { content: JSON.stringify(settings, null, 2) + '\n', changed: false }
-  }
   if (!settings.hooks || typeof settings.hooks !== 'object') settings.hooks = {}
   if (!Array.isArray(settings.hooks.SessionStart)) settings.hooks.SessionStart = []
+  const alreadyInstalled = settings.hooks.SessionStart.some((group) =>
+    Array.isArray(group?.hooks)
+    && group.hooks.some((hook) => hook?.type === 'command' && hook.command === command)
+  )
+  if (alreadyInstalled) {
+    return { content: JSON.stringify(settings, null, 2) + '\n', changed: false }
+  }
   settings.hooks.SessionStart.push({ hooks: [{ type: 'command', command }] })
   return { content: JSON.stringify(settings, null, 2) + '\n', changed: true }
 }

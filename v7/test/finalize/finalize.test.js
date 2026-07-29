@@ -44,6 +44,17 @@ test('finalizeChapter 正常定稿：落档 + git commit + 清工作区', async 
   try {
     const git = createGit(ctx.repoPath)
     const before = await git.revCount()
+    await fs.writeFile(
+      path.join(ctx.repoPath, '工作区', '重试预算.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        chapters: {
+          3: { mechanical: { attempts: [{ draftHash: `sha256:${'a'.repeat(64)}`, route: 'initial', result: 'fail' }] }, review: { attempts: [] } },
+          99: { mechanical: { attempts: [{ draftHash: `sha256:${'b'.repeat(64)}`, route: 'initial', result: 'fail' }] }, review: { attempts: [] } },
+        },
+      }),
+      'utf8'
+    )
 
     const r = await finalizeChapter(ctx, payload())
     assert.equal(r.ok, true, r.error)
@@ -58,6 +69,12 @@ test('finalizeChapter 正常定稿：落档 + git commit + 清工作区', async 
 
     await assert.rejects(() => fs.access(path.join(ctx.repoPath, '工作区/细纲.md')))
     await assert.rejects(() => fs.access(path.join(ctx.repoPath, CHAPTER_KNOWLEDGE_SNAPSHOT_PATH)))
+
+    const budget = JSON.parse(
+      await fs.readFile(path.join(ctx.repoPath, '工作区', '重试预算.json'), 'utf8')
+    )
+    assert.equal(budget.chapters['3'], undefined, 'commit confirmed 后清该章重试预算')
+    assert.ok(budget.chapters['99'], '其他章的重试预算保留')
   } finally {
     await cleanup()
   }
@@ -294,9 +311,22 @@ test('finalizeChapter 清理遇目录与可疑路径：仍 ok、目录被清、�
     const reportDir = path.join(ctx.repoPath, '工作区', '评审报告')
     await fs.mkdir(reportDir, { recursive: true })
     await fs.writeFile(path.join(reportDir, '事实审查.md'), '通过', 'utf8')
+    // payload 借 workspaceFiles 指名删重试预算 → 必须被系统状态保护拦下，
+    // 但本章记录仍由定稿清理精确移除
+    await fs.writeFile(
+      path.join(ctx.repoPath, '工作区', '重试预算.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        chapters: {
+          3: { mechanical: { attempts: [{ draftHash: `sha256:${'c'.repeat(64)}`, route: 'initial', result: 'fail' }] }, review: { attempts: [] } },
+          88: { mechanical: { attempts: [{ draftHash: `sha256:${'d'.repeat(64)}`, route: 'initial', result: 'fail' }] }, review: { attempts: [] } },
+        },
+      }),
+      'utf8'
+    )
 
     const p = payload()
-    p.workspaceFiles = ['细纲.md', '评审报告', '工作区/审稿.md', '../定稿/正文/0001-开局.md']
+    p.workspaceFiles = ['细纲.md', '评审报告', '工作区/审稿.md', '../定稿/正文/0001-开局.md', '重试预算.json']
     const r = await finalizeChapter(ctx, p)
     assert.equal(r.ok, true, r.error)
     assert.ok(r.commitHash, '应正常入档')
@@ -308,6 +338,15 @@ test('finalizeChapter 清理遇目录与可疑路径：仍 ok、目录被清、�
       (r.warnings || []).some((w) => w.includes('可疑路径')),
       `应有可疑路径告警：${JSON.stringify(r.warnings)}`
     )
+    assert.ok(
+      (r.warnings || []).some((w) => w.includes('系统状态路径') && w.includes('重试预算')),
+      `重试预算必须被机器状态保护拦下：${JSON.stringify(r.warnings)}`
+    )
+    const budget = JSON.parse(
+      await fs.readFile(path.join(ctx.repoPath, '工作区', '重试预算.json'), 'utf8')
+    )
+    assert.equal(budget.chapters['3'], undefined, '本章记录由定稿清理精确移除')
+    assert.ok(budget.chapters['88'], 'payload 删不掉其他章的重试预算')
   } finally {
     await cleanup()
   }

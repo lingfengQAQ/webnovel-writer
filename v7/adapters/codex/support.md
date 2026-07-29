@@ -5,5 +5,5 @@
 - skill：支持，SKILL.md；`description` 受约 8k 字符预算
 - subagent：实验性支持，TOML agents
 - hook：不支持
-- 降级策略：无 hook → 状态机入口读 `books.jsonl` 等价注入；subagent 实验性 → 两审优先完整，不稳时降级兼容模式并声明
+- 降级策略：无 hook → 生成的 SKILL 启动步显式运行 `session-context` 注入当前书/书单/近况入口；subagent 实验性 → 两审优先完整，不稳时降级兼容模式并声明
 - smoke：`node scripts/smoke.mjs --host codex`（推迟 beta 手测：建书→写1章→两审→定稿）

@@ -32,6 +32,8 @@ import {
   verifyPendingCommitProofFile,
   workspaceRemovalIsContained,
 } from '../staging/contract-invalidation.js'
+import { clearRetryPolicyChapters } from '../retry-policy/index.js'
+import { writeAtomicBatch } from '../storage/atomic.js'
 
 /**
  * 定稿：原子 commit（D3）。写工作树 → git add → commit → 最后清工作区。
@@ -309,6 +311,19 @@ async function finalizeChapterLocked(ctx, payload, opts = {}) {
       warnings.push(...await cleanConfirmedOutlineArtifacts(repoPath))
     }
     warnings.push(...await cleanWorkspaceFiles(repoPath, workspaceFiles))
+
+    // 章节已入档：清该章重试预算（决策 2026-07-23）。失败只记 warning，
+    // 残留只会让下次重写多要一次作者确认，不影响已提交结果。
+    try {
+      const retryCleared = await clearRetryPolicyChapters(repoPath, [chapterNum])
+      if (!retryCleared.ok) {
+        warnings.push(`本章已入档，但重试预算清理失败：${retryCleared.error}`)
+      } else if (retryCleared.file) {
+        await writeAtomicBatch(repoPath, [retryCleared.file])
+      }
+    } catch (err) {
+      warnings.push(`本章已入档，但重试预算清理失败（${err.message}），稍后手动删除该章记录即可。`)
+    }
 
     return { ok: true, commitHash, cacheRefresh, contractGuardReleased, warnings, error: '' }
   } catch (err) {

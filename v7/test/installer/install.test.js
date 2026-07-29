@@ -27,6 +27,18 @@ const exists = async (root, rel) => {
     return false
   }
 }
+async function listRelativeFiles(root) {
+  const files = []
+  const walk = async (dir, base = '') => {
+    for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+      const rel = base ? `${base}/${entry.name}` : entry.name
+      if (entry.isDirectory()) await walk(path.join(dir, entry.name), rel)
+      else if (entry.isFile()) files.push(rel)
+    }
+  }
+  await walk(root)
+  return files
+}
 
 test('init：一条命令装出完整布局（AC2）,vendored bin 自包含可跑', async () => {
   const { root, ctx, cleanup } = await tmpWorkdir()
@@ -52,6 +64,13 @@ test('init：一条命令装出完整布局（AC2）,vendored bin 自包含可�
     ]) {
       assert.ok(await exists(root, rel), `缺 ${rel}`)
     }
+    const runtimeFiles = await listRelativeFiles(path.join(root, '.webnovel'))
+    assert.ok(!runtimeFiles.some((rel) => rel.includes('story-repo-spec')), 'init 不得分发 story-repo-spec')
+    assert.ok(!runtimeFiles.some((rel) => rel.startsWith('docs/architecture/')), 'init 不得分发架构文档')
+    assert.ok(
+      runtimeFiles.filter((rel) => rel.startsWith('docs/')).every((rel) => rel.startsWith('docs/knowledge/')),
+      'init 后 .webnovel/docs 只允许知识治理文档',
+    )
     // 平台壳落位
     assert.ok(await exists(root, '.claude/skills/webnovel-writer/SKILL.md'))
     assert.ok(await exists(root, '.claude/agents/事实审查.md'))
@@ -64,6 +83,9 @@ test('init：一条命令装出完整布局（AC2）,vendored bin 自包含可�
     assert.ok(agents.includes('<!-- WEBNOVEL:START -->') && agents.includes('<!-- WEBNOVEL:END -->'))
     // 报告人话
     assert.ok(r.report.includes('claude-code') && r.report.includes('下一步'))
+    assert.match(r.report, /SessionStart 只注入当前书、本数与全书近况入口/)
+    assert.match(r.report, /启动时由 SKILL 显式运行 session-context/)
+    assert.doesNotMatch(r.report, /与 hook 等价/)
 
     // vendored bin 真的能跑（js-yaml 链路含在内）：list-books 走 session→storage→yaml
     const out = await exec(process.execPath, [path.join(root, '.webnovel/bin/webnovel-writer.js'), 'list-books'], {
@@ -71,6 +93,37 @@ test('init：一条命令装出完整布局（AC2）,vendored bin 自包含可�
       encoding: 'utf8',
     })
     assert.ok(out.stdout.includes('还没有书'), out.stdout)
+  } finally {
+    await cleanup()
+  }
+})
+
+test('init/update：alpha 只安装 SessionStart，并保留用户自有 PreToolUse', async () => {
+  const { root, ctx, cleanup } = await tmpWorkdir()
+  try {
+    const preToolUse = [
+      { matcher: 'Write|Edit', hooks: [{ type: 'command', command: 'node 用户自己的写前检查.mjs' }] },
+    ]
+    await fs.mkdir(path.join(root, '.claude'), { recursive: true })
+    await fs.writeFile(
+      path.join(root, '.claude', 'settings.json'),
+      JSON.stringify({ hooks: { PreToolUse: preToolUse } }, null, 2) + '\n',
+      'utf8',
+    )
+
+    const init = await installWorkdir(ctx, { hostsOverride: 'claude-code', ...NO_ENV })
+    assert.equal(init.ok, true, init.error)
+    const afterInit = JSON.parse(await read(root, '.claude/settings.json'))
+    assert.deepEqual(afterInit.hooks.PreToolUse, preToolUse)
+    assert.deepEqual(Object.keys(afterInit.hooks).sort(), ['PreToolUse', 'SessionStart'])
+    assert.equal(afterInit.hooks.SessionStart.length, 1)
+    assert.match(afterInit.hooks.SessionStart[0].hooks[0].command, /session-context$/)
+
+    const update = await installWorkdir(ctx, { hostsOverride: 'claude-code', ...NO_ENV })
+    assert.equal(update.ok, true, update.error)
+    const afterUpdate = JSON.parse(await read(root, '.claude/settings.json'))
+    assert.deepEqual(afterUpdate.hooks.PreToolUse, preToolUse)
+    assert.equal(afterUpdate.hooks.SessionStart.length, 1)
   } finally {
     await cleanup()
   }

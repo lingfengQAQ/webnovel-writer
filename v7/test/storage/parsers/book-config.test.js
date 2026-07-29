@@ -47,6 +47,34 @@ test('空块列表统一为数组', () => {
   assert.deepEqual(result.data.流派, [])
 })
 
+test('文体基线起止必须是正整数', () => {
+  for (const [field, value] of [
+    ['文体基线起', 0],
+    ['文体基线起', -1],
+    ['文体基线起', 1.5],
+    ['文体基线止', 0],
+    ['文体基线止', -1],
+    ['文体基线止', 2.5],
+  ]) {
+    const result = parseBookConfig(`${field}: ${value}\n`)
+    assert.equal(result.ok, false, `${field}: ${value}`)
+    assert.equal(result.data, null)
+    assert.match(result.error, new RegExp(field))
+    assert.match(result.error, /正整数/)
+  }
+
+  const quoted = parseBookConfig('文体基线起: "1"\n')
+  assert.equal(quoted.ok, false)
+  assert.match(quoted.error, /文体基线起.*正整数/)
+})
+
+test('文体基线起不能大于文体基线止', () => {
+  const result = parseBookConfig('文体基线起: 31\n文体基线止: 30\n')
+  assert.equal(result.ok, false)
+  assert.equal(result.data, null)
+  assert.match(result.error, /文体基线起.*不能大于.*文体基线止/)
+})
+
 test('边界：YAML 语法错误', () => {
   const yaml = `书名: "未闭合`
 

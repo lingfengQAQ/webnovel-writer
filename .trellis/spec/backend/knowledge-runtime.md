@@ -1,6 +1,6 @@
 # 知识运行时开发规范
 
-> 版本：基线 1.5（2026-07-22）。产品边界以 PRD 1.6、story-repo-spec 0.17 和 `v7/docs/knowledge/` 为准。
+> 版本：基线 1.5（2026-07-22；2026-07-23 引用基线更新）。产品边界以 PRD 1.7、story-repo-spec 0.18 和 `v7/docs/knowledge/` 为准。
 
 ## 1. Scope / Trigger
 

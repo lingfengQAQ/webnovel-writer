@@ -20,7 +20,7 @@ test('renderTemplate：agentCapable=false → 渲染兼容(降级)模式块', ()
 test('生成 claude-code 壳：hasHooks 块入、unless 块去；两审完整模式；F1 命令接线；占位符全渲染', async () => {
   const out = await generateHostShells(V7)
   const skill = out['claude-code']['skills/webnovel-writer/SKILL.md']
-  assert.match(skill, /SessionStart 已注入/)
+  assert.match(skill, /SessionStart 已注入「当前在写哪本 \/ 共几本 \/ 全书近况入口」/)
   assert.ok(!skill.includes('session-context`，向作者报'), 'hasHooks=true 应去掉 unless 块')
   assert.match(skill, /独立 subagent/)
   assert.ok(!skill.includes('兼容模式'), 'agentCapable=true 应去掉兼容模式块')
@@ -40,11 +40,34 @@ test('生成 claude-code 壳：hasHooks 块入、unless 块去；两审完整模
 test('生成 codex 壳：无 hook → unless 块入；角色输出 TOML', async () => {
   const out = await generateHostShells(V7)
   const skill = out['codex']['skills/webnovel-writer/SKILL.md']
-  assert.match(skill, /session-context/)
+  assert.match(skill, /session-context`，向作者报「当前在写哪本 \/ 共几本 \/ 全书近况入口」/)
   assert.ok(!skill.includes('SessionStart 已注入'))
   const role = out['codex']['agents/事实审查.toml']
   assert.match(role, /name = "事实审查"/)
   assert.match(role, /instructions = """/)
+})
+
+test('所有生成 SKILL 的状态机序 4 卷复盘排在序 5 体检之前', async () => {
+  const out = await generateHostShells(V7)
+  for (const [host, files] of Object.entries(out)) {
+    const skill = files['skills/webnovel-writer/SKILL.md']
+    const sequence4 = skill.indexOf('- 序4 卷复盘')
+    const sequence5 = skill.indexOf('- 序5 体检')
+    assert.ok(sequence4 >= 0, `${host} 缺序4卷复盘`)
+    assert.ok(sequence5 >= 0, `${host} 缺序5体检`)
+    assert.ok(sequence4 < sequence5, `${host} 应按状态机序号展示序4后序5`)
+  }
+})
+
+test('所有生成 SKILL 都声明 alpha hook 边界与序2事后自愈', async () => {
+  const out = await generateHostShells(V7)
+  for (const [host, files] of Object.entries(out)) {
+    const skill = files['skills/webnovel-writer/SKILL.md']
+    assert.match(skill, /next` 序2只做事后手改自愈/)
+    assert.match(skill, /不是 PreToolUse 写前拦截/)
+    assert.match(skill, /7\.0\.0-alpha 不安装 PreToolUse/)
+    assert.ok(!skill.includes('{{'), `${host} 占位符应全部渲染`)
+  }
 })
 
 test('角色占位符注入 category（来自 schema.js 单源）', async () => {

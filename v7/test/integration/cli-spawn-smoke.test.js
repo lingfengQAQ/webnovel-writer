@@ -10,7 +10,8 @@ import { tempV6, inlineFixture } from '../migrate/_v6.js'
 
 const exec = promisify(execFile)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const BIN = path.join(__dirname, '../../bin/webnovel-writer.js')
+const PACKAGE_ROOT = path.join(__dirname, '../..')
+const BIN = path.join(PACKAGE_ROOT, 'bin/webnovel-writer.js')
 const fixtureRoot = path.join(__dirname, '../fixtures/sample-book')
 
 /**
@@ -24,6 +25,36 @@ test('bin --help：说明审稿输入令牌的三处原样回传约束', async (
   assert.match(r.stdout, /save-review <章号> --file=<两审json> \[--draft=<路径>\]/)
   assert.match(r.stdout, /save-review .*外层\+两份报告原样回传令牌/)
   assert.match(r.stdout, /禁止重算/)
+})
+
+test('bin 动态导入：包路径含 #、%、空格和中文仍可加载命令', async () => {
+  const specialRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'wnw-CLI #100% 中文-'))
+  const workdir = path.join(specialRoot, '工作 目录')
+  try {
+    for (const entry of ['bin', 'src', 'node_modules']) {
+      await fs.cp(path.join(PACKAGE_ROOT, entry), path.join(specialRoot, entry), { recursive: true })
+    }
+    await fs.copyFile(path.join(PACKAGE_ROOT, 'package.json'), path.join(specialRoot, 'package.json'))
+    await fs.mkdir(path.join(workdir, '.webnovel'), { recursive: true })
+
+    const specialBin = path.join(specialRoot, 'bin', 'webnovel-writer.js')
+    const ok = await exec(process.execPath, [specialBin, 'list-books'], { cwd: workdir, encoding: 'utf8' })
+    assert.match(ok.stdout, /还没有书/)
+
+    const missing = await exec(process.execPath, [specialBin, 'not-a-command'], {
+      cwd: workdir,
+      encoding: 'utf8',
+    }).then(
+      () => null,
+      (err) => err,
+    )
+    assert.ok(missing, '不存在的命令应非零退出')
+    assert.equal(missing.code, 1)
+    assert.match(missing.stderr, /未知命令/)
+    assert.ok(!/\n\s+at /.test(missing.stderr), `错误不带栈：${missing.stderr}`)
+  } finally {
+    await fs.rm(specialRoot, { recursive: true, force: true })
+  }
 })
 
 test('bin spawn 冒烟：export 单章（书仓库直启）+ 坏参数人话退出', async () => {

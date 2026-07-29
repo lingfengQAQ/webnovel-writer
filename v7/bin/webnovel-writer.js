@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { readFileSync } from 'node:fs'
 import { CacheManager } from '../src/cache/index.js'
 import { checkNodeVersion } from '../src/runtime/node-version.js'
@@ -50,10 +50,10 @@ if (!command || command === '--help') {
   console.log('')
   console.log('写章流程（M2，零 AI 脚本面）：')
   console.log('  prepare-chapter <章号>                  备料：写出 工作区/本章写作材料.md')
-  console.log('  mechanical-check <章号> [--draft=<路径>]  机检：字数/禁词/禁句式/复读/新专名/信息差候选')
+  console.log('  mechanical-check <章号> [--draft=<路径>] [--author-confirmed]  机检：字数/禁词/禁句式/复读/新专名/信息差候选；自动修复每章 2 轮，超限需作者确认')
   console.log('')
   console.log('宿主通道（M5，AI 产物经文件回流；JSON 一律 --file/--payload 文件路径）：')
-  console.log('  review-input <章号> [--draft=<路径>]      生成含契约版本/令牌的 工作区/审稿输入.json')
+  console.log('  review-input <章号> [--draft=<路径>] [--author-approved]  生成含契约版本/令牌的 工作区/审稿输入.json；两审自动轮次每章 2 轮，超限需作者批准')
   console.log('  save-review <章号> --file=<两审json> [--draft=<路径>]  外层+两份报告原样回传令牌（禁止重算）→ 工作区/审稿.md')
   console.log('  persist-outline --file=<json>            细纲落盘（{细纲}）')
   console.log('  persist-book --file=<json> [--dir=<目录>] 建书落盘+登记（作品契约必需，须作者确认）')
@@ -116,7 +116,7 @@ if (!/^[a-z0-9-]+$/.test(command)) {
 let cache
 try {
   const commandPath = path.join(__dirname, '../src/commands', `${command}.js`)
-  const commandUrl = new URL(`file:///${commandPath.replace(/\\/g, '/')}`).href
+  const commandUrl = pathToFileURL(commandPath).href
   const mod = await import(commandUrl)
 
   const { options, positionalArgs } = parseArgs(argv.slice(1))

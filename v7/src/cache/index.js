@@ -26,7 +26,7 @@ export async function refreshCacheAfterSourceChange(ctx) {
 }
 
 /**
- * CacheManager：管理 .cache/index.db 五表。
+ * CacheManager：管理 .cache/index.db 六表（含 entity_aliases）。
  */
 export class CacheManager {
   constructor(dbPath) {

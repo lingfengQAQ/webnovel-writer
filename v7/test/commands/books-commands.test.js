@@ -70,7 +70,7 @@ test('switch-book：换书改当前标记;缺参数人话报错', async () => {
   }
 })
 
-test('session-context：输出与 assembleSessionContext 逐字一致（两宿主入口等价）,并刷新最后打开', async () => {
+test('session-context：输出与 assembleSessionContext 逐字一致（hook 注入与 SKILL 显式调用同源）,并刷新最后打开', async () => {
   const { root, ctx, cleanup } = await tmpWorkdir([
     { 书名: '星海', 目录: '星海', 当前: true, 最后打开: '2000-01-01' },
   ])

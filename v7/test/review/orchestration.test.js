@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { assembleReviewInput, mergeReviews, runReviews } from '../../src/review/index.js'
+import { assembleReviewInput, mergeReviews, runReviews, saveReviews } from '../../src/review/index.js'
 import { makeGitBook, chapter } from '../state-machine/_helper.js'
 
 const charCard = (name, 境界) => `---\n姓名: ${name}\n状态: 在世\n位置: 青云宗\n境界: ${境界}\n---\n## 设定\n。`
@@ -141,6 +141,69 @@ test('runReviews：降级模式 → 审稿单含兼容声明', async () => {
     assert.equal(calls, 1, '降级模式预算应为单次 AI 调用')
     const 审稿 = await fs.readFile(path.join(root, '工作区', '审稿.md'), 'utf8')
     assert.match(审稿, /兼容模式/)
+  } finally { await cleanup() }
+})
+
+test('runReviews：签发即预约两审轮次，第三轮在调用模型前拒绝，作者批准单独记账', async () => {
+  const { ctx, cleanup, root } = await makeReviewBook()
+  try {
+    let calls = 0
+    let seenToken = ''
+    const reviewers = {
+      factCheck: async (input) => {
+        calls++
+        seenToken = input.审稿输入令牌
+        return reviewedReport(input, { issues: [] })
+      },
+      editorial: async (input) => reviewedReport(input, { issues: [] }),
+    }
+    const budgetPath = path.join(root, '工作区', '重试预算.json')
+
+    const r1 = await runReviews(ctx, { chapterNum: 2, draftPath: '工作区/草稿.md', mode: 'complete', reviewers })
+    assert.equal(r1.ok, true)
+    const afterFirst = JSON.parse(await fs.readFile(budgetPath, 'utf8'))
+    assert.equal(afterFirst.chapters['2'].review.attempts.length, 1)
+    assert.equal(afterFirst.chapters['2'].review.attempts[0].status, 'saved', '保存成功后轮次记为 saved')
+
+    // 作者裁决重提：同一令牌重新 save-review，不计新轮
+    const resaved = await saveReviews(ctx, {
+      chapterNum: 2,
+      rawFact: { 审稿输入令牌: seenToken, issues: [] },
+      rawEdit: { 审稿输入令牌: seenToken, issues: [] },
+      reviewInputToken: seenToken,
+      mode: 'complete',
+      draftPath: '工作区/草稿.md',
+    })
+    assert.equal(resaved.ok, true)
+    assert.ok(
+      (resaved.warnings || []).some((w) => w.includes('不计新轮')),
+      '覆盖保存已 saved 轮次必须给可见提醒'
+    )
+    const afterResave = JSON.parse(await fs.readFile(budgetPath, 'utf8'))
+    assert.equal(afterResave.chapters['2'].review.attempts.length, 1, '裁决重提不消耗新轮次')
+
+    const r2 = await runReviews(ctx, { chapterNum: 2, draftPath: '工作区/草稿.md', mode: 'complete', reviewers })
+    assert.equal(r2.ok, true)
+
+    const callsBeforeThird = calls
+    const r3 = await runReviews(ctx, { chapterNum: 2, draftPath: '工作区/草稿.md', mode: 'complete', reviewers })
+    assert.equal(r3.ok, false)
+    assert.match(r3.errors[0], /自动轮次已用完/)
+    assert.equal(calls, callsBeforeThird, '第三轮必须在调用模型前拒绝')
+
+    const r4 = await runReviews(ctx, {
+      chapterNum: 2,
+      draftPath: '工作区/草稿.md',
+      mode: 'complete',
+      reviewers,
+      authorApproved: true,
+    })
+    assert.equal(r4.ok, true)
+    const afterAuthor = JSON.parse(await fs.readFile(budgetPath, 'utf8'))
+    const attempts = afterAuthor.chapters['2'].review.attempts
+    assert.equal(attempts.length, 3)
+    assert.equal(attempts[2].route, 'author', '作者批准的轮次单独记账')
+    assert.equal(attempts.filter((a) => a.route === 'automatic').length, 2, '自动额度不被作者轮次恢复')
   } finally { await cleanup() }
 })
 

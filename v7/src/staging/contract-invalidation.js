@@ -8,6 +8,7 @@ import {
   parseChapterKnowledgeSnapshot,
 } from '../knowledge/chapter.js'
 import { readCurrentReviewInput } from '../review/input-binding.js'
+import { RETRY_POLICY_PATH } from '../retry-policy/index.js'
 
 export const CONTRACT_INVALIDATION_MARKER = path.join('工作区', '契约更新待重备料.md')
 export const CONTRACT_INVALIDATION_GUARD = path.join('工作区', '契约失效.json')
@@ -353,6 +354,7 @@ export async function overlapsMachineWorkspaceState(repoPath, name) {
     path.join(repoPath, CONTRACT_INVALIDATION_MARKER),
     path.join(repoPath, CONTRACT_UPDATE_LOCK),
     path.join(repoPath, CHAPTER_KNOWLEDGE_SNAPSHOT_PATH),
+    path.join(repoPath, RETRY_POLICY_PATH),
   ]
   for (const protectedPath of protectedPaths) {
     if (await filesystemPathsOverlap(target, protectedPath)) return true

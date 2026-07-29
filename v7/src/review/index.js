@@ -25,6 +25,7 @@ import {
   reviewInputFile,
 } from './input-binding.js'
 import { acquireContractMutationLock } from '../staging/contract-invalidation.js'
+import { markReviewAttemptSaved, reserveReviewAttempt } from '../retry-policy/index.js'
 
 const 兼容声明 = '本次使用兼容模式（单上下文顺序审稿），审稿隔离度低于完整两审模式。'
 const 完整声明 = '完整两审模式（事实审查/编辑审各自独立上下文）。'
@@ -299,7 +300,7 @@ export function mergeReviews(
  * @param {{repoPath}} ctx
  * @param {{chapterNum, merged, draft, 待确认新专名?: string[], 章摘要?: string}} args
  */
-export async function persistReviewReport(ctx, { chapterNum, merged, draft, 待确认新专名 = [], 章摘要 = '', raw = null }) {
+export async function persistReviewReport(ctx, { chapterNum, merged, draft, 待确认新专名 = [], 章摘要 = '', raw = null, extraFiles = [] }) {
   const { repoPath } = ctx
 
   const issueLines = merged.issues.length
@@ -343,6 +344,7 @@ export async function persistReviewReport(ctx, { chapterNum, merged, draft, 待�
     files.push({ path: path.join('工作区', '评审报告', '编辑审.raw.json'), content: JSON.stringify(raw.editorial ?? {}, null, 2) })
   }
   files.push({ path: path.join('工作区', '审稿.md'), content: md })
+  files.push(...extraFiles)
 
   await writeAtomicBatch(repoPath, files)
 
@@ -407,6 +409,23 @@ export async function saveReviews(
       { factCheck: vFact.report, editorial: vEdit.report },
       { mode, chapterNum, reviewInputToken }
     )
+    // 记账在报告落盘前核对、与报告同一原子批写入：损坏 fail closed；
+    // 记录缺失（作者删过预算文件）只降级为 warning——审稿结果本身是合法产物。
+    const marked = await markReviewAttemptSaved(ctx.repoPath, { chapterNum, reviewInputToken, mode })
+    const warnings = []
+    let budgetFiles = []
+    if (marked.ok) {
+      if (marked.file) budgetFiles = [marked.file]
+      // 已 saved 轮次的再次保存合法（作者裁决重提），但必须可见——否则预算拒绝
+      // 后拿留存 sidecar 覆盖保存会毫无痕迹。
+      if (!marked.changed && marked.attempt?.status === 'saved') {
+        warnings.push('本轮审稿结果此前已保存，本次按同一轮次覆盖，不计新轮。')
+      }
+    } else if (marked.missing) {
+      warnings.push('重试预算记录中找不到与本次审稿输入令牌对应的轮次，审稿结果已照常保存；需要重审时请先重新运行 review-input。')
+    } else {
+      return { ok: false, errors: [marked.error] }
+    }
     const saved = await persistReviewReport(ctx, {
       chapterNum,
       merged,
@@ -414,8 +433,9 @@ export async function saveReviews(
       待确认新专名,
       章摘要,
       raw: { factCheck: rawFact, editorial: rawEdit },
+      extraFiles: budgetFiles,
     })
-    return { ok: true, merged, 审稿路径: saved.审稿路径, errors: [] }
+    return { ok: true, merged, 审稿路径: saved.审稿路径, warnings, errors: [] }
   } finally {
     await lock.release()
   }
@@ -426,19 +446,32 @@ export async function saveReviews(
  * @param {{repoPath, cache}} ctx
  * @param {{chapterNum, draftPath, mode, reviewers, 待确认新专名?, 章摘要?}} args
  */
-export async function runReviews(ctx, { chapterNum, draftPath, mode = 'complete', reviewers, 待确认新专名, 章摘要 }) {
+export async function runReviews(ctx, { chapterNum, draftPath, mode = 'complete', reviewers, 待确认新专名, 章摘要, authorApproved = false }) {
   const initialLock = await acquireContractMutationLock(ctx.repoPath, '组装审稿输入')
   if (!initialLock.ok) return { ok: false, errors: [initialLock.error] }
   let inp
+  let reserved = null
   try {
     inp = await assembleReviewInput(ctx, { chapterNum, draftPath })
     if (inp.ok) {
-      await writeAtomicBatch(ctx.repoPath, [reviewInputFile(inp.input)])
+      // 调用模型前在锁内预约两审轮次；拒绝时不写审稿输入，直接超限转作者。
+      reserved = await reserveReviewAttempt(ctx.repoPath, {
+        chapterNum,
+        reviewInputToken: inp.input.审稿输入令牌,
+        mode,
+        authorApproved,
+      })
+      if (reserved.ok) {
+        const files = [reviewInputFile(inp.input)]
+        if (reserved.file) files.push(reserved.file)
+        await writeAtomicBatch(ctx.repoPath, files)
+      }
     }
   } finally {
     await initialLock.release()
   }
   if (!inp.ok) return { ok: false, errors: [inp.error] }
+  if (!reserved.ok) return { ok: false, errors: [reserved.error] }
 
   let rawFact
   let rawEdit
