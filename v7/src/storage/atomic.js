@@ -18,11 +18,16 @@ export async function writeAtomicBatch(repoPath, files) {
     for (const f of files) {
       if (seen.has(f.path)) throw new Error(`批量写入包含重复路径：${f.path}`)
       seen.add(f.path)
-      const full = path.join(repoPath, f.path)
       // P0-F4 总闸：不信任任何调用方，词法级 repo 边界断言（目标可能尚不存在，
       // 故不做 realpath；与 staging/contract-invalidation.js 的
       // workspaceRemovalIsContained 判定口径不同构，两处注释互指）。
       // 必须在 mkdir 之前判定：越界时零建目录。
+      // 绝对路径先拒：POSIX 的 path.join(repo, 绝对路径) 会把它吸收进 repo 内部
+      //（Windows 对盘符处理又不同），仅靠包含检查会平台相关地漏判，故显式拦。
+      if (path.isAbsolute(f.path)) {
+        throw new Error(`批量写入路径越界：${f.path}`)
+      }
+      const full = path.join(repoPath, f.path)
       const resolved = path.resolve(full)
       if (resolved !== resolvedRoot && !resolved.startsWith(resolvedRoot + path.sep)) {
         throw new Error(`批量写入路径越界：${f.path}`)

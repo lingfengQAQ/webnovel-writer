@@ -31,11 +31,17 @@ test('writeAtomicBatch：../ 越界路径整批拒绝且仓外零残留', async 
 test('writeAtomicBatch：绝对路径与深嵌套越界同样拒绝', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'wnw-atomic-'))
   try {
+    // 绝对路径：POSIX 的 path.join(root, 绝对路径) 会吸收进 repo 内部，仅靠包含检查会漏判，
+    // 靠 isAbsolute 显式拒（跨平台一致）。
     await assert.rejects(() =>
       writeAtomicBatch(root, [{ path: path.join(root, '..', 'deep', 'x.md'), content: 'x' }])
     )
     await assert.rejects(() =>
       writeAtomicBatch(root, [{ path: path.resolve(path.join(root, 'a', '..', '..', 'x.md')), content: 'x' }])
+    )
+    // 相对 .. 逃逸：非绝对，靠边界包含检查拒。
+    await assert.rejects(() =>
+      writeAtomicBatch(root, [{ path: path.join('..', '逃逸.md'), content: 'x' }])
     )
     assert.deepEqual(await fs.readdir(root), [], '批内应零落盘')
   } finally {
