@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-0.md`
-- **Total Sessions**: 10
-- **Last Active**: 2026-07-23
+- **Total Sessions**: 11
+- **Last Active**: 2026-07-29
 <!-- @@@/auto:current-status -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 11 | 2026-07-29 | v7 全局评审整改收口：策略落地与三轮核验 | `9e3b370` | `v7` |
 | 10 | 2026-07-23 | 知识库十维集成审计收口 | `63f72e8`, `7754eac` | `v7` |
 | 9 | 2026-07-21 | 07-10 篇章知识策展全流程完成并签收 | `5f3b793`, `c9a6194`, `de395b7`, `ba04e33`, `cf012cf` | `v7` |
 | 8 | 2026-07-21 | 篇章知识任务批次7收口+批次8签收前应修R1-R8 | - | `v7` |
