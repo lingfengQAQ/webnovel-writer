@@ -57,10 +57,10 @@
 
 ## 落地顺序（已商定）
 
-1. P0：F1-F4 校验 + 总闸（发版硬阻断；顺带 F5 统一章号/卷号校验）
-2. P1：F6 静默降级标记（真模型 50 章验证之前）
-3. P2：F7 OpenCode adapter
-4. P3：F8-F10（+F11 待定级）中危合批
+1. ✅ P0：F1-F4 校验 + 总闸（发版硬阻断；顺带 F5 统一章号/卷号校验）——子任务 `07-29-p0-path-traversal` 已归档（96773c0 + 397b133，CI 双平台绿；实施中追加发现：总闸对绝对路径平台相关漏判，已一并修复）
+2. P1：F6 静默降级标记（真模型 50 章验证之前）——子任务 `07-29-p1-dto-degraded-flag`（planning，prd/design/implement 三件套齐，待 start）
+3. P2：F7 OpenCode adapter——子任务 `07-29-p2-opencode-adapter`（planning，PRD 就绪；design 实施期以 plugin spike 补）
+4. P3：F8-F10（+F11 待定级）中危合批 + F12 v7 路由 #135 同构核查——子任务 `07-29-p3-medium-batch`（planning，PRD-only 合批；**F11 定级待作者裁决**）；建议 npm 发版前完成
 
 ## Notes
 

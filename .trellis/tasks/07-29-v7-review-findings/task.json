@@ -19,7 +19,10 @@
   "pr_url": null,
   "subtasks": [],
   "children": [
-    "07-29-p0-path-traversal"
+    "07-29-p0-path-traversal",
+    "07-29-p1-dto-degraded-flag",
+    "07-29-p2-opencode-adapter",
+    "07-29-p3-medium-batch"
   ],
   "parent": null,
   "relatedFiles": [],
