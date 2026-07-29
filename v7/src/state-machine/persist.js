@@ -21,6 +21,7 @@ import {
   validateWorkContract,
 } from '../knowledge/contract.js'
 import { isDesignPath, validateDesignContent } from '../knowledge/design.js'
+import { isSafeFileStem } from '../util/filename.js'
 import {
   buildChapterKnowledgeSnapshot,
   CHAPTER_OUTLINE_PATH,
@@ -288,6 +289,17 @@ export async function persistVolumeReview(ctx, { 卷号, 卷摘要, 下卷卷纲
     if (下卷卷纲) {
       const next = String(卷号 + 1).padStart(2, '0')
       files.push({ path: path.join('大纲', '卷纲', `第${next}卷.md`), content: 下卷卷纲 })
+    }
+    // P0-F3：伏笔条目 id 是 AI 可控字段且直拼路径，撞号检查前先过白名单
+    //（前缀 + 文件名干，与 ThreadLedgerWriter.createThread 的 id 校验同族）。
+    for (const e of 伏笔条目) {
+      if (typeof e?.id !== 'string' || !e.id.startsWith('伏笔-') || !isSafeFileStem(e.id)) {
+        return {
+          ok: false,
+          written: [],
+          error: `伏笔条目编号「${typeof e?.id === 'string' && e.id ? e.id : '（空）'}」不合法，应为 伏笔-NNN 形式`,
+        }
+      }
     }
     // 写前查重（B2）：本函数绕过 createThread 直接落文件，撞号会在下次缓存重建时
     // 才被发现（threads 主键冲突整库回滚）。有界匹配口径与 createThread 一致。

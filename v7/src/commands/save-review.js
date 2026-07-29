@@ -2,6 +2,7 @@ import path from 'node:path'
 import { saveReviews } from '../review/index.js'
 import { readJsonInput } from '../util/json-input.js'
 import { formatFactChangeDecisionRequests } from '../knowledge/fact-changes.js'
+import { parsePositiveInt } from '../util/positive-int.js'
 
 /**
  * save-review <章号> --file=<两审json> [--draft=<repo相对路径>]：两审产物入库。
@@ -12,8 +13,8 @@ import { formatFactChangeDecisionRequests } from '../knowledge/fact-changes.js'
  * 契约：纯返回 {ok, output?, error?}。
  */
 export async function run(args, options, ctx) {
-  const chapterNum = parseInt(args[0], 10)
-  if (isNaN(chapterNum)) return { ok: false, error: '章号必须是数字' }
+  const chapterNum = parsePositiveInt(args[0])
+  if (chapterNum === null) return { ok: false, error: '章号必须是数字（正整数）' }
 
   const spec = await readJsonInput(ctx, options.file, 'file')
   if (!spec.ok) return { ok: false, error: spec.error }

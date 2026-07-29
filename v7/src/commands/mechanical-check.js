@@ -11,6 +11,7 @@ import {
   retryDraftHash,
   retryPolicyFile,
 } from '../retry-policy/index.js'
+import { parsePositiveInt } from '../util/positive-int.js'
 
 /**
  * mechanical-check <章号> [--draft=<path>] [--author-confirmed]
@@ -18,9 +19,9 @@ import {
  * 默认草稿 工作区/草稿-A.md。契约：纯返回 {ok, output?, error?}（见 design §6.2）。
  */
 export async function run(args, options, ctx) {
-  const chapterNum = parseInt(args[0], 10)
-  if (isNaN(chapterNum)) {
-    return { ok: false, error: '章号必须是数字' }
+  const chapterNum = parsePositiveInt(args[0])
+  if (chapterNum === null) {
+    return { ok: false, error: '章号必须是数字（正整数）' }
   }
   const draftPath =
     options.draft && options.draft !== true

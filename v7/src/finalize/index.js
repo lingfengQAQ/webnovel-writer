@@ -17,6 +17,7 @@ import {
   formatFactChangeValidationError,
   validateFactChanges,
 } from '../knowledge/fact-changes.js'
+import { validateFinalizePayloadPaths } from '../knowledge/payload-guards.js'
 import { sanitizeFileName } from '../util/filename.js'
 import {
   archiveChapterKnowledgeFromOutline,
@@ -141,6 +142,13 @@ async function finalizeChapterLocked(ctx, payload, opts = {}) {
     commitLines = {},
     workspaceFiles = [],
   } = payload
+
+  // P0-F1/F2 payload 校验层（R6：与 staging 共用 knowledge/payload-guards.js，
+  // 不开第二条口径）：写盘前带索引定位人话拒绝，AI 可改 payload 重试。
+  const payloadPaths = validateFinalizePayloadPaths(payload)
+  if (!payloadPaths.ok) {
+    return { ok: false, error: `定稿停止：${payloadPaths.error}` }
+  }
 
   const factValidation = await validateFactChanges(repoPath, factChanges)
   if (!factValidation.ok) {

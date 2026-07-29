@@ -4,6 +4,7 @@ import { writeAtomicBatch } from '../storage/atomic.js'
 import { reviewInputFile } from '../review/input-binding.js'
 import { acquireContractMutationLock } from '../staging/contract-invalidation.js'
 import { MAX_AUTOMATIC_REVIEW_ATTEMPTS, reserveReviewAttempt } from '../retry-policy/index.js'
+import { parsePositiveInt } from '../util/positive-int.js'
 
 /**
  * review-input <章号> [--draft=<repo相对路径>] [--author-approved]：组装两审共用的
@@ -14,8 +15,8 @@ import { MAX_AUTOMATIC_REVIEW_ATTEMPTS, reserveReviewAttempt } from '../retry-po
  * 契约：纯返回 {ok, output?, error?}。
  */
 export async function run(args, options, ctx) {
-  const chapterNum = parseInt(args[0], 10)
-  if (isNaN(chapterNum)) return { ok: false, error: '章号必须是数字' }
+  const chapterNum = parsePositiveInt(args[0])
+  if (chapterNum === null) return { ok: false, error: '章号必须是数字（正整数）' }
   const draftPath =
     options.draft && options.draft !== true ? options.draft : path.join('工作区', '草稿-A.md')
   const authorApproved =

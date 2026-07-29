@@ -190,6 +190,36 @@ test('persistVolumeReview（序4）→ 写卷摘要 + 下卷卷纲 + vol commit�
   } finally { await cleanup() }
 })
 
+// P0-F3：卷复盘伏笔条目 id 是 AI 可控字段，撞号检查前要过白名单校验，零写入零提交。
+test('persistVolumeReview（序4）：非法伏笔 id 人话拒绝，零写入零提交', async () => {
+  const cases = [
+    ['../../x', /伏笔条目编号「…?(\.\.\/)*\.{0,2}x?」/],
+    ['悬念-1', /应为 伏笔-NNN 形式/],
+    ['伏笔-1/x', /伏笔条目编号/],
+    ['', /伏笔条目编号/],
+  ]
+  for (const [badId, errPattern] of cases) {
+    const { ctx, root, git, cleanup } = await makeGitBook({ 'book.yaml': 'spec_version: "7.0"\n书名: 测\n' })
+    try {
+      const { stdout: before } = await git(['rev-list', '--count', 'HEAD'])
+      const r = await persistVolumeReview(ctx, {
+        卷号: 1,
+        卷摘要: '收束。',
+        伏笔条目: [{ id: badId, frontMatter: { 状态: '埋设' }, body: 'x' }],
+      })
+      assert.equal(r.ok, false, String(badId))
+      assert.match(r.error, errPattern, String(badId))
+      await assert.rejects(() => read(root, '定稿/摘要/卷摘要/第01卷.md'), '校验失败不得写卷摘要')
+      await assert.rejects(() => fs.access(path.join(root, 'x.md')), '仓内不得落穿越文件')
+      await assert.rejects(() => fs.access(path.join(root, '..', 'x.md')), '仓外不得落穿越文件')
+      const { stdout: after } = await git(['rev-list', '--count', 'HEAD'])
+      assert.equal(after.trim(), before.trim(), '不得产生 commit')
+    } finally {
+      await cleanup()
+    }
+  }
+})
+
 test('persistVolumeReview（序4）：作品契约缺失或损坏时零写入、零提交', async () => {
   const cases = [
     {

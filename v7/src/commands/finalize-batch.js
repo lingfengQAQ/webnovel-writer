@@ -1,4 +1,5 @@
 import { finalizeBatch } from '../staging/index.js'
+import { parsePositiveInt } from '../util/positive-int.js'
 
 /**
  * finalize-batch [--until=<章号>]：作者敲定后按章号升序逐章原子定稿（每章独立 commit，
@@ -8,8 +9,8 @@ import { finalizeBatch } from '../staging/index.js'
 export async function run(args, options, ctx) {
   let until
   if (options.until !== undefined) {
-    until = parseInt(options.until, 10)
-    if (isNaN(until)) return { ok: false, error: '--until 需要章号数字' }
+    until = parsePositiveInt(options.until)
+    if (until === null) return { ok: false, error: '--until 需要章号数字（正整数）' }
   }
 
   const r = await finalizeBatch(ctx, { until })

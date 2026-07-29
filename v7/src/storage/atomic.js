@@ -13,11 +13,20 @@ let counter = 0
 export async function writeAtomicBatch(repoPath, files) {
   const seen = new Set()
   const plans = []
+  const resolvedRoot = path.resolve(repoPath)
   try {
     for (const f of files) {
       if (seen.has(f.path)) throw new Error(`批量写入包含重复路径：${f.path}`)
       seen.add(f.path)
       const full = path.join(repoPath, f.path)
+      // P0-F4 总闸：不信任任何调用方，词法级 repo 边界断言（目标可能尚不存在，
+      // 故不做 realpath；与 staging/contract-invalidation.js 的
+      // workspaceRemovalIsContained 判定口径不同构，两处注释互指）。
+      // 必须在 mkdir 之前判定：越界时零建目录。
+      const resolved = path.resolve(full)
+      if (resolved !== resolvedRoot && !resolved.startsWith(resolvedRoot + path.sep)) {
+        throw new Error(`批量写入路径越界：${f.path}`)
+      }
       await fs.mkdir(path.dirname(full), { recursive: true })
       const n = counter++
       const tmp = `${full}.wnwtmp.${process.pid}.${n}`

@@ -5,6 +5,58 @@ import path from 'node:path'
 import { promises as fs } from 'node:fs'
 import { writeAtomicBatch } from '../../src/storage/atomic.js'
 
+// P0-F4：总闸边界——越界路径整批拒绝，仓外零写入零建目录，tmp 全清理。
+test('writeAtomicBatch：../ 越界路径整批拒绝且仓外零残留', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'wnw-atomic-'))
+  const outside = path.join(root, '..', `wnw-outside-${process.pid}`)
+  try {
+    await fs.mkdir(outside, { recursive: true })
+    await assert.rejects(
+      () => writeAtomicBatch(root, [{ path: '../escape.md', content: 'x' }]),
+      /越界/
+    )
+    assert.deepEqual(await fs.readdir(root), [], '批内应零落盘（含 tmp）')
+    assert.deepEqual(await fs.readdir(outside), [], '仓外不得有文件写入')
+    assert.deepEqual(
+      (await fs.readdir(root, { recursive: false })).filter((f) => f.includes('.wnwtmp')),
+      [],
+      'tmp 必须清理'
+    )
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+    await fs.rm(outside, { recursive: true, force: true })
+  }
+})
+
+test('writeAtomicBatch：绝对路径与深嵌套越界同样拒绝', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'wnw-atomic-'))
+  try {
+    await assert.rejects(() =>
+      writeAtomicBatch(root, [{ path: path.join(root, '..', 'deep', 'x.md'), content: 'x' }])
+    )
+    await assert.rejects(() =>
+      writeAtomicBatch(root, [{ path: path.resolve(path.join(root, 'a', '..', '..', 'x.md')), content: 'x' }])
+    )
+    assert.deepEqual(await fs.readdir(root), [], '批内应零落盘')
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('writeAtomicBatch：仓内正常相对路径（含中文子目录）不受影响', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'wnw-atomic-'))
+  try {
+    const written = await writeAtomicBatch(root, [
+      { path: '正文/第001章.md', content: '正文内容' },
+      { path: 'a/b/c.md', content: 'nested' },
+    ])
+    assert.deepEqual(written, ['正文/第001章.md', 'a/b/c.md'])
+    assert.equal(await fs.readFile(path.join(root, '正文', '第001章.md'), 'utf8'), '正文内容')
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
 test('writeAtomicBatch：后续文件失败时，已替换文件恢复原样', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'wnw-atomic-'))
   try {

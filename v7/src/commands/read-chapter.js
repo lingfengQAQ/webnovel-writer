@@ -1,15 +1,16 @@
 import { ChapterReader } from '../storage/adapters/ChapterReader.js'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { parsePositiveInt } from '../util/positive-int.js'
 
 /**
  * read-chapter <章号> [--front-matter|--tail=N|--head=N|--摘要]
  * 契约：纯返回 {ok, output?, error?}，不碰 console/process/cache 生命周期（见 design §6.2）。
  */
 export async function run(args, options, ctx) {
-  const chapterNum = parseInt(args[0], 10)
-  if (isNaN(chapterNum)) {
-    return { ok: false, error: '章号必须是数字' }
+  const chapterNum = parsePositiveInt(args[0])
+  if (chapterNum === null) {
+    return { ok: false, error: '章号必须是数字（正整数）' }
   }
 
   const reader = new ChapterReader(ctx.repoPath, ctx.cache)

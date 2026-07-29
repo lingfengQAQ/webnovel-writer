@@ -1,5 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import path from 'node:path'
+import { promises as fs } from 'node:fs'
 import { SecretWriter } from '../../../src/storage/adapters/SecretWriter.js'
 import { makeRepo, cleanup, read } from '../_tmprepo.js'
 
@@ -15,6 +17,24 @@ test('SecretWriter.write 写信息差（防呆 front matter + 内容）', async 
     assert.match(content, /关键词:\n {2}- 血书/)
     assert.match(content, /## 内容/)
     assert.match(content, /血书写着真凶名讳/)
+  } finally {
+    await cleanup(root)
+  }
+})
+
+// P0-F1：id 是 AI 可控字段，写入器必须自卫——非法 id 拒绝且零建目录。
+test('SecretWriter.write 拒绝路径穿越 id 且零建目录', async () => {
+  const root = await makeRepo({})
+  try {
+    const w = new SecretWriter(root)
+    for (const bad of ['../../x', '..', 'a/b', 'a\\b', 'C:\\x', '']) {
+      const r = await w.write(bad, { 强度: '高' }, 'x')
+      assert.equal(r.ok, false, bad)
+      assert.match(r.error, /信息差/)
+    }
+    await assert.rejects(() =>
+      fs.access(path.join(root, '定稿')), '非法 id 不得创建 定稿/ 目录'
+    )
   } finally {
     await cleanup(root)
   }

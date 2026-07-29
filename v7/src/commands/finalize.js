@@ -2,6 +2,7 @@ import { finalizeChapter } from '../finalize/index.js'
 import { readBatch } from '../staging/index.js'
 import { readJsonInput } from '../util/json-input.js'
 import { applyReviewOutcome } from '../review/outcome.js'
+import { parsePositiveInt } from '../util/positive-int.js'
 
 /**
  * finalize <章号> --payload=<定稿包json路径>：原子 commit（正文入定稿、条目/设定/时间线更新、
@@ -12,8 +13,8 @@ import { applyReviewOutcome } from '../review/outcome.js'
  * 契约：纯返回 {ok, output?, error?}。
  */
 export async function run(args, options, ctx) {
-  const chapterNum = parseInt(args[0], 10)
-  if (isNaN(chapterNum)) return { ok: false, error: '章号必须是数字' }
+  const chapterNum = parsePositiveInt(args[0])
+  if (chapterNum === null) return { ok: false, error: '章号必须是数字（正整数）' }
 
   const batch = await readBatch(ctx.repoPath)
   if (batch.exists) {

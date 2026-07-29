@@ -117,6 +117,42 @@ test('stage 跳章拒绝、重章覆盖（改标题清旧目录）', async () =>
   }
 })
 
+// P0-R6：staging 链与手动 finalize 走同一套 payload 校验，不开第二条口径。
+test('stage 拒绝路径穿越 secretWrites.id（与 finalize 同一校验函数）', async () => {
+  const { ctx, cleanup } = await repoCtx(null, bookFiles())
+  try {
+    const payload = mkPayload(3)
+    payload.secretWrites = [{ id: '../../x', frontMatter: { 强度: '高' }, content: '## 内容\nx' }]
+    await writeReviewArtifacts(ctx.repoPath, 3, [], [], payload)
+    const r = await stageChapter(ctx, { chapterNum: 3, payload })
+    assert.equal(r.ok, false)
+    assert.match(r.error, /secretWrites\[0\]\.id/)
+    await assert.rejects(() =>
+      fs.access(path.join(ctx.repoPath, '工作区', '待定稿')), '非法 payload 不得建批次目录'
+    )
+    await assert.rejects(() => fs.access(path.join(ctx.repoPath, '..', 'x.md')))
+  } finally {
+    await cleanup()
+  }
+})
+
+test('stage 拒绝非正整数 timelineRows.volumeNum（与 finalize 同一校验函数）', async () => {
+  const { ctx, cleanup } = await repoCtx(null, bookFiles())
+  try {
+    const payload = mkPayload(3)
+    payload.timelineRows = [
+      { volumeNum: '../../x', row: { 章: 3, 书内时间: 't', 一句话事件: 'e', 在场: 'x' } },
+    ]
+    await writeReviewArtifacts(ctx.repoPath, 3, [], [], payload)
+    const r = await stageChapter(ctx, { chapterNum: 3, payload })
+    assert.equal(r.ok, false)
+    assert.match(r.error, /timelineRows\[0\]\.volumeNum/)
+    await assert.rejects(() => fs.access(path.join(ctx.repoPath, '..', 'x.md')))
+  } finally {
+    await cleanup()
+  }
+})
+
 test('stage 无审稿单拒绝，零写入', async () => {
   const { ctx, cleanup } = await repoCtx(null, bookFiles())
   try {

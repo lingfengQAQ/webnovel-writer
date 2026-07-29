@@ -1,5 +1,6 @@
 import { stageChapter } from '../staging/index.js'
 import { readJsonInput } from '../util/json-input.js'
+import { parsePositiveInt } from '../util/positive-int.js'
 
 /**
  * stage-chapter <章号> --payload=<定稿包json路径>：自动模式暂存一章到 工作区/待定稿/
@@ -8,8 +9,8 @@ import { readJsonInput } from '../util/json-input.js'
  * 契约：纯返回 {ok, output?, error?}。
  */
 export async function run(args, options, ctx) {
-  const chapterNum = parseInt(args[0], 10)
-  if (isNaN(chapterNum)) return { ok: false, error: '章号必须是数字' }
+  const chapterNum = parsePositiveInt(args[0])
+  if (chapterNum === null) return { ok: false, error: '章号必须是数字（正整数）' }
 
   const spec = await readJsonInput(ctx, options.payload ?? options.file, 'payload')
   if (!spec.ok) return { ok: false, error: spec.error }

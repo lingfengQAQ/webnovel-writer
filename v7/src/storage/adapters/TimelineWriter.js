@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { parseMarkdownTable } from '../parsers/markdown-table.js'
 import { serializeMarkdownTable } from '../serializers/markdown-table.js'
+import { parsePositiveInt } from '../../util/positive-int.js'
 
 const TIMELINE_HEADERS = ['章', '书内时间', '一句话事件', '在场']
 
@@ -21,10 +22,19 @@ export class TimelineWriter {
    * @returns {Promise<{ok: boolean, filePath: string, error: string}>}
    */
   async appendRow(volumeNum, row) {
+    // P0-F2 写入器自卫（不信任调用方）：volumeNum 是 AI 可控字段，必须在 mkdir 之前拒绝。
+    const vol = parsePositiveInt(volumeNum)
+    if (vol === null) {
+      return {
+        ok: false,
+        filePath: '',
+        error: `时间线卷号必须是正整数，收到「${String(volumeNum ?? '（空）')}」`,
+      }
+    }
     try {
       const dir = path.join(this.repoPath, '定稿', '设定', '时间线')
       await fs.mkdir(dir, { recursive: true })
-      const filePath = path.join(dir, `第${String(volumeNum).padStart(2, '0')}卷.md`)
+      const filePath = path.join(dir, `第${String(vol).padStart(2, '0')}卷.md`)
 
       let headers = TIMELINE_HEADERS
       let rows = []

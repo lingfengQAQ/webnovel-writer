@@ -1,4 +1,5 @@
 import { restageReview } from '../staging/index.js'
+import { parsePositiveInt } from '../util/positive-int.js'
 
 /**
  * batch-restage <章号>：受影响章重审完成后收回「待审收」——把 工作区/审稿.md 的新审稿单
@@ -6,8 +7,8 @@ import { restageReview } from '../staging/index.js'
  * 契约：纯返回 {ok, output?, error?}。
  */
 export async function run(args, options, ctx) {
-  const chapterNum = parseInt(args[0], 10)
-  if (isNaN(chapterNum)) return { ok: false, error: '章号必须是数字' }
+  const chapterNum = parsePositiveInt(args[0])
+  if (chapterNum === null) return { ok: false, error: '章号必须是数字（正整数）' }
 
   const r = await restageReview(ctx.repoPath, chapterNum)
   if (!r.ok) return { ok: false, error: r.error }

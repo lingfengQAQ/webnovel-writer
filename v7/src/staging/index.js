@@ -30,6 +30,7 @@ import {
   isFactPath,
   validateFactChanges,
 } from '../knowledge/fact-changes.js'
+import { validateFinalizePayloadPaths } from '../knowledge/payload-guards.js'
 import { isDesignPath } from '../knowledge/design.js'
 import {
   archiveChapterKnowledgeFromOutline,
@@ -471,6 +472,13 @@ async function stageChapterLocked(ctx, { chapterNum, payload }) {
     const archived = await archiveChapterKnowledgeFromOutline(ctx, payload)
     if (!archived.ok) return { ok: false, error: `暂存停止：${archived.error}` }
     payload = archived.payload
+
+    // P0-F1/F2 payload 校验层（R6：与 finalize 共用 knowledge/payload-guards.js，
+    // 不开第二条口径）：批次预登记前带索引定位人话拒绝。
+    const payloadPaths = validateFinalizePayloadPaths(payload)
+    if (!payloadPaths.ok) {
+      return { ok: false, error: `暂存停止：${payloadPaths.error}` }
+    }
 
     const priorFacts = await stagedFacts(repoPath, { before: chapterNum })
     const factValidation = await validateFactChanges(repoPath, payload.factChanges, {

@@ -1,4 +1,5 @@
 import { exportChapters } from '../export/index.js'
+import { parsePositiveInt } from '../util/positive-int.js'
 
 /**
  * export <章号> | export --range=a-b | export --all
@@ -13,11 +14,16 @@ export async function run(args, options, ctx) {
     if (!m) {
       return { ok: false, error: '范围格式应为 --range=起章-止章，例如 --range=6-12。' }
     }
-    return exportChapters(ctx, { mode: 'range', start: Number(m[1]), end: Number(m[2]) })
+    const start = parsePositiveInt(m[1])
+    const end = parsePositiveInt(m[2])
+    if (start === null || end === null) {
+      return { ok: false, error: '范围章号必须是数字（正整数），例如 --range=6-12。' }
+    }
+    return exportChapters(ctx, { mode: 'range', start, end })
   }
-  const chapterNum = parseInt(args[0], 10)
-  if (Number.isNaN(chapterNum)) {
-    return { ok: false, error: '用法：export <章号>，或 export --range=起章-止章，或 export --all。' }
+  const chapterNum = parsePositiveInt(args[0])
+  if (chapterNum === null) {
+    return { ok: false, error: '章号必须是数字（正整数）；用法：export <章号>，或 export --range=起章-止章，或 export --all。' }
   }
   return exportChapters(ctx, { mode: 'single', chapterNum })
 }

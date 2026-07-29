@@ -39,6 +39,53 @@ function payload() {
   }
 }
 
+// P0-F1/F2：payload 校验层——非法 secretWrites/timelineRows 在写盘前带索引定位人话拒绝。
+test('finalizeChapter 拒绝路径穿越 secretWrites.id（仓外零写入）', async () => {
+  const { ctx, cleanup } = await gitBookCtx()
+  try {
+    const p = payload()
+    p.secretWrites = [
+      { id: '信息差-001-正常', frontMatter: { 强度: '高' }, content: '## 内容\nx' },
+      { id: '../../x', frontMatter: { 强度: '高' }, content: '## 内容\nx' },
+    ]
+    const git = createGit(ctx.repoPath)
+    const before = await git.revCount()
+
+    const r = await finalizeChapter(ctx, p)
+    assert.equal(r.ok, false)
+    assert.match(r.error, /secretWrites\[1\]\.id/)
+    assert.match(r.error, /信息差编号/)
+    assert.equal(await git.revCount(), before, '不得提交')
+    await assert.rejects(() => fs.access(path.join(ctx.repoPath, '定稿', '正文', '0003-初露.md')))
+    await assert.rejects(() => fs.access(path.join(ctx.repoPath, 'x.md')))
+    await assert.rejects(() => fs.access(path.join(ctx.repoPath, '..', 'x.md')))
+  } finally {
+    await cleanup()
+  }
+})
+
+test('finalizeChapter 拒绝非正整数 timelineRows.volumeNum（仓外零写入）', async () => {
+  const { ctx, cleanup } = await gitBookCtx()
+  try {
+    const p = payload()
+    p.timelineRows = [
+      { volumeNum: 1, row: { 章: 3, 书内时间: 't', 一句话事件: 'e', 在场: 'x' } },
+      { volumeNum: '../../x', row: { 章: 3, 书内时间: 't', 一句话事件: 'e', 在场: 'x' } },
+    ]
+    const git = createGit(ctx.repoPath)
+    const before = await git.revCount()
+
+    const r = await finalizeChapter(ctx, p)
+    assert.equal(r.ok, false)
+    assert.match(r.error, /timelineRows\[1\]\.volumeNum/)
+    assert.equal(await git.revCount(), before, '不得提交')
+    await assert.rejects(() => fs.access(path.join(ctx.repoPath, '定稿', '正文', '0003-初露.md')))
+    await assert.rejects(() => fs.access(path.join(ctx.repoPath, '..', 'x.md')))
+  } finally {
+    await cleanup()
+  }
+})
+
 test('finalizeChapter 正常定稿：落档 + git commit + 清工作区', async () => {
   const { ctx, cleanup } = await gitBookCtx()
   try {

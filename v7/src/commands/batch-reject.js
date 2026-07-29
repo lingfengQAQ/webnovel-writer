@@ -1,4 +1,5 @@
 import { rejectFrom } from '../staging/index.js'
+import { parsePositiveInt } from '../util/positive-int.js'
 
 /**
  * batch-reject <章号>：打回批内第 K 章（工件清空待重写），K 之后的章全部标记「受影响」
@@ -6,8 +7,8 @@ import { rejectFrom } from '../staging/index.js'
  * 契约：纯返回 {ok, output?, error?}。
  */
 export async function run(args, options, ctx) {
-  const chapterNum = parseInt(args[0], 10)
-  if (isNaN(chapterNum)) return { ok: false, error: '章号必须是数字' }
+  const chapterNum = parsePositiveInt(args[0])
+  if (chapterNum === null) return { ok: false, error: '章号必须是数字（正整数）' }
 
   const r = await rejectFrom(ctx.repoPath, chapterNum)
   if (!r.ok) return { ok: false, error: r.error }
