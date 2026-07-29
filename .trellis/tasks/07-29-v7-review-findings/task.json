@@ -1,0 +1,28 @@
+{
+  "id": "v7-review-findings",
+  "name": "v7-review-findings",
+  "title": "v7 全局评审发现记录（P0安全/P1降级标记/OpenCode适配/中危合批）",
+  "description": "记录 v7 多维度评审（架构/边界/代码质量/安全/人机交互）发现的问题与落地顺序，先记录后拆分实施",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "codex",
+  "assignee": "codex",
+  "createdAt": "2026-07-29",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "v7",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-29-p0-path-traversal"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

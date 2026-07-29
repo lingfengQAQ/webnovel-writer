@@ -1,0 +1,22 @@
+书仓就位：C:\Users\lcy\AppData\Local\Temp\wnw-p0-probe-mCyrzy\书仓
+初始 commit 数：1
+
+=== A) secretWrites[1].id 路径穿越 ===
+退出码：1
+输出：定稿停止：secretWrites[1].id 信息差编号「../../x」含非法字符，不能用作文件名
+人话拒绝：✓  git干净：✓  零提交：✓  仓外零残留：✓
+
+=== B) timelineRows[1].volumeNum 路径穿越 ===
+退出码：1
+输出：定稿停止：timelineRows[1].volumeNum 时间线卷号必须是正整数，收到「../../x」
+人话拒绝：✓  git干净：✓  零提交：✓  仓外零残留：✓
+
+=== C) persist-volume-review 伏笔条目 id 路径穿越 ===
+退出码：1
+输出：伏笔条目编号「../../x」不合法，应为 伏笔-NNN 形式
+人话拒绝：✓  git干净：✓  零摘要写入：✓  仓外零残留：✓
+
+=== D) 合法定稿回归 ===
+退出码：0  正常定稿：✓  第 3 章已定稿（commit 32a4120e）。
+
+探针结果：4 过 / 0 挂
