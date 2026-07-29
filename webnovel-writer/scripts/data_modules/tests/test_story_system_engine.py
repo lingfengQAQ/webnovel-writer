@@ -188,6 +188,60 @@ def test_story_system_falls_back_to_explicit_genre():
     assert contract["master_setting"]["route"]["recommended_dynamic_tables"] == ["桥段套路", "爽点与节奏", "场景写法"]
 
 
+def test_explicit_genre_fallback_keeps_requested_genre_not_row_subgenre():
+    """A fallback row is borrowed for its tables/tone only.
+
+    Its own 「题材/流派」 must not overwrite the genre the caller asked for.
+    Mirrors the real 题材与调性推理 table, where GR-001 is the first row whose
+    「适用题材」 contains 仙侠 while its 「题材/流派」 is 玄幻退婚流.
+    """
+    csv_dir = _make_local_tmp_path() / "csv"
+    csv_dir.mkdir()
+
+    _write_csv(
+        csv_dir / "题材与调性推理.csv",
+        [
+            "编号", "适用技能", "分类", "层级", "关键词", "意图与同义词", "适用题材",
+            "大模型指令", "核心摘要", "详细展开", "题材/流派", "canonical_genre", "题材别名", "核心调性",
+            "节奏策略", "毒点", "推荐基础检索表", "推荐动态检索表", "默认查询词",
+        ],
+        [
+            {
+                "编号": "GR-001",
+                "适用技能": "story-system",
+                "分类": "题材路由",
+                "层级": "知识补充",
+                "关键词": "退婚流|三年之约",
+                "意图与同义词": "",
+                "适用题材": "玄幻|仙侠",
+                "大模型指令": "",
+                "核心摘要": "",
+                "详细展开": "",
+                "题材/流派": "玄幻退婚流",
+                "canonical_genre": "玄幻",
+                "题材别名": "",
+                "核心调性": "先压后爆",
+                "节奏策略": "三章内必须有首次有效反打",
+                "毒点": "",
+                "推荐基础检索表": "命名规则|人设与关系",
+                "推荐动态检索表": "桥段套路|爽点与节奏|场景写法",
+                "默认查询词": "",
+            }
+        ],
+    )
+
+    engine = StorySystemEngine(csv_dir=csv_dir)
+    contract = engine.build(query="仙侠", genre="仙侠", chapter=None)
+    route = contract["master_setting"]["route"]
+
+    assert route["route_source"] == "explicit_genre_fallback"
+    # Regression: primary_genre used to leak the fallback row's own sub-genre.
+    assert route["primary_genre"] == "仙侠"
+    assert route["primary_genre"] != "玄幻退婚流"
+    # canonical_genre already preferred the explicit genre; the two must agree.
+    assert route["canonical_genre"] == "仙侠"
+
+
 def test_story_system_unmatched_genre_raises_routing_error():
     csv_dir = _make_local_tmp_path() / "csv"
     csv_dir.mkdir()

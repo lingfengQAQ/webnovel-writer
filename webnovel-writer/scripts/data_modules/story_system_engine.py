@@ -190,6 +190,15 @@ class StorySystemEngine:
             raise self._routing_error(query=query, genre=genre, route_rows=route_rows)
 
         primary_genre = str(matched.get("题材/流派") or genre or "").strip()
+        # When the caller states the genre explicitly but no row matches by
+        # keyword, the fallback row is borrowed only for its recommended tables
+        # and tone -- its own 「题材/流派」 is that row's sub-genre and may belong to
+        # a different genre entirely. Keep what the caller asked for, mirroring
+        # how canonical_genre prefers the explicit genre below.
+        # (inferred_genre_fallback intentionally keeps the row's sub-genre: there
+        # the genre was only guessed from free text, so the row is more specific.)
+        if route_source == "explicit_genre_fallback" and genre:
+            primary_genre = str(genre).strip()
         explicit_canonical = self._primary_resolved_genre(genre)
         canonical_genre = str(matched.get("canonical_genre") or "").strip()
         row_canonicals = [
