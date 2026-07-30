@@ -33,6 +33,6 @@
 
 ## Notes
 
-- 实施前需用本机 `opencode`（1.18.4 已装）核对 agents frontmatter 的 permission 字段实际 schema——kimi 的对照表基于其宿主经验，落地时以官方文档/实测为准，写进 support.md。
+- **S0 硬前置（作者指定，2026-07-30）**：kimi 的宿主就是 OpenCode，由 kimi 先按 `research/opencode-capability-checklist.md` 逐条实测（A 探测 / B skills / C agents+permission / D plugins 注入 / E 配置合并 / F 版本线），填实测结果 + 证据原文；claude 复核后按实测定稿 design.md，再进 S1。registry/壳/installer 每个字段都必须指到清单里的一条实测证据。
 - plugin 注入若实测有坑，回退方案：AGENTS.md 标记块承载静态指引 + 启动时 SKILL 引导手动 `session-context`（即 `hasHooks:false` 降级），registry 相应改 false——诚实标注优于虚标。
-- 工作量参照 codex adapter；中等复杂度，design 细节可在实施首步以 spike 形式验证 plugin 机制后再定稿（PRD+本 Notes 即启动依据，design.md 可实施期补）。
+- 工作量参照 codex adapter；分工沿用 kimi 实施 / claude 检查。

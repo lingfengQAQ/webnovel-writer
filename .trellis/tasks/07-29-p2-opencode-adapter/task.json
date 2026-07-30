@@ -9,7 +9,7 @@
   "package": null,
   "priority": "P2",
   "creator": "codex",
-  "assignee": "codex",
+  "assignee": "kimi",
   "createdAt": "2026-07-29",
   "completedAt": null,
   "branch": null,
@@ -21,6 +21,6 @@
   "children": [],
   "parent": "07-29-v7-review-findings",
   "relatedFiles": [],
-  "notes": "",
+  "notes": "分工（作者裁定 07-30）：kimi 实施 / claude 检查。S0 硬前置=kimi 在 OpenCode 宿主内按 research/opencode-capability-checklist.md 逐条实测填证据（重点 C2 permission 实形、D4 hasHooks 诚实结论），claude 复核清单后定稿 design.md 才进 S1。",
   "meta": {}
 }
