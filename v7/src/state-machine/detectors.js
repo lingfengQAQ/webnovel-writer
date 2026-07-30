@@ -143,8 +143,9 @@ export async function bookMissing(repoPath) {
 }
 
 /** 序2：跟踪面（TRACKED_SOURCE_PREFIXES + book.yaml）下未登记的手改清单（git 工作树未提交改动,含未跟踪新文件）。
- * 供状态机出 dto 变更清单、relink 补登命令圈定 add 范围——检测与执行同源,不双写。 */
-export async function listManualEdits(repoPath) {
+ * 供状态机出 dto 变更清单、relink 补登命令圈定 add 范围——检测与执行同源,不双写。
+ * degradation：P1-F6 降级事件收集器（可选）——git 不可用时清单为空会导致序2 静默漏检，须上报。 */
+export async function listManualEdits(repoPath, degradation = null) {
   try {
     const status = await createGit(repoPath).status()
     const paths = []
@@ -155,14 +156,16 @@ export async function listManualEdits(repoPath) {
       }
     }
     return paths
-  } catch {
+  } catch (err) {
+    // P1-F6 有损（低置信，checkGitHealth guidance 部分缓释）：git 不可用→序2 静默放行
+    degradation?.report('listManualEdits', err.message)
     return []
   }
 }
 
 /** 序2：定稿/大纲 有未登记手改（git 工作树有未提交改动） */
-export async function hasManualEdits(repoPath) {
-  return (await listManualEdits(repoPath)).length > 0
+export async function hasManualEdits(repoPath, degradation = null) {
+  return (await listManualEdits(repoPath, degradation)).length > 0
 }
 
 /**

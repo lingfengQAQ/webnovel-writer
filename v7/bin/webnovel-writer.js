@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs'
 import { CacheManager } from '../src/cache/index.js'
 import { checkNodeVersion } from '../src/runtime/node-version.js'
 import { resolveRunContext } from '../src/runtime/locate.js'
+import { createDegradationCollector } from '../src/util/degradation.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -138,7 +139,8 @@ try {
     } else {
       cache = new CacheManager(path.join(plan.repoPath, '.cache', 'index.db'))
       await cache.ensureReady(plan.repoPath)
-      ctx = { repoPath: plan.repoPath, cache, workdir: plan.workdir ?? null, packageRoot }
+      // P1-F6：全书级降级事件收集器随行 ctx——有损降级点 report，DTO 组装收口处 drain
+      ctx = { repoPath: plan.repoPath, cache, workdir: plan.workdir ?? null, packageRoot, degradation: createDegradationCollector() }
     }
 
     const result = await mod.run(positionalArgs, options, ctx)

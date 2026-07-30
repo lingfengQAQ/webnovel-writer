@@ -105,6 +105,8 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
     }
 
     const status = overlayBookStatus(await assembleBookStatus(ctx), facts)
+    // P1-F6 有损：全书近况失败被静默消费（当前卷默认 1 → 时间线卷范围错；近况变空串）
+    if (!status.ok) ctx.degradation?.report('assembleReviewInput.全书近况', status.error)
     const 当前卷 = status.ok ? status.data.当前卷 : 1
 
     // P1-1：名册快照（正名+别名）,供 AI 判新专名,不泄漏路径;同时建 aliasMap 供角色别名命中
@@ -119,8 +121,9 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
         if (别名.length) aliasMap.set(r.正名, 别名)
         return { 正名: r.正名, 别名 }
       })
-    } catch {
-      // 缓存不可用则略
+    } catch (err) {
+      // 缓存不可用则略（P1-F6 有损：空名册会让 AI 判新专名失真，进 degraded 可见）
+      ctx.degradation?.report('assembleReviewInput.名册', err.message)
     }
     // 批内预登记的名册行（新角色/新别名）
     for (const pair of facts.roster) {
@@ -142,7 +145,11 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
         if (!f.endsWith('.md')) continue
         const name = f.replace(/\.md$/, '')
         const cc = await assembleCharacterContext(ctx, name)
-        if (!cc.ok) continue
+        // P1-F6 有损：单卡读失败静默跳员，AI 看不到在场角色
+        if (!cc.ok) {
+          ctx.degradation?.report('assembleReviewInput.相关角色(单卡)', `${name}：${cc.error}`)
+          continue
+        }
         // 别名合集:名册 entity_aliases（规范源）+ 角色卡 fm.别名
         const aliases = new Set(aliasMap.get(name) || [])
         const fmAliases = cc.context.别名
@@ -155,8 +162,11 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
         const upd = facts.characterUpdates.get(name)
         相关角色.push(upd ? { ...cc.context, ...upd } : cc.context)
       }
-    } catch {
-      // 无角色目录
+    } catch (err) {
+      // 无角色目录（ENOENT=语义「没有角色」，合理吞错；其他读失败=有损，进 degraded）
+      if (err?.code !== 'ENOENT') {
+        ctx.degradation?.report('assembleReviewInput.相关角色(目录)', err.message)
+      }
     }
 
     const tl = await new TimelineReader(repoPath, cache).readVolumeRange(Math.max(1, 当前卷 - 1), 当前卷)
@@ -165,7 +175,7 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
       时间线片段.push({ 章: tr.row?.章 ?? '', 事件: `${tr.row?.一句话事件 ?? ''}（批内预登记）` })
     }
 
-    const secrets = await new SecretReader(repoPath, cache).listUnrevealed()
+    const secrets = await new SecretReader(repoPath, cache, ctx.degradation).listUnrevealed()
     const 信息差候选 = secrets.map((s) => ({ id: s.id, 短题: s.短题, 关键词: s.关键词 }))
     for (const s of facts.secretWrites) {
       const fm = s.frontMatter || {}
@@ -188,8 +198,9 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
         开启章: r.opened_chapter,
         最后推进章: r.last_advanced_chapter,
       }))
-    } catch {
-      // 缓存不可用则略
+    } catch (err) {
+      // 缓存不可用则略（P1-F6 有损：空条目清单会让 AI 看不到既有伏笔）
+      ctx.degradation?.report('assembleReviewInput.相关条目', err.message)
     }
     // 批内预登记的条目事实：新开条目补进清单，已有条目刷状态/最后推进章
     for (const [id, t] of facts.threads) {
@@ -213,10 +224,12 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
     // 草稿声明涉及的条目附履历尾部（末 3 行）；未声明的维持纯元数据（控 token）
     const declaredIds = new Set(拟条目变动.map((d) => d.id))
     if (declaredIds.size) {
-      const ledger = new ThreadLedgerReader(repoPath, cache)
+      const ledger = new ThreadLedgerReader(repoPath, cache, ctx.degradation)
       for (const t of 相关条目) {
         if (!declaredIds.has(t.id)) continue
         const h = await ledger.readHistory(t.id)
+        // P1-F6 有损（A3）：已声明条目履历读失败，静默不加履历尾部
+        if (!h.ok) ctx.degradation?.report('assembleReviewInput.履历尾部', `${t.id}：${h.error}`)
         if (h.ok && h.history.length) t.履历尾部 = h.history.slice(-3).map((x) => x.原文)
       }
     }
@@ -225,6 +238,9 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
     if (!Number.isInteger(contractVersion) || contractVersion < 1) {
       return { ok: false, input: null, error: '组装审稿输入停止：作品契约版本无效' }
     }
+    // P1-F6：有损降级事件在 bind 前注入——审稿输入令牌（全字段 sha256）随之覆盖 degraded，
+    // AI 必须据 degraded 区分「没有数据」与「读取失败后的残缺数据」。
+    const degradationEvents = ctx.degradation?.drain() || []
     const input = bindReviewInput({
         章号: chapterNum,
         作品契约版本: contractVersion,
@@ -261,6 +277,7 @@ export async function assembleReviewInput(ctx, { chapterNum, draftPath }) {
         ...(designObjects.missing.length
           ? { 计划对象缺失提醒: `未找到：${designObjects.missing.join('、')}。按正文实际内容审查，不要求临时对象补档。` }
           : {}),
+        ...(degradationEvents.length ? { degraded: degradationEvents } : {}),
     })
     return { ok: true, input, error: '' }
   } catch (err) {

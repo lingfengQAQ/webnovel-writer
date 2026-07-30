@@ -9,9 +9,11 @@ import { sanitizeFileName } from '../../util/filename.js'
  * EntityReader：读取角色卡、解析别名。
  */
 export class EntityReader {
-  constructor(repoPath, cache = null) {
+  constructor(repoPath, cache = null, degradation = null) {
     this.repoPath = repoPath
     this.cache = cache
+    // P1-F6 降级事件收集器（ctx 随行旁路，可选）；有损降级发生时 report
+    this.degradation = degradation
   }
 
   /**
@@ -118,6 +120,8 @@ export class EntityReader {
         const rows = await this.cache.query(query, params)
         return rows
       } catch (err) {
+        // P1-F6 有损降级：缓存坏→[]（不走文件扫描分支——该分支只在无缓存时可达）
+        this.degradation?.report('EntityReader.listCharacters', err.message)
         return []
       }
     }

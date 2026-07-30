@@ -5,7 +5,7 @@ import { EntityReader } from '../storage/adapters/EntityReader.js'
  * 契约：纯返回 {ok, output?, error?}（见 design §6.2）。
  */
 export async function run(args, options, ctx) {
-  const reader = new EntityReader(ctx.repoPath, ctx.cache)
+  const reader = new EntityReader(ctx.repoPath, ctx.cache, ctx.degradation)
   const filter = {}
   if (options.status && options.status !== true) filter.status = options.status
   const rows = await reader.listCharacters(filter)

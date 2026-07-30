@@ -11,6 +11,8 @@ export async function assembleBookStatus(ctx) {
   try {
     const { cache, repoPath } = ctx
     const config = await new BookConfigReader(repoPath).read()
+    // P1-F6 有损（A1）：book.yaml 读失败→卷规模等默认值静默进近况与阈值
+    if (!config.ok) ctx.degradation?.report('bookStatus.book.yaml', config.error)
     const bookConfig = config.ok ? config.data : {}
 
     const volRow = await cache.query('SELECT MAX(volume_num) AS v FROM chapters')
@@ -36,7 +38,7 @@ export async function assembleBookStatus(ctx) {
     }
 
     // 悬了太久（查询时算，阈值从 book.yaml）
-    const overdue = await new ThreadLedgerReader(repoPath, cache).listOverdue(bookConfig)
+    const overdue = await new ThreadLedgerReader(repoPath, cache, ctx.degradation).listOverdue(bookConfig)
 
     const 卷规模 = bookConfig.卷规模 || 40
     const data = {

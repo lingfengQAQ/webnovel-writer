@@ -24,9 +24,11 @@ function threadRowToFrontMatter(row) {
  * ThreadLedgerReader：读取三类条目（伏笔/悬念/感情线）。
  */
 export class ThreadLedgerReader {
-  constructor(repoPath, cache = null) {
+  constructor(repoPath, cache = null, degradation = null) {
     this.repoPath = repoPath
     this.cache = cache
+    // P1-F6 降级事件收集器（ctx 随行旁路，可选）；有损降级发生时 report
+    this.degradation = degradation
   }
 
   /**
@@ -185,6 +187,8 @@ export class ThreadLedgerReader {
 
       return filtered
     } catch (err) {
+      // P1-F6 有损降级：缓存坏→[]，全书近况宣称「悬了太久：无」
+      this.degradation?.report('ThreadLedgerReader.listOverdue', err.message)
       return []
     }
   }
@@ -212,6 +216,8 @@ export class ThreadLedgerReader {
       const rows = await this.cache.query(query, params)
       return rows
     } catch (err) {
+      // P1-F6 有损降级：缓存坏→[]
+      this.degradation?.report('ThreadLedgerReader.listByType', err.message)
       return []
     }
   }

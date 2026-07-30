@@ -13,7 +13,7 @@ export async function run(args, options, ctx) {
   if (!message) {
     return { ok: false, error: '缺少 --message=<一句话说明>（写进 commit，日后可查这次手改改了什么）' }
   }
-  const changes = await listManualEdits(ctx.repoPath)
+  const changes = await listManualEdits(ctx.repoPath, ctx.degradation)
   if (!changes.length) {
     return { ok: true, output: '作品契约/定稿/大纲/文风没有未登记的手改，无需补登。' }
   }

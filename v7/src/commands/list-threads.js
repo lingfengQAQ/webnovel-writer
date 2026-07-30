@@ -6,7 +6,7 @@ import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
  * 契约：纯返回 {ok, output?, error?}（见 design §6.2）。
  */
 export async function run(args, options, ctx) {
-  const reader = new ThreadLedgerReader(ctx.repoPath, ctx.cache)
+  const reader = new ThreadLedgerReader(ctx.repoPath, ctx.cache, ctx.degradation)
 
   if (options['悬了太久']) {
     const config = await new BookConfigReader(ctx.repoPath).read()

@@ -45,6 +45,8 @@ async function prepareChapterMaterialsLocked(ctx, { chapterNum }) {
 
     const facts = await stagedFacts(repoPath, { before: chapterNum })
     const status = overlayBookStatus(await assembleBookStatus(ctx), facts)
+    // P1-F6 有损：全书近况失败被静默消费（当前卷默认 1 → 时间线卷范围错）
+    if (!status.ok) ctx.degradation?.report('prepareChapterMaterials.全书近况', status.error)
     const 当前卷 = status.ok ? status.data.当前卷 : 1
 
     // 本章要写到的事 + 知识声明位（读细纲）
@@ -72,7 +74,7 @@ async function prepareChapterMaterialsLocked(ctx, { chapterNum }) {
     const 时间线md = 时间线行.length ? 时间线行.join('\n') : '（无）'
 
     // 信息差边界（未揭晓，勿泄）：短题+知情人+关键词+内容首句——写稿 AI 知道秘密才守得住秘密
-    const secretReader = new SecretReader(repoPath, cache)
+    const secretReader = new SecretReader(repoPath, cache, ctx.degradation)
     const secrets = await secretReader.listUnrevealed()
     const 信息差行 = []
     for (const s of secrets) {
@@ -107,6 +109,8 @@ async function prepareChapterMaterialsLocked(ctx, { chapterNum }) {
       const reader = new ChapterReader(repoPath, cache)
       for (const r of recent.reverse()) {
         const t = await reader.readTail(r.chapter_num, 150)
+        // P1-F6 有损：章存在（缓存查出）但结尾读失败，空串拼接会被 AI 当作真实结尾
+        if (!t.ok) ctx.degradation?.report('prepareChapterMaterials.近章结尾', `第${r.chapter_num}章：${t.error}`)
         tails.push(`### 第${r.chapter_num}章结尾\n${t.ok ? t.text : ''}`)
       }
     }
@@ -160,9 +164,21 @@ async function prepareChapterMaterialsLocked(ctx, { chapterNum }) {
       // meta 读不到按未体检处理
     }
 
+    // P1-F6：有损降级事件——材料含缺料提醒（AI 读到必须向作者呈报），不进则无此段
+    const degradationEvents = ctx.degradation?.drain() || []
+    const degradedSection = degradationEvents.length
+      ? [
+          `## 材料缺料提醒（degraded）`,
+          `本次组装发生 ${degradationEvents.length} 处读取失败，以下材料可能缺料，请向作者呈报并确认后再继续：`,
+          ...degradationEvents.map((e) => `- ${e.site}：${e.reason}`),
+          '',
+        ]
+      : []
+
     const parts = [
       `# 第 ${chapterNum} 章写作材料`,
       '',
+      ...degradedSection,
       status.ok ? status.markdown : '## 全书近况\n（组装失败）',
       '',
       `## 本章要写到的事\n${要写到的事}`,
@@ -190,7 +206,13 @@ async function prepareChapterMaterialsLocked(ctx, { chapterNum }) {
     const filePath = path.join(dir, '本章写作材料.md')
     await fs.writeFile(filePath, content, 'utf8')
 
-    return { ok: true, filePath, content, error: '' }
+    return {
+      ok: true,
+      filePath,
+      content,
+      ...(degradationEvents.length ? { degraded: degradationEvents } : {}),
+      error: '',
+    }
   } catch (err) {
     return { ok: false, filePath: '', content: '', error: `备料失败：${err.message}` }
   }

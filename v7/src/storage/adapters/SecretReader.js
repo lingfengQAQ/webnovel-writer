@@ -15,9 +15,11 @@ function parseJSONArray(text) {
  * SecretReader：读取信息差。
  */
 export class SecretReader {
-  constructor(repoPath, cache = null) {
+  constructor(repoPath, cache = null, degradation = null) {
     this.repoPath = repoPath
     this.cache = cache
+    // P1-F6 降级事件收集器（ctx 随行旁路，可选）；有损降级发生时 report
+    this.degradation = degradation
   }
 
   async readBasicInfo(id) {
@@ -92,6 +94,8 @@ export class SecretReader {
         登记章: r.registered_chapter,
       }))
     } catch (err) {
+      // P1-F6 有损降级：缓存坏→空清单（无文件 fallback），DTO 照常组装并宣称「（无）」
+      this.degradation?.report('SecretReader.listUnrevealed', err.message)
       return []
     }
   }

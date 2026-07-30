@@ -85,6 +85,8 @@ export async function buildDto(ctx, 序, base = {}) {
         }
       }
       const status = await assembleBookStatus(ctx)
+      // P1-F6 有损：全书近况失败→空串/空清单静默进序4 DTO
+      if (!status.ok) ctx.degradation?.report('dto.序4.全书近况', status.error)
       const contractHistory = await readContractIssueHistory(ctx.repoPath, { volume: base.卷 })
       const contractSummary = summarizeContractIssues(contractHistory)
       return {
@@ -96,7 +98,7 @@ export async function buildDto(ctx, 序, base = {}) {
         作品契约复盘: contractSummary.length
           ? contractSummary
           : '本卷没有实际记录的作品契约问题，默认保持现契约不变。',
-        期望产物: '卷摘要 + 下卷卷纲 + 伏笔机会候选（作者勾选后 M3 生成条目）+ 作品契约复盘；契约无问题就保持不变，有问题也只提出修订候选，作者确认且修订 JSON 已记录证据与影响范围后才运行 persist-contract',
+        期望产物: '卷摘要 + 下卷卷纲 + 伏笔机会候选（作者勾选后 M3 生成条目）+ 作品契约复盘；契约无问题就保持不变，有问题也只提出修订候选，作者确认且修订 JSON 已记录证据与影响范围后才运行 persist-contract。若本 DTO 带 degraded 字段：有读取失败发生过，相应材料可能缺料，先向作者呈报缺料位置与原因、作者确认后再继续',
       }
     }
     case 6: {
@@ -109,7 +111,11 @@ export async function buildDto(ctx, 序, base = {}) {
         }
       }
       const status = await assembleBookStatus(ctx)
+      // P1-F6 有损：全书近况失败→空串静默进序6 DTO
+      if (!status.ok) ctx.degradation?.report('dto.序6.全书近况', status.error)
       const config = await new BookConfigReader(ctx.repoPath).read()
+      // P1-F6 有损（A2）：book.yaml 读失败→「自动确认细纲」静默 =false
+      if (!config.ok) ctx.degradation?.report('dto.序6.book.yaml', config.error)
       const 自动确认细纲 = !!(config.ok && config.data.自动确认细纲)
       const 知识 = await chapterKnowledge(ctx, {
         当前卷: status.ok ? status.data.当前卷 : 1,
@@ -132,7 +138,7 @@ export async function buildDto(ctx, 序, base = {}) {
           自动确认细纲
             ? '工作区/细纲.md（含本章定位声明 + 本章要写到的事 + 备选，由 M3 落盘）；自动确认细纲已开：提案直接 persist-outline 生效，不再问作者；卷近尾声时提案可含收卷提议'
             : '工作区/细纲.md（含本章定位声明 + 本章要写到的事 + 备选，由 M3 落盘）；卷近尾声时提案可含收卷提议（依据卷纲进度与卷规模参考值，作者确认后定稿写入 收卷: 是）'
-        }；章级候选只是少量材料，不是固定答案。可组合、变体或完全自定义，作者确认整份细纲即确认这些软策略。提案段按需声明（皆可空、多选）：本章节拍 / 本章场景 / 本章技法 / 本章追读；实际修改或自定义另写知识变体，本章涉及计划对象时写本章对象。`,
+        }；章级候选只是少量材料，不是固定答案。可组合、变体或完全自定义，作者确认整份细纲即确认这些软策略。提案段按需声明（皆可空、多选）：本章节拍 / 本章场景 / 本章技法 / 本章追读；实际修改或自定义另写知识变体，本章涉及计划对象时写本章对象。若本 DTO 带 degraded 字段：有读取失败发生过，相应材料可能缺料，先向作者呈报缺料位置与原因、作者确认后再继续。`,
       }
     }
     default:
@@ -154,7 +160,7 @@ async function chapterKnowledge(ctx, { 当前卷, nextChapter, 本章任务 }) {
   const recent = await readRecentChapterKnowledge(ctx.repoPath, {
     before: nextChapter,
     stagedChapters: staged.chapters,
-  })
+  }, ctx.degradation)
   const recentSelections = flattenRecentChapterKnowledge(recent)
   const recentContext = {
     近期知识历史: await toPlanningKnowledgeHistory(ctx.packageRoot, recent),

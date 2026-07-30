@@ -224,10 +224,12 @@ export function flattenRecentChapterKnowledge(history) {
   return flattened
 }
 
-/** 最近若干章的选择历史；stagedChapters 覆盖同章定稿视图并参与统一倒序截断。 */
+/** 最近若干章的选择历史；stagedChapters 覆盖同章定稿视图并参与统一倒序截断。
+ * degradation：P1-F6 降级事件收集器（可选）——单章读失败静默跳章时上报。 */
 export async function readRecentChapterKnowledge(
   repoPath,
-  { before = Number.POSITIVE_INFINITY, limit = RECENT_KNOWLEDGE_CHAPTER_LIMIT, stagedChapters = [] } = {}
+  { before = Number.POSITIVE_INFINITY, limit = RECENT_KNOWLEDGE_CHAPTER_LIMIT, stagedChapters = [] } = {},
+  degradation = null
 ) {
   const chapters = new Map()
   for (const chapter of Array.isArray(stagedChapters) ? stagedChapters : []) {
@@ -258,9 +260,15 @@ export async function readRecentChapterKnowledge(
     if (!frontMatter) {
       try {
         const parsed = parseFrontMatter(await fs.readFile(source.filePath, 'utf8'))
-        if (!parsed.ok) continue
+        if (!parsed.ok) {
+          // P1-F6 有损：章文件存在但解析失败，该章知识历史消失
+          degradation?.report('readRecentChapterKnowledge.单章解析', `第${chapterNum}章：${parsed.error}`)
+          continue
+        }
         frontMatter = parsed.data
-      } catch {
+      } catch (err) {
+        // P1-F6 有损：章文件存在但读失败，该章知识历史消失
+        degradation?.report('readRecentChapterKnowledge.单章读', `第${chapterNum}章：${err.message}`)
         continue
       }
     }

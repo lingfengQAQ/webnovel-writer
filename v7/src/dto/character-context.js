@@ -8,7 +8,7 @@ import { EntityReader } from '../storage/adapters/EntityReader.js'
  * @returns {Promise<{ok: boolean, context: object|null, error: string}>}
  */
 export async function assembleCharacterContext(ctx, name) {
-  const reader = new EntityReader(ctx.repoPath, ctx.cache)
+  const reader = new EntityReader(ctx.repoPath, ctx.cache, ctx.degradation)
   const r = await reader.readCharacterFrontMatter(name)
   if (!r.ok) {
     return { ok: false, context: null, error: r.error }
