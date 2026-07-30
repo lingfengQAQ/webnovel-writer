@@ -16,18 +16,18 @@
 
 ## Requirements
 
-- [ ] **R1**：DTO 增加 `degraded` 标记字段（数组：每项含发生位置/原因摘要），有损降级发生时必填；无降级时字段不出现（省 token，旧消费者零感知）。
-- [ ] **R2**：备料（`prepare-chapter` 的本章写作材料）与两审输入（`assembleReviewInput` 的 ReviewInput）两条送 AI 主链路优先覆盖；状态机序 0-6 DTO 次之。
-- [ ] **R3**：SKILL/角色任务书补一句消费约定：见到 `degraded` 须向作者呈报「本次材料可能缺料及原因」，不得基于残缺上下文静默写作/审稿。
-- [ ] **R4**：`state-machine/dto.js` 与 `persist.js` 为产出/落盘对称结构——新字段须同步进 DTO「期望产物」说明，防契约漂移（父任务 prd 已提示）。
-- [ ] **R5**：良性降级（缓存→文件成功）不进 `degraded`，避免狼来了；可记工作区诊断日志。
+- [x] **R1**：DTO 增加 `degraded` 标记字段（数组：每项含发生位置/原因摘要），有损降级发生时必填；无降级时字段不出现（省 token，旧消费者零感知）。
+- [x] **R2**：备料（`prepare-chapter` 的本章写作材料）与两审输入（`assembleReviewInput` 的 ReviewInput）两条送 AI 主链路优先覆盖；状态机序 0-6 DTO 次之。
+- [x] **R3**：SKILL/角色任务书补一句消费约定：见到 `degraded` 须向作者呈报「本次材料可能缺料及原因」，不得基于残缺上下文静默写作/审稿。
+- [x] **R4**：`state-machine/dto.js` 与 `persist.js` 为产出/落盘对称结构——新字段须同步进 DTO「期望产物」说明，防契约漂移（父任务 prd 已提示）。（核实：期望产物说明实指 dto.js 内嵌文案，persist.js 无此文案，序 4/序 6 已补 degraded 语义）
+- [x] **R5**：良性降级（缓存→文件成功）不进 `degraded`，避免狼来了；可记工作区诊断日志。（签收口径：零处理，连诊断日志也不写——缓存自重建机制已够，不制造未提交工作区噪声）
 
 ## Acceptance Criteria
 
-- [ ] 故障注入测试：DI 一个 `cache.query` 恒抛 + 文件也缺的场景 → 备料/审稿输入 DTO 带 `degraded`，含位置与原因；同场景仅缓存坏、文件在 → 不带 `degraded`（良性降级）。
-- [ ] 无故障全链路：`degraded` 字段不出现在任何 DTO（现有测试断言结构的用例零改动即绿）。
-- [ ] 全量测试绿 + drift check 绿（SKILL 有改动须重渲染四宿主壳）。
-- [ ] spec 回填：DTO 契约（story-repo spec 相应节 + 决策条目）写明 degraded 语义与三分类口径。
+- [x] 故障注入测试：DI 一个 `cache.query` 恒抛 + 文件也缺的场景 → 备料/审稿输入 DTO 带 `degraded`，含位置与原因；同场景仅缓存坏、文件在 → 不带 `degraded`（良性降级）。（`test/prep/degraded.test.js` + `test/review/degraded.test.js` 6 例全绿，留档 `fault-injection-output.txt`）
+- [x] 无故障全链路：`degraded` 字段不出现在任何 DTO（现有测试断言结构的用例零改动即绿）。
+- [x] 全量测试绿 + drift check 绿（SKILL 有改动须重渲染四宿主壳）。（704/704 全绿，drift check 通过，四宿主壳已重渲染含 degraded 段）
+- [x] spec 回填：DTO 契约（story-repo spec 相应节 + 决策条目）写明 degraded 语义与三分类口径。（story-repo-spec 0.20 决策 63）
 
 ## Non-Goals
 

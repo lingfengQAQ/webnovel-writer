@@ -20,7 +20,7 @@
 
 ### P1 · 真模型验证前置：DTO 静默降级显式标记
 
-- [ ] **F6：Cache/Reader 失败静默降级为空数据**。如 `storage/adapters/ChapterReader.js:53-56` 缓存失败吞错降级为文件读；prep/review 多处 `catch {}` → 送达 AI 的 DTO 可能悄悄缺料，AI 无法区分「没有数据」与「读取失败」。
+- [x] **F6：Cache/Reader 失败静默降级为空数据**。如 `storage/adapters/ChapterReader.js:53-56` 缓存失败吞错降级为文件读；prep/review 多处 `catch {}` → 送达 AI 的 DTO 可能悄悄缺料，AI 无法区分「没有数据」与「读取失败」。✅ 2026-07-30 子任务 07-29-p1-dto-degraded-flag 修复（S0 普查 85 站三分类、11 有损点 + 3 锚点全接；收集器 ctx 随行、三链路收口 drain、SKILL/任务书消费约定；spec 0.20 决策 63）
 - 危害叠加：与「4 宿主真模型 smoke 全部 deferred-beta」叠加时，beta 真写 50 章若吃到缺料 DTO，验证结论失真且无人察觉。
 - 修法口径：DTO 增加 `degraded` 标记字段（降级发生位置+原因）；注意 `state-machine/dto.js` 与 `persist.js` 为产出/落盘对称结构，新字段须同步进 DTO `期望产物` 说明防契约漂移。
 

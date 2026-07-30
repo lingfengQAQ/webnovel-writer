@@ -3,7 +3,7 @@
   "name": "p1-dto-degraded-flag",
   "title": "P1 DTO 静默降级显式标记（F6）",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

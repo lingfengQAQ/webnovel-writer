@@ -1,0 +1,17 @@
+✔ 备料链：secrets 缓存损坏 → DTO 与材料文本都带 degraded (288.1626ms)
+✔ 备料链：无故障 → degraded 键与提醒段全部不出现（旧消费者零感知） (279.919ms)
+✔ 审稿输入链：secrets/entities/threads 缓存损坏 → ReviewInput 带 degraded 且令牌覆盖 (789.3112ms)
+✔ 审稿输入链：角色卡读失败 → degraded 定位到具体角色名 (790.1522ms)
+✔ 审稿输入链：无故障 → degraded 键不出现（旧断言零改动） (799.4129ms)
+✔ 良性降级：ChapterReader 缓存坏、文件在 → 数据不缺，不产生事件（狼来了防护） (1151.4383ms)
+✔ degradation collector：report 收集 site/reason，drain 清空 (1.2904ms)
+✔ degradation collector：reason 截断 200 字符（DTO 是材料不是日志） (0.1716ms)
+✔ degradation collector：site/reason 归一为字符串 (0.1177ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3750.5354
