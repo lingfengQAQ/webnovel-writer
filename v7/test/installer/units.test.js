@@ -47,15 +47,16 @@ test('detectHosts：opencode 探测命中（win32 .cmd/no-ext 双 shim 形态）
   try {
     // A1 实测 Windows 三 shim 形态：opencode / opencode.cmd / opencode.ps1 并存——
     // '' ext 分支命中无扩展名 shim；.CMD ext 分支命中 .cmd。两形态分别断言。
+    // platform 显式注入 win32：不注入时 Linux CI 按 posix 只查无扩展名，.cmd 分支测不到。
     await fs.writeFile(path.join(root, 'opencode'), '#!/bin/sh\n', 'utf8')
     await fs.writeFile(path.join(root, 'opencode.cmd'), '@echo off\n', 'utf8')
     const env = { PATH: root, PATHEXT: '.COM;.EXE;.BAT;.CMD' }
-    const hits = await detectHosts(REGISTRY, { env })
+    const hits = await detectHosts(REGISTRY, { env, platform: 'win32' })
     assert.ok(hits.includes('opencode'), `opencode 应命中：${JSON.stringify(hits)}`)
 
     // 只有 .cmd 时（win32 常见）也命中
     await fs.rm(path.join(root, 'opencode'), { force: true })
-    const hits2 = await detectHosts(REGISTRY, { env })
+    const hits2 = await detectHosts(REGISTRY, { env, platform: 'win32' })
     assert.ok(hits2.includes('opencode'), `.cmd shim 应命中：${JSON.stringify(hits2)}`)
   } finally {
     await cleanup()

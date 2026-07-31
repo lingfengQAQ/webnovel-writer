@@ -8,10 +8,14 @@ import path from 'node:path'
 export async function detectHosts(registry, { env = process.env, platform = process.platform } = {}) {
   const pathVar = env.PATH || env.Path || ''
   const dirs = pathVar.split(path.delimiter).filter(Boolean)
-  const exts =
+  // win32 语义：PATHEXT 惯例大写（.CMD）而 shim 文件常为小写（.cmd），真实 Windows 靠
+  // 文件系统大小写不敏感命中——这里补小写变体，使匹配不依赖文件系统特性
+  // （大小写敏感卷/跨平台模拟 win32 同样成立）。
+  const rawExts =
     platform === 'win32'
       ? ['', ...(env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)]
       : ['']
+  const exts = [...new Set(rawExts.flatMap((e) => [e, e.toLowerCase()]))]
   const hits = []
   for (const [host, cfg] of Object.entries(registry.hosts)) {
     if (host === '_default' || !cfg.detect_bin) continue
