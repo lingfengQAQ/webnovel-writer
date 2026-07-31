@@ -40,6 +40,48 @@ async function listRelativeFiles(root) {
   return files
 }
 
+// F7：opencode 落位闭环——壳/插件进 .opencode/、manifest 记录、幂等重跑、报告含重启提示。
+test('init --hosts=opencode：壳+插件落位、幂等、报告重启提示', async () => {
+  const { root, ctx, cleanup } = await tmpWorkdir()
+  try {
+    const r = await installWorkdir(ctx, { hostsOverride: 'opencode', ...NO_ENV })
+    assert.equal(r.ok, true, r.error)
+
+    assert.ok(await exists(root, '.opencode/skills/webnovel-writer/SKILL.md'), 'SKILL 落位')
+    assert.ok(await exists(root, '.opencode/agents/事实审查.md'), '事实审查壳落位')
+    assert.ok(await exists(root, '.opencode/agents/编辑审.md'), '编辑审壳落位')
+    assert.ok(await exists(root, '.opencode/plugins/webnovel-session.js'), '会话注入插件落位')
+
+    // 两审壳 frontmatter 实形（C1/C2 实测口径）
+    const role = await read(root, '.opencode/agents/事实审查.md')
+    assert.match(role, /mode: subagent/)
+    for (const key of ['edit: deny', 'bash: deny', 'webfetch: deny', 'task: deny']) {
+      assert.ok(role.includes(key), `事实审查壳缺 ${key}`)
+    }
+
+    // 插件 fail-open 且引用 vendored CLI 同源命令
+    const plugin = await read(root, '.opencode/plugins/webnovel-session.js')
+    assert.match(plugin, /chat\.message/)
+    assert.match(plugin, /webnovel-writer\.js/)
+
+    // manifest 三态记录
+    const m = await readManifest(root)
+    assert.ok(m.files['.opencode/skills/webnovel-writer/SKILL.md'], 'manifest 记录 SKILL')
+    assert.ok(m.files['.opencode/plugins/webnovel-session.js'], 'manifest 记录插件')
+    assert.ok(m.files['.opencode/agents/事实审查.md'], 'manifest 记录两审壳')
+
+    // 报告含重启提示（B1 实测配置一次性加载）
+    assert.match(r.report, /重启后生效/)
+
+    // 幂等重跑：内容不变零写入
+    const r2 = await installWorkdir(ctx, { hostsOverride: 'opencode', ...NO_ENV })
+    assert.equal(r2.ok, true, r2.error)
+    assert.equal(r2.written.length, 0, `幂等重跑应零写入：${JSON.stringify(r2.written)}`)
+  } finally {
+    await cleanup()
+  }
+})
+
 test('init：一条命令装出完整布局（AC2）,vendored bin 自包含可跑', async () => {
   const { root, ctx, cleanup } = await tmpWorkdir()
   try {

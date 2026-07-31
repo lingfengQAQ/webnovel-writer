@@ -111,6 +111,10 @@ export async function installWorkdir(ctx, { hostsOverride = null, force = false,
       written.push('.claude/settings.json')
     }
   }
+  // OpenCode（F7）：skills/agents/plugins 为启动时加载——装完须重启宿主才生效（S0-B1 实测）
+  if (hosts.includes('opencode')) {
+    notes.push('OpenCode 请重启后生效：skills/agents/plugins 都在进程启动时加载一次。')
+  }
   if (agents.note) notes.push(agents.note)
 
   await writeManifest(workdir, { version: pkgVersion, files: newFiles })

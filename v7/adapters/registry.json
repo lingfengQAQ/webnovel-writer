@@ -37,6 +37,16 @@
       "detect_bin": "cursor-agent",
       "install_dir": ".cursor"
     },
+    "opencode": {
+      "tier": 1,
+      "verified": "机制实测通过（S0 十六项能力清单）+ 宿主最小 smoke 通过（skill发现/插件注入/两审派发/permission行为级）；完整写章 smoke 推迟 beta",
+      "agentCapable": true,
+      "hasHooks": true,
+      "detect_bin": "opencode",
+      "install_dir": ".opencode",
+      "smoke": "node scripts/smoke.mjs --host opencode",
+      "smoke_status": "deferred-beta"
+    },
     "_default": {
       "tier": 3,
       "verified": "标准 SKILL.md 理论可用",

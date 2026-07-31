@@ -103,7 +103,7 @@ try {
   const node = (bin, args) =>
     exec(process.execPath, [bin, ...args], { cwd: workdir, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
 
-  const init = await node(installedBin, ['init', '--hosts=claude-code,codex'])
+  const init = await node(installedBin, ['init', '--hosts=claude-code,codex,opencode'])
   console.log('--- init 报告 ---\n' + init.stdout + '-----------------')
   for (const rel of [
     '.webnovel/bin/webnovel-writer.js',
@@ -119,10 +119,19 @@ try {
     '.claude/agents/事实审查.md',
     '.claude/settings.json',
     '.codex/agents/事实审查.toml',
+    '.opencode/skills/webnovel-writer/SKILL.md',
+    '.opencode/agents/事实审查.md',
+    '.opencode/agents/编辑审.md',
+    '.opencode/plugins/webnovel-session.js',
     'AGENTS.md',
   ]) {
     check(await exists(path.join(workdir, rel)), `init 布局：${rel}`)
   }
+  // F7 opencode：两审壳含只读 permission（宿主硬约束）
+  const ocRole = await fs.readFile(path.join(workdir, '.opencode/agents/事实审查.md'), 'utf8')
+  check(/mode: subagent/.test(ocRole) && ocRole.includes('edit: deny') && ocRole.includes('task: deny'),
+    'opencode 两审壳：mode=subagent + 只读 permission 落位')
+  check(init.stdout.includes('opencode'), 'init 报告如实列出 opencode 宿主')
   const initializedFiles = await listRelativeFiles(path.join(workdir, '.webnovel'))
   const initializedDocs = initializedFiles.filter((rel) => rel.startsWith('docs/'))
   check(

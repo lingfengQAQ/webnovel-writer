@@ -1,7 +1,7 @@
 # Webnovel Writer 多宿主与多智能体适配 Spec
 
-> 日期：2026-06-05（v3 修订：2026-06-11；v3.1-v3.9 历史见 git；v3.10：2026-07-23，发布审计明确重试预算、alpha 延后 PreToolUse，并封闭 story-repo-spec 包边界；v3.11：2026-07-28，重试段改按命令返回 action 协议表述，并补记账与 ReviewInput 共锁的并发提示说明）
-> 状态：草案 v3.11
+> 日期：2026-06-05（v3 修订：2026-06-11；v3.1-v3.9 历史见 git；v3.10：2026-07-23，发布审计明确重试预算、alpha 延后 PreToolUse，并封闭 story-repo-spec 包边界；v3.11：2026-07-28，重试段改按命令返回 action 协议表述，并补记账与 ReviewInput 共锁的并发提示说明；v3.12：2026-07-30，OpenCode 适配入列 tier 1——能力清单实测全绿、两审只读 permission 硬约束、plugins 工厂函数 session 注入）
+> 状态：草案 v3.12
 > 基线：**v7 story repo**（`story-repo-spec-2026-06-10.md` 0.18）+ **PRD**（`v7-prd.md` 1.7，产品法律文本，冲突时以 PRD 为准）。v2 的基线是 v6.1.0 Python runtime，该架构已被 v7 推翻；本版继承 v2 的元层纪律，重写全部基座层。
 > 来源：v2（基于 PR #110 review 重写）+ 2026-06 多平台调研核验 + Trellis 多宿主机制调研（2026-06-11）+ PRD 1.0 + RFC 后续决策（2026-06-26）+ RFC 深度核验（2026-06-27）
 > 定位：把 v7 的格式层（story repo）原封不动地暴露给多个 agent 宿主——格式平台无关，本 spec 只管入口怎么落、角色怎么生成、安装怎么零门槛、支持等级怎么诚实。
@@ -248,6 +248,9 @@ node scripts/build-host-shells.mjs --check     # drift check，CI 必跑
                      "detect_bin": "gemini", "install_dir": ".gemini" },
     "cursor":      { "tier": 2, "verified": "社区反馈", "agentCapable": true, "hasHooks": false,
                      "detect_bin": "cursor-agent", "install_dir": ".cursor" },
+    "opencode":    { "tier": 1, "verified": "能力实测", "agentCapable": true, "hasHooks": true,
+                     "detect_bin": "opencode", "install_dir": ".opencode",
+                     "smoke": "node scripts/smoke.mjs --host opencode" },
     "_default":    { "tier": 3, "verified": "标准 SKILL.md 理论可用" }
   }
 }
@@ -255,11 +258,20 @@ node scripts/build-host-shells.mjs --check     # drift check，CI 必跑
 
 除 `_default` 外每个宿主必填 `detect_bin`（安装器 PATH 探测名）与 `install_dir`（平台壳落点，validator 强制）；`agentCapable`（两审能否走独立 subagent）与 `hasHooks`（有无 SessionStart 注入）驱动模板条件块（§6.2）。
 
-- **一级**（Claude Code + Codex）：维护者亲测，发布前必须过 smoke。
+- **一级**（Claude Code + Codex + OpenCode）：维护者亲测或能力实测（support.md 附证据），发布前必须过 smoke。OpenCode 于 2026-07-30 入列（F7 任务）：十六项能力清单实测全绿；两审 subagent 带只读 `permission`（`edit/bash/webfetch/task: deny`——工具从模型可见集整体移除，v7 独有两审硬约束宿主）；会话启动注入走 `.opencode/plugins/*.js` 工厂函数 + `chat.message` 钩（OpenCode 全文件发现制，无 settings 类配置合并点）；skills/agents/plugins 配置一次性加载，安装报告提示重启生效。
 - **二级**（Gemini CLI / Cursor）：社区反馈确认，README 如实标注。
 - **三级**：凡支持标准 SKILL.md 的宿主理论可用，不单独承诺。
 
 `supports` 类字段不允许手写猜测，必须由对应 `support.md` 支撑。
+
+### 7.1.1 分级与 smoke 门槛的关系（v3.12 裁决，2026-07-30）
+
+三个 tier 是**结构/能力就绪度**的分级，`smoke_status` 是**发布门槛状态**——两轴独立，不存在「一级即已 smoke」的语义：
+
+- `tier 1/2` 仅承诺「机制证据链完整」（能力实测 / 社区反馈 + support.md 锚点）；"发布前必须过 smoke" 中的「发布」指 **npm 正式发版（M5 beta 门）**，不是 alpha 期逐任务节奏。
+- alpha 期允许所有宿主（含 tier 1）登记 `smoke_status: deferred-beta`——这不是缺口，是统一推迟的验证门；registry 的 `smoke` 字段给出每个人的 beta 验证命令。
+- beta 收口时：tier 1 宿主的 smoke 全部转 `passed` 才允许 npm 发版；任一 tier 1 宿主 smoke 不过则降级 tier 2 或移除出 registry（不能挂着一级另标未验）。
+- 单宿主完整写章 smoke（建书→写1章→两审→定稿）与「最小宿主 smoke」（skill 发现/插件注入/两审派发/permission 生效）是两层：最小 smoke 支撑 tier 入列，完整 smoke 是发版门槛。
 
 ### 7.2 support.md（继承 v2，逐宿主必备）
 

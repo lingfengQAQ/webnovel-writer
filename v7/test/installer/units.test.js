@@ -42,6 +42,26 @@ test('parseHostsOverride：未知宿主人话报错并列可用项', () => {
   assert.deepEqual(good.hosts, ['codex', 'cursor'])
 })
 
+test('detectHosts：opencode 探测命中（win32 .cmd/no-ext 双 shim 形态）', async () => {
+  const { root, cleanup } = await tmpDir('wnw-path-oc-')
+  try {
+    // A1 实测 Windows 三 shim 形态：opencode / opencode.cmd / opencode.ps1 并存——
+    // '' ext 分支命中无扩展名 shim；.CMD ext 分支命中 .cmd。两形态分别断言。
+    await fs.writeFile(path.join(root, 'opencode'), '#!/bin/sh\n', 'utf8')
+    await fs.writeFile(path.join(root, 'opencode.cmd'), '@echo off\n', 'utf8')
+    const env = { PATH: root, PATHEXT: '.COM;.EXE;.BAT;.CMD' }
+    const hits = await detectHosts(REGISTRY, { env })
+    assert.ok(hits.includes('opencode'), `opencode 应命中：${JSON.stringify(hits)}`)
+
+    // 只有 .cmd 时（win32 常见）也命中
+    await fs.rm(path.join(root, 'opencode'), { force: true })
+    const hits2 = await detectHosts(REGISTRY, { env })
+    assert.ok(hits2.includes('opencode'), `.cmd shim 应命中：${JSON.stringify(hits2)}`)
+  } finally {
+    await cleanup()
+  }
+})
+
 test('manifest：三态判定 + 读写往返', async () => {
   const { root, cleanup } = await tmpDir()
   try {

@@ -50,6 +50,26 @@ function roleToToml(role, ctx) {
   return `name = "${role.name}"\ndescription = "${role.description}"\n\ninstructions = """\n${renderTemplate(role.body, ctx)}\n"""\n`
 }
 
+// opencode 分形（F7，S0 实测 C1/C2）：mode=subagent（只能被主 agent 经 task 派发）+
+// 只读 permission——deny 四键把「写文件/执行命令/联网/再派发」从模型可见工具集整体移除
+// （permission deny = 工具不注册，强于提示词约束）；read/glob/grep 保留默认 allow，与角色
+// 「可精读输入、不碰外部」的语义边界一致。不写未实测的 skill 键。
+function roleToOpenCodeMd(role, ctx) {
+  const fm = [
+    '---',
+    `name: ${role.name}`,
+    `description: ${role.description}`,
+    'mode: subagent',
+    'permission:',
+    '  edit: deny',
+    '  bash: deny',
+    '  webfetch: deny',
+    '  task: deny',
+    '---',
+  ].join('\n')
+  return `${fm}\n${renderTemplate(role.body, ctx)}`
+}
+
 /**
  * 生成所有宿主壳（内存态,确定性）。
  * @param {string} baseDir v7 包根（含 roles/ skills/ adapters/）
@@ -72,7 +92,17 @@ export async function generateHostShells(baseDir) {
     files['skills/webnovel-writer/SKILL.md'] = renderTemplate(skillRaw, ctx)
     for (const role of roles) {
       if (host === 'codex') files[`agents/${role.name}.toml`] = roleToToml(role, ctx)
+      else if (host === 'opencode') files[`agents/${role.name}.md`] = roleToOpenCodeMd(role, ctx)
       else files[`agents/${role.name}.md`] = roleToMarkdown(role, ctx)
+    }
+    // F7：opencode 会随壳产会话注入插件（.opencode/plugins/ 自动发现，零配置合并）。
+    // 模板单源在 templates/opencode-session-hook.js，随生成器进 drift check。
+    if (host === 'opencode') {
+      const plugin = await fs.readFile(
+        path.join(baseDir, 'templates', 'opencode-session-hook.js'),
+        'utf8'
+      )
+      files['plugins/webnovel-session.js'] = plugin
     }
     out[host] = files
   }

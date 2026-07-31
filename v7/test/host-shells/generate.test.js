@@ -47,6 +47,45 @@ test('生成 codex 壳：无 hook → unless 块入；角色输出 TOML', async 
   assert.match(role, /instructions = """/)
 })
 
+// F7：opencode 壳——SKILL 走 hasHooks/agentCapable 双真支路；两审 subagent 只读 permission；插件随壳产。
+test('生成 opencode 壳：hasHooks 启动段入、两审完整模式；agents 含 mode+四 deny；插件带 chat.message', async () => {
+  const out = await generateHostShells(V7)
+  assert.ok(out.opencode, 'registry 应产 opencode 壳')
+
+  const skill = out.opencode['skills/webnovel-writer/SKILL.md']
+  assert.match(skill, /SessionStart 已注入「当前在写哪本 \/ 共几本 \/ 全书近况入口」/)
+  assert.ok(!skill.includes('兼容模式'), 'agentCapable=true 应去掉兼容模式块')
+  assert.match(skill, /独立 subagent/)
+  assert.ok(!skill.includes('{{'), '占位符应全部渲染')
+
+  for (const roleName of ['事实审查', '编辑审']) {
+    const role = out.opencode[`agents/${roleName}.md`]
+    assert.ok(role, `缺 ${roleName} 壳`)
+    // C1/C2 实测 schema：mode=subagent + 四 deny 键（写/执行/联网/再派发全封）
+    assert.match(role, /mode: subagent/)
+    for (const key of ['edit: deny', 'bash: deny', 'webfetch: deny', 'task: deny']) {
+      assert.ok(role.includes(key), `${roleName} 缺 permission ${key}`)
+    }
+    assert.match(role, /审稿输入令牌/, `${roleName} 任务书本体入壳`)
+    assert.ok(!role.includes('{{categories'), `${roleName} category 占位符已渲染`)
+  }
+
+  const plugin = out.opencode['plugins/webnovel-session.js']
+  assert.ok(plugin, 'opencode 壳应带会话注入插件')
+  assert.match(plugin, /chat\.message/)
+  assert.match(plugin, /session-context/)
+  assert.match(plugin, /fail-open/, '插件须 fail-open 注释可考')
+  assert.doesNotMatch(plugin, /C:\\|C:\//, '插件不含本机绝对路径')
+})
+
+test('opencode 两审壳 name=文件名一致性（OpenCode 以文件名注册 agent id）', async () => {
+  const out = await generateHostShells(V7)
+  for (const roleName of ['事实审查', '编辑审']) {
+    const role = out.opencode[`agents/${roleName}.md`]
+    assert.ok(role.includes(`name: ${roleName}`), `${roleName} 的 frontmatter name 应与文件名一致`)
+  }
+})
+
 test('所有生成 SKILL 的状态机序 4 卷复盘排在序 5 体检之前', async () => {
   const out = await generateHostShells(V7)
   for (const [host, files] of Object.entries(out)) {
