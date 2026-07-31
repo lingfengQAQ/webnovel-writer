@@ -26,7 +26,7 @@
 
 ### P2 · OpenCode 宿主适配（参照 codex 形状，不碰核心 src）
 
-- [ ] **F7：`adapters/registry.json` 无 opencode 条目**，当前落 `_default`（tier 3，agentCapable:false → 两审降级为同上下文自审，评审独立性受损）。经核实 OpenCode 具备 tier-1 全部能力：SKILL.md 原生支持（`.opencode/skills/`）、subagent（`.opencode/agents/*.md` + `mode: subagent`）、会话启动注入（plugin `chat.message` hook，本仓库 Trellis 即活证据）、`opencode` 命令在 PATH。属于**适配清单遗漏而非能力缺口**。
+- [x] **F7：`adapters/registry.json` 无 opencode 条目**，当前落 `_default`（tier 3，agentCapable:false → 两审降级为同上下文自审，评审独立性受损）。经核实 OpenCode 具备 tier-1 全部能力：SKILL.md 原生支持（`.opencode/skills/`）、subagent（`.opencode/agents/*.md` + `mode: subagent`）、会话启动注入（plugin `chat.message` hook，本仓库 Trellis 即活证据）、`opencode` 命令在 PATH。属于**适配清单遗漏而非能力缺口**。✅ 2026-07-30 子任务 07-29-p2-opencode-adapter 修复+复核整改（claude 退回后补：S0 十六项能力实测 + install-e2e 全过 → 插件行为单测 8 例 + OpenCode 1.18.4 真产物最小 smoke 四轮全过（skill 发现/插件注入回文/两审派发/PWNED.txt 行为级不存在）+ spec v3.12 §7.1.1 裁决「tier 与 smoke 门槛两轴独立」消除一级/推迟矛盾；registry verified 降为诚实口径；完整写章 smoke 与全部宿主同口径统一推迟 beta）
 - 红利：OpenCode subagent frontmatter 支持 `permission: { edit: deny }`，可把两审「只读 ReviewInput」从提示词约束升级为宿主权限硬约束，与 v7「AI 不信任工程」哲学最合拍。
 - 工作量参照 codex adapter：registry 条目 + host-shells 渲染（agents markdown，frontmatter 加 mode/permission）+ installer 加插件文件写入路径（或 AGENTS.md 块兜底）+ `adapters/opencode/support.md`。
 

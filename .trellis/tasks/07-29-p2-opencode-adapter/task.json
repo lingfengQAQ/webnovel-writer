@@ -3,7 +3,7 @@
   "name": "p2-opencode-adapter",
   "title": "P2 OpenCode 宿主适配（F7）",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -21,6 +21,6 @@
   "children": [],
   "parent": "07-29-v7-review-findings",
   "relatedFiles": [],
-  "notes": "分工（作者裁定 07-30）：kimi 实施 / claude 检查。S0 硬前置=kimi 在 OpenCode 宿主内按 research/opencode-capability-checklist.md 逐条实测填证据（重点 C2 permission 实形、D4 hasHooks 诚实结论），claude 复核清单后定稿 design.md 才进 S1。",
+  "notes": "分工（作者裁定 07-30）：kimi 实施 / claude 检查。S0 硬前置=kimi 在 OpenCode 宿主内按 research/opencode-capability-checklist.md 逐条实测填证据（重点 C2 permission 实形、D4 hasHooks 诚实结论），claude 复核清单后定稿 design.md 才进 S1。 | S0 完成（2026-07-30 kimi）：16 条全实测，结论 C2 工具消失级 deny 成立（含 webfetch/task 外溢边界）、C3 新鲜上下文实证、C4 并行派发实证、D4 hasHooks=true（plugin 注入生产验证）。清单含 3 条诚实提醒待 design 消化。 | 复核整改完成（2026-07-30 kimi，claude 退回四项全补）：插件行为单测 8 例、OpenCode 1.18.4 真产物最小 smoke 四轮全过（research/opencode-real-smoke.md）、spec v3.12 §7.1.1 裁决 tier↔smoke 独立、UTF-8 留档重生成。全量 716 绿。",
   "meta": {}
 }

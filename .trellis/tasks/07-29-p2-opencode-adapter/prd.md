@@ -12,19 +12,20 @@
 
 ## Requirements
 
-- [ ] **R1**：`adapters/registry.json` 加 `opencode` 条目：tier 1、`agentCapable: true`、`hasHooks: true`、`detect_bin: "opencode"`、`install_dir: ".opencode"`、smoke 沿用 `deferred-beta` 口径（与 claude-code/codex 一致，诚实不夸大）。
-- [ ] **R2**：`host-shells/generate.js` 渲染 opencode 壳：SKILL 走 `hasHooks:true` 条件块；两审 agents 为 markdown，frontmatter 含 `mode: subagent` + 只读 permission（`edit: deny` 及等值项，以 OpenCode 实际 schema 为准）。
-- [ ] **R3**：installer 支持 opencode 落位：壳文件进 `.opencode/`；会话启动注入写 `.opencode/plugins/webnovel-session.js`（`chat.message` hook 注入书籍状态）；静态部分沿用现有 AGENTS.md 标记块机制（OpenCode 自动加载 AGENTS.md）。manifest 三态与幂等合并沿用现有机制。
-- [ ] **R4**：`adapters/opencode/support.md` 支持核验记录（参照 codex/support.md 形状，写明证据与 smoke 推迟）。
-- [ ] **R5**：drift check 覆盖 opencode 壳（生成器确定性 + validator）。
+- [x] **R1**：`adapters/registry.json` 加 `opencode` 条目：tier 1、`agentCapable: true`、`hasHooks: true`、`detect_bin: "opencode"`、`install_dir: ".opencode"`、smoke 沿用 `deferred-beta` 口径（与 claude-code/codex 一致，诚实不夸大）。
+- [x] **R2**：`host-shells/generate.js` 渲染 opencode 壳：SKILL 走 `hasHooks:true` 条件块；两审 agents 为 markdown，frontmatter 含 `mode: subagent` + 只读 permission（`edit: deny` 及等值项，以 OpenCode 实际 schema 为准）。（四 deny 键：edit/bash/webfetch/task，均 S0 实测验证；edit:deny 连带消除 write 工具）
+- [x] **R3**：installer 支持 opencode 落位：壳文件进 `.opencode/`；会话启动注入写 `.opencode/plugins/webnovel-session.js`（`chat.message` hook 注入书籍状态）；静态部分沿用现有 AGENTS.md 标记块机制（OpenCode 自动加载 AGENTS.md）。manifest 三态与幂等合并沿用现有机制。（安装报告补「重启后生效」提示——OpenCode 配置一次性加载实测）
+- [x] **R4**：`adapters/opencode/support.md` 支持核验记录（参照 codex/support.md 形状，写明证据与 smoke 推迟）。（逐项能力 + 验证于 1.18.4 + 三 caveat）
+- [x] **R5**：drift check 覆盖 opencode 壳（生成器确定性 + validator）。
 
 ## Acceptance Criteria
 
-- [ ] `node scripts/build-host-shells.mjs` 产出 `dist/opencode/`，drift check 绿。
-- [ ] install-e2e 增加 opencode 目标（或至少单测覆盖 detect/落位/manifest 幂等），双平台 CI 绿。
-- [ ] 渲染出的两审 agent frontmatter 含 `mode: subagent` + 只读 permission；SKILL 条件块按 `agentCapable:true`/`hasHooks:true` 展开（两审派 subagent 段生效、启动段走 hook 注入分支）。
-- [ ] registry 报告/安装报告如实显示 opencode 支持等级（沿用「直引 registry.verified 不夸大」决策）。
-- [ ] 全量测试绿。
+- [x] `node scripts/build-host-shells.mjs` 产出 `dist/opencode/`，drift check 绿。
+- [x] install-e2e 增加 opencode 目标（或至少单测覆盖 detect/落位/manifest 幂等），双平台 CI 绿。（e2e 全过含 opencode 落位+permission+报告断言，输入出经 Python utf8 解码留档至 `install-e2e-output.txt`——win 控制台显示乱码与文件内容无关）
+- [x] 渲染出的两审 agent frontmatter 含 `mode: subagent` + 只读 permission；SKILL 条件块按 `agentCapable:true`/`hasHooks:true` 展开（两审派 subagent 段生效、启动段走 hook 注入分支）。（dist 产物逐字验证：SessionStart 注入段在/兼容模式段不在/独立 subagent 段在）
+- [x] registry 报告/安装报告如实显示 opencode 支持等级（沿用「直引 registry.verified 不夸大」决策）。（复核整改后 verified 降为诚实口径：`机制实测通过（S0 十六项能力清单）+ 宿主最小 smoke 通过…；完整写章 smoke 推迟 beta`）
+- [x] 全量测试绿。（708/708）
+- [x] 复核整改（claude review #1-#4）：插件行为自动化测试 8 例（注入/双去重/无 text part/失败 fail-open/形状兼容/`s-nobin`/`s-apidown`）；OpenCode 1.18.4 真产物最小 smoke 四轮全过（skill 发现/插件注入回文/两审派发/PWNED.txt 行为级不存在）；spec v3.12 补 §7.1.1「分级与 smoke 门槛的关系」消除一级/推迟矛盾；UTF-8 留档重生成。
 
 ## Non-Goals
 

@@ -1,0 +1,57 @@
+✓ pack 清单含 GPL 许可证
+✓ pack 清单含迁移指南
+✓ pack 清单 docs 仅含 knowledge 与 migration-guide
+✓ pack 清单不含 story-repo-spec
+✓ pack 清单不含 docs/architecture
+✓ npm pack 产物：webnovel-writer-7.0.0-alpha.tgz
+✓ 安装产物 bin 存在
+✓ 安装包 docs 仅含 knowledge 与 migration-guide
+✓ 安装包不含 story-repo-spec
+✓ 安装包不含 docs/architecture
+--- init 报告 ---
+安装完成：工作目录（webnovel-writer 7.0.0-alpha）
+Node v24.15.0 ✓（门槛 22.13.0）
+平台壳：
+  - claude-code → .claude/  一级（结构就绪，真模型 smoke 推迟 beta）；两审=独立 subagent；SessionStart 只注入当前书、本数与全书近况入口
+  - codex → .codex/  一级（结构就绪，真模型 smoke 推迟 beta）；两审=独立 subagent；启动时由 SKILL 显式运行 session-context
+  - opencode → .opencode/  一级（能力实测通过（2026-07-30，S0 清单全绿），真模型 smoke 推迟 beta）；两审=独立 subagent；SessionStart 只注入当前书、本数与全书近况入口
+写入 463 个文件
+注意：OpenCode 请重启后生效：skills/agents/plugins 都在进程启动时加载一次。
+下一步：在这个目录打开你的 agent CLI，对它说「开始写书」。
+-----------------
+✓ init 布局：.webnovel/bin/webnovel-writer.js
+✓ init 布局：.webnovel/node_modules/js-yaml/package.json
+✓ init 布局：.webnovel/manifest.json
+✓ init 布局：.webnovel/books.jsonl
+✓ init 布局：.webnovel/references/路由.csv
+✓ init 布局：.webnovel/references/节拍/PA-001-压抑蓄力爆发.md
+✓ init 布局：.webnovel/docs/knowledge/维度宪章.md
+✓ init 布局：.webnovel/docs/knowledge/调用者与字段矩阵.md
+✓ init 布局：.webnovel/docs/knowledge/策展规则.md
+✓ init 布局：.claude/skills/webnovel-writer/SKILL.md
+✓ init 布局：.claude/agents/事实审查.md
+✓ init 布局：.claude/settings.json
+✓ init 布局：.codex/agents/事实审查.toml
+✓ init 布局：.opencode/skills/webnovel-writer/SKILL.md
+✓ init 布局：.opencode/agents/事实审查.md
+✓ init 布局：.opencode/agents/编辑审.md
+✓ init 布局：.opencode/plugins/webnovel-session.js
+✓ init 布局：AGENTS.md
+✓ opencode 两审壳：mode=subagent + 只读 permission 落位
+✓ init 报告如实列出 opencode 宿主
+✓ init 后 .webnovel/docs 仅含知识治理文档
+✓ init 后不含 story-repo-spec
+✓ init 后不含 docs/architecture
+✓ init 保留用户自有 PreToolUse
+✓ alpha 只新增 SessionStart 上下文 hook
+✓ 建书并登记为当前书（vendored bin）
+✓ 书仓库 book.yaml
+✓ 书仓库指路 AGENTS.md
+✓ 书仓库作品契约真源
+✓ 书仓库知识选择记录
+✓ next 判定起草第 1 章（实际：序6）
+✓ update 幂等可重跑
+✓ update 保留用户自有 PreToolUse
+✓ update 不重复安装 SessionStart
+
+安装链路 e2e 全通过：pack → 安装 → 中文路径 init → 建书 → next → update
