@@ -30,5 +30,6 @@
 
 ## Notes
 
-- **F11 定级待裁决**：kimi 初评列高危，claude 复核调中危候选（触发前提是 books.jsonl 先被外因写坏——persist-book 写侧有校验，攻击面是手改/网盘同步损坏而非 AI payload 直达）。裁决选项：留本批（推荐，修法半天量级）或升级单独任务。启动本任务前作者拍板。
-- 五项彼此独立，可按 F8→F11→F9→F10→F12 或任意顺序推进；lightweight 合批，PRD-only 启动（单项设计决策已内联），不另写 design.md。
+- **规划期勘察修正（2026-07-31，详见 implement.md）**：F9 按后置债务清单口径=陈旧检测 + `next` 序 0 提议清理保留作者确认，**非静默自动回收**（锁文件已写 pid/startedAt，数据在位）；F10 的 index.lock 不含 pid，「进程存活判断」不可行，收窄为阈值 60s + 删前二次 stat；F11 勘察发现**写侧 registerBook 本就无安全校验**，修法改为写读双侧（isSafeFileStem 复用 P0 单源）；F8 按防呆方言既有姿势 throw 人话（决策 62 拒绝不改写）；F12 实测 v7 路由设计上无 fallback 行选择机制，同构问题大概率不存在，以实测取证收口。
+- **F11 定级**：按 claude 建议留本批（触发前提=文件先被外因写坏，写侧修复后攻击面进一步收窄）；作者如裁决升级随时可拆出，不阻塞其余四项。
+- 五项彼此独立可任意顺序；lightweight 合批 PRD+implement 启动，不写 design.md（单项设计决策已内联）。分工沿用：kimi 实施 / claude 检查（review gates 见 implement.md）。

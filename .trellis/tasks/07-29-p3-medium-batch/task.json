@@ -9,7 +9,7 @@
   "package": null,
   "priority": "P2",
   "creator": "codex",
-  "assignee": "codex",
+  "assignee": "kimi",
   "createdAt": "2026-07-29",
   "completedAt": null,
   "branch": null,
@@ -21,6 +21,6 @@
   "children": [],
   "parent": "07-29-v7-review-findings",
   "relatedFiles": [],
-  "notes": "",
+  "notes": "分工（沿用）：kimi 实施 / claude 检查。启动依据=prd+implement（勘察修正已入两件）。要点：F9 序0清理流不得绕过作者确认；F11 写读双侧；平台相关测试实施时先 WSL 过一遍（P0/P2 两次 ubuntu CI 教训）。review gates：S3 后序0走查、S6 前全证据留档交 claude 复跑。",
   "meta": {}
 }
