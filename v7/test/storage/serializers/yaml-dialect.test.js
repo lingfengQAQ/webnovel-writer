@@ -58,6 +58,51 @@ test('数字和布尔值正常输出', () => {
   assert.ok(yaml.includes('开关: true'))
 })
 
+// P3-F8：key 零校验可把 `:`/`\n`/控制字符注入 front matter 结构（AI 可控 updates 键直达）。
+// 防呆方言对非法形态的既有姿势是 throw 人话（嵌套映射先例），校验拒绝而非静默改写。
+test('P3-F8：注入型 key 一律人话 throw', () => {
+  const cases = [
+    ['换行键', { 'a\n读者已知: true': 'x' }, /\n|换行/],
+    ['冒号键', { 'a: b': 'x' }, /:/],
+    ['井号键', { 'a # b': 'x' }, /#/],
+    ['首尾空白键', { ' 隐患 ': 'x' }, /空白/],
+    ['引号引导键', { '"': 'x' }, /"|“|”/],
+    ['单引号引导键', { "'": 'x' }, /'|‘|’/],
+    ['空键', { '': 'x' }, /空/],
+    ['控制字符键', { 'a\x07b': 'x' }, /控制字符|\x07/],
+  ]
+  for (const [名称, data, errPattern] of cases) {
+    assert.throws(
+      () => serializeYAML(data),
+      (err) => errPattern.test(err.message) || /非法/.test(err.message),
+      `${名称} 应被拒`
+    )
+  }
+  // 每条错误文本必须指认是哪个 key（可定位）
+  try {
+    serializeYAML({ '坏\n键': 1 })
+    assert.unreachable('应已 throw')
+  } catch (err) {
+    assert.match(err.message, /坏/)
+  }
+})
+
+test('P3-F8：合法 key（含中文/连字符/数字/下划线）不受影响', () => {
+  const data = {
+    章号: 1,
+    标题: '正常',
+    'fast-pair': 'ok',
+    知识选择_版本: 'v2',
+    key3: 'x',
+  }
+  const yaml = serializeYAML(data)
+  assert.ok(yaml.includes('章号: 1'))
+  assert.ok(yaml.includes('标题: 正常'))
+  assert.ok(yaml.includes('fast-pair: ok'))
+  assert.ok(yaml.includes('知识选择_版本: v2'))
+  assert.ok(yaml.includes('key3: x'))
+})
+
 test('嵌套映射抛错', () => {
   const data = { 外层: { 内层: '值' } }
   assert.throws(() => {

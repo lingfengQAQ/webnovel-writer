@@ -6,6 +6,7 @@ import { promises as fs } from 'node:fs'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { checkGitHealth } from '../../src/state-machine/git-health.js'
+import { STALE_LOCK_MS } from '../../src/state-machine/git-health.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -35,6 +36,43 @@ test('git健康：陈旧锁文件自动删 + 救援记录', async () => {
     const r = await checkGitHealth({ repoPath: root })
     assert.equal(r.ok, true)
     assert.ok(r.fixed.some((m) => m.includes('锁文件')))
+    await assert.rejects(() => fs.access(lock))
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+// P3-F10：阈值 3s→60s——杀软/索引器瞬时持锁超 3s 曾被误删（双 git 进程并发写损坏窗口）。
+// git 的 index.lock 不含 pid（无法判活锁），退而求其次=分钟级阈值 + 删除前二次 stat 防 TOCTOU。
+test('P3-F10：分钟级阈值内的新鲜锁绝不误删（杀软/索引器瞬时持锁场景）', async () => {
+  const { root } = await makeGitRepo()
+  try {
+    const lock = path.join(root, '.git', 'index.lock')
+    await fs.writeFile(lock, '', 'utf8')
+    // 5 秒龄：旧 3s 阈值下会被误删（这正是 F10 的 bug 场景）
+    const recent = new Date(Date.now() - 5000)
+    await fs.utimes(lock, recent, recent)
+    const r = await checkGitHealth({ repoPath: root })
+    assert.equal(r.ok, true)
+    assert.ok(STALE_LOCK_MS > 5000, `阈值须 >5s（实测 ${STALE_LOCK_MS}ms），否则本测试无意义`)
+    assert.ok(STALE_LOCK_MS >= 60_000, `阈值须提到分钟级（实测 ${STALE_LOCK_MS}ms）`)
+    assert.ok(!r.fixed.some((m) => m.includes('锁文件')), '5s 新鲜锁不得被判陈旧删除')
+    await fs.access(lock)
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('P3-F10：分钟级超龄锁（90 秒）才删（陈旧判定仍有牙齿）', async () => {
+  const { root } = await makeGitRepo()
+  try {
+    const lock = path.join(root, '.git', 'index.lock')
+    await fs.writeFile(lock, '', 'utf8')
+    const old = new Date(Date.now() - 90_000)
+    await fs.utimes(lock, old, old)
+    const r = await checkGitHealth({ repoPath: root })
+    assert.equal(r.ok, true)
+    assert.ok(r.fixed.some((m) => m.includes('锁文件')), '90s 超龄锁必须删除')
     await assert.rejects(() => fs.access(lock))
   } finally {
     await fs.rm(root, { recursive: true, force: true })

@@ -111,6 +111,55 @@ test('序0：源文件解析失败 → 修复确认', async () => {
   }
 })
 
+// P3-F9：陈旧契约锁（持有进程已死）→ 序0 修复确认里带 delete 指引的独立项
+test('序0（P3-F9）：陈旧契约锁 → failures 含 delete 动作与清理指引', async () => {
+  const { ctx, root, cleanup } = await makeGitBook(healthyBook())
+  try {
+    // 放一个 pid 已死的锁（进程探测不可达的 pid）
+    const lockDir = path.join(root, '工作区')
+    await fs.mkdir(lockDir, { recursive: true })
+    let deadPid = process.pid + 100000
+    try { process.kill(deadPid, 0) } catch { /* ESRCH 即确认已死 */ }
+    await fs.writeFile(
+      path.join(lockDir, '契约更新处理中.lock'),
+      JSON.stringify({ pid: deadPid, operation: '章节定稿', startedAt: new Date().toISOString() }),
+      'utf8'
+    )
+
+    const r = await determineNextState(ctx)
+    assert.equal(r.序, 0, JSON.stringify(r.dto))
+    assert.equal(r.state, 'repair-confirm')
+    const lockFailure = r.dto.failures.find((f) => f.file === '工作区/契约更新处理中.lock')
+    assert.ok(lockFailure, 'failures 必须含契约锁项')
+    assert.equal(lockFailure.action, 'delete')
+    assert.match(lockFailure.修复指引, /persist-repair/)
+    assert.match(String(r.dto.期望产物), /delete/)
+  } finally {
+    await cleanup()
+  }
+})
+
+// P3-F9：活锁（pid 存活）不得被判陈旧——序0 不因它停下
+test('序0（P3-F9）：活锁（持锁进程存活）不进 failures，不阻断流程', async () => {
+  const { ctx, root, cleanup } = await makeGitBook(healthyBook())
+  try {
+    const lockDir = path.join(root, '工作区')
+    await fs.mkdir(lockDir, { recursive: true })
+    await fs.writeFile(
+      path.join(lockDir, '契约更新处理中.lock'),
+      JSON.stringify({ pid: process.pid, operation: '章节定稿', startedAt: new Date().toISOString() }),
+      'utf8'
+    )
+
+    const r = await determineNextState(ctx)
+    assert.ok(!r.dto.failures || !r.dto.failures.some((f) => f.file === '工作区/契约更新处理中.lock'),
+      '活锁不得被判陈旧进 failures')
+    assert.notEqual(r.序, 0, '活锁不得触发序0')
+  } finally {
+    await cleanup()
+  }
+})
+
 test('序0：计划对象损坏 → 启动先进入修复确认', async () => {
   const { ctx, cleanup } = await makeGitBook(healthyBook({
     '大纲/创作设计/人物/CHAR-001-林晚.md': designFixture().replace('## 一致性边界', '## 边界缺失'),

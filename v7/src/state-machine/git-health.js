@@ -2,7 +2,10 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { createGit } from '../finalize/git.js'
 
-const STALE_LOCK_MS = 3000
+// P3-F10：3s 太短——杀软/Windows 索引器对 .git 的瞬时读锁常常超 3s，
+// 曾被误判陈旧删除，引入双 git 进程并发写损坏窗口。git 的 index.lock 不含 pid
+//（无法做活锁进程判定），退而求其次=分钟级阈值 + 删除前二次 stat 防 TOCTOU。
+export const STALE_LOCK_MS = 60_000
 
 /**
  * git 健康检查（spec §10 第 0 步前）。D2：激进自动修 + 可恢复安全网。
@@ -22,12 +25,17 @@ export async function checkGitHealth(ctx) {
   try {
     const st = await fs.stat(lockPath)
     if (Date.now() - st.mtimeMs > STALE_LOCK_MS) {
-      await fs.rm(lockPath, { force: true })
-      fixed.push('删除了陈旧的 git 锁文件（.git/index.lock，残留自上次中断的 git 操作）')
-      rescued.push('index.lock 已删')
+      // P3-F10 删除前二次 stat 防 TOCTOU：判陈旧到 rm 的窗口里若锁被新 git 操作刷新（mtime 变近），
+      // 说明是活锁，宁可保守不删，不能误删别人的锁。
+      const recheck = await fs.stat(lockPath)
+      if (Date.now() - recheck.mtimeMs > STALE_LOCK_MS) {
+        await fs.rm(lockPath, { force: true })
+        fixed.push('删除了陈旧的 git 锁文件（.git/index.lock，残留自上次中断的 git 操作）')
+        rescued.push('index.lock 已删')
+      }
     }
   } catch {
-    // 无锁文件
+    // 无锁文件（或二次 stat 时已被持有方自然释放）
   }
 
   // 2. .git 损坏：坏了别再动 git（D2 例外，只指引）

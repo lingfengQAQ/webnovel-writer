@@ -277,6 +277,66 @@ test('persistRepair（序0）→ 仅写失败清单内的文件,内容须能解�
   } finally { await cleanup() }
 })
 
+// P3-F9：序0 陈旧锁清理走 persistRepair 的 delete 动作（白名单钳死，只放行契约锁路径的删除）。
+test('persistRepair（P3-F9）：action=delete 删契约锁（白名单含该路径）', async () => {
+  const { ctx, root, cleanup } = await tmpRepo()
+  try {
+    const lockRel = '工作区/契约更新处理中.lock'
+    await fs.mkdir(path.join(root, '工作区'), { recursive: true })
+    await fs.writeFile(path.join(root, lockRel), '{"pid":999999,"operation":"定稿"}', 'utf8')
+    const r = await persistRepair(
+      ctx,
+      { repairs: [{ file: lockRel, action: 'delete' }] },
+      { allowedFiles: [lockRel] }
+    )
+    assert.equal(r.ok, true, r.error)
+    assert.deepEqual(r.written, [lockRel])
+    await assert.rejects(() => fs.access(path.join(root, lockRel)), '锁必须被删除')
+  } finally { await cleanup() }
+})
+
+test('persistRepair（P3-F9）：action=delete 不在白名单照样拒；删非锁路径也拒', async () => {
+  const { ctx, root, cleanup } = await tmpRepo()
+  try {
+    const notInList = await persistRepair(
+      ctx,
+      { repairs: [{ file: '工作区/契约更新处理中.lock', action: 'delete' }] },
+      { allowedFiles: ['定稿/正文/0001-起.md'] }
+    )
+    assert.equal(notInList.ok, false, 'delete 也必须在 allowedFiles 内')
+
+    const arbitrary = await persistRepair(
+      ctx,
+      { repairs: [{ file: '定稿/正文/0001-起.md', action: 'delete' }] },
+      { allowedFiles: ['定稿/正文/0001-起.md', '工作区/契约更新处理中.lock'] }
+    )
+    assert.equal(arbitrary.ok, false, 'delete 只放行契约锁路径，不得删任意文件')
+  } finally { await cleanup() }
+})
+
+test('persistRepair（P3-F9）：delete 与正常 repairs 同批共存', async () => {
+  const { ctx, root, cleanup } = await tmpRepo()
+  try {
+    const lockRel = '工作区/契约更新处理中.lock'
+    const target = '定稿/正文/0001-起.md'
+    await fs.mkdir(path.join(root, '工作区'), { recursive: true })
+    await fs.writeFile(path.join(root, lockRel), '{}', 'utf8')
+    await fs.mkdir(path.join(root, '定稿/正文'), { recursive: true })
+    await fs.writeFile(path.join(root, target), '---\n坏: yaml: :\n---\n正文', 'utf8')
+    const r = await persistRepair(
+      ctx,
+      { repairs: [
+        { file: lockRel, action: 'delete' },
+        { file: target, content: '---\n章号: 1\n标题: 起\n---\n正文' },
+      ] },
+      { allowedFiles: [lockRel, target] }
+    )
+    assert.equal(r.ok, true, r.error)
+    await assert.rejects(() => fs.access(path.join(root, lockRel)))
+    assert.match(await read(root, target), /章号: 1/)
+  } finally { await cleanup() }
+})
+
 test('persistRepair：拒绝写不在失败清单内的文件（安全网,防 AI 任意写）', async () => {
   const { ctx, root, cleanup } = await tmpRepo()
   try {

@@ -16,6 +16,10 @@ export function serializeYAML(data) {
   const lines = []
 
   for (const [key, value] of Object.entries(data)) {
+    // P3-F8：key 零校验时 `:`/`\n`/控制字符可以注入 front matter 结构（AI 可控 updates 键直达）。
+    // 与嵌套检测同款姿势：人话 throw 并指认是哪个 key，校验拒绝而非静默改写。
+    assertSafeYamlKey(key)
+
     // 检测嵌套映射（违反防呆方言）
     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
       throw new Error(`防呆方言禁止嵌套映射：字段「${key}」的值是对象。所有字段必须平铺到顶层。`)
@@ -37,6 +41,35 @@ export function serializeYAML(data) {
   }
 
   return lines.join('\n')
+}
+
+/**
+ * key 合法性校验（P3-F8）：key 会原样写进 `key: value` 行首，
+ * 含 `:`（冒号切分出第二对键值）、`\n`（续行造新行=新字段）、`#`（行内注释吞尾）、
+ * 首尾空白（序列化后被裁，读回对不上）、引号引导（换标量形态）、控制字符（解析器炸）
+ * 的 key 都是注入面。合法 key = 非空、无控制字符、无冒号/井号/首尾空白、非引号引导。
+ * @param {string} key
+ */
+function assertSafeYamlKey(key) {
+  if (typeof key !== 'string' || key === '') {
+    throw new Error(`防呆方言收到空字段名（非法 key），拒绝序列化`)
+  }
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x1f]/.test(key)) {
+    throw new Error(`字段名「${JSON.stringify(key)}」含控制字符（含换行），会注入 front matter 结构，拒绝序列化`)
+  }
+  if (key !== key.trim()) {
+    throw new Error(`字段名「${key}」含首尾空白（序列化后读回对不上），拒绝序列化`)
+  }
+  if (key.includes(':')) {
+    throw new Error(`字段名「${key}」含冒号（YAML 键值分隔符，会切出新字段），拒绝序列化`)
+  }
+  if (key.includes('#')) {
+    throw new Error(`字段名「${key}」含井号（行内注释起点，后半截会被吞掉），拒绝序列化`)
+  }
+  if (/^["'“‘”’]/.test(key)) {
+    throw new Error(`字段名「${key}」以引号开头（会改变标量形态），拒绝序列化`)
+  }
 }
 
 /**

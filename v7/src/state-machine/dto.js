@@ -38,7 +38,8 @@ export async function buildDto(ctx, 序, base = {}) {
       return {
         state: 'repair-confirm',
         failures: base.failures || [],
-        期望产物: '逐个给出「保留作者意图」的修复方案，作者确认后由 M3 写回',
+        期望产物:
+          '逐个给出「保留作者意图」的修复方案，作者确认后由 M3 写回。failures 中带 `action: "delete"` 的项是陈旧锁清理——不产内容，作者确认后 persist-repair 直接删（白名单仅限该锁路径，不得推广成任意删除）。',
       }
     case 1: {
       const routes = ctx.packageRoot ? await loadRoutes(ctx.packageRoot) : []

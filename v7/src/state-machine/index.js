@@ -2,6 +2,10 @@ import { checkGitHealth } from './git-health.js'
 import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
 import { buildDto } from './dto.js'
 import * as d from './detectors.js'
+import {
+  CONTRACT_UPDATE_LOCK,
+  readStaleContractLock,
+} from '../staging/contract-invalidation.js'
 
 /**
  * 状态机单入口（spec §10）：先跑 git 健康检查，再按序 0-6 命中即停判定下一步。
@@ -21,6 +25,17 @@ export async function determineNextState(ctx) {
 
   // 序0 修复确认（检测=脚本，提议=AI）
   const failures = await d.detectParseFailures(repoPath)
+  // P3-F9：契约互斥锁陈旧残留——进程被 kill/断电后锁永远堵死写路径。
+  // 检测成独立 failure（file=锁路径，走 persistRepair 的 delete 行动）；不是静默自动回收（保留了作者确认）。
+  const staleLock = await readStaleContractLock(repoPath)
+  if (staleLock.stale) {
+    failures.push({
+      file: CONTRACT_UPDATE_LOCK,
+      error: staleLock.reason,
+      action: 'delete',
+      修复指引: '锁的持有进程已不在，锁文件残留只会阻塞写路径。作者确认后可经 persist-repair action=delete 直接删除（不需要 AI 生成内容）。',
+    })
+  }
   // 作品契约缺/坏由序4、序6的同一 ContractReader 阻断，不送进 AI 修复或创作态。
   // 若还有其他源文件错误，仍保持既有序0修复确认语义。
   const repairFailures = failures.filter(

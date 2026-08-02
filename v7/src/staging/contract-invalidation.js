@@ -12,7 +12,80 @@ import { RETRY_POLICY_PATH } from '../retry-policy/index.js'
 
 export const CONTRACT_INVALIDATION_MARKER = path.join('工作区', '契约更新待重备料.md')
 export const CONTRACT_INVALIDATION_GUARD = path.join('工作区', '契约失效.json')
-export const CONTRACT_UPDATE_LOCK = path.join('工作区', '契约更新处理中.lock')
+// 产品契约口径：仓库相对路径恒为正斜杠字面量（含 Windows）——DTO 面向 AI/宿主展示的
+// 路径与 persistRepair 白名单比对的口径都必须一致（P3-F9/R4）。
+export const CONTRACT_UPDATE_LOCK = '工作区/契约更新处理中.lock'
+
+/**
+ * 陈旧锁年龄兜底阈值（P3-F9）：锁文件缺 pid 或进程探测不可达时，仅靠时间判定。
+ * 取 30 分钟——正当写操作（含大批量定稿）远低此数；这是无 pid 可判活锁时的兜底，
+ * 有 pid 信息时一律以 pid 存活判定为准，与时间无关。
+ */
+export const STALE_CONTRACT_LOCK_AGE_MS = 30 * 60 * 1000
+
+/**
+ * 读并判定契约互斥锁是否陈旧（P3-F9）。进程被 kill/断电后锁文件永久残留会堵死全部写路径。
+ * 判定双判：pid 存活探测（process.kill(pid, 0)：ESRCH=进程不在=陈旧；EPERM/无异常=活锁）；
+ * pid 缺失/解析失败时才退回 startedAt/文件 mtime 年龄阈值。
+ * @param {string} repoPath
+ * @returns {Promise<{stale: boolean, reason: string, error: string, pid: number|null, startedAt: string|null}>}
+ *   stale=false 时 reason 为 ''（无锁或活锁）；stale=true 时 reason 为人话理由（供电/ui 序0呈报）。
+ */
+export async function readStaleContractLock(repoPath) {
+  const none = { stale: false, reason: '', error: '', pid: null, startedAt: null }
+  const lockPath = path.join(repoPath, CONTRACT_UPDATE_LOCK)
+  let raw
+  try {
+    raw = await fs.readFile(lockPath, 'utf8')
+  } catch {
+    return none // 无锁文件
+  }
+
+  let meta = {}
+  try {
+    meta = JSON.parse(raw)
+  } catch {
+    /* 损坏锁文件：走年龄兜底 */
+  }
+  const pid = Number.isInteger(meta?.pid) ? meta.pid : null
+
+  if (pid !== null) {
+    try {
+      process.kill(pid, 0) // 探测：不杀进程，只看存活
+      return { ...none, pid, startedAt: meta?.startedAt ?? null } // 活锁：不可判陈旧
+    } catch (err) {
+      if (err.code === 'ESRCH') {
+        return {
+          stale: true,
+          reason: `锁的持有进程（pid ${pid}）已退出但锁文件残留（上次中断未清理），${CONTRACT_UPDATE_LOCK} 会一直阻塞写操作，可安全清理`,
+          error: '',
+          pid,
+          startedAt: meta?.startedAt ?? null,
+        }
+      }
+      // EPERM 等：探测不可达视为活锁（保守不误删）
+      return { ...none, pid, startedAt: meta?.startedAt ?? null }
+    }
+  }
+
+  // 无 pid 信息：年龄兜底（锁文件 mtime 比 startedAt 更接近残留时刻）
+  try {
+    const st = await fs.stat(lockPath)
+    if (Date.now() - st.mtimeMs > STALE_CONTRACT_LOCK_AGE_MS) {
+      return {
+        stale: true,
+        reason: `锁文件超龄残留（超过 ${Math.round(STALE_CONTRACT_LOCK_AGE_MS / 60000)} 分钟无变化）且无法确认持有进程，可安全清理`,
+        error: '',
+        pid: null,
+        startedAt: meta?.startedAt ?? null,
+      }
+    }
+  } catch {
+    // stat 失败按无锁处理
+  }
+  return none
+}
+
 
 const BATCH_DIR = path.join('工作区', '待定稿')
 const GUARD_KEYS = Object.freeze([
@@ -44,7 +117,7 @@ export async function acquireContractMutationLock(repoPath, operation = '作品�
     if (err.code === 'EEXIST') {
       return {
         ok: false,
-        error: `已有作品状态写入正在处理，${operation}不能并发执行；请等待该次完成后重试。`,
+        error: `已有作品状态写入正在处理，${operation}不能并发执行；请等待该次完成后重试。锁文件：${CONTRACT_UPDATE_LOCK}——若怀疑是上次中断残留的陈旧锁，先运行 next 待序0 提议清理并确认。`,
       }
     }
     return { ok: false, error: `${operation}无法建立并发保护：${err.message}` }

@@ -8,6 +8,8 @@ import {
   scanRebuildBooks,
   assembleSessionContext,
   writeBooksRegistry,
+  loadBooks,
+  registerBook,
 } from '../../src/session/index.js'
 
 async function tmpWorkdir() {
@@ -35,6 +37,69 @@ test('readBooksRegistry：解析合法行,损坏行跳过并计数', async () =>
     assert.equal(r.ok, true)
     assert.equal(r.books.length, 2)
     assert.equal(r.corrupt, 1)
+  } finally { await cleanup() }
+})
+
+// P3-F11：JSON 能解但形状非法（目录穿越/非字符串/非单层）的行必须算 corrupt——
+// 否则下游会把 `目录: "../../x"` 当成合法书目录消费（git clean/reset 落到工作目录外）。
+test('readBooksRegistry（P3-F11）：形状非法的行计入 corrupt（越界目录不进书单）', async () => {
+  const { root, cleanup } = await tmpWorkdir()
+  try {
+    await writeRegistry(root, [
+      JSON.stringify({ 书名: '剑起青云', 目录: '剑起青云', 当前: true }),
+      JSON.stringify({ 书名: 'x', 目录: '../../etc/passwd' }),
+      JSON.stringify({ 书名: 'x', 目录: 'a/b' }),
+      JSON.stringify({ 书名: 'x', 目录: 'a\\b' }),
+      JSON.stringify({ 书名: 'x', 目录: '..', 当前: true }),
+      JSON.stringify({ 书名: 'x', 目录: 123 }),
+      JSON.stringify({ 书名: 'x' }),
+      JSON.stringify(['不是对象']),
+      JSON.stringify({ 书名: '', 目录: 'y' }),
+      JSON.stringify({ 书名: '  ', 目录: 'y' }),
+      JSON.stringify({ 书名: '正常', 目录: '.hidden' }),
+    ])
+    const r = await readBooksRegistry(root)
+    assert.equal(r.ok, true)
+    assert.deepEqual(
+      r.books.map((b) => b.书名),
+      ['剑起青云'],
+      `形状非法的行必须全部拦截，实际通过：${JSON.stringify(r.books)}`
+    )
+    assert.equal(r.corrupt, 10, `10 行非法须全计数，实际 ${r.corrupt}`)
+  } finally { await cleanup() }
+})
+
+test('loadBooks（P3-F11）：形状非法的行走到既有 corrupt+自愈回写通道（好行保留 坏行清除）', async () => {
+  const { root, cleanup } = await tmpWorkdir()
+  try {
+    await writeRegistry(root, [
+      JSON.stringify({ 书名: '剑起青云', 目录: '剑起青云', 当前: true }),
+      JSON.stringify({ 书名: 'x', 目录: '../../evil' }),
+    ])
+    const r = await loadBooks(root)
+    assert.equal(r.ok, true)
+    assert.equal(r.books.length, 1)
+    assert.equal(r.books[0].书名, '剑起青云')
+    // 自愈回写：坏行应从文件里被清掉
+    const content = await fs.readFile(path.join(root, '.webnovel', 'books.jsonl'), 'utf8')
+    for (const line of content.trim().split('\n')) {
+      const b = JSON.parse(line)
+      assert.equal(b.书名, '剑起青云', '自愈回写后只剩好行')
+    }
+  } finally { await cleanup() }
+})
+
+test('registerBook（P3-F11）：越界/非法目录写侧即拒（不污染书单）', async () => {
+  const { root, cleanup } = await tmpWorkdir()
+  try {
+    for (const bad of ['../../x', 'a/b', 'a\\b', '/abs/path', 'C:\\x', '..', '.hidden', 'CON']) {
+      const r = await registerBook(root, { 书名: 'x', 目录: bad })
+      assert.equal(r.ok, false, `目录「${bad}」必须被拒`)
+      assert.match(r.error || '', /目录/, `报错要点名字段：${bad}`)
+    }
+    // 合法目录照常登记
+    const good = await registerBook(root, { 书名: '剑起青云', 目录: '剑起青云' })
+    assert.equal(good.ok, true, good.error)
   } finally { await cleanup() }
 })
 

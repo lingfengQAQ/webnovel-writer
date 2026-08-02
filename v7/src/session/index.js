@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
+import { isSafeFileStem } from '../util/filename.js'
 
 /**
  * SessionStart 注入与书单登记（story-repo-spec §2.0）。
@@ -9,7 +10,21 @@ import { BookConfigReader } from '../storage/adapters/BookConfigReader.js'
  * 读侧 + 扫描重建自愈（M4）与写侧（登记/换书/最后打开,M5）同模块,books.jsonl 格式单源。
  */
 
-/** 读 .webnovel/books.jsonl,逐行 JSON,损坏行跳过并计数 */
+/**
+ * books.jsonl 行形状校验（P3-F11）：JSON 能解不等于能账本——
+ * 形状非法的行（`目录` 含 `/`、`\`、`..`、绝对路径、Windows 保留名、非字符串，
+ * 或 `书名` 非非空字符串）一律判 corrupt 进既有自愈回写通道。
+ * 判据=「目录是单层安全文件名干」（isSafeFileStem——P0 单源，不另建黑名单；
+ * JSONL 行是机器账本字段不是语义标的，与白名单文件干同族）。写侧 registerBook 同款口径。
+ */
+function isValidBookEntry(entry) {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false
+  if (typeof entry.书名 !== 'string' || !entry.书名.trim()) return false
+  if (typeof entry.目录 !== 'string' || !entry.目录) return false
+  return isSafeFileStem(entry.目录)
+}
+
+/** 读 .webnovel/books.jsonl,逐行 JSON,损坏行跳过并计数（P3-F11：形状非法行同计） */
 export async function readBooksRegistry(workdir) {
   const p = path.join(workdir, '.webnovel', 'books.jsonl')
   let content
@@ -23,11 +38,14 @@ export async function readBooksRegistry(workdir) {
   for (const line of content.split('\n')) {
     const t = line.trim()
     if (!t) continue
+    let entry = null
     try {
-      books.push(JSON.parse(t))
+      entry = JSON.parse(t)
     } catch {
-      corrupt++
+      entry = null
     }
+    if (entry && isValidBookEntry(entry)) books.push(entry)
+    else corrupt++
   }
   return { ok: true, missing: false, books, corrupt }
 }
@@ -105,9 +123,20 @@ function localDate() {
 
 /**
  * 登记一本书并置为当前（建书流程调用）。同目录已登记则更新书名,不产生重复行。
+ * P3-F11 写侧校验：`书名` 非空字符串、`目录` 为单层安全文件名干——
+ * 否则一行坏数据就能让下游 `git clean -fd` / `fs.rm` 落到工作目录外（与读侧同口径单源判定）。
  */
 export async function registerBook(workdir, { 书名, 目录 }) {
-  if (!书名 || !目录) return { ok: false, error: '登记需要 书名 与 目录', books: [] }
+  if (typeof 书名 !== 'string' || !书名.trim()) {
+    return { ok: false, error: '登记需要非空字符串的 书名 字段', books: [] }
+  }
+  if (typeof 目录 !== 'string' || !isSafeFileStem(目录)) {
+    return {
+      ok: false,
+      error: `目录「${typeof 目录 === 'string' && 目录 ? 目录 : '（空）'}」不合法：须为单层目录名，不能含路径分隔符、绝对路径或「..」（P3-F11 安全校验）`,
+      books: [],
+    }
+  }
   const { books } = await loadBooks(workdir)
   const kept = books.filter((b) => b.目录 !== 目录).map((b) => ({ ...b, 当前: false }))
   kept.push({ 书名, 目录, 当前: true, 最后打开: localDate() })

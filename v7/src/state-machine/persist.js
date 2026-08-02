@@ -363,24 +363,49 @@ function validateRepairContent(file, content) {
 }
 
 /**
+ * P3-F9：陈旧锁 delete 的唯一放行面。白名单钳死——只有契约互斥锁可经 persistRepair
+ * 删除，防 AI 把 delete 推广成任意删。新增其他可删路径必须先加测试并在这里显式登记。
+ */
+export const REPAIR_DELETE_ALLOWED = Object.freeze(['工作区/契约更新处理中.lock'])
+
+/**
  * 序0 修复确认 → 写回修复后的源文件。安全网:
  * 只写在 allowedFiles（M3 检测到的失败清单）内的文件;修复内容必须能解析,否则不写。
+ * P3-F9 起支持 `action: 'delete'` 项删除陈旧锁（仅 REPAIR_DELETE_ALLOWED 内路径）。
  */
 export async function persistRepair(ctx, { repairs }, { allowedFiles = [] } = {}) {
+  const deletes = []
+  const writes = []
   for (const r of repairs) {
     if (!allowedFiles.includes(r.file)) {
       return { ok: false, written: [], error: `拒绝写入非失败清单文件：${r.file}` }
+    }
+    if (r.action === 'delete') {
+      if (!REPAIR_DELETE_ALLOWED.includes(r.file)) {
+        return { ok: false, written: [], error: `拒绝删除非白名单路径：${r.file}（delete 只放行契约锁清理）` }
+      }
+      deletes.push(r.file)
+      continue
     }
     const check = validateRepairContent(r.file, r.content)
     if (!check.ok) {
       return { ok: false, written: [], error: `修复内容仍解析失败（${r.file}）：${check.error}` }
     }
+    writes.push(r)
   }
   try {
-    const written = await writeAtomicBatch(
+    // 删除先行（不属 writeAtomicBatch 的语义面——原子批只管写）。
+    // 顺序要求：先解锁（让互斥路径恢复）再写回，避免修复件被陈旧锁挡住。
+    const written = []
+    for (const rel of deletes) {
+      await fs.rm(path.join(ctx.repoPath, rel), { force: true })
+      written.push(rel)
+    }
+    const batchWritten = await writeAtomicBatch(
       ctx.repoPath,
-      repairs.map((r) => ({ path: r.file, content: r.content }))
+      writes.map((r) => ({ path: r.file, content: r.content }))
     )
+    written.push(...batchWritten)
     // 修复件此前因解析失败不在缓存,写完必须自刷,否则报表/备料继续缺数据。
     // 修复本身不 commit：入档走序2 手改补登（relink）,与 spec §9 的手改通道一致。
     const cacheRefresh = await refreshCacheAfterSourceChange(ctx)
