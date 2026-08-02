@@ -2,6 +2,8 @@
 
 前置：v7 分支 887dc1a 之后；716 测试绿基线。分工沿用：kimi 实施 / claude 检查。TDD 每项先攻击/故障样例红测。
 
+> 状态（2026-07-31 kimi 收尾）：**S1-S6 全部完成，全量 733/733 绿 + drift 绿，等 claude review gates（S3 序 0 走查 + S6 全证据复跑）**
+
 ## 规划期勘察修正（2026-07-31，逐文件核实）
 
 - **F9 口径以后置债务清单为准**（`tasks/archive/2026-07/07-23-v7-global-review-remediation/research/后置债务清单.md` 行 15）：陈旧检测（pid 存活或年龄阈值）+ **由 `next` 序 0 提议清理并保留作者确认**——**不做静默自动回收**；现有并发互斥与锁内不变量测试不回退。勘察红利：锁文件已写 `{pid, operation, startedAt}`（`contract-invalidation.js:36-38`），自愈所需数据在位，只缺读侧判定 + 序 0 接线 + EEXIST 文案补锁路径。
@@ -13,12 +15,12 @@
 
 ## 步骤（顺序可调，五项彼此独立）
 
-- [ ] **S1 F8 YAML key 校验**：红测（key 含 `\n`/`:`/`#` 的注入样例期望 throw 人话）→ `serializeYAML` 循环头加 key 白名单判定（合法=非空、无控制字符、无 `:`/`#`/引号引导、无首尾空白）→ 全量 front matter round-trip 回归。
-- [ ] **S2 F10 index.lock 阈值**：`STALE_LOCK_MS` 3000→60000 + 删除前二次 stat 年龄确认；异常样本库全绿；spec 决策注明理由（杀软/索引器锁盘场景）。
-- [ ] **S3 F9 契约锁陈旧自愈**：红测（放置陈旧锁文件：pid 已死 / startedAt 超阈值）→ 读侧 `readStaleContractLock(repoPath)`（pid 存活探测 + 年龄阈值双判）→ `next` 序 0 检测到陈旧锁时进 `dto.failures` 提议清理（走既有序 0 修复确认流，作者确认后 persist-repair 删锁）→ EEXIST 报错文案补锁文件路径与「若确认无并发进程可经序 0 清理」指引。活锁（pid 存活）保持拒绝。现有互斥测试零回退。
-- [ ] **S4 F11 books.jsonl 写读双侧**：红测（`目录: "../../x"` 写侧拒绝；手工坏行读侧过滤入 corrupt 计数且 locate 不消费）→ 写侧 `registerBook` 校验 `书名` 非空字符串 + `目录` 过 `isSafeFileStem`；读侧 `readBooks` 行级形状校验（书名/目录字符串 + 目录 isSafeFileStem），坏行 corrupt++ 走既有自愈回写；`runtime/locate.js` 消费面零改动（上游已滤净）。
-- [ ] **S5 F12 路由同构核查（核查项）**：实测三场景取证——只给大类题材（如 玄幻）建书时 `knowledge-pack` 返回集、`路由.csv` 归一行为、书级契约是否隐式带入某子流派调性/桥段默认值；结论 + 复现命令留档本任务 `research/route-isomorphism-check.md`。有问题→修复并补测试；无问题→写明证据收口。
-- [ ] **S6 收尾**：全量回归 + drift 绿；spec 回填（story-repo 决策条目：F8 key 校验口径 / F9 序 0 清理流 / F10 阈值 / F11 双侧校验；error-handling 如涉补条）；提交分层（实现+测试一 commit、任务工件一 commit）；父任务 F8-F11 勾选 + F12 记录结论。
+- [x] **S1 F8 YAML key 校验**：红测（8 类注入样例 throw 人话指认字段名 + 合法键不受影响）→ `serializeYAML` 循环头 `assertSafeYamlKey` 白名单判定 → 全量 front matter round-trip 43 绿。
+- [x] **S2 F10 index.lock 阈值**：`STALE_LOCK_MS` 3000→60000（导出常量供测试断言下限）+ 删除前二次 stat 年龄确认；git-health 7 例全绿（5s 新鲜锁保留/90s 超龄删/二次 stat 覆盖）。
+- [x] **S3 F9 契约锁陈旧自愈**：红测（死 pid→陈旧 / 活 pid 超龄→拒 / 无 pid+超龄→年龄兜底 / EEXIST 文案）→ `readStaleContractLock`（pid 存活探测优先，EPERM 保守活锁；无 pid 回退 30 分 mtime）→ 序 0 独立检测并入 failures（动作=delete + 修复指引；**非静默回收**）→ `persistRepair` 新增 `action:'delete'`（`REPAIR_DELETE_ALLOWED` 白名单只放行契约锁路径）→ EEXIST 文案。活锁拒绝零回退（router 2 例实证序 0 不被活锁触发）。
+- [x] **S4 F11 books.jsonl 写读双侧**：红测（形状非法行 10 样例全 corrupt、写侧 8 类非法目录拒绝、自愈回写清坏行）→ 共用 `isValidBookEntry`（目录=`isSafeFileStem` P0 单源）；读侧形状非法一行入 corrupt 走原有回写通道；`runtime/locate.js` 消费面零改动。session 20 例全绿。
+- [x] **S5 F12 路由同构核查（核查项）**：实测三场景取证实拍（玄幻=无携带；修仙=canonical 归一仙侠声明表；玄幻+凡人流=显式指定才进包）+ resolveBookKnowledge 源码逐行审（未命中显式列出、零 fallback/默认选择/继承分支）→ **零改动收口**，`research/route-isomorphism-check.md`。
+- [x] **S6 收尾**：全量回归 **733/733 绿** + drift check 绿；spec 回填 story-repo 0.21 决策 64（四条口径合批记录）；父任务 F8-F11 全勾选 + F12 结论记录；提交分层（实现+测试一 commit、任务工件一 commit——待作者/claude 检查后执行）。
 
 ## Review gates（claude）
 

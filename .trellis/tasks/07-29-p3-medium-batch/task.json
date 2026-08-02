@@ -3,7 +3,7 @@
   "name": "p3-medium-batch",
   "title": "P3 中危合批（F8-F11 + v7 路由 #135 同构核查）",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -21,6 +21,6 @@
   "children": [],
   "parent": "07-29-v7-review-findings",
   "relatedFiles": [],
-  "notes": "分工（沿用）：kimi 实施 / claude 检查。启动依据=prd+implement（勘察修正已入两件）。要点：F9 序0清理流不得绕过作者确认；F11 写读双侧；平台相关测试实施时先 WSL 过一遍（P0/P2 两次 ubuntu CI 教训）。review gates：S3 后序0走查、S6 前全证据留档交 claude 复跑。",
+  "notes": "分工（沿用）：kimi 实施 / claude 检查。启动依据=prd+implement（勘察修正已入两件）。要点：F9 序0清理流不得绕过作者确认；F11 写读双侧；平台相关测试实施时先 WSL 过一遍（P0/P2 两次 ubuntu CI 教训）。review gates：S3 后序0走查、S6 前全证据留档交 claude 复跑。 | 实施完成（2026-07-31 kimi）：S1-S6 全过，全量 733/733 绿 + drift 绿。F12 零改动收口（research/route-isomorphism-check.md）。等 claude review gates：S3 序0 走查（重点：非静默回收/活锁不误删/REPAIR_DELETE_ALLOWED 只放行契约锁）+ S6 前全证据复跑（含 WSL 过平台相关测试）。",
   "meta": {}
 }

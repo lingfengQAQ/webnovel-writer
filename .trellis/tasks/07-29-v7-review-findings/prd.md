@@ -32,10 +32,10 @@
 
 ### P3 · 中危合批
 
-- [ ] **F8：YAML 序列化器 key 零转义**。`storage/serializers/yaml-dialect.js:18-36`，value 侧转义完备但 key 原样输出；AI 可控 updates 键含 `\n`/`:` 可注入 front matter 结构。修法：key 白名单或同等引号转义。
-- [ ] **F9：契约互斥锁无陈旧回收**。`staging/contract-invalidation.js:29-67`，进程被 kill 后锁文件永久残留堵住全部写路径，且报错不给锁位置/删除指引。修法：pid/startedAt 陈旧判定 + 指引文案。
-- [ ] **F10：git index.lock 陈旧阈值仅 3 秒**。`state-machine/git-health.js:5`，杀软/索引器锁盘超 3 秒会被误删 → 双 git 进程并发写损坏窗口。修法：提到分钟级 + 进程存活判断。
-- [ ] **F11：`books.jsonl` 读侧无形状校验**（用户复核调级为中危候选，待裁决）：`session/index.js` 逐行 JSON.parse 不校验 `目录` 字段，`runtime/locate.js:50` 直接消费 → 目录写坏后 `git clean -fd` / `reset --hard` / 递归 `fs.rm` 作用于工作目录外。复核意见：读侧复用 `persist-book` 同款校验。
+- [x] **F8：YAML 序列化器 key 零转义**。✅ 2026-07-31 子任务 07-29-p3-medium-batch 修复（key 白名单 throw 人话指认字段名，决策 62 拒绝不改写）
+- [x] **F9：契约互斥锁无陈旧回收**。✅ 同子任务修复（pid 探测+30 分兜底双判；序0 确认流+delete 白名单只放行该锁路径；EEXIST 文案补指引）
+- [x] **F10：git index.lock 陈旧阈值仅 3 秒**。✅ 同子任务修复（60s + 删前二次 stat 防 TOCTOU）
+- [x] **F11：`books.jsonl` 读侧无形状校验**。✅ 同子任务修复（写读双侧 `isValidBookEntry`，目录=`isSafeFileStem` 复用 P0 单源；形状非法行 corrupt+自愈回写）
 
 ### 设计取舍，暂不动
 
