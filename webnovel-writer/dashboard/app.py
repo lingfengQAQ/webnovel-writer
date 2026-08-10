@@ -44,6 +44,13 @@ def _get_project_root() -> Path:
     return _project_root
 
 
+def configure_project_root(project_root: str | Path) -> Path:
+    """Switch the read model root for the single-user local process."""
+    global _project_root
+    _project_root = Path(project_root).expanduser().resolve()
+    return _project_root
+
+
 def _webnovel_dir() -> Path:
     return _get_project_root() / ".webnovel"
 
@@ -254,10 +261,8 @@ def _projection_status_for_commit(project_root: Path, chapter: int, commit_paylo
 # ---------------------------------------------------------------------------
 
 def create_app(project_root: str | Path | None = None) -> FastAPI:
-    global _project_root
-
     if project_root:
-        _project_root = Path(project_root).resolve()
+        configure_project_root(project_root)
 
     _ensure_scripts_dir_on_path()
 

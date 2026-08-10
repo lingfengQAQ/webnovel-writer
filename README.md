@@ -147,6 +147,16 @@ RERANK_API_KEY=your_rerank_api_key
 
 Dashboard 是个只读面板，能看项目状态、实体关系图、章节内容、伏笔和追读力数据。前端是预先打包好的，跟着插件一起发，本地不用跑 `npm build`。
 
+### 7. 使用 DeepSeek 本地写作客户端
+
+客户端提供创建小说、大纲规划、正文生成、深度审查、改稿、人工定稿和缓存命中统计：
+
+```bash
+python -X utf8 webnovel-writer/scripts/webnovel.py --project-root "<书项目根目录>" client
+```
+
+首次打开后在“模型设置”填写 DeepSeek API Key。密钥保存在系统凭据库，正文只有在用户点击“人工确认并定稿”后才进入 Story System 提交链。详细说明见 [DeepSeek 本地写作客户端](docs/guides/deepseek-client.md)。
+
 ## 写章工作流
 
 `/webnovel-write` 不是把活儿丢给模型生成一次就完事，而是一条带关卡的完整流水线：
@@ -239,6 +249,7 @@ python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJE
 | [系统架构与模块](docs/architecture/overview.md) | 核心理念、Agent 分工、Story System 设计 |
 | [命令详解](docs/guides/commands.md) | Skill 命令和 CLI 子命令速查 |
 | [RAG 与配置](docs/guides/rag-and-config.md) | 检索流程、环境变量、默认模型 |
+| [DeepSeek 本地写作客户端](docs/guides/deepseek-client.md) | 客户端启动、写作闭环、缓存命中与安全边界 |
 | [题材模板](docs/guides/genres.md) | 37 个题材模板和复合题材规则 |
 | [项目结构与运维](docs/operations/operations.md) | 目录层级、健康检查、备份恢复 |
 | [插件发版](docs/operations/plugin-release.md) | Marketplace 发版和版本同步流程 |

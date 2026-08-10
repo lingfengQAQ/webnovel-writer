@@ -417,6 +417,21 @@ def cmd_use(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_client(args: argparse.Namespace) -> int:
+    try:
+        root = _resolve_root(args.project_root)
+    except FileNotFoundError:
+        root = normalize_windows_path(args.project_root).expanduser().resolve() if args.project_root else Path.cwd().resolve()
+        root.mkdir(parents=True, exist_ok=True)
+    plugin_root = _scripts_dir().parent
+    if str(plugin_root) not in sys.path:
+        sys.path.insert(0, str(plugin_root))
+    from writer.server import serve
+
+    serve(root, host=args.host, port=args.port, no_browser=args.no_browser)
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="webnovel unified CLI")
     parser.add_argument("--project-root", help="书项目根目录或工作区根目录（可选，默认自动检测）")
@@ -497,6 +512,12 @@ def main() -> None:
     p_use.add_argument("project_root", help="书项目根目录（必须包含 .webnovel/state.json）")
     p_use.add_argument("--workspace-root", help="工作区根目录（可选；默认由运行环境推断）")
     p_use.set_defaults(func=cmd_use)
+
+    p_client = sub.add_parser("client", help="启动本地 DeepSeek 写作客户端")
+    p_client.add_argument("--host", default="127.0.0.1")
+    p_client.add_argument("--port", type=int, default=8765)
+    p_client.add_argument("--no-browser", action="store_true")
+    p_client.set_defaults(func=cmd_client)
 
     # Pass-through to data modules
     p_index = sub.add_parser("index", help="转发到 index_manager")

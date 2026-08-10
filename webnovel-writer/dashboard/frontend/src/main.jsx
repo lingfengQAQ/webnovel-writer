@@ -10,6 +10,7 @@ const PacingPage = lazy(() => import('./pages/PacingPage.jsx'))
 const ForeshadowingPage = lazy(() => import('./pages/ForeshadowingPage.jsx'))
 const FilesPage = lazy(() => import('./pages/FilesPage.jsx'))
 const SystemPage = lazy(() => import('./pages/SystemPage.jsx'))
+const WriterPage = lazy(() => import('./pages/WriterPage.jsx'))
 
 function LoadingScreen() {
     return (
@@ -29,6 +30,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 <Routes>
                     <Route path="/" element={<App />}>
                         <Route index element={<OverviewPage />} />
+                        <Route path="writer" element={<WriterPage />} />
                         <Route path="characters" element={<CharactersPage />} />
                         <Route path="pacing" element={<PacingPage />} />
                         <Route path="foreshadowing" element={<ForeshadowingPage />} />

@@ -268,6 +268,7 @@ def init_project(
     sect_hierarchy: str = "",
     cultivation_chain: str = "",
     cultivation_subtiers: str = "",
+    update_project_pointer: bool = True,
 ) -> None:
     project_path = Path(project_dir).expanduser().resolve()
     if ".claude" in project_path.parts:
@@ -683,12 +684,13 @@ __pycache__/
                 print(f"Git init failed (non-fatal): {e}")
 
     # 记录工作区默认项目指针（非阻断）
-    try:
-        pointer_file = write_current_project_pointer(project_path)
-        if pointer_file is not None:
-            print(f"Default project pointer updated: {pointer_file}")
-    except Exception as e:
-        print(f"Default project pointer update failed (non-fatal): {e}")
+    if update_project_pointer:
+        try:
+            pointer_file = write_current_project_pointer(project_path)
+            if pointer_file is not None:
+                print(f"Default project pointer updated: {pointer_file}")
+        except Exception as e:
+            print(f"Default project pointer update failed (non-fatal): {e}")
 
     print(f"\nProject initialized at: {project_path}")
     print("Key files:")

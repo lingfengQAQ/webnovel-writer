@@ -1,6 +1,6 @@
 import { startTransition, useCallback, useEffect, useState } from 'react'
 import { NavLink, Outlet, useOutletContext } from 'react-router-dom'
-import { fetchProjectInfo, subscribeSSE } from './api.js'
+import { fetchProjectInfo, fetchWriterCapabilities, subscribeSSE } from './api.js'
 import {
     BookmarkIcon,
     ChartBarIcon,
@@ -13,6 +13,7 @@ import {
 } from './icons.jsx'
 
 const NAV_ITEMS = [
+    { to: '/writer', label: '创作工作台', icon: SlidersIcon, writerOnly: true },
     { to: '/', label: '总览', icon: ChartBarIcon, end: true },
     { to: '/characters', label: '角色图鉴', icon: UsersIcon },
     { to: '/pacing', label: '节奏雷达', icon: TrendingUpIcon },
@@ -25,6 +26,7 @@ export default function App() {
     const [projectInfo, setProjectInfo] = useState(null)
     const [refreshToken, setRefreshToken] = useState(0)
     const [connected, setConnected] = useState(false)
+    const [writerEnabled, setWriterEnabled] = useState(false)
 
     const loadProjectInfo = useCallback(() => {
         fetchProjectInfo()
@@ -34,6 +36,7 @@ export default function App() {
 
     useEffect(() => {
         loadProjectInfo()
+        fetchWriterCapabilities().then(() => setWriterEnabled(true)).catch(() => setWriterEnabled(false))
     }, [loadProjectInfo, refreshToken])
 
     useEffect(() => {
@@ -65,7 +68,7 @@ export default function App() {
                     <div className="subtitle" title={title}>{title}</div>
                 </div>
                 <nav className="sidebar-nav">
-                    {NAV_ITEMS.map(item => {
+                    {NAV_ITEMS.filter(item => !item.writerOnly || writerEnabled).map(item => {
                         const Icon = item.icon
                         return (
                             <NavLink

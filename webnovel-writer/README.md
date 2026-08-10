@@ -14,6 +14,7 @@
 | 题材/写法数据 | 9 CSV | `references/csv/*.csv` |
 | 题材模板 | 按题材 | `templates/genres/*.md` |
 | Dashboard 前端 | 预打包 | `dashboard/frontend/dist/`（随包发布，无需本地构建） |
+| DeepSeek Writer | 本地客户端 | `writer/`（FastAPI 编排、草稿、缓存和受控定稿） |
 
 ### 7 个 Skill
 
@@ -54,6 +55,14 @@ python -m pip install -r scripts/requirements.txt
 RAG 检索需在书项目根目录配置 `.env`（缺失时自动退回 BM25 关键词检索）。详见 [RAG 与配置](../docs/guides/rag-and-config.md)。
 
 ## 最小验证
+
+启动 DeepSeek 写作客户端：
+
+```bash
+python -X utf8 scripts/webnovel.py --project-root "<书项目根目录>" client
+```
+
+Writer Client 会复用现有 runtime；原 Dashboard 继续保持只读。
 
 ```bash
 # 路径 / 项目根 / Story System 健康预检
