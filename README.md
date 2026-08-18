@@ -335,7 +335,7 @@ Webnovel Writer 用业余时间维护。如果它帮你省下了梳理设定、�
 
 ## Star 历史
 
-[![Star History Chart](https://api.star-history.com/svg?repos=lingfengQAQ/webnovel-writer&type=Date)](https://star-history.com/#lingfengQAQ/webnovel-writer&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=lingfengQAQ/webnovel-writer&type=Date)](https://star-history.dera.page/#lingfengQAQ/webnovel-writer&Date)
 
 ## 致谢
 
