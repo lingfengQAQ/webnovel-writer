@@ -30,8 +30,10 @@ GLOBAL_REGISTRY_REL: Path = Path("webnovel-writer") / "workspaces.json"
 
 # Claude Code 常见环境变量（存在时优先作为“工作区根目录”提示）
 ENV_CLAUDE_PROJECT_DIR = "CLAUDE_PROJECT_DIR"
+ENV_OPENCODE_PROJECT_DIR = "OPENCODE_PROJECT_DIR"
 ENV_CLAUDE_HOME = "CLAUDE_HOME"
 ENV_WEBNOVEL_CLAUDE_HOME = "WEBNOVEL_CLAUDE_HOME"
+ENV_OPENCODE_HOME = "OPENCODE_HOME"
 
 
 def _find_git_root(cwd: Path) -> Optional[Path]:
@@ -60,12 +62,20 @@ def _normcase_path_key(p: Path) -> str:
 
 
 def _get_user_claude_root() -> Path:
-    raw = os.environ.get(ENV_WEBNOVEL_CLAUDE_HOME) or os.environ.get(ENV_CLAUDE_HOME)
+    raw = (
+        os.environ.get(ENV_WEBNOVEL_CLAUDE_HOME)
+        or os.environ.get(ENV_CLAUDE_HOME)
+        or os.environ.get(ENV_OPENCODE_HOME)
+    )
     if raw:
         try:
             return normalize_windows_path(raw).expanduser().resolve()
         except Exception:
             return normalize_windows_path(raw).expanduser()
+    for home_dir in (".opencode", ".claude"):
+        candidate = (Path.home() / home_dir).resolve()
+        if candidate.is_dir():
+            return candidate
     return (Path.home() / ".claude").resolve()
 
 
@@ -135,7 +145,7 @@ def _resolve_project_root_from_global_registry(
         return None
 
     hints: list[Path] = []
-    env_ws = os.environ.get(ENV_CLAUDE_PROJECT_DIR)
+    env_ws = os.environ.get(ENV_CLAUDE_PROJECT_DIR) or os.environ.get(ENV_OPENCODE_PROJECT_DIR)
     if env_ws:
         hints.append(normalize_windows_path(env_ws).expanduser())
     if workspace_hint is not None:
@@ -208,7 +218,7 @@ def update_global_registry_current_project(
 
     ws = workspace_root
     if ws is None:
-        env_ws = os.environ.get(ENV_CLAUDE_PROJECT_DIR)
+        env_ws = os.environ.get(ENV_CLAUDE_PROJECT_DIR) or os.environ.get(ENV_OPENCODE_PROJECT_DIR)
         if env_ws:
             ws = normalize_windows_path(env_ws).expanduser()
     if ws is None:
@@ -407,7 +417,7 @@ def resolve_project_root(explicit_project_root: Optional[str] = None, *, cwd: Op
     # 用户级 registry fallback（仅在“有上下文提示”时启用，避免误命中）
     # - 若 CLAUDE_PROJECT_DIR 存在：认为 Claude Code 提供了工作区上下文
     # - 否则仅在 base 位于某个已记录 workspace 内时启用（前缀匹配）
-    allow_last_used = bool(os.environ.get(ENV_CLAUDE_PROJECT_DIR))
+    allow_last_used = bool(os.environ.get(ENV_CLAUDE_PROJECT_DIR) or os.environ.get(ENV_OPENCODE_PROJECT_DIR))
     reg_root = _resolve_project_root_from_global_registry(
         base,
         workspace_hint=None,
