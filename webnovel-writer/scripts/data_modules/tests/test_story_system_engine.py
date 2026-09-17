@@ -188,6 +188,123 @@ def test_story_system_falls_back_to_explicit_genre():
     assert contract["master_setting"]["route"]["recommended_dynamic_tables"] == ["桥段套路", "爽点与节奏", "场景写法"]
 
 
+def test_explicit_genre_fallback_keeps_requested_genre_not_row_subgenre():
+    """A fallback row is borrowed for its recommended tables only.
+
+    Its own 「题材/流派」/「核心调性」/「节奏策略」/「默认查询词」/「毒点」 describe the
+    row's sub-genre and must not leak into a project whose caller explicitly
+    asked for a different genre. Mirrors the real 题材与调性推理 table, where
+    GR-001 is the first row whose 「适用题材」 contains 仙侠 while its
+    「题材/流派」 is 玄幻退婚流.
+    """
+    csv_dir = _make_local_tmp_path() / "csv"
+    csv_dir.mkdir()
+
+    _write_csv(
+        csv_dir / "题材与调性推理.csv",
+        [
+            "编号", "适用技能", "分类", "层级", "关键词", "意图与同义词", "适用题材",
+            "大模型指令", "核心摘要", "详细展开", "题材/流派", "canonical_genre", "题材别名", "核心调性",
+            "节奏策略", "毒点", "推荐基础检索表", "推荐动态检索表", "默认查询词",
+        ],
+        [
+            {
+                "编号": "GR-001",
+                "适用技能": "story-system",
+                "分类": "题材路由",
+                "层级": "知识补充",
+                "关键词": "退婚流|三年之约",
+                "意图与同义词": "",
+                "适用题材": "玄幻|仙侠",
+                "大模型指令": "",
+                "核心摘要": "",
+                "详细展开": "",
+                "题材/流派": "玄幻退婚流",
+                "canonical_genre": "玄幻",
+                "题材别名": "",
+                "核心调性": "先压后爆",
+                "节奏策略": "三章内必须有首次有效反打",
+                "毒点": "打脸不能软收尾",
+                "推荐基础检索表": "命名规则|人设与关系",
+                "推荐动态检索表": "桥段套路|爽点与节奏|场景写法",
+                "默认查询词": "退婚|打脸|废材逆袭",
+            }
+        ],
+    )
+
+    _write_csv(
+        csv_dir / "桥段套路.csv",
+        ["编号", "适用技能", "分类", "层级", "关键词", "适用题材", "核心摘要", "桥段名称", "毒点"],
+        [
+            {
+                "编号": "TR-001",
+                "适用技能": "write",
+                "分类": "桥段",
+                "层级": "知识补充",
+                "关键词": "退婚|打脸",
+                "适用题材": "玄幻|仙侠",
+                "核心摘要": "退婚现场要给足羞辱和反击空间",
+                "桥段名称": "退婚三年之约",
+                "毒点": "主角还没反打就被配角替他出手",
+            }
+        ],
+    )
+
+    _write_csv(
+        csv_dir / "裁决规则.csv",
+        [
+            "编号", "适用技能", "分类", "层级", "关键词", "意图与同义词", "适用题材",
+            "大模型指令", "核心摘要", "详细展开", "题材", "风格优先级", "爽点优先级",
+            "节奏默认策略", "毒点权重", "冲突裁决", "contract注入层", "反模式",
+        ],
+        [
+            {
+                "编号": "RS-002",
+                "适用技能": "story-system",
+                "分类": "裁决",
+                "层级": "推理层",
+                "关键词": "仙侠",
+                "意图与同义词": "修仙怎么写",
+                "适用题材": "仙侠",
+                "大模型指令": "按冲突裁决排序命中条目",
+                "核心摘要": "仙侠裁决规则",
+                "详细展开": "",
+                "题材": "仙侠",
+                "风格优先级": "冷硬算计 > 超然物外",
+                "爽点优先级": "境界碾压 > 底牌揭晓",
+                "节奏默认策略": "慢蓄快爆",
+                "毒点权重": "修炼水字数 > 逻辑断裂",
+                "冲突裁决": "爽点与节奏 > 桥段套路 > 场景写法",
+                "contract注入层": "CHAPTER_BRIEF.writing_guidance",
+                "反模式": "修炼变流水账",
+            }
+        ],
+    )
+
+    engine = StorySystemEngine(csv_dir=csv_dir)
+    contract = engine.build(query="仙侠", genre="仙侠", chapter=None)
+    master = contract["master_setting"]
+    route = master["route"]
+
+    assert route["route_source"] == "explicit_genre_fallback"
+    # Regression: primary_genre used to leak the fallback row's own sub-genre.
+    assert route["primary_genre"] == "仙侠"
+    # canonical_genre already preferred the explicit genre; the two must agree.
+    assert route["canonical_genre"] == "仙侠"
+    # The row is still borrowed for its recommended tables.
+    assert route["recommended_dynamic_tables"] == ["桥段套路", "爽点与节奏", "场景写法"]
+
+    # Regression: the row's 默认查询词 (退婚|打脸) used to pull TR-001 into
+    # base_context, injecting 退婚流 tropes into every chapter's writing_guidance.
+    assert "TR-001" not in {row.get("编号") for row in master["base_context"]}
+    # Regression: the row's own tone/pacing used to become locked master
+    # constraints for an unrelated genre.
+    assert master["master_constraints"]["core_tone"] == ""
+    assert master["master_constraints"]["pacing_strategy"] == ""
+    # The row's own 毒点 must not leak either.
+    assert "打脸不能软收尾" not in {item["text"] for item in contract["anti_patterns"]}
+
+
 def test_story_system_unmatched_genre_raises_routing_error():
     csv_dir = _make_local_tmp_path() / "csv"
     csv_dir.mkdir()
