@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -223,17 +224,163 @@ class Engine:
         )
         return res.json()
 
-    def chapter_outline(self, chapter: int) -> Any:
-        """读本章章纲原始文件（load-context 的 outline 可能截断）。"""
-        padded = f"{chapter:04d}"
-        candidates = [
-            self.project_root and Path(self.project_root) / "大纲" / f"第{padded}章.md",
-            self.project_root and Path(self.project_root) / "大纲" / f"第{chapter}章.md",
-        ]
-        for cand in candidates:
-            if cand and Path(cand).is_file():
-                return Path(cand).read_text(encoding="utf-8")
+    def chapter_outline(self, chapter: int, max_chars: Optional[int] = None) -> Any:
+        """读本章章纲。
+
+        上游有两种存放约定（见 chapter_outline_loader.py）：
+        1. 单章文件：`大纲/第{1,2,3,4 位}章*.md`
+        2. 卷级大纲：`大纲/第{N}卷-详细大纲.md`，章纲是其中 `### 第N章：标题` 分节
+
+        第 2 种是 `/webnovel-plan` 的实际产出位置，所以必须支持从卷大纲里
+        抽取本章那一段。优先单章文件（更精确），回退卷大纲。
+        """
+        if not self.project_root:
+            return None
+        outline_dir = Path(self.project_root) / "大纲"
+        if not outline_dir.is_dir():
+            return None
+
+        # 1) 单章文件
+        for pattern in (
+            f"第{chapter}章*.md",
+            f"第{chapter:02d}章*.md",
+            f"第{chapter:03d}章*.md",
+            f"第{chapter:04d}章*.md",
+        ):
+            matches = sorted(outline_dir.glob(pattern))
+            if matches:
+                return matches[0].read_text(encoding="utf-8")
+
+        # 2) 卷大纲：解析出本章分节
+        volume_num = self.volume_for_chapter(chapter)
+        for name in (
+            f"第{volume_num}卷-详细大纲.md",
+            f"第{volume_num}卷 - 详细大纲.md",
+            f"第{volume_num}卷 详细大纲.md",
+        ):
+            path = outline_dir / name
+            if not path.is_file():
+                continue
+            section = self._extract_chapter_section(
+                path.read_text(encoding="utf-8"), chapter
+            )
+            if section:
+                if max_chars and len(section) > max_chars:
+                    return section[:max_chars]
+                return section
         return None
+
+    @staticmethod
+    def _extract_chapter_section(content: str, chapter: int) -> Optional[str]:
+        """从卷大纲里抽出 `### 第N章：标题` 到下一个章标题之间的内容。
+
+        标题里的章号可能是阿拉伯数字，也可能是中文数字（第一章）。
+        """
+        heading = re.compile(
+            r"^#{1,6}\s*第\s*(?P<num>[0-9]+|[一二三四五六七八九十百]+)\s*章[：:].*$",
+            re.MULTILINE,
+        )
+        matches = list(heading.finditer(content))
+        for index, match in enumerate(matches):
+            if Engine._parse_chapter_num(match.group("num")) != chapter:
+                continue
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(content)
+            return content[match.start():end].strip()
+        return None
+
+    _CN_DIGITS = {
+        "一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
+        "六": 6, "七": 7, "八": 8, "九": 9,
+    }
+
+    @staticmethod
+    def _parse_chapter_num(value: str) -> Optional[int]:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        if text.isdigit():
+            return int(text)
+        if text == "十":
+            return 10
+        if "十" in text:
+            left, _, right = text.partition("十")
+            tens = Engine._CN_DIGITS.get(left, 1 if not left else 0)
+            ones = Engine._CN_DIGITS.get(right, 0) if right else 0
+            parsed = tens * 10 + ones
+            return parsed or None
+        parsed = 0
+        for char in text:
+            digit = Engine._CN_DIGITS.get(char)
+            if digit is None:
+                return None
+            parsed = parsed * 10 + digit
+        return parsed or None
+
+    def volume_for_chapter(self, chapter: int) -> int:
+        """章节归属的卷号。优先 state.json 的卷规划，回退默认 50 章/卷。"""
+        state = self.state_payload()
+        progress = state.get("progress")
+        if isinstance(progress, dict):
+            volumes = progress.get("volumes") or progress.get("volume_plans")
+            if isinstance(volumes, list):
+                for entry in volumes:
+                    if not isinstance(entry, dict):
+                        continue
+                    rng = entry.get("chapters_range") or entry.get("range")
+                    parsed = self._parse_range(rng)
+                    if parsed and parsed[0] <= chapter <= parsed[1]:
+                        try:
+                            return int(entry.get("volume") or entry.get("volume_id") or 1)
+                        except (TypeError, ValueError):
+                            break
+        return (max(1, chapter) - 1) // 50 + 1
+
+    @staticmethod
+    def _parse_range(value: Any) -> Optional[tuple]:
+        match = re.match(r"^\s*(\d+)\s*-\s*(\d+)\s*$", str(value or ""))
+        if not match:
+            return None
+        start, end = int(match.group(1)), int(match.group(2))
+        return (start, end) if start <= end else None
+
+    def save_outline(self, relative_path: str, content: str) -> Path:
+        """写入大纲文件（相对项目根）。"""
+        if not self.project_root:
+            raise EngineError("project_root 未设置")
+        path = Path(self.project_root) / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        return path
+
+    def read_outline(self, relative_path: str) -> Optional[str]:
+        return self.read_text(relative_path)
+
+    def master_outline(self) -> Optional[str]:
+        return self.read_text("大纲/总纲.md")
+
+    def settings_digest(self) -> Dict[str, str]:
+        """读设定集（规划阶段需要）。"""
+        out: Dict[str, str] = {}
+        if not self.project_root:
+            return out
+        base = Path(self.project_root) / "设定集"
+        if not base.is_dir():
+            return out
+        for path in sorted(base.glob("*.md")):
+            try:
+                out[path.name] = path.read_text(encoding="utf-8")
+            except OSError:
+                continue
+        return out
+
+    def update_state(self, *args: str) -> CommandResult:
+        return self.run(["update-state", "--", *args], timeout=300)
+
+    def master_outline_sync(self, volume: int, writeback_file: str = "") -> CommandResult:
+        argv = ["master-outline-sync", "--volume", str(volume), "--format", "json"]
+        if writeback_file:
+            argv += ["--writeback-file", writeback_file]
+        return self.run(argv, timeout=300)
 
     def state_payload(self) -> Dict[str, Any]:
         """读 .webnovel/state.json（projection/read-model）。"""

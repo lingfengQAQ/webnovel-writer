@@ -238,6 +238,25 @@ def create_service_app(default_project_root: Optional[str] = None) -> FastAPI:
             progress=progress,
             stop_after_review=bool(payload.get("stop_after_review")),
             override_existing=bool(payload.get("override_existing")),
+            accept_blocking=bool(payload.get("accept_blocking")),
+        )
+
+    def _build_planner(engine: Engine, payload: Dict[str, Any], progress=None):
+        from .planner import PlanPipeline
+
+        settings = load_settings(engine.project_root)
+        clients = build_clients(settings)
+        return PlanPipeline(
+            settings, engine, clients,
+            volume=int(payload.get("volume") or 1),
+            chapter_start=payload.get("chapter_start"),
+            chapter_end=payload.get("chapter_end"),
+            genre=str(payload.get("genre") or ""),
+            requirements=str(payload.get("requirements") or ""),
+            batch_size=int(payload.get("batch_size") or 10),
+            chapters_per_volume=int(payload.get("chapters_per_volume") or 50),
+            progress=progress,
+            override_existing=bool(payload.get("override_existing")),
         )
 
     @app.post("/service/write", tags=["write"])
@@ -251,6 +270,46 @@ def create_service_app(default_project_root: Optional[str] = None) -> FastAPI:
         result = await pipeline.run(int(chapter))
         return result.to_dict()
 
+    @app.post("/service/write/resume", tags=["write"])
+    async def resume_write(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+        """从指定阶段续跑（同步）。
+
+        用于解决阻断问题后的继续：
+        - `{"chapter":1,"from_stage":"draft"}` 重新起草
+        - `{"chapter":1,"from_stage":"polish","accept_blocking":true}` 接受现状继续
+        - `{"chapter":1,"from_stage":"commit","accept_blocking":true}` 正文已改好，直接提交
+        """
+        chapter = payload.get("chapter")
+        if not chapter:
+            raise HTTPException(400, "chapter 必填")
+        from_stage = str(payload.get("from_stage") or "polish")
+        if from_stage not in WritePipeline.RESUME_STAGES:
+            raise HTTPException(
+                400,
+                f"from_stage 非法：{from_stage}。"
+                f"可选：{', '.join(WritePipeline.RESUME_STAGES)}",
+            )
+        engine = _engine_or_raise(payload.get("project_root") or default_project_root)
+        pipeline = _build_pipeline(engine, payload)
+        result = await pipeline.run(int(chapter), from_stage=from_stage)
+        return result.to_dict()
+
+    @app.get("/service/write/blocking", tags=["write"])
+    async def get_blocking(
+        project_root: Optional[str] = Query(default=None),
+    ) -> Any:
+        """读当前阻断状态与续跑选项。"""
+        engine = _engine_or_raise(project_root or default_project_root)
+        path = await asyncio.to_thread(
+            lambda: engine.tmp_dir() / "blocking_state.json"
+        )
+        if not Path(path).is_file():
+            return {"chapter": None, "blocking_issues": [], "resume_options": []}
+        try:
+            return json.loads(Path(path).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise HTTPException(500, f"读取阻断状态失败：{exc}") from exc
+
     @app.post("/service/write/stream", tags=["write"])
     async def write_chapter_stream(payload: Dict[str, Any] = Body(...)) -> StreamingResponse:
         """SSE 流式写章：实时推送阶段进度，最后推 final 事件。"""
@@ -258,6 +317,7 @@ def create_service_app(default_project_root: Optional[str] = None) -> FastAPI:
         if not chapter:
             raise HTTPException(400, "chapter 必填")
         engine = _engine_or_raise(payload.get("project_root") or default_project_root)
+        from_stage = str(payload.get("from_stage") or "preflight")
 
         queue: asyncio.Queue = asyncio.Queue()
 
@@ -267,7 +327,7 @@ def create_service_app(default_project_root: Optional[str] = None) -> FastAPI:
         async def _worker() -> None:
             try:
                 pipeline = _build_pipeline(engine, payload, progress=_progress)
-                result = await pipeline.run(int(chapter))
+                result = await pipeline.run(int(chapter), from_stage=from_stage)
                 await queue.put(("final", result.to_dict()))
             except Exception as exc:  # noqa: BLE001 - 必须把错误推给前端
                 await queue.put(("error", {"message": f"{type(exc).__name__}: {exc}"}))
@@ -294,6 +354,83 @@ def create_service_app(default_project_root: Optional[str] = None) -> FastAPI:
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    # ─────────────────────────────────────────────────────────────
+    # 规划：卷纲 + 章纲（对应上游 /webnovel-plan）
+    # ─────────────────────────────────────────────────────────────
+
+    @app.post("/service/plan", tags=["plan"])
+    async def plan_volume(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+        """规划一卷：生成节拍表、时间线、章纲，并刷新写作合同。
+
+        没有这一步，新项目没有章纲，写章无法开始。
+        """
+        engine = _engine_or_raise(payload.get("project_root") or default_project_root)
+        planner = _build_planner(engine, payload)
+        result = await planner.run()
+        return result.to_dict()
+
+    @app.post("/service/plan/stream", tags=["plan"])
+    async def plan_volume_stream(payload: Dict[str, Any] = Body(...)) -> StreamingResponse:
+        """SSE 流式规划：按批次推送章纲进度。"""
+        engine = _engine_or_raise(payload.get("project_root") or default_project_root)
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async def _progress(event) -> None:
+            await queue.put(("progress", event.to_dict()))
+
+        async def _worker() -> None:
+            try:
+                planner = _build_planner(engine, payload, progress=_progress)
+                result = await planner.run()
+                await queue.put(("final", result.to_dict()))
+            except Exception as exc:  # noqa: BLE001
+                await queue.put(("error", {"message": f"{type(exc).__name__}: {exc}"}))
+            finally:
+                await queue.put(("__end__", None))
+
+        async def _gen():
+            task = asyncio.create_task(_worker())
+            try:
+                while True:
+                    kind, data = await queue.get()
+                    if kind == "__end__":
+                        break
+                    yield f"event: {kind}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+            except asyncio.CancelledError:
+                task.cancel()
+                raise
+            finally:
+                if not task.done():
+                    task.cancel()
+
+        return StreamingResponse(
+            _gen(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    @app.get("/service/plan/outline", tags=["plan"])
+    async def get_outline(
+        chapter: Optional[int] = Query(default=None),
+        volume: Optional[int] = Query(default=None),
+        project_root: Optional[str] = Query(default=None),
+    ) -> Any:
+        """读章纲或卷大纲。"""
+        engine = _engine_or_raise(project_root or default_project_root)
+        if chapter:
+            text = await asyncio.to_thread(engine.chapter_outline, chapter)
+            if text is None:
+                raise HTTPException(404, f"未找到第 {chapter} 章章纲")
+            return {"chapter": chapter, "content": text}
+        if volume:
+            rel = f"大纲/第{volume}卷-详细大纲.md"
+            text = await asyncio.to_thread(engine.read_outline, rel)
+            if text is None:
+                raise HTTPException(404, f"未找到第 {volume} 卷详细大纲")
+            return {"volume": volume, "content": text}
+        master = await asyncio.to_thread(engine.master_outline)
+        return {"master_outline": master}
 
     # ─────────────────────────────────────────────────────────────
     # 只读查询（写操作之外，仍走本层以便统一 project_root）

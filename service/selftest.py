@@ -104,7 +104,7 @@ long_text = "字" * 50000
 rendered = prompts._dump(long_text, 1000)
 check("dump truncates long input", len(rendered) < 2000 and "已截断" in rendered)
 
-# ── engine 路径解析（不调用上游） ────────────────────────────────────────────
+# ── 章纲路径解析（修过的 bug） ───────────────────────────────────────────────
 from service.engine import Engine  # noqa: E402
 
 try:
@@ -114,11 +114,72 @@ try:
 except Exception as exc:  # noqa: BLE001
     check("engine constructs", False, str(exc))
 
-# ── pipeline 结构 ────────────────────────────────────────────────────────────
+# 卷大纲里的章纲抽取：这是 /webnovel-plan 的真实产出格式
+VOLUME_OUTLINE = """# 第1卷 详细大纲
+
+> 覆盖第 1-50 章
+
+### 第1章：退婚之辱
+
+**目标**：主角当众被退婚
+**CBN**：萧炎 | 面对 | 纳兰嫣然
+
+### 第2章：三年之约
+
+**目标**：立下三年之约
+**CBN**：萧炎 | 立下 | 三年之约
+
+### 第十章：第十章的标题
+
+**目标**：中文数字章号
+"""
+check("extract section 1 from volume outline",
+      (Engine._extract_chapter_section(VOLUME_OUTLINE, 1) or "").startswith("### 第1章"))
+sec2 = Engine._extract_chapter_section(VOLUME_OUTLINE, 2) or ""
+check("extract section 2 stops at next heading",
+      "三年之约" in sec2 and "第十章" not in sec2)
+check("extract chinese numeral heading",
+      "中文数字章号" in (Engine._extract_chapter_section(VOLUME_OUTLINE, 10) or ""))
+check("missing chapter returns None",
+      Engine._extract_chapter_section(VOLUME_OUTLINE, 99) is None)
+
+check("parse arabic chapter num", Engine._parse_chapter_num("42") == 42)
+check("parse chinese chapter num 十", Engine._parse_chapter_num("十") == 10)
+check("parse chinese chapter num 二十三", Engine._parse_chapter_num("二十三") == 23)
+check("parse chinese chapter num 一", Engine._parse_chapter_num("一") == 1)
+
+check("volume_for_chapter default 50/vol", eng.volume_for_chapter(1) == 1
+      and eng.volume_for_chapter(51) == 2)
+check("parse_range works", Engine._parse_range("1-50") == (1, 50))
+check("parse_range rejects junk", Engine._parse_range("bad") is None)
+
+# ── planner 分节 ─────────────────────────────────────────────────────────────
+from service.planner import PlanPipeline, PlanResult  # noqa: E402
+
+sections = PlanPipeline._split_sections(VOLUME_OUTLINE)
+check("planner splits sections", sorted(sections) == [1, 2, 10], f"got {sorted(sections)}")
+check("planner section content", "退婚之辱" in sections.get(1, ""))
+check("plan result serializable",
+      isinstance(PlanResult(volume=1, status="failed").to_dict(), dict))
+
+# ── pipeline 续跑阶段 ────────────────────────────────────────────────────────
 from service.pipeline import Stage, WritePipeline, WriteResult  # noqa: E402
 
 check("all stages present", len(list(Stage)) == 11)
 check("write result serializable", isinstance(WriteResult(1, "t", "failed").to_dict(), dict))
+check("resume stages cover full flow",
+      WritePipeline.RESUME_STAGES[0] == "preflight"
+      and WritePipeline.RESUME_STAGES[-1] == "backup")
+check("resume stage ordering is correct",
+      WritePipeline.RESUME_STAGES.index("review") < WritePipeline.RESUME_STAGES.index("commit"))
+
+# ── planner prompts ──────────────────────────────────────────────────────────
+from service import prompts  # noqa: E402
+
+check("plan volume system demands mid-volume twist", "中段反转" in prompts.PLAN_VOLUME_SYSTEM)
+check("plan chapters system defines CBN/CPNs/CEN",
+      all(k in prompts.PLAN_CHAPTERS_SYSTEM for k in ("CBN", "CPNs", "CEN")))
+check("plan chapters system caps forbidden zones", "不超过 5 条" in prompts.PLAN_CHAPTERS_SYSTEM)
 
 # ── app 路由 ─────────────────────────────────────────────────────────────────
 from service.app import create_service_app  # noqa: E402
@@ -135,6 +196,11 @@ required = {
     "/service/projects/resume",
     "/service/write",
     "/service/write/stream",
+    "/service/write/resume",
+    "/service/write/blocking",
+    "/service/plan",
+    "/service/plan/stream",
+    "/service/plan/outline",
     "/service/chapters/{chapter}",
     "/service/context/{chapter}",
     "/service/events",

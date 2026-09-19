@@ -35,6 +35,24 @@ python -m service.server --project-root ./我的小说 --port 8770
 打开 `http://127.0.0.1:8770/docs` 看写操作 API；
 打开 `http://127.0.0.1:8770/` 看只读可视化面板（复用上游 Dashboard 前端）。
 
+### 完整创作流程
+
+```bash
+# 第一步：规划（必需！新项目只有总纲，没有章纲，不规划无法写作）
+curl -X POST http://127.0.0.1:8770/service/plan \
+  -H 'Content-Type: application/json' \
+  -d '{"volume":1,"chapter_start":1,"chapter_end":10,"genre":"玄幻"}'
+
+# 第二步：写第一章
+curl -X POST http://127.0.0.1:8770/service/write/stream \
+  -H 'Content-Type: application/json' \
+  -d '{"chapter":1}'
+```
+
+> **注意**：上游 `init` 只生成 `大纲/总纲.md`，**没有任何章纲**。
+> 而写章第一步就要从章纲解析本章目标。所以 `plan` 不是可选项——
+> 跳过它，`write` 会在 contract 阶段直接失败。
+
 ## 配置
 
 三种方式，优先级由低到高：**代码默认 → `.env` → 环境变量 → `PUT /service/config`**。
@@ -104,6 +122,15 @@ curl -X POST http://127.0.0.1:8770/service/config/test \
 |---|---|---|
 | POST | `/service/write` | 同步写一章 |
 | POST | `/service/write/stream` | SSE 流式写章（推荐） |
+| POST | `/service/write/resume` | **从指定阶段续跑**（解决阻断后继续） |
+| GET | `/service/write/blocking` | 读当前阻断状态与续跑选项 |
+
+### 规划
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/service/plan` | 规划一卷（节拍表 + 时间线 + 章纲） |
+| POST | `/service/plan/stream` | SSE 流式规划（按批次推送进度） |
+| GET | `/service/plan/outline` | 读章纲 / 卷大纲 / 总纲 |
 
 `/service/write/stream` 会推送 `progress` 事件（每个阶段的 running/ok/failed），
 最后推 `final`（完整结果）或 `error`。
@@ -119,13 +146,46 @@ curl -X POST http://127.0.0.1:8770/service/config/test \
   "mode": "default",
   "target_words": 2500,
   "override_existing": false,
-  "stop_after_review": false
+  "stop_after_review": false,
+  "accept_blocking": false
 }
 ```
 
 - `mode`：`default` / `fast` / `minimal`
+- `chapter_goal`：**可省略**，会自动从章纲解析
 - `override_existing`：正文已存在时是否覆盖（默认 false，即沿用现有正文，不覆盖作者手改）
 - `stop_after_review`：只跑到审查就停，方便先看审查结果再决定
+- `accept_blocking`：是否接受阻断问题继续（默认 false，见下）
+
+### 阻断问题怎么处理
+
+审查发现 `blocking=true` 的问题时，流程会停在 `needs_user_action`，
+不会静默放过。此时有三种继续方式：
+
+```bash
+# 看当前阻断内容与可选续跑方式
+curl "http://127.0.0.1:8770/service/write/blocking"
+
+# 方式 A：重新起草
+curl -X POST http://127.0.0.1:8770/service/write/resume \
+  -H 'Content-Type: application/json' \
+  -d '{"chapter":1,"from_stage":"draft"}'
+
+# 方式 B：接受现状，继续润色→提交
+curl -X POST http://127.0.0.1:8770/service/write/resume \
+  -H 'Content-Type: application/json' \
+  -d '{"chapter":1,"from_stage":"polish","accept_blocking":true}'
+
+# 方式 C：自己改好正文后直接提交
+curl -X POST http://127.0.0.1:8770/service/write/resume \
+  -H 'Content-Type: application/json' \
+  -d '{"chapter":1,"from_stage":"commit","accept_blocking":true}'
+```
+
+`accept_blocking=true` 时，裁决会被**写进 `review_results.json`**：
+每个阻断项的 `blocking` 降为 false，原始记录保存在 `adjudicated_blocking_issues`，
+并附 `adjudication` 元信息。这是必需的——上游 `precommit` gate 直接读该文件的
+`blocking_count`，只设内存标志位 gate 仍会拒绝提交。
 
 ### 只读
 | 方法 | 路径 | 说明 |
@@ -151,7 +211,7 @@ preflight → contract → context → draft → review → polish → data → 
 | 阶段 | 说明 |
 |---|---|
 | `preflight` | 校验项目根、占位符、Story System 健康 |
-| `contract` | 刷新本章写作合同（题材自动从 state.json 解析） |
+| `contract` | 刷新本章写作合同（题材自动从 state.json 解析，目标自动从章纲解析） |
 | `context` | context-agent 生成五段写作任务书 |
 | `draft` | 按任务书起草正文 |
 | `review` | reviewer 做五维事实审查（设定/时间线/连贯/角色/逻辑） |
@@ -159,6 +219,22 @@ preflight → contract → context → draft → review → polish → data → 
 | `data` | data-agent 提取事实，产出三份 commit artifact |
 | `commit` | 提交 CHAPTER_COMMIT，驱动 5 项投影 |
 | `backup` | 章节级 git 备份 |
+
+每个阶段都可以作为 `from_stage` 续跑起点。
+
+## 规划流程
+
+对应上游 `/webnovel-plan`：
+
+| 阶段 | 产出 |
+|---|---|
+| `preflight` | 校验项目、解析题材 |
+| `volume` | `大纲/第N卷-节拍表.md`、`大纲/第N卷-时间线.md` |
+| `chapters` | `大纲/第N卷-详细大纲.md`（章纲按 `### 第N章：标题` 分节，默认 10 章/批） |
+| `finalize` | 刷新写作合同、更新项目状态 |
+
+章纲是增量补齐的：已存在的章节不会重写，只补缺失的。
+每批生成后会记住上一批末章的 `CEN`，供下一批首章的 `CBN` 承接。
 
 ### 硬规则（继承自上游，未放宽）
 
@@ -191,10 +267,13 @@ preflight → contract → context → draft → review → polish → data → 
 
 ## 已知限制
 
-- **耗时**：写一章约 3-5 分钟（审查阶段最慢，取决于模型速度）。
+- **耗时**：写一章约 2-5 分钟（审查阶段最慢，取决于模型速度）；规划一卷约 30 秒-2 分钟。
 - **RAG 需自行配置**：不配 Embedding Key 时检索退回 BM25，语义召回会弱一些。
-- **未移植 `/webnovel-plan`**：卷纲/章纲规划仍在做（当前写章需要章纲已存在，或显式传 `chapter_goal`）。
-- **未移植 `/webnovel-init` 的交互式问答**：`POST /service/projects` 是参数化的，不做多轮追问。
+- **未移植交互式问答**：上游 `/webnovel-init` 与 `/webnovel-plan` 有多轮追问；
+  服务端是参数化的（`POST /service/projects`、`POST /service/plan`），不做多轮对话。
+  需要补设定的地方，直接改设定集文件后重跑。
+- **未移植 `/webnovel-review` 独立入口**：审查目前内嵌在写章流程里。
+- **`stop_after_review` 与 `accept_blocking` 需显式传**：默认行为是遇阻断即停。
 
 ## 许可
 

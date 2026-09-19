@@ -408,3 +408,187 @@ def build_polish_prompt(
         parts.append(f"\n# 风格适配要求\n{style_hint}")
     parts.append("\n输出润色后的完整正文。")
     return "\n".join(parts)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# planner：卷纲 + 章纲（对应上游 /webnovel-plan）
+# ─────────────────────────────────────────────────────────────────────────────
+
+PLAN_VOLUME_SYSTEM = """你是网文卷纲规划师。基于总纲与设定集，为本卷生成**卷节拍表**与**卷时间线**。
+
+## 执行原则
+
+1. 只做增量补齐，不重写整份总纲或设定集。
+2. 先锁定卷级节奏，再批量拆章。
+3. 时间线是硬约束。
+4. 若发现总纲与设定冲突，先阻断。
+5. 优先级链：用户明确要求 > 总纲核心冲突与卷末高潮 > 时间线硬约束 > 默认流程。
+
+## 卷节拍表硬要求
+
+- 必须填写中段反转；确无则写"无（理由：...）"。
+- 危机链至少 3 次递增。
+- 卷末新钩子必须能落到最后一章的章末未闭合问题。
+
+## 卷时间线硬要求
+
+- 必须明确时间体系与本卷时间跨度。
+- 有倒计时事件时列出并标记 D-N。
+
+## 输出格式
+
+只输出一个 JSON 对象，两个键：
+
+```json
+{
+  "volume_beats": "卷节拍表的完整 markdown 正文",
+  "volume_timeline": "卷时间线的完整 markdown 正文"
+}
+```
+
+不要输出任何解释文字。markdown 正文里不要包含文件路径。"""
+
+
+PLAN_CHAPTERS_SYSTEM = """你是网文章纲拆解师。基于卷纲、节拍表与时间线，批量生成**章纲**。
+
+## 章节黄金结构
+
+每章都是一个小故事：开头钩子 → 发展推进 → 高潮爽点 → 结尾钩子。
+
+## 每章必须包含的字段
+
+目标、阻力、代价、时间锚点、章内时间跨度、与上章时间差、倒计时状态、爽点、Strand、
+反派层级、视角/主角、关键实体、本章变化、章末未闭合问题、钩子。
+
+## 结构化节点（严格执行）
+
+节点格式统一为 `主体 | 动作/变化 | 对象/结果`。
+
+- `CBN`（章节起点）：每章固定 1 个，承接上一章 CEN。
+- `CPNs`（推进节点）：每章 2-4 个，按时间顺序排列。
+- `CEN`（章节终点）：每章固定 1 个，落到章末未闭合问题。
+- `必须覆盖节点`：每章最多 4 个，建议 CBN + CEN + 1~2 个核心 CPN。
+- `本章禁区`：不超过 5 条，只写本章绝对不能发生的硬禁区，不写风格类建议。
+
+**相邻章节 `CEN -> 下一章 CBN` 必须逻辑承接**（首章除外）。
+
+## 爽点密度
+
+- 最低标准：每 10 章至少 1 个 B 级或以上爽点。
+- 理想：每 5 章 1 个 C 级 + 每 10 章 1 个 B 级 + 每 30 章 1 个 A 级。
+- 禁忌：连续 20 章没有任何爽点。
+
+## 时间线硬约束
+
+所有章纲必须带时间字段；时间必须单调递增，不得回跳（闪回须明确标注）。
+
+## 输出格式
+
+只输出一个 JSON 对象：
+
+```json
+{
+  "chapters": [
+    {
+      "chapter": 1,
+      "title": "章节标题",
+      "goal": "本章目标",
+      "content": "该章完整 markdown 正文（含上述所有字段与结构化节点）"
+    }
+  ]
+}
+```
+
+`content` 必须是可直接写入大纲文件的完整 markdown，形如：
+
+```markdown
+### 第1章：退婚之辱
+
+**目标**：...
+**阻力**：...
+**代价**：...
+**时间锚点**：...
+**章内时间跨度**：...
+**与上章时间差**：...
+**倒计时状态**：...
+**爽点**：...
+**Strand**：...
+**反派层级**：...
+**视角/主角**：...
+**关键实体**：...
+**本章变化**：...
+**章末未闭合问题**：...
+**钩子**：...
+
+**CBN**：主体 | 动作 | 对象
+**CPNs**：
+- 主体 | 动作 | 对象
+- 主体 | 动作 | 对象
+**CEN**：主体 | 动作 | 对象
+**必须覆盖节点**：
+- ...
+**本章禁区**：
+- ...
+```
+
+不要输出任何解释文字。"""
+
+
+def build_plan_volume_prompt(
+    volume: int,
+    chapter_start: int,
+    chapter_end: int,
+    master_outline: Optional[str],
+    settings_digest: Optional[Dict[str, str]],
+    genre: str,
+    requirements: str = "",
+) -> str:
+    parts = [
+        f"# 任务\n规划第 {volume} 卷（第 {chapter_start}-{chapter_end} 章）。",
+        f"\n# 题材\n{genre or '(未指定)'}",
+    ]
+    if master_outline:
+        parts.append(f"\n# 总纲\n```markdown\n{_dump(master_outline, 20000)}\n```")
+    else:
+        parts.append("\n# 总纲\n(缺失。请基于题材与书名规划，并在节拍表中标注这一限制。)")
+    if settings_digest:
+        rendered = "\n\n".join(
+            f"## {name}\n{text}" for name, text in settings_digest.items()
+        )
+        parts.append(f"\n# 设定集\n```markdown\n{_dump(rendered, 20000)}\n```")
+    if requirements:
+        parts.append(f"\n# 作者额外要求\n{requirements}")
+    parts.append(
+        f"\n产出的卷节拍表与时间线要覆盖第 {chapter_start}-{chapter_end} 章的范围。"
+    )
+    return "\n".join(parts)
+
+
+def build_plan_chapters_prompt(
+    volume: int,
+    chapter_start: int,
+    chapter_end: int,
+    volume_beats: str,
+    volume_timeline: str,
+    genre: str,
+    batch_start: int,
+    batch_end: int,
+    previous_cen: str = "",
+    requirements: str = "",
+) -> str:
+    parts = [
+        f"# 任务\n拆解第 {volume} 卷第 {batch_start}-{batch_end} 章的章纲"
+        f"（本卷全范围：第 {chapter_start}-{chapter_end} 章）。",
+        f"\n# 题材\n{genre or '(未指定)'}",
+        f"\n# 卷节拍表\n```markdown\n{_dump(volume_beats, 16000)}\n```",
+        f"\n# 卷时间线\n```markdown\n{_dump(volume_timeline, 12000)}\n```",
+    ]
+    if previous_cen:
+        parts.append(f"\n# 上一章 CEN（本批第一章的 CBN 必须承接它）\n{previous_cen}")
+    if requirements:
+        parts.append(f"\n# 作者额外要求\n{requirements}")
+    parts.append(
+        f"\n只产出第 {batch_start}-{batch_end} 章的章纲，不要多做其他章。"
+        "严格按 JSON 格式输出。"
+    )
+    return "\n".join(parts)

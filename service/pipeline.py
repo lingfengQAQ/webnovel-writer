@@ -131,6 +131,7 @@ class WritePipeline:
         progress: Optional[ProgressFn] = None,
         stop_after_review: bool = False,
         override_existing: bool = False,
+        accept_blocking: bool = False,
     ) -> None:
         self.settings = settings
         self.engine = engine
@@ -143,10 +144,13 @@ class WritePipeline:
         self.progress = progress
         self.stop_after_review = stop_after_review
         self.override_existing = override_existing
+        # 显式接受阻断问题后继续（默认 False：阻断即停，等裁决）
+        self.accept_blocking = accept_blocking
         self.result: Optional[WriteResult] = None
         self._chapter_text: str = ""
         self._task_brief: str = ""
         self._review_json: Dict[str, Any] = {}
+        self._hard_failure: bool = False
 
     # ---- 事件与计时 ----
 
@@ -189,17 +193,52 @@ class WritePipeline:
 
     # ---- 主流程 ----
 
-    async def run(self, chapter: int) -> WriteResult:
+    # 可指定从哪里开始。用于：审查后裁决完继续、只补跑提交、只重写正文等。
+    RESUME_STAGES = (
+        "preflight", "contract", "context", "draft", "review",
+        "polish", "data", "commit", "backup",
+    )
+
+    async def run(self, chapter: int, from_stage: str = "preflight") -> WriteResult:
         self.result = WriteResult(chapter=chapter, title=self.chapter_title, status="failed")
         self._timings = {}
+        self._hard_failure = False
         chapter = int(chapter)
 
+        start = from_stage if from_stage in self.RESUME_STAGES else "preflight"
+        if start != "preflight":
+            self.result.auto_handled.append(f"从 `{start}` 阶段续跑（跳过前面的阶段）")
+
+        async def _step(name: str, fn) -> None:
+            """按续跑位置决定跳过还是执行。"""
+            if self.RESUME_STAGES.index(name) < self.RESUME_STAGES.index(start):
+                return
+            await fn(chapter)
+
         try:
-            await self._step_preflight(chapter)
-            await self._step_contract(chapter)
-            await self._step_context(chapter)
-            await self._step_draft(chapter)
-            review = await self._step_review(chapter)
+            await _step("preflight", self._step_preflight)
+            await _step("contract", self._step_contract)
+
+            # 续跑自 draft 及之后时，正文已在磁盘上，先读回来
+            await _step("context", self._step_context)
+            await _step("draft", self._step_draft)
+
+            # review 及之后需要正文在内存里
+            if self.RESUME_STAGES.index(start) > self.RESUME_STAGES.index("draft"):
+                if not self._chapter_text:
+                    existing = await asyncio.to_thread(self.engine.chapter_file, chapter)
+                    if existing is None:
+                        raise PipelineError(
+                            f"续跑自 `{start}`，但第 {chapter} 章正文不存在。"
+                            "请从 `draft` 或更早阶段重新开始。",
+                            Stage.DRAFT, recoverable=False,
+                        )
+                    self._chapter_text = existing.read_text(encoding="utf-8")
+                    self.result.chapter_file = str(existing)
+
+            review: Dict[str, Any] = {}
+            if self.RESUME_STAGES.index(start) <= self.RESUME_STAGES.index("review"):
+                review = await self._step_review(chapter)
 
             if self.stop_after_review:
                 self.result.status = "partial"
@@ -207,34 +246,53 @@ class WritePipeline:
                 await self._finalize(chapter)
                 return self.result
 
-            # blocking issue 不自动放过：交用户裁决
-            if review.get("has_blocking") or int(review.get("blocking_count") or 0) > 0:
-                self.result.blocking_issues = [
+            # blocking issue 不自动放过，除非调用方显式接受
+            blocking_issues: List[Dict[str, Any]] = []
+            if review:
+                blocking_issues = [
                     issue for issue in (review.get("issues") or [])
-                    if issue.get("blocking")
+                    if isinstance(issue, dict) and issue.get("blocking")
                 ]
-                self.result.status = "needs_user_action"
-                self.result.needs_user_action.append(
-                    f"存在 {len(self.result.blocking_issues)} 个阻断问题，需裁决后才能继续"
-                )
-                await self._finalize(chapter)
-                return self.result
+            elif self.accept_blocking:
+                # 续跑自 review 之后：内存里没有审查结果，从 artifact 读
+                blocking_issues = self._read_blocking_from_artifact()
 
-            await self._step_polish(chapter)
-            await self._step_data(chapter)
-            await self._step_commit(chapter)
-            await self._step_backup(chapter)
+            if blocking_issues:
+                self.result.blocking_issues = blocking_issues
+                self._save_blocking_state(chapter)
+                if not self.accept_blocking:
+                    self.result.status = "needs_user_action"
+                    self.result.needs_user_action.append(
+                        f"存在 {len(blocking_issues)} 个阻断问题，需裁决后才能继续。"
+                        f"可用 POST /service/write/resume 带 from_stage=polish 并"
+                        f" accept_blocking=true 接受现状继续，或先手工修订正文后从 polish 续跑。"
+                    )
+                    await self._finalize(chapter)
+                    return self.result
+                # 接受：把裁决写进 artifact，否则上游 precommit gate 仍会拒绝
+                self._record_blocking_adjudication(
+                    chapter, reason="用户通过 accept_blocking 明确裁决接受"
+                )
+
+            await _step("polish", self._step_polish)
+            await _step("data", self._step_data)
+            await _step("commit", self._step_commit)
+            await _step("backup", self._step_backup)
 
         except PipelineError as exc:
+            self._hard_failure = True
             self.result.status = "failed"
             self.result.problems.append(f"[{exc.stage.value}] {exc}")
         except LLMError as exc:
+            self._hard_failure = True
             self.result.status = "failed"
             self.result.problems.append(f"LLM 调用失败：{exc}")
         except EngineError as exc:
+            self._hard_failure = True
             self.result.status = "failed"
             self.result.problems.append(f"上游引擎失败：{exc}")
         except Exception as exc:  # noqa: BLE001 - 兜底，避免 API 层 500 无信息
+            self._hard_failure = True
             self.result.status = "failed"
             self.result.problems.append(f"未预期错误：{type(exc).__name__}: {exc}")
 
@@ -717,16 +775,114 @@ class WritePipeline:
 
     # ---- 收尾 ----
 
+    def _read_blocking_from_artifact(self) -> List[Dict[str, Any]]:
+        """从 review_results.json 读仍未裁决的阻断项。"""
+        tmp = self.engine.tmp_dir() / "review_results.json"
+        if not tmp.is_file():
+            return []
+        try:
+            data = json.loads(tmp.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return []
+        if not isinstance(data, dict):
+            return []
+        issues = data.get("issues")
+        issues = issues if isinstance(issues, list) else []
+        return [
+            issue for issue in issues
+            if isinstance(issue, dict) and issue.get("blocking")
+        ]
+
+    def _record_blocking_adjudication(self, chapter: int, reason: str) -> None:
+        """把用户裁决**写进审查 artifact**，而不是只记在内存里。
+
+        上游 `precommit` gate 直接读 `review_results.json` 的 `blocking_count`
+        （见 artifact_validator._policy_issues），所以只设一个内存标志位是没用的：
+        gate 照样会拒绝。要让裁决真正生效，必须：
+          1. 把每个 blocking issue 的 `blocking` 降为 false（上游按此计数）
+          2. 保留原始阻断记录到 `adjudicated_blocking_issues`，不丢失审计线索
+          3. 打上 `adjudication` 元信息，说明是谁在什么时候放行的
+        """
+        tmp = self.engine.tmp_dir() / "review_results.json"
+        if not tmp.is_file():
+            return
+        try:
+            data = json.loads(tmp.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        if not isinstance(data, dict):
+            return
+
+        issues = data.get("issues")
+        issues = issues if isinstance(issues, list) else []
+        adjudicated = [
+            issue for issue in issues
+            if isinstance(issue, dict) and issue.get("blocking")
+        ]
+        if not adjudicated:
+            return
+
+        # 保留原始阻断记录，再降级 blocking 标志
+        data["adjudicated_blocking_issues"] = adjudicated
+        for issue in adjudicated:
+            issue["blocking"] = False
+        data["issues_count"] = len(issues)
+        data["blocking_count"] = 0
+        data["has_blocking"] = False
+        data["adjudication"] = {
+            "chapter": chapter,
+            "accepted_by": "service",
+            "reason": reason,
+            "original_blocking_count": len(adjudicated),
+        }
+        data["summary"] = (
+            f"{len(issues)}个问题；用户已裁决接受 {len(adjudicated)} 个阻断项"
+        )
+        try:
+            tmp.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+        except OSError:
+            return
+        self.result.auto_handled.append(
+            f"已把用户裁决写入 review_results.json（{len(adjudicated)} 个阻断项降级，"
+            "原始记录保留在 adjudicated_blocking_issues）"
+        )
+
+    def _save_blocking_state(self, chapter: int) -> None:
+        """把阻断状态落盘，供用户查看与续跑判断。"""
+        try:
+            self.engine.write_tmp_json("blocking_state.json", {
+                "chapter": chapter,
+                "blocking_issues": self.result.blocking_issues,
+                "review_file": "review_results.json",
+                "resume_hint": (
+                    "修订正文后从 polish 续跑，或直接接受现状继续提交"
+                ),
+                "resume_options": [
+                    {"from_stage": "draft", "accept_blocking": False,
+                     "desc": "重新起草正文"},
+                    {"from_stage": "polish", "accept_blocking": True,
+                     "desc": "接受当前正文与阻断问题，继续润色→提交"},
+                    {"from_stage": "commit", "accept_blocking": True,
+                     "desc": "正文已自行改好，直接提交"},
+                ],
+            })
+        except Exception:  # noqa: BLE001 - 落盘失败不影响主流程
+            pass
+
     async def _finalize(self, chapter: int) -> None:
         assert self.result is not None
         self.result.timings = dict(self._timings)
 
-        # 状态判定：宁可保守，不可假报完成
-        if self.result.status not in ("needs_user_action",):
-            if self.result.problems and not self.result.commit_file:
+        # 状态判定：产物为准，宁可保守，不可假报完成
+        if self.result.status != "needs_user_action":
+            committed = bool(self.result.commit_file)
+            if self._hard_failure and not committed:
                 self.result.status = "failed"
-            elif self.result.problems:
-                self.result.status = "partial"
+            elif self.result.problems or not committed:
+                # 有产物但有问题 → partial；没有 commit 又没有明确失败 → partial
+                self.result.status = "partial" if self.result.chapter_file else "failed"
             else:
                 self.result.status = "completed"
 
