@@ -159,8 +159,15 @@ curl -X POST http://127.0.0.1:8770/service/config/test \
 
 ### 阻断问题怎么处理
 
-审查发现 `blocking=true` 的问题时，流程会停在 `needs_user_action`，
-不会静默放过。此时有三种继续方式：
+上游有**三类**提交阻断，服务层都会转成 `needs_user_action` 并给出裁决入口：
+
+| 类型 | 上游错误码 | 来源 |
+|---|---|---|
+| 审查阻断 | `artifact.blocking_review` | `review_results.json` 的 `blocking_count > 0` |
+| 待消歧实体 | `artifact.pending_disambiguation` | `disambiguation_result.json` 的 `pending` 非空 |
+| 未覆盖节点 | `artifact.missed_outline_node` | `fulfillment_result.json` 的 `missed_nodes` 非空 |
+
+处理方式：
 
 ```bash
 # 看当前阻断内容与可选续跑方式
@@ -182,10 +189,14 @@ curl -X POST http://127.0.0.1:8770/service/write/resume \
   -d '{"chapter":1,"from_stage":"commit","accept_blocking":true}'
 ```
 
-`accept_blocking=true` 时，裁决会被**写进 `review_results.json`**：
-每个阻断项的 `blocking` 降为 false，原始记录保存在 `adjudicated_blocking_issues`，
-并附 `adjudication` 元信息。这是必需的——上游 `precommit` gate 直接读该文件的
-`blocking_count`，只设内存标志位 gate 仍会拒绝提交。
+`accept_blocking=true` 时，裁决会**写进 artifact 本身**，因为上游 gate 直接读文件：
+
+- 审查阻断 → 各项 `blocking` 降为 false，`blocking_count` 清零，
+  原始记录保留在 `adjudicated_blocking_issues`
+- 待消歧 → `pending` 清空，原始记录保留在 `adjudicated_pending`
+
+两处都会附 `adjudication` 元信息（谁在何时、为什么放行）。
+只设内存标志位是无效的——gate 读的是文件。
 
 ### 只读
 | 方法 | 路径 | 说明 |
@@ -265,15 +276,60 @@ preflight → contract → context → draft → review → polish → data → 
 上游 `data_modules` 内部结构会随版本变化。子进程调用只依赖 CLI 这一层稳定契约，
 上游重构不影响我们。代价是每次调用有进程启动开销（实测约 0.5-3 秒）。
 
+### 一个必须知道的坑：vector 投影失败会卡死整本书
+
+上游 `project_phase.has_projection_blocker` 把**任何** `failed:` / `pending`
+投影状态视为阻塞，项目 phase 会变成 `projection_failed`，于是**后续每一章的
+precommit gate 都被拒绝**——第 1 章能过，第 2 章起全部写不下去。
+
+而 README 又说"不填 Embedding Key 也能用，会自动退回 BM25"。这两件事直接冲突：
+不配 Embedding Key 时 `vector` 投影必然 `failed:store_failed`，于是整本书卡死。
+
+服务层的处理：**未配置 Embedding Key** 时把 `vector` 的 `failed` 归一化为
+`skipped`（上游自身在 `not_required` 时也是 skipped，语义一致），
+配置了 RAG 却失败则保留为真故障并补跑。
+
+注意 `.webnovel/projection_log.jsonl` 是投影状态的**权威来源**，优先级高于
+commit 文件，所以归一化必须同时改这两处——只改 commit 文件无效。
+
+### 测试
+
+```bash
+# 单元测试（确定性，不联网）
+python -m pytest -c service/pytest.ini service/tests
+
+# 真实 LLM 端到端（默认 skip，需提供凭据）
+set WEBNOVEL_E2E_FROM_DSH=WORKBUDDY_API_KEY   # 从 DSH 凭据读，或
+set WEBNOVEL_E2E_BASE_URL=... & set WEBNOVEL_E2E_API_KEY=... & set WEBNOVEL_E2E_MODEL=...
+python -m pytest -c service/pytest.ini service/tests/test_integration_real.py -v
+```
+
+测试刻意不让 fake 与生产漂移：`FakeEngine` 只替换子进程调用，文件与解析逻辑
+（章纲路径、卷号推断、投影归一化）都委托真实实现。
+
+### 三个踩过的坑（都已在代码里处理）
+
+1. **章纲存在卷大纲里**：上游把章纲写在 `大纲/第N卷-详细大纲.md` 的
+   `### 第N章：标题` 分节，不是独立文件。只找单章文件会读不到章纲，
+   写章必然失败。两种约定都要支持，且标题里的章号可能是中文数字。
+2. **vector 投影失败会卡死整本书**：见上文。归一化时必须同时改
+   `projection_log.jsonl` 与 commit 文件，因为前者是权威来源。
+3. **LLM 输出被 token 截断**：审查输出较长时（多问题 + 逐维结论）会被
+   截断成半截 JSON，解析直接失败。现在给足 `max_tokens`（32k），
+   并在解析失败时降温度重试；规划/审查/事实提取都有重试。
+
 ## 已知限制
 
 - **耗时**：写一章约 2-5 分钟（审查阶段最慢，取决于模型速度）；规划一卷约 30 秒-2 分钟。
 - **RAG 需自行配置**：不配 Embedding Key 时检索退回 BM25，语义召回会弱一些。
+  （服务层会处理由此引发的 vector 投影阻塞，见上文。）
 - **未移植交互式问答**：上游 `/webnovel-init` 与 `/webnovel-plan` 有多轮追问；
   服务端是参数化的（`POST /service/projects`、`POST /service/plan`），不做多轮对话。
   需要补设定的地方，直接改设定集文件后重跑。
 - **未移植 `/webnovel-review` 独立入口**：审查目前内嵌在写章流程里。
 - **`stop_after_review` 与 `accept_blocking` 需显式传**：默认行为是遇阻断即停。
+- **真实 E2E 依赖模型稳定性**：模型偶发不按 schema 返回时，规划/写作可能失败；
+  这不是服务层缺陷，但会体现在 `problems` 里。
 
 ## 许可
 

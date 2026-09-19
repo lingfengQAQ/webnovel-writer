@@ -253,8 +253,10 @@ class WritePipeline:
                     issue for issue in (review.get("issues") or [])
                     if isinstance(issue, dict) and issue.get("blocking")
                 ]
-            elif self.accept_blocking:
-                # 续跑自 review 之后：内存里没有审查结果，从 artifact 读
+            else:
+                # 续跑自 review 之后：本次没跑审查，但 artifact 里可能仍有未裁决的
+                # 阻断项。必须读出来 —— 否则会一路走到 commit，被上游 precommit
+                # gate 拒绝，最终报成含糊的 failed，而不是让用户看到裁决入口。
                 blocking_issues = self._read_blocking_from_artifact()
 
             if blocking_issues:
@@ -276,20 +278,33 @@ class WritePipeline:
 
             await _step("polish", self._step_polish)
             await _step("data", self._step_data)
+
+            # data 之后还有一类上游阻断：disambiguation_result 的 pending 项。
+            # 上游 artifact_validator 把它算作 blocker（artifact.pending_disambiguation），
+            # 若不管它，commit 会被 gate 拒绝并报成含糊的 failed。
+            if await self._handle_pending_disambiguation(chapter):
+                await self._finalize(chapter)
+                return self.result
+
             await _step("commit", self._step_commit)
             await _step("backup", self._step_backup)
 
         except PipelineError as exc:
             self._hard_failure = True
-            self.result.status = "failed"
+            # 不覆盖已判定的 needs_user_action：例如 commit rejected 会先设好
+            # 该状态再抛异常，若这里无条件改成 failed，用户就看不到裁决入口了。
+            if self.result.status != "needs_user_action":
+                self.result.status = "failed"
             self.result.problems.append(f"[{exc.stage.value}] {exc}")
         except LLMError as exc:
             self._hard_failure = True
-            self.result.status = "failed"
+            if self.result.status != "needs_user_action":
+                self.result.status = "failed"
             self.result.problems.append(f"LLM 调用失败：{exc}")
         except EngineError as exc:
             self._hard_failure = True
-            self.result.status = "failed"
+            if self.result.status != "needs_user_action":
+                self.result.status = "failed"
             self.result.problems.append(f"上游引擎失败：{exc}")
         except Exception as exc:  # noqa: BLE001 - 兜底，避免 API 层 500 无信息
             self._hard_failure = True
@@ -472,8 +487,13 @@ class WritePipeline:
 
             context = {"recent_state_changes": state_changes, "story_context": pack}
             prompt = prompts.build_review_prompt(chapter, self._chapter_text, context)
-            raw = await client.complete_json(
-                prompts.REVIEW_SYSTEM, prompt, temperature=0.1, max_tokens=8192
+
+            # 审查输出可能很长（多问题、逐维结论）。token 给小了会被截断成
+            # 半截 JSON，解析直接失败。所以给足额度，并在解析失败时降温度重试。
+            raw = await self._json_with_retry(
+                client, prompts.REVIEW_SYSTEM, prompt,
+                max_tokens=32768, temperature=0.1,
+                what="审查",
             )
             if not isinstance(raw, dict):
                 raise PipelineError(
@@ -551,6 +571,47 @@ class WritePipeline:
 
         await self._timed(Stage.POLISH, "润色与 Anti-AI 终检", _do)
 
+    async def _json_with_retry(
+        self,
+        client: LLMClient,
+        system: str,
+        prompt: str,
+        *,
+        max_tokens: int,
+        temperature: float,
+        what: str,
+        stage: Stage = Stage.REVIEW,
+    ) -> Any:
+        """调 LLM 并解析 JSON，失败时降温度重试。
+
+        为什么需要：实测发现审查输出会因 token 不足被**截断成半截 JSON**，
+        解析必然失败。单次调用失败就丢掉整章太脆，所以：
+        - 给足 max_tokens
+        - 解析/调用失败时重试，并追加"只输出 JSON"的纠正提示
+        """
+        attempts = max(1, self.settings.max_draft_retries + 1)
+        last_error = ""
+        for attempt in range(attempts):
+            text_prompt = prompt
+            if attempt > 0:
+                text_prompt = (
+                    prompt
+                    + f"\n\n# 上次输出不合格（{last_error}）\n"
+                    "请严格只输出一个 JSON 对象，不要输出任何解释文字或 markdown 围栏。"
+                )
+            try:
+                return await client.complete_json(
+                    system, text_prompt,
+                    temperature=temperature if attempt == 0 else 0.0,
+                    max_tokens=max_tokens,
+                )
+            except LLMError as exc:
+                last_error = str(exc)[:200]
+        raise PipelineError(
+            f"{what}失败（已重试 {attempts} 次）：{last_error}",
+            stage,
+        )
+
     async def _step_data(self, chapter: int) -> None:
         async def _do() -> None:
             client = self._client("data")
@@ -576,8 +637,10 @@ class WritePipeline:
             prompt = prompts.build_data_prompt(
                 chapter, self._chapter_text, entity_context, planned
             )
-            raw = await client.complete_json(
-                prompts.DATA_SYSTEM, prompt, temperature=0.1, max_tokens=16384
+            raw = await self._json_with_retry(
+                client, prompts.DATA_SYSTEM, prompt,
+                max_tokens=32768, temperature=0.1, what="事实提取",
+                stage=Stage.DATA,
             )
             if not isinstance(raw, dict):
                 raise PipelineError("data-agent 返回结构不是对象", Stage.DATA)
@@ -692,12 +755,18 @@ class WritePipeline:
         await self._timed(Stage.COMMIT, "提交本章事实", _do)
 
     async def _handle_projection_status(self, chapter: int, proj: Dict[str, Any]) -> None:
-        """判定投影结果。
+        """判定投影结果，并解除会卡死后续章节的 phase 阻塞。
 
-        上游的 `vector` 投影在未配置 Embedding Key 时会失败，这是**设计内的降级**
-        （README：不填 Embedding Key 会自动退回 BM25 关键词检索）。所以：
-        - 非 vector 的投影失败 → 补跑一次；仍失败则记为问题。
-        - vector 失败 → 记为 auto_handled（除非配置了 RAG 才升级为问题）。
+        关键事实（实测确认）：上游 `project_phase.has_projection_blocker` 把任何
+        `failed:` / `pending` 投影状态视为阻塞，项目 phase 变成 `projection_failed`，
+        于是**后续每一章的 precommit gate 都会被拒绝** —— 第 1 章能过，第 2 章起全卡。
+
+        而 README 明确说不填 Embedding Key 也能用（退回 BM25）。所以未配 RAG 时的
+        vector 失败属设计内降级，要归一化为 `skipped`（上游自身在 not_required 时
+        也是 skipped），否则整本书写不下去。
+
+        注意：投影状态的**权威来源是 `.webnovel/projection_log.jsonl`**，
+        优先级高于 commit 文件，因此归一化必须同时改两处。
         """
         bad = {
             key: value for key, value in proj.items()
@@ -707,20 +776,39 @@ class WritePipeline:
             return
 
         rag_configured = bool(self.settings.embed_api_key and self.settings.embed_base_url)
-        real_bad = {
-            key: value for key, value in bad.items()
-            if key != "vector" or rag_configured
-        }
-        if "vector" in bad and not rag_configured:
-            self.result.auto_handled.append(
-                "向量投影已跳过（未配置 Embedding Key，检索自动退回 BM25 关键词模式）"
-            )
 
-        if not real_bad:
+        # 未配 RAG 时的 vector 失败 → 归一化为 skipped，解除 phase 阻塞
+        if "vector" in bad and not rag_configured:
+            outcome = await asyncio.to_thread(
+                self.engine.normalize_vector_projection, chapter
+            )
+            if outcome.get("normalized"):
+                self.result.auto_handled.append(
+                    "向量投影已降级为 skipped（未配置 Embedding Key，检索退回 BM25 关键词模式；"
+                    "否则上游 phase 会变成 projection_failed，卡住后续所有章节的提交）"
+                )
+            else:
+                self.result.auto_handled.append(
+                    "向量投影不可用（未配置 Embedding Key，检索退回 BM25 关键词模式）"
+                )
+            bad.pop("vector", None)
+
+        # 以权威来源刷新一次状态
+        fresh = await asyncio.to_thread(self.engine.read_projection_status, chapter)
+        if fresh:
+            self.result.projection_status = fresh
+            bad = {
+                key: value for key, value in fresh.items()
+                if str(value).lower() not in ("done", "skipped")
+            }
+            if not bad:
+                return
+
+        if not bad:
             return
 
         self.result.auto_handled.append(
-            f"投影未完成 {real_bad}，已自动补跑 projections retry"
+            f"投影未完成 {bad}，已自动补跑 projections retry"
         )
         try:
             retry = await asyncio.to_thread(self.engine.projections_retry, chapter)
@@ -729,31 +817,24 @@ class WritePipeline:
             self.result.problems.append(f"投影补跑失败：{exc}")
             return
 
-        retry_proj = {}
-        if isinstance(retry_payload, dict):
-            retry_proj = (
-                retry_payload.get("projection_status")
-                or (retry_payload.get("commit") or {}).get("projection_status")
-                or {}
-            )
-        if not isinstance(retry_proj, dict) or not retry_proj:
-            commit_path = (
-                Path(self.engine.project_root) / ".story-system" / "commits"
-                / f"chapter_{chapter:03d}.commit.json"
-            )
-            if commit_path.is_file():
-                try:
-                    retry_proj = json.loads(
-                        commit_path.read_text(encoding="utf-8")
-                    ).get("projection_status") or {}
-                except (OSError, json.JSONDecodeError):
-                    retry_proj = {}
-        if isinstance(retry_proj, dict) and retry_proj:
+        retry_proj = self._read_projection_status(chapter, retry_payload)
+        if retry_proj:
             self.result.projection_status = retry_proj
             still_bad = {
                 key: value for key, value in retry_proj.items()
-                if str(value).lower() not in ("done", "skipped") and key != "vector"
+                if str(value).lower() not in ("done", "skipped")
             }
+            # 补跑后 vector 若仍失败且未配 RAG，再归一化一次
+            if still_bad.get("vector") and not rag_configured:
+                outcome = await asyncio.to_thread(
+                    self.engine.normalize_vector_projection, chapter
+                )
+                if outcome.get("normalized"):
+                    self.result.auto_handled.append("补跑后向量投影仍失败，已再次降级为 skipped")
+                    still_bad.pop("vector", None)
+                    self.result.projection_status = await asyncio.to_thread(
+                        self.engine.read_projection_status, chapter
+                    )
             if still_bad:
                 self.result.problems.append(f"投影补跑后仍未完成：{still_bad}")
 
@@ -774,6 +855,57 @@ class WritePipeline:
         await self._timed(Stage.BACKUP, "备份本章", _do)
 
     # ---- 收尾 ----
+
+    async def _handle_pending_disambiguation(self, chapter: int) -> bool:
+        """处理 data-agent 留下的 pending 消歧项。
+
+        上游把 `disambiguation_result.pending` 非空视为提交阻断
+        （artifact_validator._policy_issues → artifact.pending_disambiguation）。
+        所以这里要么让用户裁决，要么在 accept_blocking 下记录裁决后清空。
+
+        返回 True 表示应当停止（已置为 needs_user_action）。
+        """
+        path = self.engine.tmp_dir() / "disambiguation_result.json"
+        if not path.is_file():
+            return False
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        if not isinstance(data, dict):
+            return False
+        pending = data.get("pending")
+        if not isinstance(pending, list) or not pending:
+            return False
+
+        self.result.needs_user_action.append(
+            f"存在 {len(pending)} 条待消歧实体（会影响角色/关系/事件入库）"
+        )
+        if not self.accept_blocking:
+            self.result.status = "needs_user_action"
+            self._save_blocking_state(chapter)
+            return True
+
+        # 接受：保留原始 pending 供审计，再清空以通过 gate
+        data["adjudicated_pending"] = pending
+        data["pending"] = []
+        data["adjudication"] = {
+            "chapter": chapter,
+            "accepted_by": "service",
+            "reason": "用户通过 accept_blocking 明确裁决接受未消歧项",
+            "original_pending_count": len(pending),
+        }
+        try:
+            path.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+        except OSError:
+            self.result.problems.append("待消歧项裁决写入失败，提交可能被拒")
+            return False
+        self.result.auto_handled.append(
+            f"已裁决 {len(pending)} 条待消歧项（原始记录保留在 adjudicated_pending）"
+        )
+        return False
 
     def _read_blocking_from_artifact(self) -> List[Dict[str, Any]]:
         """从 review_results.json 读仍未裁决的阻断项。"""
@@ -848,6 +980,15 @@ class WritePipeline:
             f"已把用户裁决写入 review_results.json（{len(adjudicated)} 个阻断项降级，"
             "原始记录保留在 adjudicated_blocking_issues）"
         )
+
+    def _read_projection_status(self, chapter: int,
+                                payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """读投影状态。委托 engine（projection_log 优先，回退 commit 文件）。"""
+        if isinstance(payload, dict):
+            proj = payload.get("projection_status") or {}
+            if isinstance(proj, dict) and proj:
+                return proj
+        return self.engine.read_projection_status(chapter)
 
     def _save_blocking_state(self, chapter: int) -> None:
         """把阻断状态落盘，供用户查看与续跑判断。"""

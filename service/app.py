@@ -48,7 +48,13 @@ def _engine_or_raise(project_root: Optional[str] = None) -> Engine:
     root = project_root or settings.project_root
     if not root:
         raise HTTPException(400, "未指定 book project_root（请通过 body 传入或先初始化项目）")
-    return Engine(settings, project_root=root)
+    # 提前校验路径，避免子进程抛 WinError 267 变成 500
+    if not Path(root).is_dir():
+        raise HTTPException(400, f"项目根目录不存在或不是目录：{root}")
+    try:
+        return Engine(settings, project_root=root)
+    except EngineError as exc:
+        raise HTTPException(500, f"初始化引擎失败：{exc}") from exc
 
 
 def create_service_app(default_project_root: Optional[str] = None) -> FastAPI:
@@ -105,12 +111,13 @@ def create_service_app(default_project_root: Optional[str] = None) -> FastAPI:
         """连通性测试：跑一次最小 LLM 调用。可临时覆盖 base_url/model/api_key。"""
         settings = load_settings(default_project_root)
         role = str(payload.get("role") or "draft")
-        try:
-            role_cfg = settings.role(role)
-        except Exception:  # noqa: BLE001
-            role_cfg = None
-        if role_cfg is None:
-            raise HTTPException(400, f"未知角色：{role}")
+        # 显式校验角色名：settings.role() 对未知名字会回退到 default，
+        # 那会让调用方以为"测了 review"其实测的是 default。
+        if role not in ROLES:
+            raise HTTPException(
+                400, f"未知角色：{role}。可选：{', '.join(ROLES)}"
+            )
+        role_cfg = settings.role(role)
 
         # 临时覆盖（仅本次调用，不落盘）
         if payload.get("base_url"):

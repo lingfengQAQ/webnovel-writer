@@ -88,14 +88,28 @@ class Engine:
         timeout: int = 600,
         need_project: bool = True,
         check: bool = False,
+        workdir: Optional[str] = None,
     ) -> CommandResult:
-        """执行上游 CLI。need_project=False 用于 init 这类创建项目的命令。"""
+        """执行上游 CLI。
+
+        need_project=False 用于 init 这类创建项目的命令。
+        workdir 可显式指定工作目录（init 时目标目录还不存在，必须回退到插件根）。
+        """
         cmd: List[str] = [sys.executable, "-X", "utf8", str(self.entry)]
         if need_project:
             if not self.project_root:
                 raise EngineError("project_root 未设置")
             cmd += ["--project-root", self.project_root]
         cmd += list(args)
+
+        # cwd 必须存在，否则 subprocess 会抛 NotADirectoryError（在 Windows 上是
+        # WinError 267）。项目根传错时给出可读错误，而不是未捕获异常。
+        target_dir = workdir or self.project_root or str(UPSTREAM_ROOT)
+        if not Path(target_dir).is_dir():
+            raise EngineError(
+                f"项目根目录不存在或不是目录：{target_dir}",
+                returncode=-1,
+            )
 
         try:
             proc = subprocess.run(
@@ -106,7 +120,7 @@ class Engine:
                 errors="replace",
                 timeout=timeout,
                 env=self._env(),
-                cwd=self.project_root or str(UPSTREAM_ROOT),
+                cwd=target_dir,
             )
         except subprocess.TimeoutExpired as exc:
             raise EngineError(
@@ -130,12 +144,18 @@ class Engine:
     # ---- 项目生命周期 ----
 
     def preflight(self) -> Dict[str, Any]:
-        res = self.run(["preflight", "--format", "json"], need_project=False)
+        # preflight 自己会校验项目根；cwd 用插件根，避免项目根不存在时起不来子进程
+        res = self.run(
+            ["preflight", "--format", "json"],
+            need_project=False, workdir=str(UPSTREAM_ROOT),
+        )
         return res.json() or {}
 
     def where(self) -> Optional[str]:
         """解析真实书项目根（含 .webnovel/state.json 的目录）。"""
-        res = self.run(["where"], need_project=False)
+        res = self.run(
+            ["where"], need_project=False, workdir=str(UPSTREAM_ROOT)
+        )
         if not res.ok:
             return None
         out = res.text()
@@ -147,8 +167,10 @@ class Engine:
         """创建书项目。
 
         need_project=False —— init 不依赖已存在的 project_root。
-        注意：上游 init_project.py 把 `genre` 定为必填位置参数，缺失会直接
-        argparse 报错退出，所以这里显式补默认值。
+        注意两点：
+        1. 上游 init_project.py 把 `genre` 定为必填位置参数，缺失会直接
+           argparse 报错退出，所以这里显式补默认值。
+        2. 目标目录此时还不存在，cwd 必须回退到插件根，否则子进程起不来。
         """
         args = ["init", project_dir, title, genre or "玄幻"]
         for key, value in options.items():
@@ -156,7 +178,9 @@ class Engine:
                 continue
             flag = "--" + key.replace("_", "-")
             args += [flag, str(value)]
-        return self.run(args, need_project=False, timeout=300)
+        return self.run(
+            args, need_project=False, timeout=300, workdir=str(UPSTREAM_ROOT)
+        )
 
     def project_status(self, chapter: Optional[int] = None) -> Any:
         args = ["project-status", "--format", "json"]
@@ -587,6 +611,186 @@ class Engine:
         path = Path(self.project_root) / ".webnovel" / "tmp"
         path.mkdir(parents=True, exist_ok=True)
         return path
+
+    # ---- 投影降级归一化 ----
+
+    def _commit_path(self, chapter: int) -> Path:
+        return (
+            Path(self.project_root) / ".story-system" / "commits"
+            / f"chapter_{chapter:03d}.commit.json"
+        )
+
+    def _projection_log_path(self) -> Path:
+        return Path(self.project_root) / ".webnovel" / "projection_log.jsonl"
+
+    def normalize_vector_projection(self, chapter: int) -> Dict[str, Any]:
+        """把"未配 Embedding Key 导致的 vector 投影失败"归一化为 skipped。
+
+        为什么必须做这件事（实测确认，不是猜测）：
+
+        上游 `project_phase.has_projection_blocker` 把任何 `failed:` 状态视为阻塞，
+        项目 phase 会变成 `projection_failed`，于是**后续每一章的 precommit gate
+        都被拒绝**。也就是说 vector 投影失败不是"这一章少个索引"，而是"这本书写
+        不下去了" —— 第 1 章能过，第 2 章起全部卡死。
+
+        而 README 明确写着不填 Embedding Key 也能用（自动退回 BM25 关键词检索）。
+        所以对"未配置 RAG"这一种情况，把 `failed:store_failed` 归一化为 `skipped`
+        正是上游自身的语义：VectorProjectionWriter 在 `not_required` 时就返回
+        skipped，两种情况的实质都是"本次不做向量索引"。
+
+        关键：`.webnovel/projection_log.jsonl` 是投影状态的**权威来源**，优先级高于
+        commit 文件（project_phase.py 里 `projection_source` 会变成 `projection_log`）。
+        因此两个地方都要改，只改 commit 文件是无效的。
+
+        返回：{"normalized": bool, "reason": str, "before": {...}, "after": {...}}
+        """
+        if not self.project_root:
+            return {"normalized": False, "reason": "no_project"}
+
+        log_path = self._projection_log_path()
+        before: Dict[str, str] = {}
+        after: Dict[str, str] = {}
+        changed = False
+
+        # 1) 投影日志（权威）
+        if log_path.is_file():
+            try:
+                lines = log_path.read_text(encoding="utf-8").splitlines()
+            except OSError:
+                lines = []
+            target = -1
+            for index, raw in enumerate(lines):
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    record = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                if int(record.get("chapter") or 0) == chapter:
+                    target = index
+            if target >= 0:
+                try:
+                    record = json.loads(lines[target])
+                except json.JSONDecodeError:
+                    record = None
+                if isinstance(record, dict):
+                    writers = record.get("writers")
+                    if isinstance(writers, dict):
+                        vector = writers.get("vector")
+                        if isinstance(vector, dict):
+                            status = str(vector.get("status") or "")
+                            before["log.writers.vector"] = status
+                            if status.startswith("failed"):
+                                vector["status"] = "skipped"
+                                result = vector.get("result")
+                                if not isinstance(result, dict):
+                                    result = {}
+                                result["reason"] = "degraded:no_embedding"
+                                vector["result"] = result
+                                # 重算整体状态：全 done/skipped → done
+                                statuses = {
+                                    str(v.get("status") or "")
+                                    for v in writers.values()
+                                    if isinstance(v, dict)
+                                }
+                                record["status"] = (
+                                    "skipped" if statuses and statuses <= {"skipped"}
+                                    else "done"
+                                )
+                                after["log.writers.vector"] = "skipped"
+                                after["log.status"] = record["status"]
+                                lines[target] = json.dumps(
+                                    record, ensure_ascii=False, sort_keys=True
+                                )
+                                changed = True
+                    # projection_status 同步（部分读取路径用它）
+                    proj = record.get("projection_status")
+                    if isinstance(proj, dict):
+                        vstatus = str(proj.get("vector") or "")
+                        if vstatus.startswith("failed"):
+                            proj["vector"] = "skipped"
+                            changed = True
+            if changed:
+                try:
+                    log_path.write_text(
+                        "\n".join(lines) + "\n", encoding="utf-8"
+                    )
+                except OSError:
+                    return {"normalized": False, "reason": "log_write_failed"}
+
+        # 2) commit 文件（保持两处一致）
+        commit_path = self._commit_path(chapter)
+        if commit_path.is_file():
+            try:
+                data = json.loads(commit_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                data = None
+            if isinstance(data, dict):
+                proj = data.get("projection_status")
+                if isinstance(proj, dict):
+                    status = str(proj.get("vector") or "")
+                    before["commit.vector"] = status
+                    if status.startswith("failed"):
+                        proj["vector"] = "skipped"
+                        after["commit.vector"] = "skipped"
+                        try:
+                            commit_path.write_text(
+                                json.dumps(data, ensure_ascii=False, indent=2),
+                                encoding="utf-8",
+                            )
+                            changed = True
+                        except OSError:
+                            pass
+
+        return {
+            "normalized": changed,
+            "reason": "ok" if changed else "nothing_to_do",
+            "before": before,
+            "after": after,
+        }
+
+    def read_projection_status(self, chapter: int) -> Dict[str, str]:
+        """读该章投影状态。以 projection_log 为权威，回退 commit 文件。"""
+        log_path = self._projection_log_path()
+        if log_path.is_file():
+            try:
+                for raw in reversed(log_path.read_text(encoding="utf-8").splitlines()):
+                    raw = raw.strip()
+                    if not raw:
+                        continue
+                    try:
+                        record = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    if not isinstance(record, dict):
+                        continue
+                    if int(record.get("chapter") or 0) != chapter:
+                        continue
+                    writers = record.get("writers")
+                    if isinstance(writers, dict) and writers:
+                        return {
+                            str(name): str((item or {}).get("status") or "")
+                            for name, item in writers.items()
+                            if isinstance(item, dict)
+                        }
+                    proj = record.get("projection_status")
+                    if isinstance(proj, dict):
+                        return {str(k): str(v) for k, v in proj.items()}
+            except OSError:
+                pass
+        commit_path = self._commit_path(chapter)
+        if commit_path.is_file():
+            try:
+                data = json.loads(commit_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                return {}
+            proj = data.get("projection_status")
+            if isinstance(proj, dict):
+                return {str(k): str(v) for k, v in proj.items()}
+        return {}
 
     def write_tmp_json(self, name: str, data: Any) -> Path:
         path = self.tmp_dir() / name
