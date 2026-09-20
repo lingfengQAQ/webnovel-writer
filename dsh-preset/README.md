@@ -29,16 +29,26 @@ pip install -r webnovel-writer/scripts/requirements.txt
 pip install -r webnovel-writer/dashboard/requirements.txt
 ```
 
-### 2. 把仓库放到稳定位置
+### 2. 把仓库放到约定位置
 
-预设默认指向 `C:/Users/<你>/tools/webnovel-writer-dsh`。换成别的路径时，
-改 `agent.cordis.yml` 里 `mcp-webnovel` 行的 `args` 与 `cwd`，或设环境变量：
+预设按下面的顺序找引擎，**不写死任何用户名**：
+
+1. 环境变量 `WEBNOVEL_HOME` / `WEBNOVEL_MCP_SERVER`
+2. 回退到 `~/tools/webnovel-writer-dsh`
+
+所以最省事的做法就是 clone 到 `~/tools/webnovel-writer-dsh`：
+
+```bash
+git clone https://github.com/<you>/webnovel-writer-dsh ~/tools/webnovel-writer-dsh
+```
+
+装在别处就设环境变量（DSH 启动前设置）：
 
 | 环境变量 | 用途 | 默认 |
 |---|---|---|
+| `WEBNOVEL_HOME` | 仓库根目录（也作为子进程 cwd） | `~/tools/webnovel-writer-dsh` |
+| `WEBNOVEL_MCP_SERVER` | `mcp_server.py` 绝对路径 | `<WEBNOVEL_HOME>/service/mcp_server.py` |
 | `WEBNOVEL_PYTHON` | Python 解释器 | `python` |
-| `WEBNOVEL_MCP_SERVER` | `mcp_server.py` 的绝对路径 | `C:/Users/17213/tools/webnovel-writer-dsh/service/mcp_server.py` |
-| `WEBNOVEL_HOME` | 仓库根目录（作为子进程 cwd） | `C:/Users/17213/tools/webnovel-writer-dsh` |
 
 ### 3. 复制预设
 

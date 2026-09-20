@@ -132,7 +132,9 @@
 # 事实检索）。`dsh-mcp-client` 只向 `ctx.tools` 注册工具、`inject: ["tools"]`，
 # 不发布任何服务，所以这一行放在预设里是安全的（与 `tool-web` 同类）。
 #
-# 路径通过环境变量可覆盖，默认指向本机的稳定安装位置。
+# 路径解析顺序（不写死任何用户名）：
+#   1. 环境变量 WEBNOVEL_HOME / WEBNOVEL_MCP_SERVER —— 装在别处时用这个
+#   2. 回退到约定位置 ~/tools/webnovel-writer-dsh
 #
 # `toolCallTimeoutMs` 必须显式调大：客户端默认 60 秒，而写一章要 3-5 分钟
 # （审查阶段最慢）。用默认值会让 novel_write 在中途被超时掐断。
@@ -142,11 +144,11 @@
     serverName: webnovel
     transport: stdio
     command: !!js process.env.WEBNOVEL_PYTHON || 'python'
-    args: !!js "[ '-X', 'utf8', process.env.WEBNOVEL_MCP_SERVER || 'C:/Users/17213/tools/webnovel-writer-dsh/service/mcp_server.py' ]"
+    args: !!js "[ '-X', 'utf8', process.env.WEBNOVEL_MCP_SERVER || process.getBuiltinModule('node:path').join(process.env.WEBNOVEL_HOME || process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:os').homedir(), 'tools', 'webnovel-writer-dsh'), 'service', 'mcp_server.py') ]"
     env:
       PYTHONUTF8: '1'
       PYTHONIOENCODING: 'utf-8'
-    cwd: !!js process.env.WEBNOVEL_HOME || 'C:/Users/17213/tools/webnovel-writer-dsh'
+    cwd: !!js process.env.WEBNOVEL_HOME || process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:os').homedir(), 'tools', 'webnovel-writer-dsh')
     # 写一章 3-5 分钟，规划一卷 30 秒-2 分钟；留足余量。
     toolCallTimeoutMs: 1800000
     # 引擎起不来时不要让整个预设挂掉：工具不出现、错误进日志，
