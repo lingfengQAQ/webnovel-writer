@@ -1,6 +1,6 @@
 {
   "name": "@linfengqaqtat/dsh-scriptor",
-  "version": "0.1.0-preview.4",
+  "version": "0.1.0-preview.5",
   "type": "module",
   "main": "./lib/index.js",
   "exports": {

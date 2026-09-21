@@ -29,6 +29,17 @@ fs.writeFileSync(path.join(root, 'npmrc'), '')
 const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(npm_|pnpm_)|TOKEN|API_KEY|SECRET|DSH_|AGENTS_HOME|NODE_PATH/i.test(key)))
 Object.assign(env, { DSH_HOME: home, DSH_AGENTS_HOME: path.join(root, 'agents'), DSH_TELEMETRY_DISABLED: '1', NPM_CONFIG_USERCONFIG: path.join(root, 'npmrc') })
 const run = (entry, rest, cwd = workspace, timeout = 240000) => execFileSync(process.execPath, [entry, ...rest], { cwd, env, encoding: 'utf8', windowsHide: true, timeout, maxBuffer: 24 * 1024 * 1024 })
+// Node matches permission resources after canonicalizing them. On a Windows volume with 8.3
+// short names (hosted runners keep that setting) the temp root is also spelled RUNNER~1, so
+// one granted spelling is not enough; grant the short spelling, the canonical one and a
+// wildcard over the temp tree. Other platforms keep the single exact grant.
+const permissionGrants = access => {
+  if (process.platform !== 'win32') return [`--allow-fs-${access}=${root}`]
+  const canonical = (() => { try { return fs.realpathSync.native(root) } catch { return root } })()
+  const spellings = [...new Set([root, canonical, `${root}${path.sep}`, path.join(os.tmpdir(), '*')])]
+  // Node takes one resource per flag; a path-list form is not accepted.
+  return spellings.map(value => `--allow-fs-${access}=${value}`)
+}
 const npmCandidates = [process.env.NPM_CLI_ENTRY, path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js'), path.resolve(path.dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js')].filter(Boolean)
 const npm = npmCandidates.find(file => fs.existsSync(file))
 assert.ok(npm, 'npm-cli.js was not found; set NPM_CLI_ENTRY to the installed npm CLI')
@@ -72,7 +83,7 @@ try {
   fs.copyFileSync(path.join(sourceRoot, 'packages/bundle/tests/fixtures/packaging-isolation.mjs'), script)
   const isolatedReport = path.join(root, 'source-isolation.json')
   const blocked = path.join(sourceRoot, 'packages/bundle/src/index.ts')
-  const output = execFileSync(process.execPath, ['--permission', `--allow-fs-read=${root}`, `--allow-fs-write=${root}`, `--allow-fs-read=${path.dirname(process.execPath)}`, script, profile, hostAnchor, blocked, isolatedReport], { cwd: workspace, env, encoding: 'utf8', windowsHide: true, timeout: 45000 })
+  const output = execFileSync(process.execPath, ['--permission', ...permissionGrants('read'), ...permissionGrants('write'), `--allow-fs-read=${path.dirname(process.execPath)}`, script, profile, hostAnchor, blocked, isolatedReport], { cwd: workspace, env, encoding: 'utf8', windowsHide: true, timeout: 45000 })
   log('source-isolation', output)
   assert.equal(JSON.parse(fs.readFileSync(isolatedReport, 'utf8')).ok, true)
   report.checks.sourceDeniedRealLoader = true
@@ -125,7 +136,7 @@ try {
       assert.equal((config.match(/id: webnovel-embeddings(?:\r?\n|$)/g) ?? []).length, 1)
       log(`${label}-prepare`, run(prepare, [fullProfile, hostAnchor]))
       const fullReport = path.join(root, `${label}-isolation.json`)
-      log(`${label}-loader`, execFileSync(process.execPath, ['--permission', `--allow-fs-read=${root}`, `--allow-fs-write=${root}`, `--allow-fs-read=${path.dirname(process.execPath)}`, script, fullProfile, hostAnchor, blocked, fullReport, '--embedding'], { cwd: workspace, env, encoding: 'utf8', windowsHide: true, timeout: 45000 }))
+      log(`${label}-loader`, execFileSync(process.execPath, ['--permission', ...permissionGrants('read'), ...permissionGrants('write'), `--allow-fs-read=${path.dirname(process.execPath)}`, script, fullProfile, hostAnchor, blocked, fullReport, '--embedding'], { cwd: workspace, env, encoding: 'utf8', windowsHide: true, timeout: 45000 }))
       assert.equal(JSON.parse(fs.readFileSync(fullReport, 'utf8')).embeddingLoaded, true)
     }
     log('add-meta', run(cli, ['plugin', '--profile', fullName, 'add', fullSpec, ...registryArgs]))

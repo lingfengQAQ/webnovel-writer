@@ -20,7 +20,7 @@ dsh --profile webnovel --host 127.0.0.1 --port 6104 --no-open
 
 ## 更新与卸载
 
-先停止指定 profile 的运行实例，再安装目标精确版本并重启（本版为 `@linfengqaqtat/dsh-scriptor@0.1.0-preview.4`）。
+先停止指定 profile 的运行实例，再安装目标精确版本并重启（本版为 `@linfengqaqtat/dsh-scriptor@0.1.0-preview.5`）。
 卸载后可执行上面的安装命令重装：
 
 ```powershell
@@ -28,10 +28,10 @@ dsh plugin --profile webnovel remove @linfengqaqtat/dsh-scriptor
 dsh --profile webnovel --dump-config
 ```
 
-卸载插件不会删除作品书仓。安装不需要源码、安装时构建或 npm 账号。Release 提供 `linfengqaqtat-dsh-scriptor-0.1.0-preview.4.tgz` 作为本地安装备选；放在无空格目录并核对 SHA256 后，将安装命令的包名替换为完整文件路径。首次下载宿主依赖仍可能需要网络。
+卸载插件不会删除作品书仓。安装不需要源码、安装时构建或 npm 账号。Release 提供 `linfengqaqtat-dsh-scriptor-0.1.0-preview.5.tgz` 作为本地安装备选；放在无空格目录并核对 SHA256 后，将安装命令的包名替换为完整文件路径。首次下载宿主依赖仍可能需要网络。
 
 ## 预览版与公开文档
 
-当前主包 0.1.0-preview.4。完整的安装、配置、首章和备份教程见 [公开使用文档](https://github.com/lingfengQAQ/webnovel-writer/tree/v8/docs/user)。
+当前主包 0.1.0-preview.5。完整的安装、配置、首章和备份教程见 [公开使用文档](https://github.com/lingfengQAQ/webnovel-writer/tree/v8/docs/user)。
 
 第三方组件的原始声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，许可证文本随包放在 licenses/。源码及校验和由对应的 GitHub Release 提供。

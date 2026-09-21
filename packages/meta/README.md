@@ -12,7 +12,7 @@ dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-full@preview
 dsh --profile scriptor --host 127.0.0.1 --port 6104 --no-open
 ```
 
-本版为 `0.1.0-preview.4`，固定版本可使用 `@linfengqaqtat/dsh-scriptor-full@0.1.0-preview.4`。
+本版为 `0.1.0-preview.5`，固定版本可使用 `@linfengqaqtat/dsh-scriptor-full@0.1.0-preview.5`。
 完整版与主包单独安装二选一。已经分别安装两个插件时，先停机并移除旧安装入口，再安装完整版，避免组合配置重复加载。
 
 嵌入 API 默认关闭，需要在宿主设置中配置模型、维度和凭据。主聊天模型也由用户配置，包不包含模型额度。

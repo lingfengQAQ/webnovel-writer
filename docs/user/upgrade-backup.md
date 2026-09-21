@@ -17,13 +17,13 @@
 4. 检查书房入口、技能是否各一份，核对实际书仓状态；先用合成副本试写。
 
 ```powershell
-dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor@0.1.0-preview.4
+dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor@0.1.0-preview.5
 dsh --profile scriptor --dump-config
 ```
 
 上面展示命令形状，更新时换成实际目标版本。不要用同版本不同内容的包覆盖，也不要同时保留开发 file patch。
 
-完整版安装对应使用 `@linfengqaqtat/dsh-scriptor-full@0.1.0-preview.4`。不要在保留完整版时另外安装主包；切换安装方式前先移除原组合包。
+完整版安装对应使用 `@linfengqaqtat/dsh-scriptor-full@0.1.0-preview.5`。不要在保留完整版时另外安装主包；切换安装方式前先移除原组合包。
 
 ## 回退
 

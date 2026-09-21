@@ -6,6 +6,15 @@
 
 尚无未发布变更。
 
+## [0.1.0-preview.5] — 2026-09-21
+
+preview.4 的发行构建在 Windows runner 上失败，本版只修发行链路，产品代码与 preview.4 相同。
+
+### Fixed
+
+- **发行验收的 Windows 权限**：隔离加载验收给 Node 的读取授权此前只有一拼写，托管 runner 的临时目录同时存在 8.3 短名（`RUNNER~1`）与规范长名，规范化后不匹配即被拒（`ERR_ACCESS_DENIED`）。现按读写分别授予短名、规范名、尾分隔符与临时目录通配四种拼写，普通权限与托管 runner 都能通过。
+- **完整版卸载验收**：`pnpm remove` 没有 `--registry` 选项，移除 meta 包会重新解析依赖树，于是去 registry 找尚未发布的主包而失败。改为在隔离 profile 的 npmrc 中指向临时本地 registry。
+
 ## [0.1.0-preview.4] — 2026-09-21
 
 准备首次 npm 发行的预览版，恢复完整版 meta 包发行并补齐安装验收。
