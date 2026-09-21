@@ -25,6 +25,6 @@
   "private": true,
   "dependencies": {
     "@linfengqaqtat/dsh-scriptor": "workspace:*",
-    "@linfengqaqtat/dsh-scriptor-embedding": "workspace:*"
+    "webnovel-embedding-provider": "workspace:*"
   }
 }

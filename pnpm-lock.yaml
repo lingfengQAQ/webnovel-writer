@@ -435,7 +435,7 @@ importers:
       '@linfengqaqtat/dsh-scriptor':
         specifier: workspace:*
         version: link:../bundle
-      '@linfengqaqtat/dsh-scriptor-embedding':
+      webnovel-embedding-provider:
         specifier: workspace:*
         version: link:../embedding-provider
 
