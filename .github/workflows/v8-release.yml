@@ -42,8 +42,12 @@ jobs:
       - run: pnpm release:build -- --out .tmp/release
       - name: Install the exact release assets into a clean host
         run: |
-          $mainPackage = Get-ChildItem .tmp/release/linfengqaqtat-dsh-scriptor-*.tgz | Select-Object -ExpandProperty FullName
-          $embeddingPackage = Get-ChildItem .tmp/release/webnovel-embedding-provider-*.tgz | Select-Object -ExpandProperty FullName
+          # 以构建清单为准定位主包与可选包；glob 会把 *-full-*.tgz 误并入主包位置。
+          $manifest = Get-Content .tmp/release/release-manifest.json -Raw | ConvertFrom-Json
+          $mainPackage = Join-Path .tmp/release $manifest.filename
+          $embeddingTarball = ($manifest.optionalPackages | Where-Object { $_.name -eq 'webnovel-embedding-provider' }).tarball
+          if (-not $embeddingTarball) { throw 'Embedding package missing from release manifest' }
+          $embeddingPackage = Join-Path .tmp/release $embeddingTarball
           pnpm release:smoke -- $mainPackage $embeddingPackage
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Create a draft; never replace an existing release

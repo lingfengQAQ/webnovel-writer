@@ -27,10 +27,8 @@ const embedding = JSON.parse(fs.readFileSync(path.join(root, 'packages/embedding
 pnpm(['pack', '--pack-destination', output], path.join(root, 'packages/embedding-provider'))
 const embeddingTarball = `webnovel-embedding-provider-${embedding.version}.tgz`
 checkEmbeddingPackage(path.join(output, embeddingTarball), embedding.version)
-const meta = JSON.parse(fs.readFileSync(path.join(root, 'packages/meta/package.json'), 'utf8'))
-pnpm(['pack', '--pack-destination', output], path.join(root, 'packages/meta'))
-const metaTarball = `linfengqaqtat-dsh-scriptor-full-${meta.version}.tgz`
-assert.ok(fs.existsSync(path.join(output, metaTarball)), 'Meta package tarball must exist')
+// Meta 包 @linfengqaqtat/dsh-scriptor-full 暂不随发行提供：其 workspace 依赖打包后被改写为确切版本号，
+// 而主包与嵌入包均未发布到 npm，用户 pnpm add 该 tarball 必然 404。待包发布到 registry 后再恢复打包。
 const source = `dsh-scriptor-${info.version}-source.tar.gz`
 git(['archive', '--format=tar.gz', '--prefix=dsh-scriptor-source/', `--output=${path.join(output, source)}`, 'HEAD'])
 const dependencies = await collectDependencySources(root, output)
@@ -39,8 +37,7 @@ const assets = fs.readdirSync(output).filter(file => fs.statSync(path.join(outpu
 const manifest = { schemaVersion: 1, ...info, publicCommit: git(['rev-parse', 'HEAD']), node: process.version, pnpm: '9.0.0',
   dsh: JSON.parse(fs.readFileSync(path.join(root, 'dsh-baseline.json'), 'utf8')).registry.version,
   optionalPackages: [
-    { name: embedding.name, version: embedding.version, tarball: embeddingTarball },
-    { name: meta.name, version: meta.version, tarball: metaTarball }
+    { name: embedding.name, version: embedding.version, tarball: embeddingTarball }
   ], dependencyCount: dependencies.length,
   assets: assets.map(file => ({ file, sha256: hash(file) })) }
 fs.writeFileSync(path.join(output, 'release-manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
