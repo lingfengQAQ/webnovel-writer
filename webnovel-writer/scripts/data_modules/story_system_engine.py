@@ -189,7 +189,21 @@ class StorySystemEngine:
         if matched is None:
             raise self._routing_error(query=query, genre=genre, route_rows=route_rows)
 
-        primary_genre = str(matched.get("题材/流派") or genre or "").strip()
+        # When the caller states the genre explicitly but no row matches by
+        # keyword, the fallback row is borrowed only for its recommended tables.
+        # Its own 「题材/流派」/「核心调性」/「节奏策略」/「默认查询词」/「毒点」 describe
+        # that row's sub-genre, which may belong to a different genre entirely
+        # (e.g. GR-001 玄幻退婚流 also lists 仙侠 in 适用题材). Keep what the caller
+        # asked for, mirroring how canonical_genre prefers the explicit genre
+        # below; genre-level tone/pacing still reach chapter contracts via the
+        # reasoning layer (裁决规则).
+        # (inferred_genre_fallback intentionally keeps the row's sub-genre: there
+        # the genre was only guessed from free text, so the row is more specific.)
+        borrow_row_details = route_source != "explicit_genre_fallback"
+        if borrow_row_details:
+            primary_genre = str(matched.get("题材/流派") or genre or "").strip()
+        else:
+            primary_genre = str(genre or "").strip()
         explicit_canonical = self._primary_resolved_genre(genre)
         canonical_genre = str(matched.get("canonical_genre") or "").strip()
         row_canonicals = [
@@ -220,13 +234,13 @@ class StorySystemEngine:
                 "recommended_base_tables": self._split_multi_value(matched.get("推荐基础检索表")),
                 "recommended_dynamic_tables": self._split_multi_value(matched.get("推荐动态检索表")),
             },
-            "core_tone": str(matched.get("核心调性") or "").strip(),
-            "pacing_strategy": str(matched.get("节奏策略") or "").strip(),
-            "route_anti_patterns": self._extract_route_anti_patterns(matched),
+            "core_tone": str(matched.get("核心调性") or "").strip() if borrow_row_details else "",
+            "pacing_strategy": str(matched.get("节奏策略") or "").strip() if borrow_row_details else "",
+            "route_anti_patterns": self._extract_route_anti_patterns(matched) if borrow_row_details else [],
             "recommended_base_tables": self._split_multi_value(matched.get("推荐基础检索表")),
             "recommended_dynamic_tables": self._split_multi_value(matched.get("推荐动态检索表")),
             "genre_filter": genre_filter,
-            "default_query": str(matched.get("默认查询词") or "").strip(),
+            "default_query": str(matched.get("默认查询词") or "").strip() if borrow_row_details else "",
             "source_trace": [{"table": "题材与调性推理", "id": matched.get("编号", ""), "reason": route_source}],
         }
 
