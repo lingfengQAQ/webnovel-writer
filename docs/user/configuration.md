@@ -17,7 +17,7 @@ API key 由宿主凭据机制保管。不要把 key 写进作品、可提交的 
 只有 Release 中明确提供并列为已验收资产时，才安装相应 `.tgz`：
 
 ```powershell
-dsh plugin --profile scriptor add C:/scriptor-dist/webnovel-embedding-provider-0.0.8.tgz
+dsh plugin --profile scriptor add C:/scriptor-dist/linfengqaqtat-dsh-scriptor-embedding-0.0.8.tgz
 ```
 
 首次安装默认停用。在“设置 → 模型 → 嵌入模型 → 混合检索 · 嵌入 API”中配置协议、API 根地址、模型、维度及凭据，并显式启用。支持 OpenAI 兼容和 Gemini 原生协议；维度必须与服务真实输出一致。

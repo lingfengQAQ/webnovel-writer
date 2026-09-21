@@ -430,6 +430,15 @@ importers:
         specifier: ^5.5.0
         version: 5.9.3
 
+  packages/meta:
+    dependencies:
+      '@linfengqaqtat/dsh-scriptor':
+        specifier: workspace:*
+        version: link:../bundle
+      '@linfengqaqtat/dsh-scriptor-embedding':
+        specifier: workspace:*
+        version: link:../embedding-provider
+
   packages/polish:
     dependencies:
       '@webnovel/core':

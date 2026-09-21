@@ -15,7 +15,8 @@ dsh --profile webnovel --host 127.0.0.1 --port 6104 --no-open
 
 通过该进程输出的带 token 链接打开页面。随包技能自动发现，无需设置技能目录。
 不要同时启用旧开发 file patch 与正式安装入口。模型与凭据在宿主设置中配置。
-嵌入、场景与重排提供方是可选的独立包，不包含在主包内。
+嵌入提供方 `@linfengqaqtat/dsh-scriptor-embedding` 是可选的独立包，提供语义检索增强。
+场景与重排提供方暂未实现。需要完整功能可安装 `@linfengqaqtat/dsh-scriptor-full`。
 
 ## 更新与卸载
 

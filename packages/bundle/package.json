@@ -118,5 +118,23 @@
     "@deepseek-ai/dsh-llm": "0.1.5-rc.2",
     "@deepseek-ai/dsh-skill-filesystem": "0.1.5-rc.2",
     "react": "18.3.1"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "webnovel",
+    "writing",
+    "chinese-novel",
+    "creative-writing",
+    "ai-assistant"
+  ],
+  "homepage": "https://github.com/lingfengQAQ/webnovel-writer/tree/v8#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lingfengQAQ/webnovel-writer.git",
+    "directory": "packages/bundle"
+  },
+  "bugs": {
+    "url": "https://github.com/lingfengQAQ/webnovel-writer/issues"
   }
 }

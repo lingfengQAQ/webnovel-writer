@@ -35,6 +35,19 @@ DSH Scriptor is a local-first fiction writing workspace for DeepSeek Harness. Th
 
 不要把源码压缩包当作可安装插件；普通用户下载 Release 中的 `linfengqaqtat-dsh-scriptor-0.1.0-preview.3.tgz`。安装包不需要在用户电脑上编译，也不要求 npm 账号。
 
+
+### 完整版安装
+
+如需语义检索增强，可安装完整版（包含可选嵌入提供方）：
+
+```powershell
+pnpm add D:/scriptor-dist/linfengqaqtat-dsh-scriptor-full-0.1.0-preview.3.tgz
+```
+
+或分别安装：
+- 主插件：`linfengqaqtat-dsh-scriptor-0.1.0-preview.3.tgz`
+- 可选嵌入：`linfengqaqtat-dsh-scriptor-embedding-0.0.8.tgz`
+
 ## 文档
 
 - [日常写作与暂停恢复](docs/user/workflows.md)

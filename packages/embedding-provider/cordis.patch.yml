@@ -1,3 +1,3 @@
 - insert:
-    - id: webnovel-embeddings
-      name: '@webnovel/embedding-provider'
+    - id: scriptor-embedding
+      name: '@linfengqaqtat/dsh-scriptor-embedding'

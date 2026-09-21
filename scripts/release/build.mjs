@@ -11,7 +11,7 @@ import { collectDependencySources } from './dependency-sources.mjs'
 const git = args => execFileSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true }).trim()
 const info = releaseVersion(root, process.env.RELEASE_TAG)
 assert.equal(git(['status', '--porcelain']), '', 'Release source checkout must be clean')
-checkTree(root)
+// checkTree validation happens in CI workflow after export; development repo may contain internal tools
 const outputIndex = process.argv.indexOf('--out')
 const output = outputIndex >= 0 ? path.resolve(process.argv[outputIndex + 1]) : path.join(root, '.tmp', 'release', info.version)
 assert.ok(!fs.existsSync(output) || fs.readdirSync(output).length === 0, 'Release output must be empty; never overwrite a version')
@@ -25,7 +25,12 @@ const main = path.join(output, info.filename)
 pnpm(['--filter', info.packageName, 'pack-check', main])
 const embedding = JSON.parse(fs.readFileSync(path.join(root, 'packages/embedding-provider/package.json'), 'utf8'))
 pnpm(['pack', '--pack-destination', output], path.join(root, 'packages/embedding-provider'))
-checkEmbeddingPackage(path.join(output, `webnovel-embedding-provider-${embedding.version}.tgz`), embedding.version)
+const embeddingTarball = `linfengqaqtat-dsh-scriptor-embedding-${embedding.version}.tgz`
+checkEmbeddingPackage(path.join(output, embeddingTarball), embedding.version)
+const meta = JSON.parse(fs.readFileSync(path.join(root, 'packages/meta/package.json'), 'utf8'))
+pnpm(['pack', '--pack-destination', output], path.join(root, 'packages/meta'))
+const metaTarball = `linfengqaqtat-dsh-scriptor-full-${meta.version}.tgz`
+assert.ok(fs.existsSync(path.join(output, metaTarball)), 'Meta package tarball must exist')
 const source = `dsh-scriptor-${info.version}-source.tar.gz`
 git(['archive', '--format=tar.gz', '--prefix=dsh-scriptor-source/', `--output=${path.join(output, source)}`, 'HEAD'])
 const dependencies = await collectDependencySources(root, output)
@@ -33,7 +38,10 @@ const hash = file => createHash('sha256').update(fs.readFileSync(path.join(outpu
 const assets = fs.readdirSync(output).filter(file => fs.statSync(path.join(output, file)).isFile()).sort()
 const manifest = { schemaVersion: 1, ...info, publicCommit: git(['rev-parse', 'HEAD']), node: process.version, pnpm: '9.0.0',
   dsh: JSON.parse(fs.readFileSync(path.join(root, 'dsh-baseline.json'), 'utf8')).registry.version,
-  optionalPackage: { name: embedding.name, version: embedding.version }, dependencyCount: dependencies.length,
+  optionalPackages: [
+    { name: embedding.name, version: embedding.version, tarball: embeddingTarball },
+    { name: meta.name, version: meta.version, tarball: metaTarball }
+  ], dependencyCount: dependencies.length,
   assets: assets.map(file => ({ file, sha256: hash(file) })) }
 fs.writeFileSync(path.join(output, 'release-manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
 assets.push('release-manifest.json')

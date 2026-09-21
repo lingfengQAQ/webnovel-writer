@@ -8,9 +8,10 @@ import { execFileSync } from 'node:child_process'
 import { root as sourceRoot } from './version.mjs'
 
 const args = process.argv.slice(2).filter(value => value !== '--')
-assert.ok(args[0], 'Usage: pnpm release:smoke <main.tgz> [embedding.tgz] [--root <new-directory>]')
+assert.ok(args[0], 'Usage: pnpm release:smoke <main.tgz> [embedding.tgz] [meta.tgz] [--root <new-directory>]')
 const main = path.resolve(args[0])
-const optional = args[1] && args[1] !== '--root' ? path.resolve(args[1]) : undefined
+const embedding = args[1] && args[1] !== '--root' ? path.resolve(args[1]) : undefined
+const meta = args[2] && args[2] !== '--root' ? path.resolve(args[2]) : undefined
 const rootIndex = args.indexOf('--root')
 const root = rootIndex >= 0 ? path.resolve(args[rootIndex + 1]) : fs.mkdtempSync(path.join(os.tmpdir(), 'scriptor-install-'))
 assert.ok(root !== sourceRoot && !root.startsWith(sourceRoot + path.sep), 'Use an isolated directory outside the source checkout')
@@ -66,19 +67,28 @@ try {
   assert.equal(JSON.parse(fs.readFileSync(isolatedReport, 'utf8')).ok, true)
   report.checks.sourceDeniedRealLoader = true
   report.checks.skills = 10
-  if (optional) {
-    const copiedOptional = path.join(root, 'embedding.tgz')
-    fs.copyFileSync(optional, copiedOptional)
-    log('add-optional', run(cli, ['plugin', '--profile', 'scriptor-test', 'add', copiedOptional]))
-    assert.ok(run(cli, ['--profile', 'scriptor-test', '--dump-config']).includes('@webnovel/embedding-provider'))
-    report.checks.optionalInstalled = true
+  if (embedding) {
+    const copiedEmbedding = path.join(root, 'embedding.tgz')
+    fs.copyFileSync(embedding, copiedEmbedding)
+    log('add-embedding', run(cli, ['plugin', '--profile', 'scriptor-test', 'add', copiedEmbedding]))
+    assert.ok(run(cli, ['--profile', 'scriptor-test', '--dump-config']).includes('@linfengqaqtat/dsh-scriptor-embedding'))
+    report.checks.embeddingInstalled = true
+  }
+  if (meta) {
+    const copiedMeta = path.join(root, 'meta.tgz')
+    fs.copyFileSync(meta, copiedMeta)
+    log('add-meta', run(cli, ['plugin', '--profile', 'scriptor-test', 'add', copiedMeta]))
+    const config = run(cli, ['--profile', 'scriptor-test', '--dump-config'])
+    assert.ok(config.includes('@linfengqaqtat/dsh-scriptor'))
+    assert.ok(config.includes('@linfengqaqtat/dsh-scriptor-embedding'))
+    report.checks.metaInstalled = true
   }
   fs.writeFileSync(path.join(workspace, 'author-sentinel.txt'), 'synthetic author asset')
   log('remove-main', run(cli, ['plugin', '--profile', 'scriptor-test', 'remove', '@linfengqaqtat/dsh-scriptor']))
-  assert.ok(!run(cli, ['--profile', 'scriptor-test', '--dump-config']).includes('@linfengqaqtat/dsh-scriptor'))
+  assert.ok(!/@linfengqaqtat\/dsh-scriptor(?!-)/.test(run(cli, ['--profile', 'scriptor-test', '--dump-config'])))
   assert.equal(fs.readFileSync(path.join(workspace, 'author-sentinel.txt'), 'utf8'), 'synthetic author asset')
   log('reinstall-main', run(cli, ['plugin', '--profile', 'scriptor-test', 'add', copiedMain]))
-  assert.ok(run(cli, ['--profile', 'scriptor-test', '--dump-config']).includes('@linfengqaqtat/dsh-scriptor'))
+  assert.ok(/@linfengqaqtat\/dsh-scriptor(?!-)/.test(run(cli, ['--profile', 'scriptor-test', '--dump-config'])))
   assert.equal(fs.readFileSync(path.join(workspace, 'author-sentinel.txt'), 'utf8'), 'synthetic author asset')
   report.checks.uninstallReinstall = true
   report.ok = true

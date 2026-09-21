@@ -1,0 +1,30 @@
+{
+  "name": "@linfengqaqtat/dsh-scriptor-full",
+  "version": "0.1.0-preview.3",
+  "description": "网文写作工作台完整版（含可选嵌入提供方）",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "webnovel",
+    "writing",
+    "chinese-novel",
+    "ai-writing",
+    "full-package"
+  ],
+  "homepage": "https://github.com/lingfengQAQ/webnovel-writer/tree/v8#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lingfengQAQ/webnovel-writer.git",
+    "directory": "packages/meta"
+  },
+  "bugs": {
+    "url": "https://github.com/lingfengQAQ/webnovel-writer/issues"
+  },
+  "license": "GPL-3.0-only",
+  "author": "lingfengQAQ",
+  "private": true,
+  "dependencies": {
+    "@linfengqaqtat/dsh-scriptor": "workspace:*",
+    "@linfengqaqtat/dsh-scriptor-embedding": "workspace:*"
+  }
+}

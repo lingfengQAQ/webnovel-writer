@@ -1,5 +1,5 @@
 {
-  "name": "@webnovel/embedding-provider",
+  "name": "@linfengqaqtat/dsh-scriptor-embedding",
   "version": "0.0.8",
   "private": true,
   "type": "module",
@@ -106,5 +106,23 @@
     "THIRD_PARTY_NOTICES.md",
     "licenses/*.txt"
   ],
-  "license": "GPL-3.0-only"
+  "license": "GPL-3.0-only",
+  "description": "网文写作工作台可选嵌入提供方",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "webnovel",
+    "embedding",
+    "vector-search",
+    "semantic-retrieval"
+  ],
+  "homepage": "https://github.com/lingfengQAQ/webnovel-writer/tree/v8#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lingfengQAQ/webnovel-writer.git",
+    "directory": "packages/embedding-provider"
+  },
+  "bugs": {
+    "url": "https://github.com/lingfengQAQ/webnovel-writer/issues"
+  }
 }

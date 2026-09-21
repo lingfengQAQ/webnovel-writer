@@ -10,6 +10,20 @@
 
 首个面向公开安装的开发预览版。`scriptor-v0.1.0-preview.1` 与 `scriptor-v0.1.0-preview.2` 标签存在但没有对应 Release：前者的发行构建在 GitHub Windows runner 上因 `core.autocrlf` 把生成的许可证文本签出为 CRLF 而被干净树检查拒绝；后者在同一 runner 上安装隔离 DSH 宿主超过 4 分钟被验收脚本自身的超时中止。本版仅修正发行流程，产品代码与 preview.1 相同。
 
+### Changed
+
+- **包命名统一**：将 `@webnovel/embedding-provider` 重命名为 `@linfengqaqtat/dsh-scriptor-embedding`，统一到 `@linfengqaqtat` scope 下
+- **新增完整版包**：`@linfengqaqtat/dsh-scriptor-full` 作为 meta 包，一次安装包含主插件和可选嵌入提供方
+
+### Migration
+
+如已安装旧的 `@webnovel/embedding-provider`：
+1. 卸载：`pnpm remove @webnovel/embedding-provider`
+2. 安装新版：`pnpm add path/to/linfengqaqtat-dsh-scriptor-embedding-0.0.8.tgz`
+
+或直接安装完整版：`pnpm add path/to/linfengqaqtat-dsh-scriptor-full-0.1.0-preview.3.tgz`
+
+
 ### Fixed
 
 - `.gitattributes` 覆盖 `.txt`、`.css`、`LICENSE` 与点文件，生成的第三方许可证文本在任何 Git 行尾设置下与仓库一致。
