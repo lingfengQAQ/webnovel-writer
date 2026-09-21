@@ -7,7 +7,7 @@ body:
     id: version
     attributes:
       label: 工作台精确版本
-      placeholder: 0.1.0-preview.1
+      placeholder: 0.1.0-preview.2
     validations:
       required: true
   - type: textarea
