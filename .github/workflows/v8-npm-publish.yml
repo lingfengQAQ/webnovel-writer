@@ -1,0 +1,67 @@
+name: v8 npm publish
+on:
+  release:
+    types: [published]
+permissions:
+  contents: read
+concurrency:
+  group: v8-npm-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'lingfengQAQ/webnovel-writer' && startsWith(github.event.release.tag_name, 'scriptor-v') && github.event.release.prerelease
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Tag belongs to accepted public v8
+        run: git merge-base --is-ancestor HEAD origin/v8
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24.15.0'
+          registry-url: https://registry.npmjs.org
+      - name: Download the original release packages and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$RELEASE_TAG" --dir .tmp/npm-release --pattern '*.tgz' --pattern 'SHA256SUMS' --pattern 'release-manifest.json'
+      - name: Verify all packages and publish in dependency order
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: node scripts/release/publish-npm.mjs --assets .tmp/npm-release --publish
+  installation:
+    needs: publish
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24.15.0'
+      - name: Download the exact release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download $env:RELEASE_TAG --dir .tmp/npm-release --pattern '*.tgz' --pattern 'SHA256SUMS' --pattern 'release-manifest.json'
+      - name: Verify registry bytes and install main and full in clean profiles
+        run: |
+          node scripts/release/publish-npm.mjs --assets .tmp/npm-release --verify-only
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $manifest = Get-Content .tmp/npm-release/release-manifest.json -Raw | ConvertFrom-Json
+          $main = Join-Path .tmp/npm-release $manifest.filename
+          $embedding = Join-Path .tmp/npm-release ($manifest.optionalPackages | Where-Object name -eq 'webnovel-embedding-provider').tarball
+          $meta = Join-Path .tmp/npm-release ($manifest.optionalPackages | Where-Object name -eq '@linfengqaqtat/dsh-scriptor-full').tarball
+          node scripts/release/install-smoke.mjs $main $embedding $meta --registry
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

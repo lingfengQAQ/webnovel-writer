@@ -48,8 +48,13 @@ jobs:
           $embeddingTarball = ($manifest.optionalPackages | Where-Object { $_.name -eq 'webnovel-embedding-provider' }).tarball
           if (-not $embeddingTarball) { throw 'Embedding package missing from release manifest' }
           $embeddingPackage = Join-Path .tmp/release $embeddingTarball
-          pnpm release:smoke -- $mainPackage $embeddingPackage
+          $metaTarball = ($manifest.optionalPackages | Where-Object { $_.name -eq '@linfengqaqtat/dsh-scriptor-full' }).tarball
+          if (-not $metaTarball) { throw 'Full package missing from release manifest' }
+          $metaPackage = Join-Path .tmp/release $metaTarball
+          pnpm release:smoke -- $mainPackage $embeddingPackage $metaPackage
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate npm publish inputs without publishing
+        run: node scripts/release/publish-npm.mjs --assets .tmp/release
       - name: Create a draft; never replace an existing release
         env:
           GH_TOKEN: ${{ github.token }}

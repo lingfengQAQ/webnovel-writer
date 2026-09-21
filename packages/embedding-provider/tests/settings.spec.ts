@@ -6,13 +6,14 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { removeSync } from '../../core/src/repo/remove'
+import { linkFixtureDependencies } from '../../bundle/tests/fixtures/fixture-dependencies.mjs'
 
 describe('真实 DSH 设置与提供方生命周期', () => {
   it('可保存维度、隔离凭据、热更新配置并保持卸载重装等价', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'webnovel-embedding-settings-'))
     const packageRoot = path.resolve(__dirname, '..')
     try {
-      fs.symlinkSync(path.join(packageRoot, 'node_modules'), path.join(root, 'node_modules'), 'dir')
+      linkFixtureDependencies(packageRoot, root)
       const outfile = path.join(root, 'embedding.mjs')
       await build({ entryPoints: [path.join(packageRoot, 'src/index.ts')], outfile, platform: 'node', format: 'esm', bundle: true, target: 'node22', external: ['@deepseek-ai/cordis', '@deepseek-ai/dsh-llm', 'node:*'] })
       const result = await promisify(execFile)(process.execPath, [path.join(packageRoot, 'tests/fixtures/settings-host.mjs'), root, outfile], {
@@ -23,8 +24,6 @@ describe('真实 DSH 设置与提供方生命周期', () => {
       expect(result.stdout).toContain('"reloadPreservesSettings":true')
       expect(result.stderr).not.toContain('UNHANDLED')
     } finally {
-      const junction = path.join(root, 'node_modules')
-      if (fs.existsSync(junction)) fs.unlinkSync(junction)
       removeSync(root)
     }
   }, 25_000)

@@ -10,7 +10,7 @@ import { isBuiltin } from 'node:module'
 import { build } from 'esbuild'
 import { parse } from 'yaml'
 import { skills as skillNames, thinScripts } from './artifact-contract.mjs'
-import { packageFiles } from '../../../scripts/release/tar.mjs'
+import { packageFiles, checkPublishableManifest } from '../../../scripts/release/tar.mjs'
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url))
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'scriptor-pack-'))
@@ -35,7 +35,7 @@ const entries = [...packedFiles.keys()].map(file => `package/${file}`)
 const read = relative => fs.readFileSync(path.join(extracted, relative), 'utf8')
 const manifest = JSON.parse(read('package.json'))
 assert.equal(manifest.name, '@linfengqaqtat/dsh-scriptor')
-assert.equal(manifest.private, true)
+checkPublishableManifest(manifest)
 assert.equal(manifest.license, 'GPL-3.0-only')
 assert.equal(manifest.dsh.bundle.patch, './cordis.patch.yml')
 assert.equal(manifest.exports['./client'], './lib/client.js')

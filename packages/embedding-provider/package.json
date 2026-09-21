@@ -1,7 +1,6 @@
 {
   "name": "webnovel-embedding-provider",
   "version": "0.0.8",
-  "private": true,
   "type": "module",
   "main": "./lib/index.js",
   "exports": {
@@ -125,5 +124,10 @@
   },
   "bugs": {
     "url": "https://github.com/lingfengQAQ/webnovel-writer/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "preview",
+    "registry": "https://registry.npmjs.org/"
   }
 }

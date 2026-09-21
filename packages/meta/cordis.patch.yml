@@ -1,0 +1,5 @@
+- insert:
+    - id: webnovel
+      name: '@linfengqaqtat/dsh-scriptor'
+    - id: webnovel-embeddings
+      name: webnovel-embedding-provider

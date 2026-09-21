@@ -37,7 +37,7 @@ pnpm release:build
 
 `release:build` 拒绝脏源码、非公开文件和非空输出目录；构建后核对声明，pack 一次，检查主包和可选包，生成对应源码、第三方源码材料、公开版本清单与 SHA256SUMS。输出默认在 `.tmp/release/<version>/`。
 
-对生成的同一主包和可选包执行 `pnpm release:smoke -- <main.tgz> <embedding.tgz>`。它新装固定 DSH、创建独立 Web profile，并在源目录不可读的权限环境运行真实 Loader，然后核对卸载/重装。需要安装 npm 随 Node 提供的 CLI；输出目录保留供故障调查，报告不能冒充真实模型创作验收。
+对生成的同一主包、可选包和完整版执行 `pnpm release:smoke -- <main.tgz> <embedding.tgz> <full.tgz>`。它新装固定 DSH，分别创建主包和完整版的独立 Web profile，在源目录不可读的权限环境运行真实 Loader，再核对卸载/重装。首次 npm 发布前，临时本地 registry 提供完整版两个确切依赖的同批 tarball，其他公开依赖转向 npmjs；发布后的 `--registry` 验收全程使用 npmjs。需要 npm 随 Node 提供的 CLI；输出目录保留供故障调查，报告不能冒充真实模型创作验收。
 
 人工再核对浏览器入口、配置与合成首章教程。模型服务的调用费用单独记录；不以程序回归替代模型质量判断。
 
@@ -48,6 +48,20 @@ pnpm release:build
 Issue/PR 模板在默认 master 生效。v8 的 CI 使用 push/pull_request；发行使用 tag push。只放在 v8 的 workflow_dispatch/schedule 不能作为默认分支上的常规操作入口。
 
 维护者核对 draft 的 tag、公共 SHA、版本、SHA256、附件和说明后发布。预览版设 prerelease=true、latest=false，README 下载链接指向明确版本；不抢占 v6 的默认 Latest。
+
+## npm 预览包发布
+
+三个公开包通过 `v8-npm-publish.yml` 发布；根 workspace 和 `@webnovel/*` 不发布。三个包的 `publishConfig` 固定为 `access: public`、`tag: preview` 和官方 registry。
+
+1. 首次配置：使用拥有 `@linfengqaqtat` scope 及 `webnovel-embedding-provider` 发布权限的 npm 账号创建 granular access token。选择所需包/scope 的读写发布权限，按 npm 当前要求允许自动化发布的 2FA bypass，并设置合适到期时间。未首发的包须确保 token 包含创建它们的权限。token 直接保存到 GitHub 仓库 Settings → Secrets and variables → Actions → `NPM_TOKEN`，不要提交或粘贴到 Issue/对话。
+2. Release 草稿生成时已对全部 tarball 执行 npm dry-run。核对附件、校验和和安装报告后，通过 GitHub 界面发布预览 Release；订阅的是 `release: published`，可以覆盖从草稿发布预览版的情况。
+3. Ubuntu 发布 job checkout 对应 tag、确认属于公共 v8，下载原 `.tgz`、manifest 与 SHA256SUMS。发布器校验 tag、公共 commit、包版本及哈希，先预检全部包，再按主包 → 嵌入包 → 完整版执行 `npm publish --access public --tag preview --provenance`。不重新打包。
+4. 工作流使用 `id-token: write` 生成 provenance，`NPM_TOKEN` 只注入发布步骤；安装 job 不接收 npm token。npm 发布成功后，Windows job 按 registry 上的精确版本安装，并验证主包/完整版真实 Loader。
+5. 核对 `npm view <包名> dist-tags --json`：`preview` 为本次版本，预览版不占 `latest`。安装示例必须使用 `@preview` 或精确版本。
+
+本地仅预检：在该公共 tag checkout 中设置 `RELEASE_TAG`，执行 `node scripts/release/publish-npm.mjs --assets <附件目录>`。默认不发布；`--verify-only` 仅验证已发 registry 版本及完整性。
+
+部分发布失败时重跑同一 Actions run，保留原附件。已存在版本只有 tarball 的 SHA512 与 registry integrity 完全一致才跳过；字节不同或 `latest` 错指预览版时停止，由维护者调查。不要以同一版本重新 pack 后重试。实际 registry 发布与安装 job 全绿后才能宣布 npm 安装可用。
 
 ## 失败与恢复
 

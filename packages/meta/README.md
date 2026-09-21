@@ -1,28 +1,33 @@
-# DSH Scriptor 完整版（暂缓发行）
+# DSH Scriptor 完整版
 
-`@linfengqaqtat/dsh-scriptor-full` 是便捷 meta 包，设计目标是让安装一条命令同时获得：
+`@linfengqaqtat/dsh-scriptor-full` 同时安装主插件和可选嵌入提供方，通过 DSH 组合配置各加载一份。
 
-- **主插件** `@linfengqaqtat/dsh-scriptor`：完整的写作工作台
-- **可选嵌入提供方** `webnovel-embedding-provider`：语义检索增强
+## 安装
 
-## 当前状态：未随预览版发行
-
-主插件与嵌入提供方目前只以 tarball 形式随 Release 分发，均未发布到 npm。
-meta 包打包后依赖会被改写为确切版本号，`pnpm add` 该 tarball 时 pnpm 会到
-registry 解析上述依赖并返回 404，因此本预览版不提供完整版 tarball。
-
-需要嵌入功能时，请分别安装两个 tarball：
+准备 Node.js 24.15.0、pnpm 11.27.1 和 DSH 0.1.5-rc.2，首次创建 Web profile：
 
 ```powershell
-# 先装主插件
-dsh plugin --profile scriptor add D:/path/to/linfengqaqtat-dsh-scriptor-0.1.0-preview.3.tgz
-
-# 需要语义检索再装
-dsh plugin --profile scriptor add D:/path/to/webnovel-embedding-provider-0.0.8.tgz
+dsh --profile scriptor --from-default-profile web --dump-config
+dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-full@preview
+dsh --profile scriptor --host 127.0.0.1 --port 6104 --no-open
 ```
 
-待包发布到 npm 后，本目录的 meta 包将恢复随发行提供。
+本版为 `0.1.0-preview.4`，固定版本可使用 `@linfengqaqtat/dsh-scriptor-full@0.1.0-preview.4`。
+完整版与主包单独安装二选一。已经分别安装两个插件时，先停机并移除旧安装入口，再安装完整版，避免组合配置重复加载。
 
-## 文档
+嵌入 API 默认关闭，需要在宿主设置中配置模型、维度和凭据。主聊天模型也由用户配置，包不包含模型额度。
 
-完整使用文档：https://github.com/lingfengQAQ/webnovel-writer/tree/v8/docs/user
+## 更新与卸载
+
+停止该 profile 的实例后，安装新精确版本并重启。卸载完整版：
+
+```powershell
+dsh plugin --profile scriptor remove @linfengqaqtat/dsh-scriptor-full
+dsh --profile scriptor --dump-config
+```
+
+卸载会撤掉两个插件的组合配置，不删除作品、设置和凭据。
+GitHub Release 同时提供完整版 tarball；其两个依赖仍需从 npm 下载，不能当作完全离线的一体包。
+
+完整安装与使用教程：[公开使用文档](https://github.com/lingfengQAQ/webnovel-writer/tree/v8/docs/user)。
+许可证：[GPL-3.0-only](LICENSE)。

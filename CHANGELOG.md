@@ -6,6 +6,21 @@
 
 尚无未发布变更。
 
+## [0.1.0-preview.4] — 2026-09-21
+
+准备首次 npm 发行的预览版，恢复完整版 meta 包发行并补齐安装验收。
+
+### Added
+
+- **npm 发行流程**：为 `@linfengqaqtat/dsh-scriptor@0.1.0-preview.4`、`webnovel-embedding-provider@0.0.8`、`@linfengqaqtat/dsh-scriptor-full@0.1.0-preview.4` 增加 Release 发布后的自动上传（dist-tag `preview`，不占用 `latest`）。校验全部包与 SHA256 后上传同一 tarball；重跑只跳过 registry 字节完全一致的版本。npm 工作流成功后可执行 `dsh plugin add @linfengqaqtat/dsh-scriptor@preview`，GitHub Release 保留同字节 tarball。
+- **完整版恢复**：增加 DSH 组合配置，`dsh plugin add @linfengqaqtat/dsh-scriptor-full@preview` 同时安装并启用主插件与可选嵌入提供方；增加独立 profile 的加载与卸载重装验收。
+
+### Changed
+
+- **构建工具升级**：源码构建与宿主插件管理统一为 pnpm 11.27.1，消除 pnpm 9.x 25 个未修复安全公告（含锁文件完整性绕过）的构建环境暴露；`allowBuilds` 仅放行 esbuild/koffi。
+- **Windows 测试**：按真实路径连接各个依赖，普通权限可运行宿主集成测试，不再要求创建目录 symlink。
+- **嵌入设置客户端**：模块注册名从实际包名读取，修复改名后仍注册到旧内部名称的问题。
+
 ## [0.1.0-preview.3] — 2026-09-21
 
 首个面向公开安装的开发预览版。`scriptor-v0.1.0-preview.1` 与 `scriptor-v0.1.0-preview.2` 标签存在但没有对应 Release：前者的发行构建在 GitHub Windows runner 上因 `core.autocrlf` 把生成的许可证文本签出为 CRLF 而被干净树检查拒绝；后者在同一 runner 上安装隔离 DSH 宿主超过 4 分钟被验收脚本自身的超时中止。本版仅修正发行流程，产品代码与 preview.1 相同。

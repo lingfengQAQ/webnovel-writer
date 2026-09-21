@@ -1,55 +1,10 @@
-# 包命名变更说明
+# 完整版 0.1.0-preview.4
 
-## v0.1.0-preview.3 重要变更
+- 主插件：`@linfengqaqtat/dsh-scriptor@0.1.0-preview.4`。
+- 嵌入提供方：`webnovel-embedding-provider@0.0.8`。
+- `dsh.bundle` 组合配置同时启用两个插件；嵌入模型默认关闭。
+- 从 npm 安装：`dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-full@preview`。
+- 在全新 Web profile 安装，或先停止并移除分别安装的旧入口。不要叠加主包和完整版。
+- GitHub Release 保留同字节 tarball；依赖仍由 registry 下载。
 
-为了更清晰的包管理，公开分发包的命名已统一：
-
-### 旧命名（已废弃）
-- `@linfengqaqtat/dsh-scriptor` - 主插件
-- `@webnovel/embedding-provider` - 可选嵌入提供方
-
-### 新命名
-- `@linfengqaqtat/dsh-scriptor` - 主插件（不变）
-- `webnovel-embedding-provider` - 可选嵌入提供方（改名，脱离内部 `@webnovel/*` scope）
-
-### 安装方式
-
-**基础安装**（推荐大多数用户）：
-```bash
-dsh plugin --profile scriptor add D:/path/to/linfengqaqtat-dsh-scriptor-0.1.0-preview.3.tgz
-```
-
-**按需安装嵌入提供方**：
-```bash
-# 先装主插件
-dsh plugin --profile scriptor add D:/path/to/linfengqaqtat-dsh-scriptor-0.1.0-preview.3.tgz
-
-# 需要语义检索再装
-dsh plugin --profile scriptor add D:/path/to/webnovel-embedding-provider-0.0.8.tgz
-```
-
-### 完整版 meta 包（暂缓）
-
-`@linfengqaqtat/dsh-scriptor-full` 规划为一条命令装齐全部功能的 meta 包。
-由于主包与嵌入包均未发布到 npm，meta 包的依赖在安装时会被 pnpm 解析到
-registry 并返回 404，本预览版不提供该 tarball；待包发布到 npm 后恢复。
-
-### 迁移指南
-
-如果你已经安装了旧的 `@webnovel/embedding-provider`：
-
-1. 卸载旧包：
-   ```bash
-   pnpm remove @webnovel/embedding-provider
-   ```
-
-2. 安装新包（可选）：
-   ```bash
-   dsh plugin --profile scriptor add D:/path/to/webnovel-embedding-provider-0.0.8.tgz
-   ```
-
-### 为什么改名
-
-1. **脱离内部 scope**：公开分发包不占用内部 `@webnovel/*` 命名空间
-2. **清晰的命名**：`webnovel-embedding-provider` 直接表明它是写作工作台的嵌入提供方
-3. **安装路径统一**：安装文档与 smoke 验收都以 `dsh plugin add <tarball>` 为准
+旧内部名称 `@webnovel/embedding-provider` 不用于公开安装。升级前停止实例并备份，使用 DSH 的 `plugin remove` 移除旧安装入口后按 [README](README.md) 安装。

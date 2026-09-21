@@ -7,6 +7,7 @@ import * as os from 'node:os'
 import { promisify } from 'node:util'
 import { removeSync } from '../../core/src/repo/remove'
 import { loadSourceHost } from '../scripts/dsh-source.mjs'
+import { linkFixtureDependencies } from './fixtures/fixture-dependencies.mjs'
 
 const run = promisify(execFile)
 const packageRoot = path.resolve(__dirname, '..')
@@ -63,7 +64,7 @@ beforeAll(async () => {
   fs.mkdirSync(workspace)
   const source = process.env['WEBNOVEL_DSH_SOURCE']
   if (source === undefined) {
-    fs.symlinkSync(path.join(packageRoot, 'node_modules'), path.join(root, 'node_modules'), 'dir')
+    linkFixtureDependencies(packageRoot, root)
   } else {
     const host = loadSourceHost(source)
     fs.mkdirSync(path.join(root, 'node_modules', '@deepseek-ai'), { recursive: true })
@@ -106,9 +107,7 @@ beforeAll(async () => {
 
 afterAll(() => {
   if (root === undefined) return
-  // 先去掉本测试创建的 junction，递归清理只触及独占临时目录。
-  const junction = path.join(root, 'node_modules')
-  if (fs.existsSync(junction) && fs.lstatSync(junction).isSymbolicLink()) fs.unlinkSync(junction)
+  // removeSync uses lstat and unlinks package junctions without following them.
   removeSync(root)
 })
 

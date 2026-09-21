@@ -13,15 +13,17 @@
 
 1. 阅读目标版本的 Compatibility、已知问题与迁移说明。
 2. 完成备份，停止指定 profile 的运行实例。
-3. 下载并校验新 `.tgz`，向同一个 profile 安装该精确版本，随后重启。
+3. 向同一个 profile 安装 registry 上的新精确版本，或下载并校验对应 `.tgz` 后安装，随后重启。
 4. 检查书房入口、技能是否各一份，核对实际书仓状态；先用合成副本试写。
 
 ```powershell
-dsh plugin --profile scriptor add C:/scriptor-dist/linfengqaqtat-dsh-scriptor-0.1.0-preview.3.tgz
+dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor@0.1.0-preview.4
 dsh --profile scriptor --dump-config
 ```
 
-上面展示命令形状，更新时换成实际目标版本文件。不要用同版本不同内容的包覆盖，也不要同时保留开发 file patch。
+上面展示命令形状，更新时换成实际目标版本。不要用同版本不同内容的包覆盖，也不要同时保留开发 file patch。
+
+完整版安装对应使用 `@linfengqaqtat/dsh-scriptor-full@0.1.0-preview.4`。不要在保留完整版时另外安装主包；切换安装方式前先移除原组合包。
 
 ## 回退
 
@@ -37,5 +39,7 @@ dsh --profile scriptor --dump-config
 dsh plugin --profile scriptor remove @linfengqaqtat/dsh-scriptor
 dsh --profile scriptor --dump-config
 ```
+
+如果安装的是完整版，卸载命令改为 `dsh plugin --profile scriptor remove @linfengqaqtat/dsh-scriptor-full`。
 
 卸载移除插件及其配置贡献，不删除作者书仓、书房或已有模型凭据。确认配置已无主包后，可重新按安装教程添加；可选 embedding-provider 需要单独卸载。
