@@ -1,6 +1,6 @@
 # 从公开源码开发
 
-使用公开 v8 分支，推荐 Node 24.15.0、源码构建 pnpm 9.0.0。无需私人任务文件或原书。宿主的插件管理使用 pnpm 11.7.0；可用 `npm exec --yes --package=pnpm@9.0.0 -- pnpm <命令>` 执行下面的源码命令，保留宿主终端的 pnpm 11。
+使用公开 v8 分支，推荐 Node 24.15.0、pnpm 11.27.1（源码构建与宿主插件管理统一为该版本）。无需私人任务文件或原书。
 
 ```text
 git clone --branch v8 --single-branch https://github.com/lingfengQAQ/webnovel-writer.git

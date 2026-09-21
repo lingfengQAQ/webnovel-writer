@@ -63,7 +63,7 @@ beforeAll(async () => {
   fs.mkdirSync(workspace)
   const source = process.env['WEBNOVEL_DSH_SOURCE']
   if (source === undefined) {
-    fs.symlinkSync(path.join(packageRoot, 'node_modules'), path.join(root, 'node_modules'), 'junction')
+    fs.symlinkSync(path.join(packageRoot, 'node_modules'), path.join(root, 'node_modules'), 'dir')
   } else {
     const host = loadSourceHost(source)
     fs.mkdirSync(path.join(root, 'node_modules', '@deepseek-ai'), { recursive: true })

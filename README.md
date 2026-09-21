@@ -28,7 +28,7 @@ DSH Scriptor is a local-first fiction writing workspace for DeepSeek Harness. Th
 
 ## 开始使用
 
-1. 准备 **Git for Windows、PowerShell 7**，安装 **Node.js 24.15.0**（也支持 22.19.0 起的 Node 22）及宿主安装所用的 **pnpm 11.7.0**。源码构建另外固定 pnpm 9.0.0。
+1. 准备 **Git for Windows、PowerShell 7**，安装 **Node.js 24.15.0**（也支持 22.19.0 起的 Node 22）及 **pnpm 11.27.1**（宿主插件管理与源码构建统一为该版本）。
 2. 安装 **DSH 0.1.5-rc.2**，下载此预览版的 `.tgz`，按 [安装教程](docs/user/install.md) 核对 SHA256 并创建 Web profile。
 3. 在宿主设置中配置主模型与凭据，阅读 [最小配置](docs/user/configuration.md)。
 4. 用 [合成练习素材](examples/first-book.md) 走一遍 [第一本书与第一章](docs/user/first-book.md)，熟悉确认、定稿和恢复。

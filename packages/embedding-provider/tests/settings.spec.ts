@@ -12,7 +12,7 @@ describe('真实 DSH 设置与提供方生命周期', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'webnovel-embedding-settings-'))
     const packageRoot = path.resolve(__dirname, '..')
     try {
-      fs.symlinkSync(path.join(packageRoot, 'node_modules'), path.join(root, 'node_modules'), 'junction')
+      fs.symlinkSync(path.join(packageRoot, 'node_modules'), path.join(root, 'node_modules'), 'dir')
       const outfile = path.join(root, 'embedding.mjs')
       await build({ entryPoints: [path.join(packageRoot, 'src/index.ts')], outfile, platform: 'node', format: 'esm', bundle: true, target: 'node22', external: ['@deepseek-ai/cordis', '@deepseek-ai/dsh-llm', 'node:*'] })
       const result = await promisify(execFile)(process.execPath, [path.join(packageRoot, 'tests/fixtures/settings-host.mjs'), root, outfile], {

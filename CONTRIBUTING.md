@@ -4,7 +4,7 @@
 
 ## 本地开发
 
-从公开分支建立主题分支，例如 `git switch -c fix/install-help origin/v8`。使用 Node 24.15.0、pnpm 9.0.0，按 [开发说明](docs/development.md) 安装依赖和运行检查。无需任何内部开发工具或私人资料。
+从公开分支建立主题分支，例如 `git switch -c fix/install-help origin/v8`。使用 Node 24.15.0、pnpm 11.27.1，按 [开发说明](docs/development.md) 安装依赖和运行检查。无需任何内部开发工具或私人资料。
 
 常规检查不需要模型密钥。测试与截图使用合成书仓；不要提交自己的 API key、启动 token、完整对话或私人小说。
 

@@ -4,7 +4,7 @@
   "type": "module",
   "version": "0.1.0-preview.3",
   "description": "DSH Scriptor: a long-form fiction writing workspace for DeepSeek Harness",
-  "packageManager": "pnpm@9.0.0",
+  "packageManager": "pnpm@11.27.1",
   "scripts": {
     "prepare": "node tools/git-hooks/install.mjs || echo [git-hooks] skipped",
     "test": "vitest run",

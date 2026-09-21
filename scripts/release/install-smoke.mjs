@@ -35,10 +35,10 @@ const reportPath = path.join(root, 'install-report.json')
 const log = (name, output) => { fs.writeFileSync(path.join(root, `${name}.log`), output); console.log(`[install] ${name}`) }
 try {
   // Hosted Windows runners with a cold npm cache exceeded 4 minutes for the DSH tree; the network-bound step gets its own bound.
-  log('install-host', run(npm, ['install', '--prefix', host, '--save-exact', '--no-audit', '--no-fund', '@deepseek-ai/dsh@0.1.5-rc.2', 'pnpm@11.7.0'], host, 15 * 60 * 1000))
+  log('install-host', run(npm, ['install', '--prefix', host, '--save-exact', '--no-audit', '--no-fund', '@deepseek-ai/dsh@0.1.5-rc.2', 'pnpm@11.27.1'], host, 15 * 60 * 1000))
   const pathKey = Object.keys(env).find(key => key.toLowerCase() === 'path') ?? 'PATH'
   env[pathKey] = path.join(host, 'node_modules/.bin') + path.delimiter + (env[pathKey] ?? '')
-  report.hostPackageManager = 'pnpm@11.7.0'
+  report.hostPackageManager = 'pnpm@11.27.1'
   const require = createRequire(path.join(host, 'package.json'))
   const hostAnchor = require.resolve('@deepseek-ai/dsh/package.json')
   const cli = path.join(path.dirname(hostAnchor), 'lib/bin.js')

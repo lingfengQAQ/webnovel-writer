@@ -1,2 +1,8 @@
 packages:
   - packages/*
+# core ↔ review 循环 devDeps 为历史结构（测试互相引用夹具），沿用 pnpm 9 的任意顺序执行
+ignoreWorkspaceCycles: true
+# pnpm 10+ 默认阻断依赖构建脚本；仅放行构建/测试确实需要的原生组件
+allowBuilds:
+  esbuild: true
+  koffi: true

@@ -1,6 +1,6 @@
 # 安装 v8 预览版
 
-适用于 Windows。推荐 Node.js 24.15.0；也支持 22.19.0 起的 Node 22。DSH 固定为 0.1.5-rc.2，宿主插件管理使用 pnpm 11.7.0。v6 的 Claude Code 安装方式不适用于此分支。
+适用于 Windows。推荐 Node.js 24.15.0；也支持 22.19.0 起的 Node 22。DSH 固定为 0.1.5-rc.2，宿主插件管理使用 pnpm 11.27.1。v6 的 Claude Code 安装方式不适用于此分支。
 
 ## 1. 准备运行环境
 
@@ -10,14 +10,14 @@
 node --version
 git --version
 pwsh --version
-npm install --global pnpm@11.7.0 @deepseek-ai/dsh@0.1.5-rc.2
+npm install --global pnpm@11.27.1 @deepseek-ai/dsh@0.1.5-rc.2
 pnpm --version
 dsh --version
 ```
 
 Node、pnpm、DSH 预期版本分别属于上述范围、11.7.0、0.1.5-rc.2；Git 与 PowerShell 7 应能正常输出版本。安装依赖需要网络。Git 用于建书和保存确认后的版本历史；预构建包无需 TypeScript 或 npm 账号。若另一个 DSH 已在使用，请先阅读备份说明，并用不同的 profile 名称安装本工作台。
 
-源码仓库的 packageManager 是 pnpm 9.0.0，仅用于开发构建；不要用它代替宿主 profile 的 pnpm 11 配置支持。遇到 `ERR_PNPM_ADDING_TO_ROOT` 时先核对启动 DSH 的终端中 `pnpm --version`，不要随意忽略工作区保护或安装第二份宿主 peer。
+源码仓库的 packageManager 与宿主插件管理同为 pnpm 11.27.1。遇到 `ERR_PNPM_ADDING_TO_ROOT` 时先核对启动 DSH 的终端中 `pnpm --version`，不要随意忽略工作区保护或安装第二份宿主 peer。
 
 ## 2. 下载并核对
 

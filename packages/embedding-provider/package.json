@@ -50,6 +50,7 @@
     "@deepseek-ai/dsh-agent-loop": "0.1.5-rc.2",
     "@deepseek-ai/dsh-api-remotes": "0.1.5-rc.2",
     "@deepseek-ai/dsh-api-session-controller": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-api-settings-controller": "0.1.5-rc.2",
     "@deepseek-ai/dsh-app-boot": "0.1.5-rc.2",
     "@deepseek-ai/dsh-atomic-write": "0.1.5-rc.2",
     "@deepseek-ai/dsh-attachment": "0.1.5-rc.2",

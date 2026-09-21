@@ -34,7 +34,8 @@ git(['archive', '--format=tar.gz', '--prefix=dsh-scriptor-source/', `--output=${
 const dependencies = await collectDependencySources(root, output)
 const hash = file => createHash('sha256').update(fs.readFileSync(path.join(output, file))).digest('hex')
 const assets = fs.readdirSync(output).filter(file => fs.statSync(path.join(output, file)).isFile()).sort()
-const manifest = { schemaVersion: 1, ...info, publicCommit: git(['rev-parse', 'HEAD']), node: process.version, pnpm: '9.0.0',
+const manifest = { schemaVersion: 1, ...info, publicCommit: git(['rev-parse', 'HEAD']), node: process.version,
+  pnpm: JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).packageManager.split('@').pop(),
   dsh: JSON.parse(fs.readFileSync(path.join(root, 'dsh-baseline.json'), 'utf8')).registry.version,
   optionalPackages: [
     { name: embedding.name, version: embedding.version, tarball: embeddingTarball }
