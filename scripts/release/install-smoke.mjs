@@ -130,6 +130,10 @@ try {
     }
     log('add-meta', run(cli, ['plugin', '--profile', fullName, 'add', fullSpec, ...registryArgs]))
     verifyFull('full')
+    // pnpm remove has no --registry option, but removing one package re-resolves
+// the remaining tree, so the unpublished dependencies are located through the
+// profile's own npmrc instead.
+    if (fixtureRegistryUrl) fs.writeFileSync(path.join(fullProfile, '.npmrc'), `registry=${fixtureRegistryUrl}\n`)
     log('remove-meta', run(cli, ['plugin', '--profile', fullName, 'remove', '@linfengqaqtat/dsh-scriptor-full']))
     assert.ok(!fullDump().includes('@linfengqaqtat/dsh-scriptor'))
     assert.ok(!fullDump().includes('webnovel-embedding-provider'))
