@@ -26,7 +26,7 @@ Gemini 原生每条文本单独构造请求，使用 `batchEmbedContents` 保持
 
 启用后，写作工作台的后台索引会调用提供方发送已启用书仓的定稿切片；检索时仅发送查询文本。后台使用单次 `embedBatch` 请求并统一管理退避重试，已成功批次保存后可继续复用。超时、临时错误有界重试；批次数量、索引、维数或数值异常会明确失败，不过滤输入造成错配。不跟随 HTTP 重定向转交凭据，不回显远端响应正文。取消、设置变更及卸载会终止在途请求。
 
-构建：`pnpm --filter @linfengqaqtat/dsh-scriptor-embedding build`。本地分发包只包含 `lib/index.js`、`lib/client.js`、包描述、本说明、模型维度表、LICENSE 及第三方声明。安装到 profile 后，Cordis 条目使用 `name: '@linfengqaqtat/dsh-scriptor-embedding'`，无需把密钥写入条目配置。
+构建：`pnpm --filter webnovel-embedding-provider build`。本地分发包只包含 `lib/index.js`、`lib/client.js`、包描述、本说明、模型维度表、LICENSE 及第三方声明。安装到 profile 后，Cordis 条目使用 `name: 'webnovel-embedding-provider'`，无需把密钥写入条目配置。
 
 协议依据：
 

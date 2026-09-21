@@ -3,24 +3,24 @@
 这是 `@linfengqaqtat/dsh-scriptor` 的便捷安装包，包含：
 
 - **主插件** `@linfengqaqtat/dsh-scriptor`：完整的写作工作台
-- **可选嵌入提供方** `@linfengqaqtat/dsh-scriptor-embedding`：语义检索增强
+- **可选嵌入提供方** `webnovel-embedding-provider`：语义检索增强
 
 ## 安装
 
 一条命令安装完整功能：
 
 ```bash
-pnpm add D:/path/to/dsh-scriptor-full-0.1.0-preview.3.tgz
+pnpm add D:/path/to/linfengqaqtat-dsh-scriptor-full-0.1.0-preview.3.tgz
 ```
 
 或者按需分别安装：
 
 ```bash
 # 只装主插件（推荐大多数用户）
-pnpm add D:/path/to/dsh-scriptor-0.1.0-preview.3.tgz
+pnpm add D:/path/to/linfengqaqtat-dsh-scriptor-0.1.0-preview.3.tgz
 
 # 需要语义检索再装
-pnpm add D:/path/to/dsh-scriptor-embedding-0.0.8.tgz
+pnpm add D:/path/to/webnovel-embedding-provider-0.0.8.tgz
 ```
 
 ## 何时使用完整版

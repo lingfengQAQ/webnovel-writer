@@ -46,7 +46,7 @@ pnpm add D:/scriptor-dist/linfengqaqtat-dsh-scriptor-full-0.1.0-preview.3.tgz
 
 或分别安装：
 - 主插件：`linfengqaqtat-dsh-scriptor-0.1.0-preview.3.tgz`
-- 可选嵌入：`linfengqaqtat-dsh-scriptor-embedding-0.0.8.tgz`
+- 可选嵌入：`webnovel-embedding-provider-0.0.8.tgz`
 
 ## 文档
 

@@ -12,14 +12,14 @@
 
 ### Changed
 
-- **包命名统一**：将 `@webnovel/embedding-provider` 重命名为 `@linfengqaqtat/dsh-scriptor-embedding`，统一到 `@linfengqaqtat` scope 下
+- **包命名统一**：可选嵌入提供方由 `@webnovel/embedding-provider` 更名为 `webnovel-embedding-provider`，公开分发包不再使用内部 scope
 - **新增完整版包**：`@linfengqaqtat/dsh-scriptor-full` 作为 meta 包，一次安装包含主插件和可选嵌入提供方
 
 ### Migration
 
 如已安装旧的 `@webnovel/embedding-provider`：
 1. 卸载：`pnpm remove @webnovel/embedding-provider`
-2. 安装新版：`pnpm add path/to/linfengqaqtat-dsh-scriptor-embedding-0.0.8.tgz`
+2. 安装新版：`pnpm add path/to/webnovel-embedding-provider-0.0.8.tgz`
 
 或直接安装完整版：`pnpm add path/to/linfengqaqtat-dsh-scriptor-full-0.1.0-preview.3.tgz`
 
