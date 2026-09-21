@@ -6,7 +6,9 @@ import { execFileSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import { packageFiles, checkPublishableManifest, checkEmbeddingPackage, checkMetaPackage } from './tar.mjs'
 
-const registry = 'https://registry.npmjs.org/'
+// The official registry is the only release target. The environment override exists so
+// the publish path itself can be exercised against a first-publication fixture.
+const registry = process.env.SCRIPTOR_NPM_REGISTRY ?? 'https://registry.npmjs.org/'
 const mainName = '@linfengqaqtat/dsh-scriptor'
 const embeddingName = 'webnovel-embedding-provider'
 const metaName = '@linfengqaqtat/dsh-scriptor-full'
@@ -117,7 +119,7 @@ async function main() {
   const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }).trim()
   const packages = validateReleaseAssets(directory, process.env.RELEASE_TAG, commit)
   if (args.includes('--verify-only')) return verifyRegistry(packages)
-  const npm = [process.env.NPM_CLI_ENTRY, path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js'), path.resolve(path.dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js')].find(file => file && fs.existsSync(file))
+  const npm = [process.env.NPM_CLI_ENTRY, path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js'), path.resolve(path.dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js')].filter(Boolean).find(file => fs.existsSync(file))
   assert.ok(npm, 'npm-cli.js was not found; set NPM_CLI_ENTRY')
   const runNpm = rest => execFileSync(process.execPath, [npm, ...rest], { stdio: 'inherit', windowsHide: true })
   const plan = []
