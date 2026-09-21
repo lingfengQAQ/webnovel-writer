@@ -25,7 +25,7 @@ const main = path.join(output, info.filename)
 pnpm(['--filter', info.packageName, 'pack-check', main])
 const embedding = JSON.parse(fs.readFileSync(path.join(root, 'packages/embedding-provider/package.json'), 'utf8'))
 pnpm(['pack', '--pack-destination', output], path.join(root, 'packages/embedding-provider'))
-const embeddingTarball = `linfengqaqtat-dsh-scriptor-embedding-${embedding.version}.tgz`
+const embeddingTarball = `webnovel-embedding-provider-${embedding.version}.tgz`
 checkEmbeddingPackage(path.join(output, embeddingTarball), embedding.version)
 const meta = JSON.parse(fs.readFileSync(path.join(root, 'packages/meta/package.json'), 'utf8'))
 pnpm(['pack', '--pack-destination', output], path.join(root, 'packages/meta'))

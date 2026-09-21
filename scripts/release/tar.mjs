@@ -44,7 +44,7 @@ export function checkEmbeddingPackage(filename, expectedVersion) {
   const files = packageFiles(filename)
   const read = file => { assert.ok(files.has(file), `Missing ${file}`); return files.get(file).toString('utf8') }
   const manifest = JSON.parse(read('package.json'))
-  assert.equal(manifest.name, '@linfengqaqtat/dsh-scriptor-embedding')
+  assert.equal(manifest.name, 'webnovel-embedding-provider')
   assert.equal(manifest.version, expectedVersion)
   assert.equal(manifest.license, 'GPL-3.0-only')
   assert.equal(manifest.private, true)

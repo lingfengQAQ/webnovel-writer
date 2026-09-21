@@ -71,7 +71,7 @@ try {
     const copiedEmbedding = path.join(root, 'embedding.tgz')
     fs.copyFileSync(embedding, copiedEmbedding)
     log('add-embedding', run(cli, ['plugin', '--profile', 'scriptor-test', 'add', copiedEmbedding]))
-    assert.ok(run(cli, ['--profile', 'scriptor-test', '--dump-config']).includes('@linfengqaqtat/dsh-scriptor-embedding'))
+    assert.ok(run(cli, ['--profile', 'scriptor-test', '--dump-config']).includes('webnovel-embedding-provider'))
     report.checks.embeddingInstalled = true
   }
   if (meta) {
@@ -80,7 +80,7 @@ try {
     log('add-meta', run(cli, ['plugin', '--profile', 'scriptor-test', 'add', copiedMeta]))
     const config = run(cli, ['--profile', 'scriptor-test', '--dump-config'])
     assert.ok(config.includes('@linfengqaqtat/dsh-scriptor'))
-    assert.ok(config.includes('@linfengqaqtat/dsh-scriptor-embedding'))
+    assert.ok(config.includes('webnovel-embedding-provider'))
     report.checks.metaInstalled = true
   }
   fs.writeFileSync(path.join(workspace, 'author-sentinel.txt'), 'synthetic author asset')
