@@ -14,15 +14,15 @@
 
 一句话定位：这是一套面向长篇连载的一致性系统，不是写完就忘的一次性生成器。
 
-> **版本导览（2026-08-19 更新）**
+> **版本导览（2026-09-21 更新）**
 >
 > | 分支 | 版本 | 状态 |
 > |---|---|---|
 > | `master`（本分支） | v6 · Claude Code 插件 | 维护中（只修致命 bug），Claude Code 用户请用此版本 |
 > | `v7` | v7 · CLI 多宿主重写 | 已冻结，未发布，仅作开发档案 |
-> | `v8` | v8 · 基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的写作工作台 | 开发中，下一代主线 |
+> | [v8](https://github.com/lingfengQAQ/webnovel-writer/tree/v8) | v8 · 基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的写作工作台 | 源码预览；[安装与版本说明](https://github.com/lingfengQAQ/webnovel-writer/tree/v8#开始使用) |
 >
-> 原 v7 设计公示（[Discussions #118](https://github.com/lingfengQAQ/webnovel-writer/discussions/118)）所征集的反馈仍是 v8 设计的重要输入；v7 的 CLI 形态经评估后不再发布，下一代改以 dsh 插件形态开发，设计文档随 v8 分支公开。
+> 原 v7 设计公示（[Discussions #118](https://github.com/lingfengQAQ/webnovel-writer/discussions/118)）所征集的反馈仍是 v8 设计的重要输入；v7 的 CLI 形态经评估后不再发布，下一代改以 dsh 插件形态开发，v8 公开产品源码、运行技能和使用教程；内部开发讨论与私人创作资料不属于公开内容。v6/v8 安装方式不同，尚无经过验证的旧书仓直接迁移方案。
 
 ## 赞助与支持
 

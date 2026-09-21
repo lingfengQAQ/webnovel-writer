@@ -3,6 +3,15 @@ description: 反馈命令、Agent、数据链或 Dashboard 中可复现的问题
 title: "【Bug】"
 labels: ["bug"]
 body:
+  - type: dropdown
+    id: product_line
+    attributes:
+      label: 产品线
+      options:
+        - v6（Claude Code / master）
+        - v8（DSH Scriptor / v8）
+    validations:
+      required: true
   - type: markdown
     attributes:
       value: |

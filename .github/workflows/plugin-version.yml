@@ -1,7 +1,8 @@
-﻿name: Plugin Version Check
+name: Plugin Version Check
 
 on:
   push:
+    branches: [master]
     paths:
       - '.claude-plugin/marketplace.json'
       - 'webnovel-writer/.claude-plugin/plugin.json'
@@ -12,6 +13,7 @@ on:
       - 'releases/**'
       - '.github/workflows/plugin-version.yml'
   pull_request:
+    branches: [master]
     paths:
       - '.claude-plugin/marketplace.json'
       - 'webnovel-writer/.claude-plugin/plugin.json'

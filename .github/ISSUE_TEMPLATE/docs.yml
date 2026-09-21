@@ -1,0 +1,21 @@
+name: 文档问题
+description: 报告安装、命令或教程中的错误。
+title: '[Docs] '
+labels: [documentation]
+body:
+  - type: dropdown
+    id: product_line
+    attributes:
+      label: 产品线
+      options:
+        - v6（Claude Code / master）
+        - v8（DSH Scriptor / v8）
+    validations:
+      required: true
+  - type: textarea
+    id: location
+    attributes:
+      label: 文档链接、所用版本及出错步骤
+      description: 说明预期结果与实际结果，不要粘贴密钥或私人作品。
+    validations:
+      required: true

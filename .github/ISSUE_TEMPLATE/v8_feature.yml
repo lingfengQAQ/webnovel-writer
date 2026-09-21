@@ -1,0 +1,25 @@
+name: v8 功能或文档建议
+description: 描述 DSH 工作台的使用问题、期望或文档失效步骤。
+labels: ['version:v8']
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: 类型
+      options: [功能建议, 文档问题]
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 使用场景与问题
+      description: 文档问题请附路径、所用版本及失效步骤。
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: 期望结果与影响
+      description: 如涉及兼容性、数据迁移或费用，请说明。
+    validations:
+      required: true

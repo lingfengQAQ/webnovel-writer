@@ -1,0 +1,47 @@
+name: v8 DSH 工作台 Bug
+description: DSH Scriptor 的安装、书仓、写作流程或界面问题。
+title: '[v8 Bug] '
+labels: [bug, 'version:v8']
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 工作台精确版本
+      placeholder: 0.1.0-preview.1
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境与安装方式
+      value: |
+        OS：
+        Node：
+        DSH：
+        安装包或源码 commit：
+        可选提供方版本（如有）：
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 最小复现、预期行为与实际行为
+      description: 使用合成素材；不要上传原书、完整会话或配置导出。
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: 模型服务与模型标识（无关填不适用）
+  - type: textarea
+    id: logs
+    attributes:
+      label: 脱敏错误片段或截图
+      description: 移除 API key、启动 token、用户路径与私人正文。
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 提交前检查
+      options:
+        - label: 已搜索重复问题，并移除秘密值与私人作品内容。
+          required: true

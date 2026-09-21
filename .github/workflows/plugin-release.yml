@@ -7,7 +7,6 @@ on:
     paths:
       - '.claude-plugin/marketplace.json'
       - 'webnovel-writer/.claude-plugin/plugin.json'
-      - 'README.md'
       - 'CHANGELOG.md'
       - 'releases/**'
       - 'webnovel-writer/scripts/sync_plugin_version.py'

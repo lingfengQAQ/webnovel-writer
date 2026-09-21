@@ -9,3 +9,9 @@ contact_links:
   - name: 命令详解
     url: https://github.com/lingfengQAQ/webnovel-writer/blob/master/docs/guides/commands.md
     about: 查看 Skill 命令、CLI 入口和常见工作流。
+  - name: v8 工作台安装与教程
+    url: https://github.com/lingfengQAQ/webnovel-writer/tree/v8/docs/user
+    about: DSH Scriptor 的安装、版本、首章流程和排错说明。
+  - name: 私密报告安全漏洞
+    url: https://github.com/lingfengQAQ/webnovel-writer/security/advisories/new
+    about: 不要在公开 Issue 中贴密钥、启动 token 或私人作品。
