@@ -39,7 +39,8 @@ const registry = createServer((request, response) => {
   if (process.env.SCRIPTOR_FAIL_REGISTRY_AFTER_UPLOAD === name) { response.writeHead(500); response.end(); return }
   const now = new Date().toISOString()
   response.writeHead(200, { 'content-type': 'application/json' })
-  response.end(JSON.stringify({ name, 'dist-tags': { [entry.distTag]: entry.version },
+  // Like npm, a package's first publication also owns latest whatever --tag said.
+  response.end(JSON.stringify({ name, 'dist-tags': { [entry.distTag]: entry.version, latest: entry.version },
     time: { created: now, modified: now, [entry.version]: now },
     versions: { [entry.version]: { name, version: entry.version,
       dist: { tarball: `http://127.0.0.1:${registry.address().port}/tarballs/${entry.tarball}`, integrity: entry.integrity } } } }))

@@ -4,7 +4,9 @@
 
 ## Unreleased
 
-尚无未发布变更。
+### Fixed
+
+- **npm 发布器的 `latest` 判定**：npm 会把包的首个版本同时标为 `latest`（无论是否指定 `--tag preview`），且不允许删除该标签。preview.5 首发时三个包均已成功上传，但发布器把这一固定行为当作污染而在上传后的校验阶段失败。现只在 registry 已有正式版本、而 `latest` 仍指向预览版时才拒绝；首发同时持有 `preview` 与 `latest` 视为正常。
 
 ## [0.1.0-preview.5] — 2026-09-21
 
@@ -21,7 +23,7 @@ preview.4 的发行构建在 Windows runner 上失败，本版只修发行链路
 
 ### Added
 
-- **npm 发行流程**：为 `@linfengqaqtat/dsh-scriptor@0.1.0-preview.4`、`webnovel-embedding-provider@0.0.8`、`@linfengqaqtat/dsh-scriptor-full@0.1.0-preview.4` 增加 Release 发布后的自动上传（dist-tag `preview`，不占用 `latest`）。校验全部包与 SHA256 后上传同一 tarball；重跑只跳过 registry 字节完全一致的版本。npm 工作流成功后可执行 `dsh plugin add @linfengqaqtat/dsh-scriptor@preview`，GitHub Release 保留同字节 tarball。
+- **npm 发行流程**：为 `@linfengqaqtat/dsh-scriptor@0.1.0-preview.4`、`webnovel-embedding-provider@0.0.8`、`@linfengqaqtat/dsh-scriptor-full@0.1.0-preview.4` 增加 Release 发布后的自动上传（dist-tag `preview`）。校验全部包与 SHA256 后上传同一 tarball；重跑只跳过 registry 字节完全一致的版本。npm 工作流成功后可执行 `dsh plugin add @linfengqaqtat/dsh-scriptor@preview`，GitHub Release 保留同字节 tarball。
 - **完整版恢复**：增加 DSH 组合配置，`dsh plugin add @linfengqaqtat/dsh-scriptor-full@preview` 同时安装并启用主插件与可选嵌入提供方；增加独立 profile 的加载与卸载重装验收。
 
 ### Changed

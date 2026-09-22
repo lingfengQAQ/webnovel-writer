@@ -83,8 +83,13 @@ test('npm retry permits identical bytes but rejects replaced versions and latest
   metadata.versions[version].dist.integrity = 'sha512-different'
   assert.throws(() => registryStatus(pkg, metadata), /different bytes/)
   metadata.versions[version].dist.integrity = pkg.integrity
+  // A sole first version owns latest on npm and cannot shed it; only a displaced stable release is pollution.
   metadata['dist-tags'].latest = version
+  assert.equal(registryStatus(pkg, metadata), 'identical')
+  metadata.versions['0.1.0'] = { dist: { integrity: 'sha512-stable' } }
   assert.throws(() => registryStatus(pkg, metadata), /latest/)
+  metadata['dist-tags'].latest = '0.1.0'
+  assert.equal(registryStatus(pkg, metadata), 'identical')
 })
 test('publish contract rejects private, lifecycle hooks, local dependencies and unintended tags', () => {
   const base = { publishConfig }

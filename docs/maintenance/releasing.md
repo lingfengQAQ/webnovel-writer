@@ -66,17 +66,21 @@ Issue/PR 模板在默认 master 生效。v8 的 CI 使用 push/pull_request；�
 
    第一条须对所有待上传包成功执行后，才能执行任何第二条。dry-run 不证明账号具备发布权限，也不验证完整 provenance 上传链路。
 4. 工作流使用 `id-token: write` 生成 provenance，`NPM_TOKEN` 只注入发布步骤；安装 job 不接收 npm token。npm 发布成功后，Windows job 按 registry 上的精确版本安装，并验证主包/完整版真实 Loader。
-5. 核对 `npm view <包名> dist-tags --json`：`preview` 为本次版本，预览版不占 `latest`。安装示例必须使用 `@preview` 或精确版本。
+5. 核对 `npm view <包名> dist-tags --json`：`preview` 为本次版本。包的首个版本会同时持有 `latest`（见下），安装示例必须使用 `@preview` 或精确版本，不要依赖 `latest`。
 
 本地仅预检：在该公共 tag checkout 中设置 `RELEASE_TAG`，执行 `node scripts/release/publish-npm.mjs --assets <附件目录>`。默认不发布；`--verify-only` 仅验证已发 registry 版本及完整性。
 
-部分发布失败时重跑同一 Actions run，保留原附件。已存在版本只有 tarball 的 SHA512 与 registry integrity 完全一致才同时跳过 dry-run 和上传，最后仍核对全部包的字节与 `preview`。npm 11/12 对已发布正式版本连 dry-run 也会拒绝，因此嵌入包 `0.0.8` 已成功、完整版失败时不能再预检嵌入包。字节不同或 `latest` 错指本次版本时停止，由维护者调查。不要以同一版本重新 pack 后重试。实际 registry 发布与安装 job 全绿后才能宣布 npm 安装可用。
+部分发布失败时重跑同一 Actions run，保留原附件。已存在版本只有 tarball 的 SHA512 与 registry integrity 完全一致才同时跳过 dry-run 和上传，最后仍核对全部包的字节与 `preview`。npm 11/12 对已发布正式版本连 dry-run 也会拒绝，因此嵌入包 `0.0.8` 已成功、完整版失败时不能再预检嵌入包。字节不同，或 registry 已有正式版本而 `latest` 仍指向预览版时停止，由维护者调查。不要以同一版本重新 pack 后重试。实际 registry 发布与安装 job 全绿后才能宣布 npm 安装可用。
 
-2026-09-22 的真实首发确认了两个 registry 行为：发布前的 404 可被 CDN 缓存五分钟；即使上传指定 `--tag preview`，三个新包仍同时出现指向本次版本的 `latest`。发布器现用独立查询参数绕过旧缓存，并为每包进行至多 40 轮、间隔 3 秒的可见性检查（单次请求超时 30 秒）。不能仅凭 CLI 的上传成功行或指定过 `--tag preview` 就宣布发行验收通过。
+### 首发后的 `latest`：npm 的固定行为
 
-首发标签恢复工具 `node scripts/release/repair-first-publish.mjs --assets <原附件目录>` 默认只列计划。它核对 tag 属于公共 v8、附件清单和全部 registry 字节，要求每个包只有这一个版本且 `preview` 正确。只有 `latest` 缺失或正指向本次版本才接受；多版本历史、异字节或其他 latest 均拒绝。在 GitHub Actions 中显式加 `--apply` 后，只移除该首次发行的隐式 latest，再验证 preview/integrity。该工具不会重新上传包，也不能用于清理已经存在正式版历史的包。
+npm 会把包的**首个版本**同时标为 `latest`，即使上传指定了 `--tag preview`；registry 不允许删除 `latest`（`npm dist-tag rm <包> latest` 返回 403），只能用 `npm dist-tag add <包>@<版本> latest` 移到别的版本（[npm/cli#8490](https://github.com/npm/cli/issues/8490)）。因此：
 
-`v8-npm-recovery.yml` 仅处理 `scriptor-v0.1.0-preview.5`，由专用公共主题分支触发标签恢复与无 token 的 Windows registry 安装验收。旧上传运行的失败记录保留；恢复运行提供补完验收的证据。
+- 首发后 `latest` 与 `preview` 同指首个预览版是正常状态，不需要也无法「恢复」。发布器只在 registry 已有正式版本、而 `latest` 仍指向预览版时才判定为污染。
+- 首个正式版发布时 npm 会自动把 `latest` 移过去；之后的预览版用 `--tag preview` 上传不会再碰 `latest`。
+- 面向用户的安装命令一律写 `@preview` 或精确版本；`dsh plugin add @linfengqaqtat/dsh-scriptor` 不带标签会装到 `latest`，首发期间恰好也是预览版，正式版发布后则装到正式版。
+
+2026-09-22 的真实首发（`scriptor-v0.1.0-preview.5`）确认了两个 registry 行为：发布前的 404 可被 CDN 缓存五分钟；三个新包在显式 `--tag preview` 上传后都同时出现 `preview` 与 `latest`。当时的发布器把后者当作污染而在上传后的校验阶段失败（三包已上传、字节与附件一致、provenance 正常），随后尝试清除 `latest` 的恢复工作流在 registry 处 403，两者都已按上述规则修正。发布器现用独立查询参数绕过旧缓存，并为每包进行至多 40 轮、间隔 3 秒的可见性检查（单次请求超时 30 秒）。不能仅凭 CLI 的上传成功行或指定过 `--tag preview` 就宣布发行验收通过。
 
 ### 后续自动发布：推荐迁移到 Trusted Publishing
 

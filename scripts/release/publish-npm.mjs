@@ -79,8 +79,13 @@ export function validateReleaseAssets(directory, expectedTag, expectedCommit) {
 }
 
 // A retry must never overwrite an existing name/version or move latest.
+// npm gives a package's first version latest regardless of --tag and refuses to
+// delete latest, so a preview may hold it only while no stable release exists.
 export function registryStatus(pkg, metadata) {
-  assert.notEqual(metadata?.['dist-tags']?.latest, pkg.version, 'Preview version must not occupy latest')
+  const versions = Object.keys(metadata?.versions ?? {})
+  if (metadata?.['dist-tags']?.latest === pkg.version && pkg.version.includes('-')) {
+    assert.ok(!versions.some(version => !version.includes('-')), `Preview version must not hold latest over a stable release: ${pkg.name}`)
+  }
   const existing = metadata?.versions?.[pkg.version]
   if (!existing) return 'missing'
   assert.equal(existing.dist?.integrity, pkg.integrity, `Registry version has different bytes: ${pkg.name}@${pkg.version}`)
