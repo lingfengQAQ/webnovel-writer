@@ -36,6 +36,7 @@ const registry = createServer((request, response) => {
   }
   const entry = readState()[name]
   if (!entry) { response.writeHead(404); response.end(); return }
+  if (process.env.SCRIPTOR_FAIL_REGISTRY_AFTER_UPLOAD === name) { response.writeHead(500); response.end(); return }
   const now = new Date().toISOString()
   response.writeHead(200, { 'content-type': 'application/json' })
   response.end(JSON.stringify({ name, 'dist-tags': { [entry.distTag]: entry.version },
@@ -74,7 +75,7 @@ registry.listen(0, '127.0.0.1', async () => {
     const stderr = []
     child.stdout.on('data', chunk => stdout.push(chunk))
     child.stderr.on('data', chunk => stderr.push(chunk))
-    const [code] = await once(child, 'exit')
+    const [code] = await once(child, 'close')
     fs.writeFileSync(path.join(work, 'publisher.out'), Buffer.concat(stdout).toString('utf8'))
     fs.writeFileSync(path.join(work, 'publisher.err'), Buffer.concat(stderr).toString('utf8'))
     console.log(JSON.stringify({ code, origin, work }))

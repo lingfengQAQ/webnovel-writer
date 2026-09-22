@@ -45,4 +45,13 @@ if (!dryRun) state[manifest.name] = entry
 fs.writeFileSync(publish, JSON.stringify(state, null, 2) + '\n')
 record({ command, rest, dryRun, name: manifest.name, version: manifest.version, tarball: entry.tarball,
   integrity: entry.integrity, provenance: entry.provenance, distTag: entry.distTag, registryConfigured: registry })
+// npm 11/12 reject an existing stable version even during --dry-run.
+if (dryRun && state[manifest.name]?.version === manifest.version && !manifest.version.includes('-')) {
+  console.error(`You cannot publish over the previously published versions: ${manifest.version}.`)
+  process.exit(1)
+}
+if (dryRun && process.env.SCRIPTOR_FAIL_DRY_RUN === manifest.name) {
+  console.error(`Injected dry-run failure: ${manifest.name}`)
+  process.exit(1)
+}
 console.log(`[stub npm] ${dryRun ? 'dry-run ' : ''}publish ${manifest.name}@${manifest.version}`)

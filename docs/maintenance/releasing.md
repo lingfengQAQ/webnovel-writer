@@ -53,19 +53,57 @@ Issue/PR 模板在默认 master 生效。v8 的 CI 使用 push/pull_request；�
 
 三个公开包通过 `v8-npm-publish.yml` 发布；根 workspace 和 `@webnovel/*` 不发布。三个包的 `publishConfig` 固定为 `access: public`、`tag: preview` 和官方 registry。
 
-1. 首次配置：使用拥有 `@linfengqaqtat` scope 及 `webnovel-embedding-provider` 发布权限的 npm 账号创建 granular access token。选择所需包/scope 的读写发布权限，按 npm 当前要求允许自动化发布的 2FA bypass，并设置合适到期时间。未首发的包须确保 token 包含创建它们的权限。token 直接保存到 GitHub 仓库 Settings → Secrets and variables → Actions → `NPM_TOKEN`，不要提交或粘贴到 Issue/对话。
+### 首次发布：当前工作流
+
+1. 使用拥有 `@linfengqaqtat` scope 及 `webnovel-embedding-provider` 发布权限、已启用 2FA 的 npm 账号创建短期 granular access token。Packages and scopes 的权限选择 **Read and write (publish and stage)**，启用 **Bypass two-factor authentication**。不能选择 **stage only**，否则当前 `npm publish` 会报 `E_STAGE_REQUIRED`。未首发的包须确保 token 包含创建它们的权限；只勾选已存在包不能代表已授权新包，Organizations 管理权限也不等于包发布权限。token 保存到 GitHub 仓库 Settings → Secrets and variables → Actions → `NPM_TOKEN`，不要提交或粘贴到 Issue/对话。
 2. Release 草稿生成时已对全部 tarball 执行 npm dry-run。核对附件、校验和和安装报告后，通过 GitHub 界面发布预览 Release；订阅的是 `release: published`，可以覆盖从草稿发布预览版的情况。
-3. Ubuntu 发布 job checkout 对应 tag、确认属于公共 v8，下载原 `.tgz`、manifest 与 SHA256SUMS。发布器校验 tag、公共 commit、包版本及哈希，先预检全部包，再按主包 → 嵌入包 → 完整版执行 `npm publish --access public --tag preview --provenance`。不重新打包。
+3. Ubuntu 发布 job checkout 对应 tag、确认属于公共 v8，下载原 `.tgz`、manifest 与 SHA256SUMS。发布器校验 tag、公共 commit、包版本及哈希，先检查全部包的 registry 状态，再预检所有待上传包，按主包 → 嵌入包 → 完整版上传原 tarball。不重新打包。实际命令形状为：
+
+   ```text
+   npm publish <已验收的原件.tgz> --dry-run --ignore-scripts --access public --tag preview --registry=https://registry.npmjs.org/
+   npm publish <同一原件.tgz> --ignore-scripts --access public --tag preview --registry=https://registry.npmjs.org/ --provenance
+   ```
+
+   第一条须对所有待上传包成功执行后，才能执行任何第二条。dry-run 不证明账号具备发布权限，也不验证完整 provenance 上传链路。
 4. 工作流使用 `id-token: write` 生成 provenance，`NPM_TOKEN` 只注入发布步骤；安装 job 不接收 npm token。npm 发布成功后，Windows job 按 registry 上的精确版本安装，并验证主包/完整版真实 Loader。
 5. 核对 `npm view <包名> dist-tags --json`：`preview` 为本次版本，预览版不占 `latest`。安装示例必须使用 `@preview` 或精确版本。
 
 本地仅预检：在该公共 tag checkout 中设置 `RELEASE_TAG`，执行 `node scripts/release/publish-npm.mjs --assets <附件目录>`。默认不发布；`--verify-only` 仅验证已发 registry 版本及完整性。
 
-部分发布失败时重跑同一 Actions run，保留原附件。已存在版本只有 tarball 的 SHA512 与 registry integrity 完全一致才跳过；字节不同或 `latest` 错指预览版时停止，由维护者调查。不要以同一版本重新 pack 后重试。实际 registry 发布与安装 job 全绿后才能宣布 npm 安装可用。
+部分发布失败时重跑同一 Actions run，保留原附件。已存在版本只有 tarball 的 SHA512 与 registry integrity 完全一致才同时跳过 dry-run 和上传，最后仍核对全部包的字节与 `preview`。npm 11/12 对已发布正式版本连 dry-run 也会拒绝，因此嵌入包 `0.0.8` 已成功、完整版失败时不能再预检嵌入包。字节不同或 `latest` 错指本次版本时停止，由维护者调查。不要以同一版本重新 pack 后重试。实际 registry 发布与安装 job 全绿后才能宣布 npm 安装可用。
+
+2026-09-22 的真实首发确认了两个 registry 行为：发布前的 404 可被 CDN 缓存五分钟；即使上传指定 `--tag preview`，三个新包仍同时出现指向本次版本的 `latest`。发布器现用独立查询参数绕过旧缓存，并为每包进行至多 40 轮、间隔 3 秒的可见性检查（单次请求超时 30 秒）。不能仅凭 CLI 的上传成功行或指定过 `--tag preview` 就宣布发行验收通过。
+
+首发标签恢复工具 `node scripts/release/repair-first-publish.mjs --assets <原附件目录>` 默认只列计划。它核对 tag 属于公共 v8、附件清单和全部 registry 字节，要求每个包只有这一个版本且 `preview` 正确。只有 `latest` 缺失或正指向本次版本才接受；多版本历史、异字节或其他 latest 均拒绝。在 GitHub Actions 中显式加 `--apply` 后，只移除该首次发行的隐式 latest，再验证 preview/integrity。该工具不会重新上传包，也不能用于清理已经存在正式版历史的包。
+
+`v8-npm-recovery.yml` 仅处理 `scriptor-v0.1.0-preview.5`，由专用公共主题分支触发标签恢复与无 token 的 Windows registry 安装验收。旧上传运行的失败记录保留；恢复运行提供补完验收的证据。
+
+### 后续自动发布：推荐迁移到 Trusted Publishing
+
+截至 2026-09-22，npm 推荐 OIDC Trusted Publishing，避免长期保存发布 token。npm 官方已宣布 **2027 年 1 月移除 granular token 直接发布新版本的能力**；当前 token 工作流可用于首次发布，但需要在此之前迁移。
+
+Trusted Publisher 要求包已存在，staged publishing 也不能用于创建全新包。因此先完成三个包的真实首发，再为每个包配置可信发布者：
+
+| npm 设置项 | 本项目值 |
+| --- | --- |
+| Provider | GitHub Actions |
+| Organization or user | `lingfengQAQ` |
+| Repository | `webnovel-writer` |
+| Workflow filename | `v8-npm-publish.yml`（只填文件名） |
+| Environment name | 当前工作流未声明 environment，留空 |
+| Allowed actions | 允许 `npm publish`，保持当前自动发布方式 |
+
+2026-09-03 后创建的可信发布者默认允许暂存；要直接发布须额外允许 `npm publish`。使用 GitHub-hosted runner、`id-token: write`、Node ≥22.14.0 和 npm ≥11.5.1，三个包的 `repository.url` 必须与公共 GitHub 仓库精确匹配。公开仓库和公开包在 OIDC 发布时自动生成 provenance。
+
+**当前发布器仍强制要求 `NODE_AUTH_TOKEN`，尚未迁移为无 token 发布。** 迁移时须修改该断言、验证工作流使用的 npm 版本并补无 token 的认证回归；仅在 npm 网站设置 Trusted Publisher 不够。验证 OIDC 实际发布成功后，再撤销首发 token 并移除 GitHub 的 `NPM_TOKEN`。`npm whoami` 不反映 OIDC 发布认证状态，不能当作它的预检。
+
+如果希望每个版本增加人工确认，可改为 `npm stage publish <原件.tgz>`，维护者用 2FA 审查并批准，再运行 registry 安装验收。这会改变当前自动发布与安装 job 的衔接，不能只替换 token 权限或一条命令。
+
+官方依据（核对于 2026-09-22）：[发布命令](https://docs.npmjs.com/cli/v12/commands/npm-publish/)、[创建 granular token](https://docs.npmjs.com/creating-and-viewing-access-tokens/)、[token 权限与淘汰时间](https://docs.npmjs.com/about-access-tokens/)、[Trusted Publishing](https://docs.npmjs.com/trusted-publishers/)、[首次配置的前提](https://docs.npmjs.com/cli/v12/commands/npm-trust/)、[provenance](https://docs.npmjs.com/generating-provenance-statements/)、[staged publishing](https://docs.npmjs.com/staged-publishing/)。
 
 ## 失败与恢复
 
-失败保留检查记录和草稿，不宣布发布成功。需要改源码时用新提交与新预览版本；发布后的问题以修复版和已知问题说明处理。代码回退不能自动还原已迁移的书仓，应提供备份恢复边界。
+失败保留检查记录和草稿，不宣布发布成功。需要改源码时用新提交与新预览版本；工作流 checkout 的是 tag，分支上的发布器修复不会自动进入旧 tag 的重跑，也不能重写旧 tag。发布后的问题以修复版和已知问题说明处理。代码回退不能自动还原已迁移的书仓，应提供备份恢复边界。
 
 ## 社区与依赖
 

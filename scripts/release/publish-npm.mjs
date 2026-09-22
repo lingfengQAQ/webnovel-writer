@@ -88,7 +88,10 @@ export function registryStatus(pkg, metadata) {
 }
 
 async function metadataFor(name) {
-  const response = await fetch(`${registry}${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(30000), headers: { accept: 'application/json' } })
+  const url = new URL(encodeURIComponent(name), registry)
+  // npm's CDN can cache a pre-publication 404 for five minutes.
+  url.searchParams.set('scriptor-verify', `${Date.now()}-${Math.random()}`)
+  const response = await fetch(url, { signal: AbortSignal.timeout(30000), headers: { accept: 'application/json', 'cache-control': 'no-cache' } })
   if (response.status === 404) return undefined
   assert.ok(response.ok, `Registry lookup failed (${response.status}): ${name}`)
   return response.json()
@@ -97,7 +100,7 @@ async function metadataFor(name) {
 async function verifyRegistry(packages) {
   for (const pkg of packages) {
     let verified = false
-    for (let attempt = 0; attempt < 8; attempt++) {
+    for (let attempt = 0; attempt < 40; attempt++) {
       const metadata = await metadataFor(pkg.name)
       if (registryStatus(pkg, metadata) === 'identical' && metadata['dist-tags']?.preview === pkg.version) {
         verified = true
@@ -126,7 +129,9 @@ async function main() {
   for (const pkg of packages) {
     plan.push({ pkg, state: registryStatus(pkg, await metadataFor(pkg.name)) })
   }
-  for (const { pkg } of plan) {
+  for (const { pkg, state } of plan) {
+    // npm rejects already-published stable versions even in --dry-run mode.
+    if (state === 'identical') continue
     runNpm(['publish', pkg.filename, '--dry-run', '--ignore-scripts', '--access', 'public', '--tag', 'preview', `--registry=${registry}`])
   }
   if (!args.includes('--publish')) return console.log('[npm] preflight passed; no packages published')

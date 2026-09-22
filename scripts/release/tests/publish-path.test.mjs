@@ -59,6 +59,10 @@ const fixturePaths = {
   stub: path.join(root, 'scripts/release/tests/fixtures/stub-npm.mjs'),
 }
 
+function readInvocations(fixture) {
+  return fs.readFileSync(path.join(fixture, 'invocations.jsonl'), 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line))
+}
+
 /** Run the real publisher against the stub npm CLI and a first-publication registry. */
 function runPublisher({ assets, fixture, mode = '--publish', environment = {}, keepState = false }) {
   const result = spawnSync(process.execPath, [fixturePaths.runner, assets, fixture, ...mode.split(' ')], {
@@ -77,7 +81,8 @@ function runPublisher({ assets, fixture, mode = '--publish', environment = {}, k
   })
   assert.equal(result.status, 0, `publish-path fixture failed: ${result.stdout}${result.stderr}`)
   const report = JSON.parse(result.stdout.trim().split('\n').pop())
-  const invocations = fs.readFileSync(path.join(fixture, 'invocations.jsonl'), 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line))
+  assert.equal(report.code, 0, `publisher failed:\n${fs.readFileSync(path.join(fixture, 'publisher.out'), 'utf8')}${fs.readFileSync(path.join(fixture, 'publisher.err'), 'utf8')}`)
+  const invocations = readInvocations(fixture)
   return { report, invocations }
 }
 
@@ -99,6 +104,10 @@ test('publish path preflights every package, then uploads the same tarballs in d
   const dryRuns = invocations.filter(item => item.dryRun)
   const uploads = invocations.filter(item => !item.dryRun)
   assert.equal(dryRuns.length, 3, 'every package must be preflighted before any upload')
+  assert.deepEqual(invocations.map(item => ({ name: item.name, dryRun: item.dryRun })), [
+    ...packages.map(item => ({ name: item.name, dryRun: true })),
+    ...packages.map(item => ({ name: item.name, dryRun: false })),
+  ], 'all package preflights must finish before the first upload')
   assert.deepEqual(uploads.map(item => item.name), packages.map(item => item.name))
   for (const item of invocations) {
     assert.equal(item.command, 'publish')
@@ -129,9 +138,44 @@ test('publish retry skips a byte-identical version and never re-uploads it', () 
   const { invocations } = runPublisher({ assets, fixture, keepState: true })
   const uploads = invocations.filter(item => !item.dryRun)
   assert.deepEqual(uploads, [], 'a re-run must not publish an existing name/version again')
-  assert.equal(invocations.filter(item => item.dryRun).length, 3, 'the preflight still runs on a retry')
+  assert.deepEqual(invocations, [], 'identical versions must skip dry-run too, including the stable embedding version')
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(fixture, 'published.json'), 'utf8')), firstUploads)
   for (const item of packages) assert.equal(firstUploads[item.name].distTag, 'preview')
+}))
+
+test('partial publish retry preflights and uploads only the missing package', () => withFixture(({ assets, fixture, packages }) => {
+  runPublisher({ assets, fixture })
+  const firstUploads = JSON.parse(fs.readFileSync(path.join(fixture, 'published.json'), 'utf8'))
+  const meta = packages[2]
+  const partialState = { ...firstUploads }
+  delete partialState[meta.name]
+  fs.writeFileSync(path.join(fixture, 'published.json'), JSON.stringify(partialState))
+  const { invocations } = runPublisher({ assets, fixture, keepState: true })
+  assert.deepEqual(invocations.map(item => ({ name: item.name, dryRun: item.dryRun })), [
+    { name: meta.name, dryRun: true },
+    { name: meta.name, dryRun: false },
+  ])
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(fixture, 'published.json'), 'utf8')), firstUploads)
+}))
+
+test('publish retry rejects different registry bytes before invoking npm', () => withFixture(({ assets, fixture, packages }) => {
+  runPublisher({ assets, fixture })
+  const state = JSON.parse(fs.readFileSync(path.join(fixture, 'published.json'), 'utf8'))
+  state[packages[1].name].integrity = 'sha512-different'
+  fs.writeFileSync(path.join(fixture, 'published.json'), JSON.stringify(state))
+  assert.throws(() => runPublisher({ assets, fixture, keepState: true }), /Registry version has different bytes/)
+  assert.deepEqual(readInvocations(fixture), [])
+}))
+
+test('a failed final preflight prevents every upload', () => withFixture(({ assets, fixture, packages }) => {
+  assert.throws(() => runPublisher({ assets, fixture, environment: { SCRIPTOR_FAIL_DRY_RUN: packages[2].name } }), /Injected dry-run failure/)
+  assert.deepEqual(readInvocations(fixture).map(item => ({ name: item.name, dryRun: item.dryRun })),
+    packages.map(item => ({ name: item.name, dryRun: true })))
+}))
+
+test('registry verification failure after uploads is reported as a failed publish', () => withFixture(({ assets, fixture, packages }) => {
+  assert.throws(() => runPublisher({ assets, fixture, environment: { SCRIPTOR_FAIL_REGISTRY_AFTER_UPLOAD: packages[0].name } }), /Registry lookup failed \(500\)/)
+  assert.deepEqual(readInvocations(fixture).filter(item => !item.dryRun).map(item => item.name), packages.map(item => item.name))
 }))
 
 test('publish requires the GitHub Actions environment before any upload', () => withFixture(({ assets, fixture }) => {
@@ -145,6 +189,6 @@ test('publish requires the GitHub Actions environment before any upload', () => 
   const report = JSON.parse(runner.stdout.trim().split('\n').pop())
   assert.equal(runner.status, 0, 'the fixture itself must report its result')
   assert.notEqual(report.code, 0, 'publishing outside Actions must fail')
-  const invocations = fs.readFileSync(path.join(fixture, 'invocations.jsonl'), 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line))
+  const invocations = readInvocations(fixture)
   assert.deepEqual(invocations.filter(item => !item.dryRun), [], 'nothing may be uploaded without provenance authority')
 }))
