@@ -89,14 +89,17 @@ describe('聚合 skills 体系（渐进式披露与 Subagent 协同）', () => {
     expect(text).toContain('差异化')
     expect(text).toContain('禁区')
     expect(text).toContain('novel_create_book')
-    expect(text).toContain('novel_seed_min_design')
+    expect(text).toContain('快速开写')
+    expect(text).not.toContain('novel_seed_min_design')
     expect(text).toContain('未经作者明确同意，严禁进入建书')
   })
 
   it('定调设计：含契约六部 + 双路径 + 分部更新纪律 + 强制多方向', () => {
     const text = readSkill('novel-design')
     expect(text).toContain('契约六部')
-    expect(text).toContain('novel_seed_min_design')
+    // 快速开写走起草确认,seed 只供测试/走查,不出现在作者面技能里
+    expect(text).toContain('路径 A：快速开写')
+    expect(text).not.toContain('novel_seed_min_design')
     expect(text).toContain('novel_update_contract')
     expect(text).toContain('题材与读者定位')
     expect(text).toContain('创作禁区与不可妥协项')

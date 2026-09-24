@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
-import { activeChapterLine, parseVolumeAllocations, renderBookProgress, scanDesign, scanDesignDetail, selectCurrentVolume, seedMinDesign, writePending, serializeDocument } from '../src/index'
+import { activeChapterLine, listConfirmedEmpty, parseVolumeAllocations, renderBookProgress, scanDesign, scanDesignDetail, selectCurrentVolume, seedMinDesign, writePending, serializeDocument } from '../src/index'
 import type { LastCommitResult } from '../src/commit/history'
 
 const roots: string[] = []
@@ -64,6 +64,40 @@ describe('待补便签(算不出来的才落盘)', () => {
   })
 })
 
+describe('已确认但无内容(#165,只提示不参与推导)', () => {
+  it('只有标注的已确认分部才标;标题分部下级卷行、列表行内说明、后续正文都算内容;待补便签不算', () => {
+    const root = mkBook()
+    fs.mkdirSync(path.join(root, '大纲'), { recursive: true })
+    fs.writeFileSync(path.join(root, '大纲/故事骨架.md'), [
+      '# 故事骨架', '',
+      '## 主角目标与成长轨迹 〔已确认〕', '', '从杂役到宗主。', '',
+      '## 核心冲突与对抗力量 〔已确认〕', '', '待补：对手动机', '',
+      '## 故事阶段与关键转折 〔留白〕', '',
+      '- 主线与支线：复仇为主，师门为辅 〔已确认〕',
+      '- 线索悬念伏笔 〔已确认〕',
+      '  身世之谜贯穿全书',
+      '- 信息披露 〔已确认〕',
+      '',
+    ].join('\n'), 'utf-8')
+    fs.writeFileSync(path.join(root, '大纲/分卷布局.md'), ['# 分卷布局', '', '## 故事阶段分配 〔已确认〕', '', '- 卷01：入门立足 〔已确认〕', ''].join('\n'), 'utf-8')
+    const d = scanDesignDetail(root)
+    const empty = (parts: readonly { 名称: string; 无内容?: true }[]) => parts.filter((p) => p.无内容 === true).map((p) => p.名称)
+    expect(empty(d.骨架.分部)).toEqual(['核心冲突与对抗力量', '信息披露'])
+    expect(empty(d.分卷.分部)).toEqual([])
+    expect(listConfirmedEmpty(d)).toEqual(['故事骨架·核心冲突与对抗力量', '故事骨架·信息披露'])
+  })
+
+  it('seed 占位设计:契约、骨架、空卷行与无正文世界书条目全部列出;推导仍判开写就绪', () => {
+    const root = mkBook(true)
+    const empty = listConfirmedEmpty(scanDesignDetail(root))
+    expect(empty).toHaveLength(18)
+    expect(empty).toEqual(expect.arrayContaining(['契约·叙事方式与文风基调', '分卷布局·卷01', '世界书·世界规则/基础规则']))
+    // 卷纲「叙事结构」下有一行说明,不算空
+    expect(empty.some((e) => e.startsWith('卷01卷纲'))).toBe(false)
+    expect(scanDesign(root).骨架当前阶段已确认).toBe(true)
+  })
+})
+
 describe('书级进度卡渲染(纯函数,固定输入固定输出)', () => {
   const never: LastCommitResult = { ok: false, kind: 'never', detail: 'x' }
   const scoped: LastCommitResult = { ok: true, prefix: 'design(ch0007)', summary: '确认细纲', hash: 'abc', chapter: { 卷: null, 章: 7 } }
@@ -73,8 +107,11 @@ describe('书级进度卡渲染(纯函数,固定输入固定输出)', () => {
     const detail = scanDesignDetail(root)
     const out = renderBookProgress(detail, { '大纲/故事骨架.md': never, '作品契约/契约.md': scoped }, ['卷末锚点未兑现'])
     expect(out).toContain('【书级进度卡】')
-    expect(out).toContain('题材与读者定位〔已确认〕｜第0007章')
-    expect(out).toContain('主角目标与成长轨迹〔已确认〕｜未提交')
+    // seed 只写占位确认态:只有标注没有正文的分部逐行标「无内容」,卡首汇总条数
+    expect(out).toContain('已确认但无内容：18 处')
+    expect(out).toContain('题材与读者定位〔已确认〕（无内容）｜第0007章')
+    expect(out).toContain('主角目标与成长轨迹〔已确认〕（无内容）｜未提交')
+    expect(out).toContain('人物档案：1条（已确认 1；无正文：主角）')
     expect(out).toContain('近期窗口余量 1（见底，需滚动补充）')
     expect(out).toContain('本卷未决偏离：1 条（卷末锚点未兑现）')
     expect(out).not.toMatch(/\d{4}-\d{2}-\d{2}/)

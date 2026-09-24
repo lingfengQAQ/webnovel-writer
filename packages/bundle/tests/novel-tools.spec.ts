@@ -3,8 +3,8 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { spawnSync } from 'node:child_process'
-import { createNovelTools } from '../src/novel-tools'
-import { createBook } from '@webnovel/core'
+import { createNovelTools, NOVEL_TEST_TOOL_NAMES, NOVEL_TOOL_NAMES } from '../src/novel-tools'
+import { createBook, scanDesign } from '@webnovel/core'
 import { nativeWriteStub } from './fixtures/native-write-stub'
 
 const roots: string[] = []
@@ -22,6 +22,7 @@ describe('主 Agent 专用 Tools (方案 A)', () => {
       nativeWrite: nativeWriteStub,
       workspaceRoot: () => ws,
       bookRootOfBookId: (id) => path.join(ws, '仙途长生'),
+      testTools: true,
     })
 
     const createTool = tools.find((t) => t.name === 'novel_create_book')!
@@ -70,6 +71,47 @@ describe('主 Agent 专用 Tools (方案 A)', () => {
     const statusRes = (await statusTool.execute({ bookId: createRes.bookId })) as { ok: boolean; chapters: any[] }
     expect(statusRes.ok).toBe(true)
     expect(statusRes.chapters.length).toBeGreaterThan(0)
+    // seed 只写占位确认态:推导照常判开写就绪,另列出只有标注没有正文的分部(#165)
+    const design = (statusRes as unknown as { design: { 建议: string; 已确认无内容?: string[] } }).design
+    expect(design.建议).toBe('开写就绪')
+    expect(design.已确认无内容).toEqual(expect.arrayContaining(['故事骨架·主角目标与成长轨迹', '世界书·人物档案/主角']))
+  })
+
+  it('seed 只供测试/走查：默认不注册、不进 NOVEL_TOOL_NAMES，testTools 开启才注册', () => {
+    const deps = { nativeWrite: nativeWriteStub, workspaceRoot: () => undefined, bookRootOfBookId: () => undefined }
+    const names = createNovelTools(deps).map((t) => t.name)
+    expect(names).toEqual([...NOVEL_TOOL_NAMES])
+    for (const name of NOVEL_TEST_TOOL_NAMES) {
+      expect(names).not.toContain(name)
+      expect(NOVEL_TOOL_NAMES).not.toContain(name)
+    }
+    const withTest = createNovelTools({ ...deps, testTools: true }).map((t) => t.name)
+    expect(withTest).toEqual(expect.arrayContaining([...NOVEL_TOOL_NAMES, ...NOVEL_TEST_TOOL_NAMES]))
+    expect(withTest).toHaveLength(NOVEL_TOOL_NAMES.length + NOVEL_TEST_TOOL_NAMES.length)
+  })
+
+  it('建书即登记最小模块：不经 seed，世界书工具确认条目后即过「世界构建」', async () => {
+    const ws = mkRoot()
+    const bookRoot = path.join(ws, '工具书')
+    const tools = createNovelTools({ nativeWrite: nativeWriteStub, workspaceRoot: () => ws, bookRootOfBookId: () => bookRoot })
+    const call = async (name: string, args: Record<string, unknown>) =>
+      (await tools.find((t) => t.name === name)!.execute(args, { agent: { id: 'agent-1', session: { append: () => {} } } })) as { ok: boolean; bookId?: string }
+    const created = await call('novel_create_book', {
+      bookName: '工具书',
+      concept: { 状态: '已确认', 核心创意: 'x', 题材与目标读者: 'x', 主角核心欲望: 'x', 主要冲突: 'x', 核心看点: 'x', 差异化方向: 'x', 明确不要什么: 'x' },
+    })
+    expect(created.ok).toBe(true)
+    const declared = fs.readFileSync(path.join(bookRoot, '世界书/模块声明.md'), 'utf-8')
+    expect(declared).toContain('- 人物档案')
+    expect(declared).toContain('- 世界规则')
+    expect(scanDesign(bookRoot).世界书最小模块足够).toBe(false)
+    for (const [模块, 名称, 类型] of [['人物档案', '主角', '人物'], ['世界规则', '修炼体系', '规则']] as const) {
+      const r = await call('novel_confirm_worldbook_entry', {
+        bookId: created.bookId, 模块, 名称, 类型, 性质: '计划', 状态: '已确认', 来源: '对谈共创', 正文: `# ${名称}\n\n设定正文。\n`,
+      })
+      expect(r.ok, 模块).toBe(true)
+    }
+    expect(scanDesign(bookRoot).世界书最小模块足够).toBe(true)
   })
 
   it('novel_prepare_pack & novel_settle_chapter 守卫：无待审稿报错、无裁决通道拒绝沉淀', async () => {
@@ -109,6 +151,7 @@ describe('主 Agent 专用 Tools (方案 A)', () => {
       nativeWrite: nativeWriteStub,
       workspaceRoot: () => ws,
       bookRootOfBookId: (id) => path.join(ws, '提交纪律书'),
+      testTools: true,
     })
     const createTool = tools.find((t) => t.name === 'novel_create_book')!
     const seedTool = tools.find((t) => t.name === 'novel_seed_min_design')!

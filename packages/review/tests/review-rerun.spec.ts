@@ -185,3 +185,35 @@ describe('陈旧记录的重跑通道（D-002 回归）', () => {
     expect(record.问题).toEqual([])
   })
 })
+
+describe('待回写模块与完成同源（#162 回归）', () => {
+  const allModules = () => listChecks().filter((c) => c.执行形态 !== '作者').map((c) => c.名称)
+
+  it('首轮不预建记录逐模块回写：待回写模块＝注册全集减已回写，为空当且仅当完成', () => {
+    const root = mkBook()
+    confirmWithHard(root)
+    assembleMaterials(root, key)
+    putPending(root, `巷口风大。${HARD}。他没有回头。`)
+    const names = allModules()
+    for (const [i, name] of names.entries()) {
+      const r = ingestFindings(root, key, name, [])
+      expect(r.ok, name).toBe(true)
+      expect(r.待回写模块).toEqual(names.slice(i + 1))
+      expect(r.record!.完成).toBe(i === names.length - 1)
+    }
+  })
+
+  it('带指纹重置后：刚回写的模块之外全部列为待回写', () => {
+    const root = mkBook()
+    confirmWithHard(root)
+    assembleMaterials(root, key)
+    putPending(root, `巷口风大。${HARD}。他没有回头。`)
+    expect(runReview(root, key).ok).toBe(true)
+    ingestAll(root)
+    putPending(root, `雨停得早。${HARD}。他回头看了一眼。`)
+    const r = ingestFindings(root, key, '文本规范检查', [], computeReview(root, key).record!.审读指纹)
+    expect(r.ok).toBe(true)
+    expect(r.record!.完成).toBe(false)
+    expect(r.待回写模块).toEqual(allModules().filter((name) => name !== '文本规范检查'))
+  })
+})

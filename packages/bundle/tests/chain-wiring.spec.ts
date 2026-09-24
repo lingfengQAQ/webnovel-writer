@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { createNovelTools } from '../src/novel-tools'
+import { computeReview, listChecks, registerDefaultChecks } from '@webnovel/review'
 import { nativeWriteStub } from './fixtures/native-write-stub'
 
 const roots: string[] = []
@@ -19,6 +20,7 @@ function makeTools(ws: string) {
     nativeWrite: nativeWriteStub,
     workspaceRoot: () => ws,
     bookRootOfBookId: (id) => path.join(ws, '链路书'),
+    testTools: true,
   })
   const call = async (name: string, args: Record<string, unknown>) => {
     const tool = tools.find((t) => t.name === name)!
@@ -155,6 +157,38 @@ describe('运行链路接线(工具面验收)', () => {
     expect(r.ok).toBe(true)
     // 仅回写一个模块:其余模块未回写,审核不判完成
     expect(r.完成).toBe(false)
+  })
+
+  it('审核回写:待回写模块与完成同源;重置后报出暂存待继承的处置条数(#162)', async () => {
+    const ws = mkWs()
+    const { call } = makeTools(ws)
+    const { bookId } = await makeBook(ws, call)
+    const bookRoot = path.join(ws, '链路书')
+    const draft = path.join(bookRoot, '草稿区/草稿/卷01-开篇任务/稿1.md')
+    fs.mkdirSync(path.dirname(draft), { recursive: true })
+    fs.writeFileSync(draft, '---\n角色: 待审稿\n---\n\n主角走进城门。\n', 'utf-8')
+    registerDefaultChecks()
+    const all = listChecks().filter((c) => c.执行形态 !== '作者').map((c) => c.名称)
+    const chapter = { 卷: 1, 章: 1, 章名: '开篇任务' }
+    const kept = { 问题说明: '开场偏慢', 证据位置: '首段', 影响范围: '正文', 处置: '作者保留' }
+
+    for (const [i, 模块名] of all.entries()) {
+      const r = await call('novel_record_review_findings', { bookId, ...chapter, 模块名, 发现项: 模块名 === '章节结构审读' ? [kept] : [] })
+      expect(r.ok, 模块名).toBe(true)
+      expect(r.待回写模块).toEqual(all.slice(i + 1))
+      expect(r.完成).toBe(i === all.length - 1)
+      if (i === 0) expect(r.message).toContain(`尚待回写模块：${all.slice(1).join('、')}`)
+    }
+
+    // 改稿后带当轮指纹回写第一个模块:旧轮次重置,其余模块全部列为待回写,上一轮处置暂存待继承
+    fs.writeFileSync(draft, '---\n角色: 待审稿\n---\n\n主角走进城门，看见告示。\n', 'utf-8')
+    const fingerprint = computeReview(bookRoot, chapter).record!.审读指纹
+    const reset = await call('novel_record_review_findings', { bookId, ...chapter, 模块名: all[0], 发现项: [], 审读指纹: fingerprint })
+    expect(reset.ok).toBe(true)
+    expect(reset.完成).toBe(false)
+    expect(reset.待回写模块).toEqual(all.slice(1))
+    expect(reset.待继承处置数).toBe(1)
+    expect(reset.message).toContain('上一轮已给处置 1 条暂存待继承')
   })
 
   it('novel_record_memory 落书房,不进书仓 git;索引与条目一致', async () => {

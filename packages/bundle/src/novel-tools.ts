@@ -5,7 +5,7 @@ import type { ToolExecutionToken } from '@deepseek-ai/dsh-tools'
  * 供主管 Agent 显式调用，严格保证不变量、路径解析与状态跃迁：
  * - novel_create_book: 建书立项（带构想完整度校验 N2）
  * - novel_update_contract: 安全更新作品契约分部（防 N1 抹除）；分部「已确认」时随确认产生 design: 提交
- * - novel_seed_min_design: 注入最小设计骨架；成功后整批一次 design: 提交
+ * - novel_seed_min_design: 测试/走查专用（默认不注册，见 NOVEL_TEST_TOOL_NAMES）：注入占位设计骨架；成功后整批一次 design: 提交
  * - novel_get_story_status: 获取全书/章节真源推导状态（N4）
  * - novel_select_book: 显式切换当前会话正在写的书
  * - novel_prepare_pack: 组装待定稿包七件（定稿准备，呈作者裁决前）
@@ -44,6 +44,7 @@ import {
   deriveDesign,
   listResumable,
   listAuthorMemory,
+  listConfirmedEmpty,
   parseWindow,
   paths,
   preparePack,
@@ -151,6 +152,8 @@ export interface NovelToolsDeps {
   /** 按会话解析书仓（D10）：agent 的会话 cwd 优先，全局认领兜底。 */
   readonly bookRootOfBookId: (bookId: string, agent?: AgentLike) => string | undefined
   readonly askFn?: AskFn
+  /** 注册测试/走查专用工具（NOVEL_TEST_TOOL_NAMES）；作者环境不开，默认 false。 */
+  readonly testTools?: boolean
 }
 
 function provenanceOf(ctx: ToolExecContext | undefined, targets?: readonly string[]): OperationProvenance | undefined {
@@ -167,15 +170,13 @@ function provenanceOf(ctx: ToolExecContext | undefined, targets?: readonly strin
 }
 
 /**
- * 小说工具名单一事实来源（dsh 运行时对齐批）：主 Agent scoped 注册与
- * 子 Agent `tools.restrict({ deny })` 共用本表。
+ * 小说工具名单一事实来源（dsh 运行时对齐批）：作者环境下主 Agent scoped 注册的全集。
  * 一致性由测试保证：本表与 `createNovelTools(stub).map(t => t.name)` 逐项相等。
  */
 export const NOVEL_TOOL_NAMES: readonly string[] = [
   'novel_select_book',
   'novel_create_book',
   'novel_update_contract',
-  'novel_seed_min_design',
   'novel_get_story_status',
   'novel_search_finalized',
   'novel_index_manage',
@@ -200,6 +201,12 @@ export const NOVEL_TOOL_NAMES: readonly string[] = [
   'novel_note_pending',
   'novel_get_book_progress',
 ]
+
+/**
+ * 测试/走查专用工具：只在 `deps.testTools` 为真时注册，不进 NOVEL_TOOL_NAMES。
+ * seed 只写占位确认态（各部只有「已确认」标注、没有正文），不得作为作者的开写入口。
+ */
+export const NOVEL_TEST_TOOL_NAMES: readonly string[] = ['novel_seed_min_design']
 
 export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
   async function writeNative(root: string, op: FileOp, exec?: ToolExecContext): Promise<void> {
@@ -407,7 +414,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
     },
     {
       name: 'novel_seed_min_design',
-      description: '为新小说一键生成最小可用设计（定调、世界书、骨架、分卷与卷01近期规划），完成开写就绪。成功后整批一次 design: 提交；重跑幂等（已提交过则无改动、不重复提交）。',
+      description: '【测试/走查专用】为测试书一键写入占位设计（各部只有「已确认」标注、没有正文），直接满足开写就绪门槛；不得用于作者的书。成功后整批一次 design: 提交；重跑幂等（已提交过则无改动、不重复提交）。',
       parameters: {
         type: 'object',
         properties: {
@@ -479,7 +486,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
           properties: {
             ok: { type: 'boolean', description: '是否成功' },
             bookId: { type: 'string', description: '书id' },
-            design: { type: 'object', description: '设计面事实清单与建议（R1：建议仅供参考，不参与门禁）' },
+            design: { type: 'object', description: '设计面事实清单与建议（R1：建议仅供参考，不参与门禁）；「已确认无内容」列出只有状态标注、没有正文的设计分部（不参与推导，提示补内容）' },
             chapters: { type: 'array', description: '章节事实清单列表（每章含 §8 逐行事实项与建议）' },
             reason: { type: 'string', description: '失败原因' },
           },
@@ -497,7 +504,10 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
           // 两段返回(设计面 + 章节面),均为 R1 事实清单形状:逐项事实 + 可选建议(无权威,判断归主 Agent)
           // 设计面事实按当前卷选择器取卷(任务21, B3):active 取该卷;planning 检查规划目标卷;empty 默认卷1
           const selection = selectCurrentVolume(bookRoot)
-          const design = deriveDesign(scanDesign(bookRoot, selection.kind === 'active' ? selection.卷 : selection.kind === 'planning' ? selection.规划卷 : 1))
+          const derived = deriveDesign(scanDesign(bookRoot, selection.kind === 'active' ? selection.卷 : selection.kind === 'planning' ? selection.规划卷 : 1))
+          // 只有标注没有正文的分部照常计入推导(标注即作者确认),这里单列出来,免得「开写就绪」掩盖空设计
+          const 已确认无内容 = listConfirmedEmpty(scanDesignDetail(bookRoot))
+          const design = 已确认无内容.length === 0 ? derived : { ...derived, 已确认无内容 }
           const resumable = listResumable(bookRoot)
           const chapters = resumable.map((r) => ({
             key: r.key,
@@ -1428,8 +1438,9 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
           type: 'object',
           properties: {
             ok: { type: 'boolean', description: '是否成功' },
-            完成: { type: 'boolean', description: '八维是否全部回写完毕' },
-            待回写模块: { type: 'array', description: '尚未回写的模块名' },
+            完成: { type: 'boolean', description: '全部审读模块（确定性＋语义）是否回写完毕' },
+            待回写模块: { type: 'array', description: '尚未回写的模块名（与「完成」同源：为空即完成）' },
+            待继承处置数: { type: 'number', description: '上一轮已给处置中暂存待继承的条数' },
             message: { type: 'string', description: '结果说明' },
             reason: { type: 'string', description: '失败原因' },
           },
@@ -1446,14 +1457,17 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
           const r = ingestFindings(book.bookRoot, keyResult.key, String(args['模块名']).trim(), Array.isArray(args['发现项']) ? (args['发现项'] as unknown[]) : [],
             typeof args['审读指纹'] === 'string' ? args['审读指纹'] : undefined)
           if (!r.ok) return { ok: false, reason: r.reason }
-          const pending = Object.entries(r.record?.模块 ?? {}).filter(([, st]) => st.待回写 === true).map(([name]) => name)
+          const 完成 = r.record?.完成 === true
+          const pending = r.待回写模块 ?? []
+          const 待继承处置数 = r.record?.待继承处置?.length ?? 0
           return {
             ok: true,
-            完成: r.record?.完成 === true,
+            完成,
             待回写模块: pending,
-            message: r.record?.完成 === true
+            待继承处置数,
+            message: 完成
               ? '发现项已回写，全部模块完成，审核通过。'
-              : `发现项已回写。尚待回写模块：${pending.join('、') || '无'}（全部回写后审核才完成）。`,
+              : `发现项已回写。尚待回写模块：${pending.join('、')}（全部回写后审核才完成）。${inheritNote(待继承处置数)}`,
           }
         } catch (err) {
           return { ok: false, reason: `发现项回写失败: ${err instanceof Error ? err.message : String(err)}` }
@@ -1865,7 +1879,8 @@ ${摘要现文}`,
     'novel_resolve_proposal', 'novel_note_pending',
   ])
   const nativeTools = new Set(['novel_update_contract', 'novel_update_skeleton', 'novel_update_volume_layout', 'novel_roll_window', 'novel_confirm_worldbook_entry', 'novel_confirm_volume_outline'])
-  return tools.map((tool) => {
+  const registered = deps.testTools === true ? tools : tools.filter((tool) => !NOVEL_TEST_TOOL_NAMES.includes(tool.name))
+  return registered.map((tool) => {
     if (!locked.has(tool.name)) return tool
     return {
       ...tool,
@@ -1885,6 +1900,11 @@ ${摘要现文}`,
       },
     }
   })
+}
+
+/** 重置轮次暂存的上一轮处置:明示条数与沿用规则,免得调用方以为上一轮结论凭空消失。 */
+function inheritNote(n: number): string {
+  return n === 0 ? '' : `上一轮已给处置 ${n} 条暂存待继承：对应模块重新回写时，模块名、证据位置、问题说明一致的发现项沿用原处置，其余作废。`
 }
 
 /** 设计侧确认工具的公共收尾:整批一次 design: 提交(拍板 7),失败返回「已落盘但未提交」。 */

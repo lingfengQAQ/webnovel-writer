@@ -61,10 +61,14 @@ function labeledStateOf(text: string): string | null {
   return typeof v === 'string' ? v : null
 }
 
-function windowHasChapter(bookRoot: string, 卷: number, 章名: string): boolean {
+function readyWindowNames(bookRoot: string, 卷: number): string[] {
   const 窗口文 = readText(bookRoot, paths.近期窗口(卷))
-  if (窗口文 === null) return false
-  return parseWindow(窗口文).some((e) => e.name === 章名 && isWindowEntryReady(e.state))
+  if (窗口文 === null) return []
+  return parseWindow(窗口文).filter((e) => isWindowEntryReady(e.state)).map((e) => e.name)
+}
+
+function windowHasChapter(bookRoot: string, 卷: number, 章名: string): boolean {
+  return readyWindowNames(bookRoot, 卷).includes(章名)
 }
 
 /**
@@ -133,7 +137,9 @@ export function checkConfirmable(bookRoot: string, key: Pick<ChapterKey, '卷' |
   if (candidateText === null) gaps.push('候选细纲不存在')
 
   if (!windowHasChapter(bookRoot, key.卷, key.章名) && !hasConfirmedOutline(bookRoot, key)) {
-    gaps.push('窗口未就绪或无匹配已确认窗口项')
+    // 带上可进入条目名:章名须与其中一条同名,调用方一次就能对上,不必反复试窗口
+    const ready = readyWindowNames(bookRoot, key.卷)
+    gaps.push(`窗口未就绪或无匹配已确认窗口项（章名须与近期窗口中一条可进入条目同名；${ready.length === 0 ? '当前窗口无可进入条目' : `当前可进入：${ready.join('、')}`}）`)
   }
 
   const refLines = candidateText === null ? [] : parseOutline(candidateText).来源引用

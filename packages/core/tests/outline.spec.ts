@@ -211,8 +211,24 @@ describe('已定稿章细纲勘误(候选→再确认, F-001/任务19)', () => {
     writeCandidate(root, { 卷: 1, 章: 10, 章名: '第十章 急殓', 来源引用: refs, body: outlineBody('他') })
     const gate = checkConfirmable(root, errataKey)
     expect(gate.ok).toBe(false)
-    if (!gate.ok) expect(gate.gaps).toContain('窗口未就绪或无匹配已确认窗口项')
+    if (!gate.ok) expect(gate.gaps.some((g) => g.startsWith('窗口未就绪或无匹配已确认窗口项') && g.includes('当前窗口无可进入条目'))).toBe(true)
     expect(confirmOutline(root, errataKey).ok).toBe(false)
     expect(fs.existsSync(path.join(root, paths.确认细纲(1, 10, '第十章 急殓')))).toBe(false)
+  })
+
+  it('窗口门槛不过时报出可进入条目名(已消费条目不列),调用方一次即可对上章名', () => {
+    const root = mkBook()
+    writeRecentWindow(root, 1, [
+      { 名称: '开篇任务', 状态: '已确认' },
+      { 名称: '第十章 急殓', 状态: '已消费' },
+    ])
+    writeCandidate(root, { 卷: 1, 章: 1, 章名: '第一章', 来源引用: refs, body: outlineBody('他') })
+    const gate = checkConfirmable(root, { 卷: 1, 章: 1, 章名: '第一章' })
+    expect(gate.ok).toBe(false)
+    if (!gate.ok) {
+      const gap = gate.gaps.find((g) => g.startsWith('窗口未就绪或无匹配已确认窗口项'))
+      expect(gap).toContain('当前可进入：开篇任务')
+      expect(gap).not.toContain('急殓')
+    }
   })
 })

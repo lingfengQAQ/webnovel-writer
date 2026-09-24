@@ -21,6 +21,8 @@ export interface DesignPartDetail {
   readonly 名称: string
   readonly 状态: string
   readonly 待补: readonly string[]
+  /** 标「已确认」却只有状态标注、没有正文(不参与推导,只作提示)。 */
+  readonly 无内容?: true
 }
 
 export interface DesignDocDetail {
@@ -39,6 +41,8 @@ export interface WorldbookModuleDetail {
   readonly 名称: string
   readonly 条目数: number
   readonly 已确认数: number
+  /** 已确认但正文为空的条目名(只提示,不影响已确认数)。 */
+  readonly 无正文?: readonly string[]
 }
 
 export interface ChapterProgress {
@@ -67,15 +71,21 @@ function readText(root: string, rel: string): string | null {
   }
 }
 
-/** 解析一个文档:每个带标注条目(##/###/`- 名称 〔状态〕`)下挂其后的 `待补：` 行。 */
+/**
+ * 解析一个文档:每个带标注条目(##/###/`- 名称 〔状态〕`)下挂其后的 `待补：` 行,并判「无内容」。
+ * 内容区:标题分部延伸到下一个同级或更高级的标题分部(其下带标注的列表行——如分卷卷行——算内容);
+ * 列表分部到下一个带标注条目为止,`名称：说明` 式行内文字也算内容。`待补：` 便签不算内容。
+ */
 function parseDocDetail(text: string): DesignPartDetail[] {
   const lines = text.split('\n')
-  const parts: { 名称: string; 状态: string; line: number }[] = []
+  const parts: { 名称: string; 状态: string; line: number; level: number }[] = []
   const entry = /^\s*(?:#{1,6}\s+)?-\s+(.+?)\s*[〔(]\s*(.+?)\s*[〕)]\s*$/
-  const heading = /^\s*#{1,6}\s+(.+?)\s*[〔(]\s*(.+?)\s*[〕)]\s*$/
+  const heading = /^\s*(#{1,6})\s+(.+?)\s*[〔(]\s*(.+?)\s*[〕)]\s*$/
   for (const [i, line] of lines.entries()) {
-    const m = heading.exec(line) ?? entry.exec(line)
-    if (m) parts.push({ 名称: m[1]!.trim(), 状态: m[2]!.trim(), line: i })
+    const h = heading.exec(line)
+    const m = h === null ? entry.exec(line) : null
+    if (h !== null) parts.push({ 名称: h[2]!.trim(), 状态: h[3]!.trim(), line: i, level: h[1]!.length })
+    else if (m !== null) parts.push({ 名称: m[1]!.trim(), 状态: m[2]!.trim(), line: i, level: Infinity })
   }
   return parts.map((p, index) => {
     const next = parts[index + 1]
@@ -85,7 +95,12 @@ function parseDocDetail(text: string): DesignPartDetail[] {
       const t = lines[i]!.trim()
       if (t.startsWith('待补：') || t.startsWith('待补:')) 待补.push(t.replace(/^待补[:：]\s*/, ''))
     }
-    return { 名称: p.名称, 状态: p.状态, 待补 }
+    const contentEnd = p.level === Infinity
+      ? upper
+      : parts.slice(index + 1).find((q) => q.level <= p.level)?.line ?? lines.length
+    const 有内容 = /[：:]\s*\S/.test(p.名称)
+      || lines.slice(p.line + 1, contentEnd).some((l) => l.trim() !== '' && !PENDING_RE.test(l))
+    return { 名称: p.名称, 状态: p.状态, 待补, ...(p.状态 === '已确认' && !有内容 ? { 无内容: true as const } : {}) }
   })
 }
 
@@ -176,12 +191,16 @@ export function scanDesignDetail(bookRoot: string): DesignDetail {
       names = []
     }
     let 已确认数 = 0
+    const 无正文: string[] = []
     for (const n of names) {
       const text = readText(bookRoot, `世界书/${m}/${n}`)
       const r = text === null ? { ok: false } as const : parseDocument(text)
-      if (r.ok && r.data.fields['状态'] === '已确认') 已确认数++
+      if (!r.ok || r.data.fields['状态'] !== '已确认') continue
+      已确认数++
+      // 只剩标题行(写入器缺省正文是 `# 名称`)即无正文
+      if (!r.data.body.split('\n').some((l) => l.trim() !== '' && !/^\s*#/.test(l))) 无正文.push(n.replace(/\.md$/, ''))
     }
-    return { 名称: m, 条目数: names.length, 已确认数 }
+    return { 名称: m, 条目数: names.length, 已确认数, ...(无正文.length === 0 ? {} : { 无正文 }) }
   })
 
   // 章进度:定稿目录扫描 + 活跃章(第一个未定稿章)。
@@ -259,6 +278,23 @@ function 改动章(history: Readonly<Record<string, LastCommitResult>>, relPath:
   return '未绑定章'
 }
 
+/**
+ * 已确认但无内容的设计分部与世界书条目(`契约·题材与读者定位`、`世界书·人物档案/主角` 形)。
+ * 不参与推导(标注即作者确认):状态面与进度卡据此提示补内容——起草拿不到只有标注的设计。
+ */
+export function listConfirmedEmpty(detail: DesignDetail): string[] {
+  const out: string[] = []
+  const doc = (label: string, parts: readonly DesignPartDetail[]) => {
+    for (const p of parts) if (p.无内容 === true) out.push(`${label}·${p.名称}`)
+  }
+  doc('契约', detail.契约.分部)
+  doc('故事骨架', detail.骨架.分部)
+  doc('分卷布局', detail.分卷.分部)
+  for (const vp of detail.卷规划) doc(`卷${pad(vp.卷号)}卷纲`, vp.卷纲)
+  for (const m of detail.世界书.各模块) for (const n of m.无正文 ?? []) out.push(`世界书·${m.名称}/${n}`)
+  return out
+}
+
 /** 书级进度卡渲染(纯函数:固定输入固定输出,不含时间戳)。 */
 export function renderBookProgress(
   detail: DesignDetail,
@@ -267,8 +303,12 @@ export function renderBookProgress(
   章级待核对数 = 0,
 ): string {
   const lines: string[] = ['【书级进度卡】', '']
+  const 无内容数 = listConfirmedEmpty(detail).length
+  if (无内容数 > 0) {
+    lines.push(`已确认但无内容：${无内容数} 处（下文标「无内容」；只有状态标注、没有正文，起草拿不到这部分设定。推导照常，建议补内容）`, '')
+  }
 
-  const part = (d: DesignDocDetail) => d.分部.map((p) => `- ${p.名称}〔${p.状态}〕${p.待补.length > 0 ? `（待补:${p.待补.join(';')}）` : ''}｜${改动章(history, d.路径)}`)
+  const part = (d: DesignDocDetail) => d.分部.map((p) => `- ${p.名称}〔${p.状态}〕${p.无内容 === true ? '（无内容）' : ''}${p.待补.length > 0 ? `（待补:${p.待补.join(';')}）` : ''}｜${改动章(history, d.路径)}`)
 
   lines.push(`契约（${detail.契约.路径}）`, ...part(detail.契约), '')
   lines.push(`故事骨架（${detail.骨架.路径}）`, ...part(detail.骨架), '')
@@ -281,14 +321,15 @@ export function renderBookProgress(
   for (const vp of detail.卷规划) {
     lines.push(`卷${pad(vp.卷号)}：卷纲${vp.卷纲.length}节｜计划时间线${vp.计划时间线.条目数}条（覆盖至：${vp.计划时间线.覆盖至 ?? '空'}）｜近期窗口余量 ${vp.近期窗口.余量}${vp.近期窗口.余量 <= 2 ? '（见底，需滚动补充）' : ''}`)
     for (const p of vp.卷纲) {
-      if (p.待补.length > 0) lines.push(`  - ${p.名称}（待补:${p.待补.join(';')}）`)
+      const notes = [...(p.无内容 === true ? ['无内容'] : []), ...(p.待补.length > 0 ? [`待补:${p.待补.join(';')}`] : [])]
+      if (notes.length > 0) lines.push(`  - ${p.名称}（${notes.join('；')}）`)
     }
   }
   lines.push('')
 
   lines.push('世界书：')
   for (const m of detail.世界书.各模块) {
-    lines.push(`  - ${m.名称}：${m.条目数}条（已确认 ${m.已确认数}）`)
+    lines.push(`  - ${m.名称}：${m.条目数}条（已确认 ${m.已确认数}${m.无正文 === undefined ? '' : `；无正文：${m.无正文.join('、')}`}）`)
   }
   if (detail.世界书.未声明模块.length > 0) {
     lines.push(`  - 未声明模块：${detail.世界书.未声明模块.join('、')}（补进 世界书/模块声明.md）`)
