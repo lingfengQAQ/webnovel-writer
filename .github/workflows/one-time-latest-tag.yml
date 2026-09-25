@@ -1,0 +1,19 @@
+name: one-time latest tag update
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  move-tags:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24.15.0'
+          registry-url: https://registry.npmjs.org
+      - name: Move preview.6 to latest
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm dist-tag add @linfengqaqtat/dsh-scriptor@0.1.0-preview.6 latest --registry=https://registry.npmjs.org/
+          npm dist-tag add @linfengqaqtat/dsh-scriptor-full@0.1.0-preview.6 latest --registry=https://registry.npmjs.org/
