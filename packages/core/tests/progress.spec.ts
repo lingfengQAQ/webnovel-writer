@@ -65,6 +65,22 @@ describe('待补便签(算不出来的才落盘)', () => {
 })
 
 describe('已确认但无内容(#165,只提示不参与推导)', () => {
+  it('未标注的同级标题也截断正文范围,空子标题与注释不冒充设计内容', () => {
+    const root = mkBook()
+    fs.mkdirSync(path.join(root, '大纲'), { recursive: true })
+    fs.writeFileSync(path.join(root, '大纲/故事骨架.md'), [
+      '# 故事骨架', '',
+      '## 主角目标与成长轨迹 〔已确认〕', '',
+      '## 讨论备忘', '这段备注不属于前一部。', '',
+      '## 核心冲突与对抗力量 〔已确认〕', '### 对手', '',
+      '## 信息披露 〔已确认〕', '<!--', '之后补充这部分', '-->', '',
+      '## 读者承诺与兑现 〔已确认〕', '### 卷末兑现', '主角找回遗失的信。', '',
+    ].join('\n'), 'utf-8')
+    expect(listConfirmedEmpty(scanDesignDetail(root))).toEqual([
+      '故事骨架·主角目标与成长轨迹', '故事骨架·核心冲突与对抗力量', '故事骨架·信息披露',
+    ])
+  })
+
   it('只有标注的已确认分部才标;标题分部下级卷行、列表行内说明、后续正文都算内容;待补便签不算', () => {
     const root = mkBook()
     fs.mkdirSync(path.join(root, '大纲'), { recursive: true })

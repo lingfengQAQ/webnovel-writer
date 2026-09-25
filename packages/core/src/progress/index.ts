@@ -73,15 +73,19 @@ function readText(root: string, rel: string): string | null {
 
 /**
  * 解析一个文档:每个带标注条目(##/###/`- 名称 〔状态〕`)下挂其后的 `待补：` 行,并判「无内容」。
- * 内容区:标题分部延伸到下一个同级或更高级的标题分部(其下带标注的列表行——如分卷卷行——算内容);
- * 列表分部到下一个带标注条目为止,`名称：说明` 式行内文字也算内容。`待补：` 便签不算内容。
+ * 内容区:标题分部延伸到下一个同级或更高级的标题,无状态标注的标题同样截断范围;
+ * 列表分部到下一个带标注条目或标题为止,`名称：说明` 式行内文字也算内容。
+ * 空子标题、HTML 注释和 `待补：` 便签不算内容;分卷卷行仍算所属标题的内容。
  */
 function parseDocDetail(text: string): DesignPartDetail[] {
-  const lines = text.split('\n')
+  const lines = text.replace(/<!--[\s\S]*?(?:-->|$)/g, (comment) => comment.replace(/[^\r\n]/g, '')).split('\n')
   const parts: { 名称: string; 状态: string; line: number; level: number }[] = []
+  const headings: { line: number; level: number }[] = []
   const entry = /^\s*(?:#{1,6}\s+)?-\s+(.+?)\s*[〔(]\s*(.+?)\s*[〕)]\s*$/
   const heading = /^\s*(#{1,6})\s+(.+?)\s*[〔(]\s*(.+?)\s*[〕)]\s*$/
   for (const [i, line] of lines.entries()) {
+    const boundary = /^\s*(#{1,6})\s+/.exec(line)
+    if (boundary !== null) headings.push({ line: i, level: boundary[1]!.length })
     const h = heading.exec(line)
     const m = h === null ? entry.exec(line) : null
     if (h !== null) parts.push({ 名称: h[2]!.trim(), 状态: h[3]!.trim(), line: i, level: h[1]!.length })
@@ -95,11 +99,10 @@ function parseDocDetail(text: string): DesignPartDetail[] {
       const t = lines[i]!.trim()
       if (t.startsWith('待补：') || t.startsWith('待补:')) 待补.push(t.replace(/^待补[:：]\s*/, ''))
     }
-    const contentEnd = p.level === Infinity
-      ? upper
-      : parts.slice(index + 1).find((q) => q.level <= p.level)?.line ?? lines.length
+    const headingEnd = headings.find((q) => q.line > p.line && q.level <= p.level)?.line ?? lines.length
+    const contentEnd = p.level === Infinity ? Math.min(upper, headingEnd) : headingEnd
     const 有内容 = /[：:]\s*\S/.test(p.名称)
-      || lines.slice(p.line + 1, contentEnd).some((l) => l.trim() !== '' && !PENDING_RE.test(l))
+      || lines.slice(p.line + 1, contentEnd).some((l) => l.trim() !== '' && !/^\s*#{1,6}\s/.test(l) && !PENDING_RE.test(l))
     return { 名称: p.名称, 状态: p.状态, 待补, ...(p.状态 === '已确认' && !有内容 ? { 无内容: true as const } : {}) }
   })
 }
