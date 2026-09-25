@@ -242,7 +242,7 @@ function ingestFindingsLocked(
   模块名: string,
   rawFindings: readonly unknown[],
   expectedFingerprint?: string,
-): { readonly ok: boolean; readonly reason?: string; readonly record: ReviewRecord | null } {
+): { readonly ok: boolean; readonly reason?: string; readonly record: ReviewRecord | null; readonly 待回写模块?: readonly string[] } {
   registerDefaultChecks()
   if (getCheck(模块名) === undefined) {
     return { ok: false, reason: `未注册的审读模块:${模块名}`, record: null }
@@ -290,7 +290,10 @@ function ingestFindingsLocked(
     [模块名]: { 完成: true, 失败: false, 待回写: false },
   }
   const names = listChecks().filter((c) => c.执行形态 !== '作者').map((c) => c.名称)
-  const 完成 = names.every((name) => 模块[name]?.完成 === true && 模块[name]?.待回写 !== true)
+  // 待办与完成同源:记录里的「模块」只有回写过的键(首轮与重置轮都不含未回写模块),
+  // 从中筛待回写会漏报;一律按注册模块全集减去已完成者计算,完成＝待办为空。
+  const 待回写模块 = names.filter((name) => 模块[name]?.完成 !== true || 模块[name]?.待回写 === true)
+  const 完成 = 待回写模块.length === 0
   const record: ReviewRecord = {
     ...existing,
     完成,
@@ -301,7 +304,7 @@ function ingestFindingsLocked(
     待继承处置: remainingDispositions(existing, resetting, new Set([模块名])),
   }
   writeReviewRecord(bookRoot, key, record)
-  return { ok: true, record }
+  return { ok: true, record, 待回写模块 }
 }
 
 export const ingestFindings = bookWriter(ingestFindingsLocked)

@@ -14,7 +14,7 @@ describe('工具 output.schema 与真实返回形状一致(dsh 校验器)', () =
   it('全部工具 schema 在 dsh 支持子集内，实际返回值符合 schema', async () => {
     const repoRoot = path.resolve(__dirname, '..', '..', '..')
     const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'probe-'))
-    const tools = createNovelTools({ nativeWrite: nativeWriteStub, workspaceRoot: () => ws, bookRootOfBookId: () => path.join(ws, '探书') })
+    const tools = createNovelTools({ nativeWrite: nativeWriteStub, workspaceRoot: () => ws, bookRootOfBookId: () => path.join(ws, '探书'), testTools: true })
     const sc = { agent: { id: 'a', session: { append: () => {} } } }
     const call = (n: string, a: Record<string, unknown>) => tools.find((t) => t.name === n)!.execute(a, sc as never)
     const shapes: Record<string, string[]> = {}

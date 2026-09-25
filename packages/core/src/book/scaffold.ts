@@ -5,7 +5,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { applyVersionFields, initialVersion } from '../provenance'
-import { 契约六部, 分卷布局八部, 故事骨架九部 } from '../derive/design'
+import { 契约六部, 分卷布局八部, 故事骨架九部, 世界书最小模块 } from '../derive/design'
 import { parseConcept, serializeConcept, type Concept } from '../inspire/concept'
 import { writeBatchAtomic, type FileOp } from '../repo/atomic'
 import { runtimeIgnoreLine } from '../repo/transaction'
@@ -64,7 +64,8 @@ export function scaffoldBookFiles(bookRoot: string, concept: Concept | string, o
     { relPath: paths.卷纲(1), content: emptyVolumeOutlineBody() },
     { relPath: paths.计划时间线(1), content: emptyPlanTimelineBody() },
     { relPath: paths.近期窗口(1), content: emptyWindowBody() },
-    { relPath: '世界书/模块声明.md', content: '# 模块声明\n' },
+    // 最小模块建书即登记:scanDesign 只认模块声明里登记过的模块,确认条目工具只写条目本身
+    { relPath: '世界书/模块声明.md', content: ['# 模块声明', '', ...世界书最小模块.map((名) => `- ${名}`), ''].join('\n') },
     ...账本五文件.map((名) => ({ relPath: `账本/${名}.md`, content: `# ${名}\n` })),
     ...本书记忆四文件.map((名) => ({ relPath: `本书记忆/${名}.md`, content: `# ${名}\n` })),
   ]

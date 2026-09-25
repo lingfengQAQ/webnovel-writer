@@ -126,7 +126,7 @@ try {
 
   await check('主 Agent 工具与全局隔离', async () => {
     assert.equal(main.session.header.version, host === undefined ? baseline.registry.sessionFormat : baseline.source.sessionFormat)
-    assert.equal(schemas(main).length, 27)
+    assert.equal(schemas(main).length, 26)
     assert.deepEqual(schemas(undefined), [])
     const result = await execute(main, 'novel_select_book', { bookId: 'loader-book' })
     assert.equal(result.value.ok, true, JSON.stringify(result))
@@ -214,7 +214,7 @@ try {
       assert.ok(!service('agents').roots().includes(unmarked.agent))
       assert.ok(service('agents').roots().includes(restoredRoot.agent))
       assert.deepEqual(schemas(unmarked.agent), [])
-      assert.equal(schemas(restoredRoot.agent).length, 27)
+      assert.equal(schemas(restoredRoot.agent).length, 26)
       assert.equal(service('approval').overrideOf(unmarked.agent.session), 'never')
       assert.notEqual(service('approval').overrideOf(restoredRoot.agent.session), 'never')
     } finally {
@@ -224,12 +224,12 @@ try {
   })
   await check('同一会话恢复后重新装机', async () => {
     const previous = await service('agents').create({ sessionId: 'loader-resume', meta: { cwd: workspace } })
-    assert.equal(schemas(previous.agent).length, 27)
+    assert.equal(schemas(previous.agent).length, 26)
     await service('sessionPersistence').flush()
     await previous.dispose()
     const resumed = await service('agents').resume({ resumeSessionId: 'loader-resume' })
     try {
-      assert.equal(schemas(resumed.agent).length, 27)
+      assert.equal(schemas(resumed.agent).length, 26)
       assert.match((await presentation(resumed.agent)).status[0].text, /【工作区总览】/)
     }
     finally { await resumed.dispose() }
@@ -239,7 +239,7 @@ try {
     const whileMissing = schemas(main)
     await toggle('user-questions', false)
     assert.deepEqual(whileMissing, [])
-    assert.equal(schemas(main).length, 27)
+    assert.equal(schemas(main).length, 26)
     assert.deepEqual(schemas(child), [])
   })
   await check('审批依赖晚到仍拒绝子 Agent', async () => {
@@ -426,7 +426,7 @@ try {
     const fresh = await service('agents').create({ sessionId: 'loader-after-tools', meta: { cwd: workspace } })
     const delegated = await fresh.agent.ctx.get('agents').create({ parentAgent: fresh.agent, sessionId: 'loader-after-tools-child', meta: { cwd: workspace, origin: 'subagent' } })
     try {
-      assert.equal(schemas(fresh.agent).length, 27)
+      assert.equal(schemas(fresh.agent).length, 26)
       assert.deepEqual(schemas(delegated.agent), [])
       assert.equal((await presentation(fresh.agent)).status.length, 1)
       assert.equal((await execute(fresh.agent, 'novel_select_book', { bookId: 'loader-book' })).value.ok, true)

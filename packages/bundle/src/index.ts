@@ -26,7 +26,7 @@ import { scanBooks } from './bookshelf'
 import { attachStatusToAgent, type SystemPromptLike } from './status-context'
 import { canonicalizePath, isFullyQualifiedPath, isInsidePath } from '@webnovel/core'
 import { attachPersonaToAgent, type AgentCtxLike } from './persona'
-import { createNovelTools, NOVEL_TOOL_NAMES, type NovelToolDefinition, type ToolExecContext, type AgentLike } from './novel-tools'
+import { createNovelTools, type NovelToolDefinition, type ToolExecContext, type AgentLike } from './novel-tools'
 import type { AskFn, EmbeddingProvider } from '@webnovel/core'
 import { attachStudyWeb, notifySaved } from './study/web'
 import { StudyService } from './study/service'
@@ -369,6 +369,8 @@ export function apply(ctx: Context) {
         bookRootOfBookId: (bookId, agent) => bookRootOfBookIdFor(bookId, agent),
         askFn,
         nativeWrite: bridge?.write,
+        // 测试/走查专用工具(seed 占位设计)只在显式开启时注册,作者环境看不到
+        testTools: process.env['WEBNOVEL_TEST_TOOLS'] === '1',
         embeddingProvider: agent => agent === undefined ? undefined : agentCtxGet<{ current(): EmbeddingProvider | undefined }>(agent, 'embeddings')?.current(),
         rerankingProvider: agent => agent === undefined ? undefined : agentCtxGet<{ current(): RerankingProvider | undefined }>(agent, 'reranking')?.current(),
         indexManage: (bookId, action, agent, chapter) => {
@@ -431,7 +433,8 @@ export function apply(ctx: Context) {
     const tools = agentCtxGet<{ restrict?: (filter: { deny?: readonly string[] }) => () => void }>(agent, 'tools')
     if (typeof tools?.restrict !== 'function') return false
     try {
-      const offRestrict = tools.restrict({ deny: NOVEL_TOOL_NAMES })
+      // deny 取实际注册集:走查开启的测试工具同样对子 Agent 不可见,未注册的名字不进名单
+      const offRestrict = tools.restrict({ deny: toolKit.defs.map((tool) => tool.name) })
       if (typeof offRestrict === 'function') agentRestrictOffs.set(agent.id, offRestrict)
       return true
     } catch (err) {

@@ -108,11 +108,11 @@ user-invocable: false
 | 位置 | 下一步 |
 |---|---|
 | 灵感阶段 | 加载《灵感与立项》：收敛七要素 → 作者确认 → `novel_create_book` |
-| 作品定调 | 加载《定调设计》:`novel_seed_min_design` 一键就绪,或 `novel_update_contract` 逐部细聊 |
+| 作品定调 | 加载《定调设计》:路径 A 快速起草、作者一次确认,或路径 B `novel_update_contract` 逐部细聊 |
 | 世界构建 | 《定调设计》路径 B:`novel_confirm_worldbook_entry` 补人物档案与世界规则 |
 | 故事骨架 | 《定调设计》路径 B:`novel_update_skeleton`（九部） |
 | 分卷布局 | 《定调设计》路径 B:`novel_update_volume_layout`（八部） |
-| 当前卷规划 | 《定调设计》:本卷首次落卷纲前先出多方向呈作者选;`novel_confirm_volume_outline`、`novel_roll_window` |
+| 当前卷规划 | 《定调设计》:路径 B 本卷首次落卷纲前先出多方向呈作者选，路径 A 按已确认的快速设计继续;`novel_confirm_volume_outline`、`novel_roll_window` |
 | 开写就绪 | 进入章节面 |
 
 章节面：
