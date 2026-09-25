@@ -6,7 +6,7 @@ import { createServer, type Server } from 'node:http'
 import { documentHash, serializeDocument } from '@webnovel/core'
 import { removeSync } from '../../core/src/repo/remove'
 import { StudyService } from '../src/study/service'
-import { createStudyHandler, trustedStudyRequest, type StudyWebRuntime } from '../src/study/web'
+import { createStudyHandler, savedMessage, trustedStudyRequest, type StudyWebRuntime } from '../src/study/web'
 import type { StudySave } from '../src/study/types'
 import { BookIndexManager } from '../src/indexing/manager'
 
@@ -113,6 +113,21 @@ async function serve(followup = vi.fn(), indexing?: BookIndexManager) {
 }
 
 describe('书房 HTTP 保存和原生通知入口', () => {
+  it('#167 保存通知有核对完成条件，提交成功与失败不会混为补写设计', async () => {
+    const { post, followup } = await serve()
+    const ref = { space: 'book:fog', path: '作品契约/契约.md' }
+    const doc = new StudyService(root).read(ref)
+    const response = await post('save', { ref, hash: doc.hash, body: doc.body.trimEnd() + '。\n', operationId: 'issue-167-punctuation' })
+    expect(response.status).toBe(200)
+    expect(new StudyService(root).read(ref).body).toContain('雾港。')
+    const notification = JSON.stringify(followup.mock.calls[0])
+    expect(notification).toContain('本次保存处理完成')
+    expect(notification).toContain('不自动滚窗')
+    expect(response.body.value.route).toContain('核对并报告')
+    expect(savedMessage({ ...response.body.value, commit: 'saved', commitError: undefined })).toContain('无需补提交')
+    expect(savedMessage({ ...response.body.value, commit: 'failed', commitError: 'index locked' })).toContain('编辑器重试提交')
+  })
+
   it('索引控制沿用认证和主会话范围，不接受客户端指定根目录或未知操作', async () => {
     const indexing = new BookIndexManager({ getProvider: () => undefined })
     try {

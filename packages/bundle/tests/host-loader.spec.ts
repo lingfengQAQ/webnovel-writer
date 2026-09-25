@@ -58,20 +58,24 @@ interface LoaderReport {
 let root: string
 let report: LoaderReport
 
+function linkHostDependencies(fixtureRoot: string) {
+  const source = process.env['WEBNOVEL_DSH_SOURCE']
+  if (source === undefined) {
+    linkFixtureDependencies(packageRoot, fixtureRoot)
+  } else {
+    const host = loadSourceHost(source)
+    fs.mkdirSync(path.join(fixtureRoot, 'node_modules', '@deepseek-ai'), { recursive: true })
+    for (const name of ['cordis', 'dsh-tools', 'dsh-llm', 'dsh-credentials', 'dsh-skill-filesystem']) {
+      fs.symlinkSync(host.get(`@deepseek-ai/${name}`).directory, path.join(fixtureRoot, 'node_modules', '@deepseek-ai', name), 'junction')
+    }
+  }
+}
+
 beforeAll(async () => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'webnovel-loader-'))
   const workspace = path.join(root, 'workspace')
   fs.mkdirSync(workspace)
-  const source = process.env['WEBNOVEL_DSH_SOURCE']
-  if (source === undefined) {
-    linkFixtureDependencies(packageRoot, root)
-  } else {
-    const host = loadSourceHost(source)
-    fs.mkdirSync(path.join(root, 'node_modules', '@deepseek-ai'), { recursive: true })
-    for (const name of ['cordis', 'dsh-tools', 'dsh-llm', 'dsh-credentials', 'dsh-skill-filesystem']) {
-      fs.symlinkSync(host.get(`@deepseek-ai/${name}`).directory, path.join(root, 'node_modules', '@deepseek-ai', name), 'junction')
-    }
-  }
+  linkHostDependencies(root)
   const outfile = path.join(root, 'lib', 'webnovel.mjs')
   fs.cpSync(path.join(packageRoot, 'skills'), path.join(root, 'skills'), { recursive: true })
   await build({
@@ -112,6 +116,21 @@ afterAll(() => {
 })
 
 describe('真实 DSH Loader 验收（独立进程）', () => {
+  it('#167 作者保存后重复空操作结束轮次，新的作者委托仍可正常修改', async () => {
+    const loopRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'webnovel-save-loop-'))
+    try {
+      linkHostDependencies(loopRoot)
+      for (const file of ['native-write-core.mjs', 'embedding-provider.mjs']) fs.copyFileSync(path.join(root, file), path.join(loopRoot, file))
+      await run(process.execPath, [path.join(packageRoot, 'tests/fixtures/host-loader.mjs'), loopRoot, path.join(root, 'lib/webnovel.mjs'), 'save-loop'], {
+        cwd: loopRoot, env: { ...process.env, DSH_HOME: path.join(loopRoot, '.dsh'), DSH_AGENTS_HOME: path.join(loopRoot, '.agents'), DSH_TELEMETRY_DISABLED: '1' },
+        timeout: 45000, windowsHide: true, maxBuffer: 2 * 1024 * 1024,
+      })
+      const result = JSON.parse(fs.readFileSync(path.join(loopRoot, 'report.json'), 'utf8'))
+      expect(result.checks['保存后的重复空操作终止且下一轮可修改']).toEqual({ ok: true })
+      expect(result.saveLoop).toMatchObject({ repeatedTurnRequests: 3, totalRequests: 6, noExtraCommit: true, nextTurnChanged: true })
+    } finally { removeSync(loopRoot) }
+  }, 60000)
+
   for (const name of checks) {
     it(name, () => {
       expect(report.checks[name], report.checks[name]?.error).toEqual({ ok: true })

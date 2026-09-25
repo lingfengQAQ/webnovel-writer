@@ -30,6 +30,8 @@ import type { ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import * as fs from 'node:fs'
 import * as nodePath from 'node:path'
 import type { ToolOutputDefinition } from '@deepseek-ai/dsh-tools'
+import type { Session } from '@deepseek-ai/dsh-session'
+import { DESIGN_COMMIT_FIELDS, NATIVE_DESIGN_TOOLS, designCommitResult, type DesignCommitResult } from './design-commit-result'
 import {
   activeChapterLine,
   applyVersionFields,
@@ -107,6 +109,8 @@ export interface AgentLike {
   readonly id: string
   readonly ctx?: unknown
   readonly session?: {
+    readonly seq?: number
+    readonly eventAt?: Session['eventAt']
     readonly header?: {
       readonly id?: string
       readonly origin?: string
@@ -365,6 +369,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
         schema: {
           type: 'object',
           properties: {
+            ...DESIGN_COMMIT_FIELDS,
             ok: { type: 'boolean', description: '是否成功' },
             message: { type: 'string', description: '结果说明' },
             reason: { type: 'string', description: '失败原因' },
@@ -391,7 +396,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
         }
         // 提交点跟随作者确认（拍板 1）：只有已确认态产生 design: 提交；暂定/留白只写文件。
         if (state !== '已确认') {
-          return { ok: true, message: `已成功更新《${bookId}》契约【${partName}】为〔${state}〕（未确认，不产生提交）` }
+          return { ok: true, commitState: 'not-required', retryable: false, message: `已完成《${bookId}》契约【${partName}】更新，状态为〔${state}〕，无需提交，不要为补提交重复调用。` }
         }
         const summary = args['summary'] !== undefined ? String(args['summary']).trim() : `契约·${partName}`
         const commit = commitConfirmed({
@@ -401,15 +406,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
           summary,
           provenance: provenanceOf(sessionContext, [paths.契约()]),
         })
-        if (!commit.ok) {
-          return { ok: false, reason: `契约已写入但提交失败（重跑本工具即可补提交）：${commit.reason}` }
-        }
-        return {
-          ok: true,
-          message: commit.noChanges === true
-            ? `契约【${partName}】已确认（本次无改动，未产生新提交）`
-            : `已成功更新《${bookId}》契约【${partName}】为〔已确认〕（${commit.message}）`,
-        }
+        return designCommitResult(commit, `契约【${partName}】`, args, sessionContext)
       },
     },
     {
@@ -889,6 +886,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
         schema: {
           type: 'object',
           properties: {
+            ...DESIGN_COMMIT_FIELDS,
             ok: { type: 'boolean', description: '是否成功' },
             relPath: { type: 'string', description: '真源相对路径' },
             message: { type: 'string', description: '结果说明' },
@@ -927,6 +925,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
         schema: {
           type: 'object',
           properties: {
+            ...DESIGN_COMMIT_FIELDS,
             ok: { type: 'boolean', description: '是否成功' },
             relPath: { type: 'string', description: '真源相对路径' },
             message: { type: 'string', description: '结果说明' },
@@ -968,6 +967,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
         schema: {
           type: 'object',
           properties: {
+            ...DESIGN_COMMIT_FIELDS,
             ok: { type: 'boolean', description: '是否成功' },
             relPath: { type: 'string', description: '真源相对路径' },
             message: { type: 'string', description: '结果说明' },
@@ -1027,6 +1027,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
         schema: {
           type: 'object',
           properties: {
+            ...DESIGN_COMMIT_FIELDS,
             ok: { type: 'boolean', description: '是否成功' },
             relPath: { type: 'string', description: '条目真源相对路径' },
             message: { type: 'string', description: '结果说明' },
@@ -1075,6 +1076,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
         schema: {
           type: 'object',
           properties: {
+            ...DESIGN_COMMIT_FIELDS,
             ok: { type: 'boolean', description: '是否成功' },
             relPath: { type: 'string', description: '卷大纲真源相对路径' },
             gaps: { type: 'array', description: '卷纲段落缺口' },
@@ -1878,7 +1880,7 @@ ${摘要现文}`,
     'novel_import_draft', 'novel_record_review_findings', 'novel_record_proposal',
     'novel_resolve_proposal', 'novel_note_pending',
   ])
-  const nativeTools = new Set(['novel_update_contract', 'novel_update_skeleton', 'novel_update_volume_layout', 'novel_roll_window', 'novel_confirm_worldbook_entry', 'novel_confirm_volume_outline'])
+  const nativeTools = NATIVE_DESIGN_TOOLS
   const registered = deps.testTools === true ? tools : tools.filter((tool) => !NOVEL_TEST_TOOL_NAMES.includes(tool.name))
   return registered.map((tool) => {
     if (!locked.has(tool.name)) return tool
@@ -1915,7 +1917,7 @@ function finishDesignCommit(
   defaultSummary: string,
   chapterScope: number | null,
   sessionContext?: ToolExecContext,
-): { readonly ok: true; readonly message: string } | { readonly ok: false; readonly reason: string } {
+): DesignCommitResult {
   const batch = Array.isArray(args['批次文件']) ? (args['批次文件'] as unknown[]).map((v) => String(v).trim()).filter((v) => v !== '') : []
   const commit = commitConfirmed({
     bookRoot,
@@ -1925,13 +1927,5 @@ function finishDesignCommit(
     ...(chapterScope === null ? {} : { chapterScope }),
     provenance: provenanceOf(sessionContext, [...writtenPaths, ...batch]),
   })
-  if (!commit.ok) {
-    return { ok: false, reason: `已落盘但未提交（重跑本工具即可补提交）：${commit.reason}` }
-  }
-  return {
-    ok: true,
-    message: commit.noChanges === true
-      ? `${defaultSummary}：真源已落位（幂等重放，无改动未产生新提交）`
-      : `${defaultSummary} 已确认（${commit.message}）`,
-  }
+  return designCommitResult(commit, defaultSummary, args, sessionContext)
 }

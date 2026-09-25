@@ -1,6 +1,6 @@
-# 完整版 0.1.0-preview.5
+# 完整版 0.1.0-preview.6
 
-- 主插件：`@linfengqaqtat/dsh-scriptor@0.1.0-preview.5`。
+- 主插件：`@linfengqaqtat/dsh-scriptor@0.1.0-preview.6`。
 - 嵌入提供方：`webnovel-embedding-provider@0.0.8`。
 - `dsh.bundle` 组合配置同时启用两个插件；嵌入模型默认关闭。
 - 从 npm 安装：`dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-full@preview`。
