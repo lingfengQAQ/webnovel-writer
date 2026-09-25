@@ -16,6 +16,32 @@ function mkRoot(): string {
 afterAll(() => { for (const r of roots) { try { fs.rmSync(r, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }) } catch { /* Windows 句柄延迟释放，%TEMP% 残留无害 */ } } })
 
 describe('主 Agent 专用 Tools (方案 A)', () => {
+  it('#167 契约无改动是完成态，提交失败才允许补试，重跑不制造提交', async () => {
+    const ws = mkRoot()
+    const bookRoot = path.join(ws, '循环回归')
+    const tools = createNovelTools({ nativeWrite: nativeWriteStub, workspaceRoot: () => ws, bookRootOfBookId: () => bookRoot })
+    const created = await tools.find(t => t.name === 'novel_create_book')!.execute({
+      bookName: '循环回归', concept: { 状态: '已确认', 核心创意: 'x', 题材与目标读者: 'x', 主角核心欲望: 'x', 主要冲突: 'x', 核心看点: 'x', 差异化方向: 'x', 明确不要什么: 'x' },
+    }) as { ok: boolean; bookId: string }
+    expect(created.ok).toBe(true)
+    const update = tools.find(t => t.name === 'novel_update_contract')!
+    const args = { bookId: created.bookId, partName: '创作禁区与不可妥协项', state: '已确认', content: '不增加无关支线。' }
+    expect(await update.execute(args)).toMatchObject({ ok: true, commitState: 'committed', retryable: false })
+    const head = () => spawnSync('git', ['rev-parse', 'HEAD'], { cwd: bookRoot, encoding: 'utf8', windowsHide: true }).stdout.trim()
+    const committed = head()
+    expect(await update.execute(args)).toMatchObject({ ok: true, commitState: 'unchanged', retryable: false })
+    expect(head()).toBe(committed)
+    fs.writeFileSync(path.join(bookRoot, '.git/index.lock'), '')
+    const next = { ...args, content: '不增加无关支线，也不改主角原则。' }
+    try {
+      expect(await update.execute(next)).toMatchObject({ ok: false, commitState: 'failed', retryable: true })
+      expect(head()).toBe(committed)
+    } finally { fs.unlinkSync(path.join(bookRoot, '.git/index.lock')) }
+    expect(await update.execute(next)).toMatchObject({ ok: true, commitState: 'committed', retryable: false })
+    expect(head()).not.toBe(committed)
+    expect(await update.execute({ ...next, state: '暂定' })).toMatchObject({ ok: true, commitState: 'not-required', retryable: false })
+  })
+
   it('novel_create_book & novel_select_book & novel_seed_min_design & novel_update_contract & novel_get_story_status 闭环', async () => {
     const ws = mkRoot()
     const tools = createNovelTools({

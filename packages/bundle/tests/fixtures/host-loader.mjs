@@ -11,6 +11,7 @@ import { checkMemoryCatalog } from './memory-catalog-checks.mjs'
 import { checkMaterialSupplements } from './material-supplement-checks.mjs'
 import { checkMinimalExport } from './export-checks.mjs'
 import { checkSearch } from './retrieval-checks.mjs'
+import { checkSaveLoop } from './save-loop-check.mjs'
 
 const root = path.resolve(process.argv[2])
 const bundleUrl = pathToFileURL(path.resolve(process.argv[3])).href
@@ -107,6 +108,9 @@ const withTurn = async (agent, action) => {
 const retconArgs = { bookId: 'loader-book', 卷: 1, 章: 1, 章名: '开篇', 更正后正文: '取消后不得出现的正文。', 摘要: 'Loader cancellation probe' }
 
 try {
+  if (process.argv[4] === 'save-loop') {
+    await checkSaveLoop({ root, book, workspace, ctx, service, git, check, report, host })
+  } else {
   await check('真实 Loader 与基线版本', async () => {
     for (const row of profile.filter(row => row.name.startsWith('@deepseek-ai/dsh-'))) {
       const metadata = host === undefined ? require(`${row.name}/package.json`) : host.get(row.name).metadata
@@ -528,6 +532,7 @@ try {
       report.nativeContinuation = { restored: true, previousUserText: true, bookAndProgress: true, priorToolOutcome: true, customEvents: 0 }
     } finally { await restoredHost.fiber.dispose() }
   })
+  }
 } finally {
   await ctx.fiber.dispose()
   delete report.running

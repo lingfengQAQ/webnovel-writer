@@ -1,6 +1,6 @@
 {
   "name": "@linfengqaqtat/dsh-scriptor-full",
-  "version": "0.1.0-preview.5",
+  "version": "0.1.0-preview.6",
   "description": "网文写作工作台完整版（含可选嵌入提供方）",
   "keywords": [
     "dsh-plugin",

@@ -2,7 +2,7 @@
 
 基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的长篇小说写作工作台。把构想、设定、大纲、写章、审读、修改、定稿、记忆与导出放进一个能够暂停和继续的工作流程，作品以本地文件保存。
 
-**开发预览版：0.1.0-preview.5。** Windows 首发；重要作品使用前请备份。模型服务由你配置，调用可能产生费用。
+**开发预览版：0.1.0-preview.6。** Windows 首发；重要作品使用前请备份。模型服务由你配置，调用可能产生费用。
 
 DSH Scriptor is a local-first fiction writing workspace for DeepSeek Harness. This is the v8 developer preview. Runtime prompts and skills are included; model services are configured by the user.
 
@@ -11,9 +11,9 @@ DSH Scriptor is a local-first fiction writing workspace for DeepSeek Harness. Th
 | 产品线 | 运行环境 | 入口 |
 | --- | --- | --- |
 | v6 | Claude Code 插件 | [v6 文档与安装](https://github.com/lingfengQAQ/webnovel-writer/tree/master) |
-| v8（本分支） | DeepSeek Harness 工作台 | [下载预览版](https://github.com/lingfengQAQ/webnovel-writer/releases/tag/scriptor-v0.1.0-preview.5) · [安装教程](docs/user/install.md) |
+| v8（本分支） | DeepSeek Harness 工作台 | [下载预览版](https://github.com/lingfengQAQ/webnovel-writer/releases/tag/scriptor-v0.1.0-preview.6) · [安装教程](docs/user/install.md) |
 
-两个版本安装方式不同。当前没有经过验证的 v6/v7 书仓直接迁移方案。`v8` 是产品线名称，`0.1.0-preview.5` 是工作台安装包版本。
+两个版本安装方式不同。当前没有经过验证的 v6/v7 书仓直接迁移方案。`v8` 是产品线名称，`0.1.0-preview.6` 是工作台安装包版本。
 
 ## 能做什么
 
@@ -33,7 +33,7 @@ DSH Scriptor is a local-first fiction writing workspace for DeepSeek Harness. Th
 3. 在宿主设置中配置主模型与凭据，阅读 [最小配置](docs/user/configuration.md)。
 4. 用 [合成练习素材](examples/first-book.md) 走一遍 [第一本书与第一章](docs/user/first-book.md)，熟悉确认、定稿和恢复；需要逐屏对照界面时看 [新手图文教程](docs/user/beginner.md)。
 
-安装包不需要在用户电脑上编译，也不要求 npm 账号。Release 中的 `linfengqaqtat-dsh-scriptor-0.1.0-preview.5.tgz` 是本地安装备选，使用前核对 SHA256；源码压缩包用于开发。
+安装包不需要在用户电脑上编译，也不要求 npm 账号。Release 中的 `linfengqaqtat-dsh-scriptor-0.1.0-preview.6.tgz` 是本地安装备选，使用前核对 SHA256；源码压缩包用于开发。
 
 
 ### 可选嵌入提供方
