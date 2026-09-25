@@ -7,13 +7,13 @@
 - 作品工作目录：书仓全部文件、书仓 `.git`、草稿区以及工作范围内的书房素材。书仓 Git 不能代替包含草稿和书房内容的完整备份。
 - DSH home：profile 配置、设置及需要保留的会话。它可能包含凭据，备份应私下加密保管，不能提交公共仓库。
 
-记录主包、可选包、DSH 和 Node 版本。插件源码仓库与小说书仓是不同目录，不要误把其中一个当作另一个的备份。
+记录主包、可选包、DSH 和 Node 版本。
 
 ## 更新
 
 1. 阅读目标版本的 Compatibility、已知问题与迁移说明。
 2. 完成备份，停止指定 profile 的运行实例。
-3. 向同一个 profile 安装 registry 上的新精确版本，或下载并校验对应 `.tgz` 后安装，随后重启。
+3. 向同一个 profile 安装 npm 上的新精确版本，或下载并校验对应 `.tgz` 后安装，随后重启。
 4. 检查书房入口、技能是否各一份，核对实际书仓状态；先用合成副本试写。
 
 ```powershell
@@ -21,7 +21,7 @@ dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor@0.1.0-preview.5
 dsh --profile scriptor --dump-config
 ```
 
-上面展示命令形状，更新时换成实际目标版本。不要用同版本不同内容的包覆盖，也不要同时保留开发 file patch。
+上面展示命令写法，更新时换成实际目标版本。
 
 完整版安装对应使用 `@linfengqaqtat/dsh-scriptor-full@0.1.0-preview.5`。不要在保留完整版时另外安装主包；切换安装方式前先移除原组合包。
 
