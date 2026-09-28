@@ -114,6 +114,16 @@ export function writeIndexState(root: string, value: IndexSyncState): void {
   } finally { try { fs.unlinkSync(temp) } catch { /* Renamed or not created. */ } }
 }
 
+/** The caller holds the book lock and has actually lost the disposable vector cache. */
+export function invalidateIndexCache(root: string): void {
+  const state = readIndexState(root)
+  writeIndexState(root, { ...state, generation: state.generation + 1,
+    phase: state.paused ? 'paused' : state.auto ? 'queued' : 'disabled',
+    completedChapters: 0, completedChunks: 0, generated: 0, reused: 0, failed: 0, attempt: 0,
+    indexedHead: undefined, fingerprint: undefined, finishedAt: undefined, retryAt: undefined,
+    lastError: undefined, notice: undefined, updatedAt: Date.now() })
+}
+
 export function changeIndexState(root: string, change: (state: IndexSyncState) => IndexSyncState): Promise<IndexSyncState> {
   try { if (!fs.statSync(root).isDirectory()) throw new Error('missing root') }
   catch { return Promise.reject(new SearchError('source-error', '书仓目录不存在或不可读取')) }

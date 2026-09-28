@@ -4,12 +4,14 @@
  * computeReview 纯算零写盘；确定性模块的发现项经 ingestFindings 逐模块回写落盘——
  * 模块态置完成、发现项整批替换、空发现项也要回写（置完成），净效果与 runReview 写盘一致。
  */
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import * as fs from 'node:fs'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import fs from 'node:fs'
+import { syncBuiltinESMExports } from 'node:module'
 import * as path from 'node:path'
 import * as os from 'node:os'
-import { seedMinDesign, serializeDocument, writeCandidate, confirmOutline } from '@webnovel/core'
-import { computeReview, ingestFindings, listChecks, registerDefaultChecks, resetChecks, runReview } from '../src/index'
+import { seedMinDesign, serializeDocument, writeCandidate, confirmOutline, draftHashOf, reviewInputFingerprintOf, loadMaterialPackage } from '@webnovel/core'
+import { computeReview, ingestFindings, listChecks, registerCheck, registerDefaultChecks, resetChecks, runReview, type CheckInput } from '../src/index'
+import { removeSync } from '../../core/src/repo/remove'
 
 const roots: string[] = []
 function mkBook(): string {
@@ -18,8 +20,9 @@ function mkBook(): string {
   seedMinDesign(dir)
   return dir
 }
-afterAll(() => { for (const r of roots) { try { fs.rmSync(r, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }) } catch { /* Windows 句柄延迟释放 */ } } })
+afterAll(() => roots.forEach(root => removeSync(root)))
 beforeEach(() => { resetChecks(); registerDefaultChecks() })
+afterEach(() => { vi.restoreAllMocks(); syncBuiltinESMExports() })
 
 const key = { 卷: 1, 章: 1, 章名: '开篇任务' } as const
 
@@ -50,6 +53,36 @@ function readyBookWithPendingDraft(root: string): void {
 }
 
 describe('R21 脚本只算不写(computeReview 与 ingestFindings 分工)', () => {
+  it.each(['草稿', '细纲'])('F05 %s在读取间变化，检查与指纹仍使用同一份输入，迟到载荷不能回写', (changed) => {
+    const root = mkBook()
+    readyBookWithPendingDraft(root)
+    const target = path.join(root, changed === '草稿'
+      ? '草稿区/草稿/卷01-开篇任务/稿1.md'
+      : '大纲/卷规划/卷01/章细纲/0001-开篇任务.md')
+    const original = fs.readFileSync
+    let reads = 0
+    vi.spyOn(fs, 'readFileSync').mockImplementation((...args: Parameters<typeof fs.readFileSync>) => {
+      const text = original(...args)
+      if (path.normalize(String(args[0])) === path.normalize(target) && ++reads === (changed === '草稿' ? 2 : 1)) {
+        fs.writeFileSync(target, `${String(text)}\n作者在检查期间补写了新内容。\n`)
+      }
+      return text
+    })
+    syncBuiltinESMExports()
+    let checked: CheckInput | undefined
+    registerCheck({ 名称: '输入身份检查', 审什么: '输入身份', 依赖材料: [], 执行形态: '确定性代码', 适用范围: '章',
+      run(input) { checked = input; return [] } })
+    const result = computeReview(root, key)
+    expect(result.ok).toBe(true)
+    expect(checked).toBeDefined()
+    expect(result.record!.审稿哈希).toBe(draftHashOf(checked!.待审稿))
+    expect(result.record!.审读指纹).toBe(reviewInputFingerprintOf({
+      正文: checked!.待审稿, 细纲: checked!.细纲,
+      材料清单: loadMaterialPackage(root, key).审读材料标识, 方案: result.record!.方案,
+    }))
+    expect(ingestFindings(root, key, '输入身份检查', [], result.record!.审读指纹).ok).toBe(false)
+  })
+
   it('computeReview 不落盘:跑完检查,草稿区/审核 目录不存在', () => {
     const root = mkBook()
     readyBookWithPendingDraft(root)
@@ -68,7 +101,7 @@ describe('R21 脚本只算不写(computeReview 与 ingestFindings 分工)', () =
     const deterministic = listChecks().filter((c) => c.run !== undefined).map((c) => c.名称)
     for (const 模块名 of deterministic) {
       const 发现项 = (computed.record?.问题 ?? []).filter((f) => f.模块名 === 模块名)
-      const w = ingestFindings(root, key, 模块名, 发现项)
+      const w = ingestFindings(root, key, 模块名, 发现项, computed.record!.审读指纹)
       expect(w.ok).toBe(true)
     }
     const loaded = JSON.parse(fs.readFileSync(path.join(root, '草稿区/审核/卷01-开篇任务.json'), 'utf-8'))

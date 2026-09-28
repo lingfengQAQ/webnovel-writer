@@ -50,12 +50,13 @@ export function createEditorStore(reveal?: (sessionId: string) => void) {
     async open(id: string, ref: FileRef) {
       const sequence = (openSequence.get(id) ?? 0) + 1
       openSequence.set(id, sequence)
-      const key = fileKey(ref)
+      let key = fileKey(ref)
       update(id, { error: undefined, notice: undefined })
       try {
         if (!get(id).buffers[key]) {
           const document = await callStudy<StudyDocument>(id, 'read', { ref })
           if (!live || openSequence.get(id) !== sequence) return
+          key = fileKey(document.ref)
           if (!get(id).buffers[key]) update(id, { buffers: { ...get(id).buffers, [key]: { document, text: document.body } } })
         }
         if (openSequence.get(id) === sequence) {
@@ -77,6 +78,12 @@ export function createEditorStore(reveal?: (sessionId: string) => void) {
         const state = get(id), latest = state.buffers[key]
         if (!latest) return
         const nextKey = fileKey(saved.document.ref)
+        const target = state.buffers[nextKey]
+        if (nextKey !== key && target && (target.text !== target.document.body || target.saving || target.attempt)) {
+          updateBuffer(id, key, { saving: false, saved, errorCode: 'conflict',
+            error: '原保存已完成，但目标稿已有未合并的编辑或保存请求；两份文字均已保留。请先处理目标稿，再重试原保存。' })
+          return
+        }
         const buffers = { ...state.buffers }
         delete buffers[key]
         buffers[nextKey] = { document: saved.document, text: latest.text === attempt.body ? saved.document.body : latest.text, saved }

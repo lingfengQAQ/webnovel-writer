@@ -5,7 +5,8 @@ import * as path from 'node:path'
 import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
-import { changeIndexState, embeddingRevision, readIndexState, searchFinalized, syncFinalizedIndex, withBookWrite, writeBatchAtomic, type EmbeddingProvider } from '../src'
+import { changeIndexState, embeddingRevision, readIndexState, searchFinalized, syncFinalizedIndex, withBookLockAsync, withBookWrite, writeBatchAtomic, type EmbeddingProvider } from '../src'
+import { SearchCache } from '../src/retrieval/cache'
 import { removeSync } from '../src/repo/remove'
 import { scanFinalized } from '../src/retrieval/source'
 import { vectorBytes, normalizedVector } from '../src/retrieval/vectors'
@@ -30,6 +31,81 @@ function deferred<T>() {
 }
 
 describe('程序维护的向量索引', () => {
+  it.each(['query', 'checkpoint'] as const)('真实 SQLite 隔离使旧批次代次失效，发现入口：%s', async discoveredBy => {
+    chapter(1, '第一份'); chapter(2, '第二份')
+    const entered = deferred<void>(), late = deferred<readonly (readonly number[])[]>()
+    let calls = 0
+    const client = provider(async () => { if (++calls === 2) { entered.resolve(); return late.promise }; return [[1, 0]] })
+    await changeIndexState(root, state => ({ ...state, auto: true }))
+    const pending = syncFinalizedIndex(root, { getProvider: () => client })
+    await entered.promise
+    const before = readIndexState(root)
+    expect(before.completedChunks).toBe(1)
+    fs.writeFileSync(path.join(root, '.webnovel/finalized-search.sqlite'), 'broken')
+    if (discoveredBy === 'query') expect(await searchFinalized(root, { query: '第一份', provider: client }))
+      .toMatchObject({ ok: true, mode: 'keyword', index: { phase: 'queued', ready: false, missing: 2 } })
+    late.resolve([[1, 0]])
+    expect(await pending).toMatchObject({ ok: false, failure: { code: 'cancelled' } })
+    expect(readIndexState(root)).toMatchObject({ generation: before.generation + 1, phase: 'queued', completedChunks: 0, completedChapters: 0 })
+    const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite')
+    const db = new DatabaseSync(path.join(root, '.webnovel/finalized-search.sqlite'))
+    try { expect(db.prepare('SELECT count(*) AS count FROM embeddings').get()?.['count']).toBe(0) } finally { db.close() }
+    expect(await syncFinalizedIndex(root, { getProvider: () => client })).toMatchObject({ ok: true, state: { generated: 2, reused: 0 } })
+  })
+
+  it('外部删除缓存后重建也清除旧 ready，反复查询不反复增加代次', async () => {
+    chapter(1, '原文')
+    const client = provider()
+    await syncFinalizedIndex(root, { getProvider: () => client })
+    const before = readIndexState(root)
+    fs.unlinkSync(path.join(root, '.webnovel/finalized-search.sqlite'))
+    expect(await searchFinalized(root, { query: '原文', provider: client })).toMatchObject({ ok: true, index: { ready: false, phase: 'disabled' } })
+    expect(readIndexState(root)).toMatchObject({ generation: before.generation + 1, completedChunks: 0, phase: 'disabled', auto: false })
+    await searchFinalized(root, { query: '原文', provider: client })
+    expect(readIndexState(root).generation).toBe(before.generation + 1)
+  })
+
+  it('查询向量等待期间缓存损坏，迟到查询不能继续宣称 ready', async () => {
+    chapter(1, '原文')
+    const entered = deferred<void>(), late = deferred<readonly (readonly number[])[]>()
+    const client = provider(async (inputs, role) => {
+      if (role === 'query') { entered.resolve(); return late.promise }
+      return inputs.map(() => [1, 0])
+    })
+    await syncFinalizedIndex(root, { getProvider: () => client })
+    const pending = searchFinalized(root, { query: '原文', provider: client })
+    await entered.promise
+    fs.writeFileSync(path.join(root, '.webnovel/finalized-search.sqlite'), 'broken')
+    late.resolve([[1, 0]])
+    expect(await pending).toMatchObject({ ok: false, code: 'index-changed' })
+    expect(readIndexState(root)).toMatchObject({ phase: 'disabled', completedChunks: 0 })
+  })
+
+  it('只修复 FTS 内部召回仍保留向量和 ready 代次', async () => {
+    chapter(1, '剑客带信归来')
+    const client = provider()
+    await syncFinalizedIndex(root, { getProvider: () => client })
+    const before = readIndexState(root)
+    const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite')
+    await withBookLockAsync(root, async () => {
+      const snapshot = await scanFinalized(root)
+      const cache = await SearchCache.open(root)
+      try {
+        const db = new DatabaseSync(path.join(root, '.webnovel/finalized-search.sqlite'))
+        try {
+          const writable = db as typeof db & { enableDefensive?(enabled: boolean): void }
+          writable.enableDefensive?.(false)
+          db.exec("UPDATE terms SET body='无关内容'; UPDATE terms_content SET c1=(SELECT body FROM chunks WHERE id=c0)")
+        } finally { db.close() }
+        const ids = snapshot.documents.flatMap(doc => doc.chunks.map(chunk => chunk.id))
+        expect(cache.keyword('剑客带信', new Set(ids)).map(hit => hit.id)).toEqual(ids)
+        expect(cache.state).toBe('rebuilt')
+        expect(cache.vectors(snapshot, embeddingRevision(client)!, 2).size).toBe(1)
+      } finally { cache.close() }
+    })
+    expect(readIndexState(root)).toEqual(before)
+  })
+
   it('查询不生成正文向量；后台就绪后查询只请求问句', async () => {
     chapter(1, '主角带信归来。')
     const embed = vi.fn<EmbeddingProvider['embed']>(async inputs => inputs.map(() => [1, 0]))

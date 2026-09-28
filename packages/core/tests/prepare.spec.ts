@@ -146,7 +146,7 @@ describe('改稿最小 + 定稿准备', () => {
     // 回写其余隔离子 Agent 模块(空审 fail-closed:不回写不算完成)
     const after = runReview(root, key).record
     for (const [name, st] of Object.entries(after?.模块 ?? {})) {
-      if (st.待回写 === true) expect(ingestFindings(root, key, name, []).ok).toBe(true)
+      if (st.待回写 === true) expect(ingestFindings(root, key, name, [], after!.审读指纹).ok).toBe(true)
     }
     // F1:语义类硬约束产「需审读」发现项——按真实流程给处置(作者保留)后再推进
     const current = JSON.parse(fs.readFileSync(path.join(root, paths.审核记录(1, key.章名)), 'utf-8'))

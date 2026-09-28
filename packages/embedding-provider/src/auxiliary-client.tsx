@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SceneSettings, RerankSettings } from './auxiliary-config'
 import { DEFAULT_RERANK_TIMEOUT_MS, MAX_RERANK_TIMEOUT_MS, MIN_RERANK_TIMEOUT_MS } from '@webnovel/core/retrieval-policy'
@@ -10,7 +10,7 @@ type Group = { readonly id: string; readonly name: string; readonly models: read
 const sceneFields = ['enabled', 'provider', 'model', 'concurrency', 'timeoutMs', 'maxInputChars'] as const
 const rankFields = ['enabled', 'endpoint', 'model', 'apiKeyEnv', 'candidates', 'timeoutMs'] as const
 
-function ModelCard({ scope, host, kind }: { scope: SettingsScope<Draft>; host: Context; kind: 'scenes' | 'reranking' }) {
+function ModelCard({ scope, host, kind }: { scope: ConfigForm<Draft>; host: Context; kind: 'scenes' | 'reranking' }) {
   const state = useSyncExternalStore(listener => scope.subscribe(listener), () => scope.getSnapshot())
   const [draft, setDraft] = useState<Draft>({})
   const [revision, setRevision] = useState<number>()
@@ -67,9 +67,10 @@ function ModelCard({ scope, host, kind }: { scope: SettingsScope<Draft>; host: C
         keySaved = true
         if (alive.current) { setKey(''); setCredentialRevision(value => value + 1) }
       }
-      await scope.mutate((scene ? sceneFields : rankFields).map(field => draft[field] === undefined
+      const accepted = await scope.mutate((scene ? sceneFields : rankFields).map(field => draft[field] === undefined
         ? { op: 'unset' as const, path: [field] }
         : { op: 'set' as const, path: [field], value: draft[field] }), revision)
+      if (!accepted) throw new Error('配置未保存；请载入最新配置后重试')
       if (alive.current) { setDirty(false); setOpen(false) }
     } catch (error) { if (alive.current) setMessage((keySaved ? 'API Key 已保存；' : '') + (error instanceof Error ? error.message : '设置保存失败')) }
     finally { if (alive.current) setBusy(false) }
@@ -132,8 +133,8 @@ function ModelCard({ scope, host, kind }: { scope: SettingsScope<Draft>; host: C
 }
 
 export function installAuxiliaryCards(host: Context): void {
-  const scenes = host.settingsScope.bind<Draft>({ namespace: 'webnovel-scenes' })
-  const reranking = host.settingsScope.bind<Draft>({ namespace: 'webnovel-reranking' })
+  const scenes = host.configForms.get<Draft>('webnovel-scenes')
+  const reranking = host.configForms.get<Draft>('webnovel-reranking')
   host.slots.inject('settings.models.footer', () => host.slots.register({ name: 'settings.models.footer', id: 'webnovel-auxiliary-models', order: 51 }, () =>
     <section className="webnovel-embedding-section"><h3>检索辅助模型</h3><ul><ModelCard host={host} scope={scenes} kind="scenes" /><ModelCard host={host} scope={reranking} kind="reranking" /></ul></section>))
 }

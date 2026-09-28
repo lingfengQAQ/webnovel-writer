@@ -8,7 +8,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { writeBatchAtomic, writeFileAtomic, type FileOp } from '../repo/atomic'
 import { parseDocument, serializeDocument } from '../repo/frontmatter'
-import { assertSegment, paths, type MemoryKind } from '../repo/paths'
+import { assertSegment, MEMORY_KINDS, paths, type MemoryKind } from '../repo/paths'
 import { bookWriter } from '../repo/atomic'
 
 export interface BookMemoryInput {
@@ -117,7 +117,21 @@ export const rebuildBookMemoryIndex = bookWriter(rebuildBookMemoryIndexLocked)
 
 /** 生成一事一文件的 FileOp(条目文件 + 合并既有条目重建的索引),交调用方并入同一批原子写。 */
 export function bookMemoryOps(bookRoot: string, inputs: readonly BookMemoryInput[]): readonly FileOp[] {
-  for (const input of inputs) assertInput(input)
+  for (const input of inputs) {
+    assertInput(input)
+    const target = paths.本书记忆条目(input.名称.trim())
+    try {
+      const stat = fs.lstatSync(path.join(bookRoot, target))
+      if (!stat.isFile()) throw new Error(`本书记忆目标不是普通条目文件:${target}`)
+      const parsed = parseDocument(fs.readFileSync(path.join(bookRoot, target), 'utf8'))
+      if (!parsed.ok || !MEMORY_KINDS.includes(parsed.data.fields['类'] as MemoryKind)
+        || parsed.data.fields['名称'] !== input.名称.trim()) {
+        throw new Error(`本书记忆目标与旧格式或未知条目冲突，保留原文件:${target}`)
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+  }
   const existing = new Map(listBookMemoryEntries(bookRoot).map(entry => [entry.名称, entry.描述]))
   const effective = inputs.map(input => ({ ...input, 描述: input.描述 ?? existing.get(input.名称.trim()) }))
   const ops: FileOp[] = effective.map((input) => ({
@@ -131,13 +145,12 @@ export function bookMemoryOps(bookRoot: string, inputs: readonly BookMemoryInput
 /** 单条目直接落盘并重建索引(独立调用;定稿沉淀请走 bookMemoryOps)。 */
 function writeBookMemoryLocked(bookRoot: string, input: BookMemoryInput): { readonly ok: true; readonly relPath: string } | { readonly ok: false; readonly reason: string } {
   try {
-    assertInput(input)
+    const rel = paths.本书记忆条目(input.名称.trim())
+    writeBatchAtomic(bookRoot, bookMemoryOps(bookRoot, [input]))
+    return { ok: true, relPath: rel }
   } catch (err) {
     return { ok: false, reason: err instanceof Error ? err.message : String(err) }
   }
-  const rel = paths.本书记忆条目(input.名称.trim())
-  writeBatchAtomic(bookRoot, bookMemoryOps(bookRoot, [input]))
-  return { ok: true, relPath: rel }
 }
 
 export const writeBookMemory = bookWriter(writeBookMemoryLocked)

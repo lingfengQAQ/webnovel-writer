@@ -51,7 +51,7 @@ function finishSemanticModules(root: string): void {
   if (!result.ok || result.record === null) throw new Error(result.reason ?? 'review failed')
   for (const name of Object.keys(result.record.模块)) {
     if (result.record.模块[name]?.待回写 === true) {
-      const written = ingestFindings(root, key, name, [])
+      const written = ingestFindings(root, key, name, [], result.record.审读指纹)
       if (!written.ok) throw new Error(written.reason ?? 'ingest failed')
     }
   }

@@ -97,9 +97,9 @@ describe('主 Agent 专用 Tools (方案 A)', () => {
     const statusRes = (await statusTool.execute({ bookId: createRes.bookId })) as { ok: boolean; chapters: any[] }
     expect(statusRes.ok).toBe(true)
     expect(statusRes.chapters.length).toBeGreaterThan(0)
-    // seed 只写占位确认态:推导照常判开写就绪,另列出只有标注没有正文的分部(#165)
+    // seed 只写占位确认态:不再建议开写就绪，同时列出缺少正文的分部(#165)
     const design = (statusRes as unknown as { design: { 建议: string; 已确认无内容?: string[] } }).design
-    expect(design.建议).toBe('开写就绪')
+    expect(design.建议).toBe('作品定调')
     expect(design.已确认无内容).toEqual(expect.arrayContaining(['故事骨架·主角目标与成长轨迹', '世界书·人物档案/主角']))
   })
 

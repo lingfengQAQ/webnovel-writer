@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
+import { computeReview } from '@webnovel/review'
 import { createNovelTools } from '../src/novel-tools'
 import { nativeWriteStub } from './fixtures/native-write-stub'
 
@@ -57,7 +58,13 @@ describe('工具 output.schema 与真实返回形状一致(dsh 校验器)', () =
     rec('novel_new_outline_draft', await call('novel_new_outline_draft', { bookId, 卷: 1, 章: 1, 章名: '探章2', 正文: body, 来源引用: ['作品契约/契约.md@1'] }))
     rec('novel_confirm_outline', await call('novel_confirm_outline', { bookId, 卷: 1, 章: 1, 章名: '探章2' }))
     rec('novel_assemble_materials', await call('novel_assemble_materials', { bookId, 卷: 1, 章: 1, 章名: '探章2' }))
-    rec('novel_record_review_findings', await call('novel_record_review_findings', { bookId, 卷: 1, 章: 1, 章名: '探章2', 模块名: '章节结构审读', 发现项: [] }))
+    const reviewKey = { 卷: 1, 章: 1, 章名: '探章2' }
+    const bookRoot = path.join(ws, '探书')
+    const draftDir = path.join(bookRoot, '草稿区/草稿/卷01-探章2')
+    fs.mkdirSync(draftDir, { recursive: true })
+    fs.writeFileSync(path.join(draftDir, '稿1.md'), '---\n角色: 待审稿\n---\n\n主角走进城门。\n')
+    const fingerprint = computeReview(bookRoot, reviewKey).record!.审读指纹
+    rec('novel_record_review_findings', await call('novel_record_review_findings', { bookId, ...reviewKey, 模块名: '章节结构审读', 发现项: [], 审读指纹: fingerprint }))
     // Use the installed bundle dependency, never an old copy left in the pnpm store.
     // Node avoids Vite's handling of percent-encoded Windows paths here.
     const bundleRequire = createRequire(path.join(repoRoot, 'packages/bundle/package.json'))

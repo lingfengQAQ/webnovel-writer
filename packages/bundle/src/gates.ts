@@ -15,6 +15,7 @@
  */
 
 import * as path from 'node:path'
+import * as fs from 'node:fs'
 import {
   gateFileAccess,
   gateWriteDraft,
@@ -112,7 +113,10 @@ export function decideTargetForFile(target: string, deps: GateDeps): PreToolDeci
   if (parsed.kind === 'absolute') {
     const abs = parsed.abs
     // 书房分区:以 工作范围/书房 为界可写(A2b)
-    if (inside(path.join(ws, '书房'), abs)) return { kind: 'allow' }
+    if (inside(path.join(ws, '书房'), abs)) {
+      if (fs.existsSync(path.join(ws, '书房/作品契约/契约.md'))) return { kind: 'deny', reason: '共享目录与书仓重叠，拒绝共享写入豁免' }
+      return { kind: 'allow' }
+    }
     // 书仓内:找所在书仓再判
     const bookRoot = deps.bookRootForAbs(abs)
     if (bookRoot === undefined) {

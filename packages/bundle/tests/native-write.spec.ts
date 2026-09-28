@@ -45,7 +45,7 @@ describe('受信原生写入桥', () => {
   })
 
   it('失败与取消都清理授权；保留原生错误和附加上下文', async () => {
-    const extra = createUserMessage({ content: [{ type: 'text', text: '请重读文件后重试' }], source: { kind: 'plugin', plugin: 'test' } })
+    const extra = createUserMessage({ content: [{ type: 'text', text: '请重读文件后重试' }], source: { kind: 'user' } })
     let dispatch!: ToolExecutionInput
     const execute = vi.fn<ToolRuntime['execute']>(async input => {
       dispatch = input

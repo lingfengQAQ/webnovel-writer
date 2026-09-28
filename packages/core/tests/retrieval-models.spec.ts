@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import { changeIndexState, forgetSceneBoundaries, searchFinalized, syncFinalizedIndex, withBookWrite, type EmbeddingProvider, type RerankingProvider, type SceneProvider } from '../src'
+import { changeIndexState, forgetSceneBoundaries, readIndexState, searchFinalized, syncFinalizedIndex, withBookWrite, type EmbeddingProvider, type RerankingProvider, type SceneProvider } from '../src'
 import { scanFinalized } from '../src/retrieval/source'
 import { readSceneRecords, SCENE_CACHE_PATH, validateSceneEnds } from '../src/retrieval/scenes'
 import { removeSync } from '../src/repo/remove'
@@ -43,6 +43,36 @@ function deadlineClock() {
 }
 
 describe('场景边界与独立缓存', () => {
+  it('缓存恢复与场景模型更换共同拒绝迟到边界，换维度后只复用已经验证的场景', async () => {
+    chapter(1)
+    const client = embedding()
+    await syncFinalizedIndex(root, { getProvider: () => client })
+    const entered = deferred<void>(), late = deferred<readonly number[]>()
+    let sceneClient = scenes(async () => { entered.resolve(); return late.promise })
+    const pending = syncFinalizedIndex(root, { getProvider: () => client, getSceneProvider: () => sceneClient })
+    await entered.promise
+    const before = readIndexState(root)
+    fs.writeFileSync(path.join(root, '.webnovel/finalized-search.sqlite'), 'broken')
+    expect(await searchFinalized(root, { query: '救人', provider: client })).toMatchObject({ ok: true, index: { ready: false } })
+    expect(readIndexState(root)).toMatchObject({ generation: before.generation + 1, completedChunks: 0, phase: 'disabled' })
+    sceneClient = scenes()
+    late.resolve([3])
+    expect(await pending).toMatchObject({ ok: false, failure: { code: 'cancelled' } })
+    expect(Object.keys(readSceneRecords(root))).toHaveLength(0)
+    const segment = vi.fn<SceneProvider['segment']>(async paragraphs => [paragraphs.length])
+    sceneClient = scenes(segment)
+    const newEmbed = vi.fn<EmbeddingProvider['embed']>(async inputs => inputs.map(() => [1, 0, 0]))
+    const newClient: EmbeddingProvider = { metadata: { ...client.metadata, dimensions: 3, revision: 'new-dimensions' }, embed: newEmbed, embedBatch: newEmbed }
+    expect(await syncFinalizedIndex(root, { getProvider: () => newClient, getSceneProvider: () => sceneClient })).toMatchObject({ ok: true, state: { provider: { dimensions: 3 }, generated: 1 } })
+    const boundaries = fs.readFileSync(path.join(root, SCENE_CACHE_PATH))
+    fs.writeFileSync(path.join(root, '.webnovel/finalized-search.sqlite'), 'broken again')
+    await searchFinalized(root, { query: '救人', provider: newClient })
+    sceneClient = { ...sceneClient, metadata: { ...sceneClient.metadata, revision: 'new-scene-model' } }
+    expect(await syncFinalizedIndex(root, { getProvider: () => newClient, getSceneProvider: () => sceneClient })).toMatchObject({ ok: true, state: { generated: 1 } })
+    expect(segment).toHaveBeenCalledTimes(1)
+    expect(fs.readFileSync(path.join(root, SCENE_CACHE_PATH))).toEqual(boundaries)
+    expect(newEmbed.mock.calls.map(call => call[1])).toEqual(['document', 'document'])
+  })
   it('并发识别通过串行短锁保存，不把同任务的进度写入误判为外部锁竞争', async () => {
     chapter(1); chapter(2, '另一章。\n\n另一段。'); chapter(3, '第三章独立正文。')
     const client = embedding(), sceneClient = scenes(async paragraphs => [paragraphs.length], 2)
@@ -163,6 +193,20 @@ describe('场景边界与独立缓存', () => {
 })
 
 describe('查询阶段的可选重排序', () => {
+  it('重排等待期间另一查询重建缓存，迟到排序不能发布旧代次', async () => {
+    chapter(1); chapter(2, '城门关闭。')
+    const client = embedding()
+    await syncFinalizedIndex(root, { getProvider: () => client })
+    const entered = deferred<void>(), late = deferred<readonly number[]>()
+    const reranker = ranker(async () => { entered.resolve(); return late.promise })
+    const pending = searchFinalized(root, { query: '城门', provider: client, getReranker: () => reranker })
+    await entered.promise
+    fs.writeFileSync(path.join(root, '.webnovel/finalized-search.sqlite'), 'broken')
+    await searchFinalized(root, { query: '城门', provider: client, mode: 'keyword' })
+    late.resolve([0, 1])
+    expect(await pending).toMatchObject({ ok: false, code: 'index-changed' })
+    expect(readIndexState(root)).toMatchObject({ completedChunks: 0, phase: 'disabled' })
+  })
   async function ready() {
     chapter(1, '测试：城门的争吵。'); chapter(2, '测试：河边救人的经过。')
     const client = embedding()

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { callStudy } from './api'
-import type { ClientHost } from './host'
+import { mainSessionOf, type ClientHost } from './host'
 import type { EditorStore } from './store'
 
 export function useSession(host: ClientHost): string | undefined {
-  return useSyncExternalStore(host.sessions.list.subscribe, () => host.sessions.list.getSnapshot().current)
+  return useSyncExternalStore(host.sessions.list.subscribe, () => mainSessionOf(host))
 }
 
 export function useEditor(store: EditorStore, id: string) {

@@ -12,6 +12,8 @@ import { formatCommitMessage } from '../commit/message'
 import { assertSegment, validateSegment } from '../repo/paths'
 import { removeSync } from '../repo/remove'
 import { scaffoldBookFiles } from './scaffold'
+import { scanWorkspaceBooks } from './identity'
+import { withBookLock } from '../repo/lock'
 import { checkConceptCompleteness, type Concept } from '../inspire/concept'
 
 export interface CreateBookInput {
@@ -49,6 +51,8 @@ export function createBook(input: CreateBookInput): CreateBookResult {
     }
   }
 
+  if (input.书名.normalize('NFC') === '书房') return { ok: false, reason: '书房是共享资料保留目录，请换一个书名' }
+
   const { workspaceRoot } = input
   if (!fs.existsSync(workspaceRoot) || !fs.statSync(workspaceRoot).isDirectory()) {
     return { ok: false, reason: '工作范围不存在' }
@@ -65,19 +69,28 @@ export function createBook(input: CreateBookInput): CreateBookResult {
     return { ok: false, reason: `构想未确认或未完整,拒绝建书(缺失: ${completeness.gaps.join(', ')})` }
   }
 
-  const bookId = generateBookId(input.书名)
-  let created = false
   try {
-    fs.mkdirSync(bookRoot)
-    created = true
-    scaffoldBookFiles(bookRoot, input.concept, { bookId })
-    const commit = initFirstCommit(bookRoot)
-    return { ok: true, bookRoot, bookId, commit }
-  } catch (err) {
-    if (created) {
-      try { removeSync(bookRoot) } catch { /* 尽力清书仓 */ }
-    }
-    return { ok: false, reason: `建书失败已回滚:${String(err)}` }
+    return withBookLock(workspaceRoot, () => {
+      const bookId = generateBookId(input.书名)
+      if (scanWorkspaceBooks(workspaceRoot).some(book => book.bookId === bookId)) {
+        return { ok: false, reason: `书id已存在或碰撞:${bookId}，请换一个书名；已有书id不会改写` }
+      }
+      let created = false
+      try {
+        fs.mkdirSync(bookRoot)
+        created = true
+        scaffoldBookFiles(bookRoot, input.concept, { bookId })
+        const commit = initFirstCommit(bookRoot)
+        return { ok: true, bookRoot, bookId, commit }
+      } catch (err) {
+        if (created) {
+          try { removeSync(bookRoot) } catch { /* 尽力清书仓 */ }
+        }
+        return { ok: false, reason: `建书失败已回滚:${String(err)}` }
+      }
+    })
+  } catch (error) {
+    return { ok: false, reason: `建书失败：${error instanceof Error ? error.message : String(error)}` }
   }
 }
 

@@ -3,5 +3,6 @@ export { commitWithIsolatedIndex, runGit, onBookCommit, type BookCommitEvent, ty
 export { COMMIT_PREFIXES, formatCommitMessage, type CommitMessageInput, type CommitPrefix } from './message'
 export { checkCommitPath, checkCommitRelPath, type CommitPathCheck } from './paths'
 export { archiveChapter, archiveRetcon, type ArchiveOptions, type ArchiveResult, type ManifestEntry } from './archive'
+export { archiveRetconRequest, type RetconRequestOptions } from './archive'
 export { commitConfirmed, type CommitConfirmedOptions, type CommitConfirmedResult } from './design'
 export { lastCommitOf, type LastCommitResult } from './history'

@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process'
 import { archiveChapter, archiveRetcon } from '../src/commit/archive'
 import { serializeDocument } from '../src/repo/frontmatter'
 import { queryLedger, queryMemory } from '../src/ledger'
+import { planSettlement } from '../src/settlement'
 
 const roots: string[] = []
 const key = { 卷: 1, 章: 1, 章名: '开篇任务' } as const
@@ -53,6 +54,40 @@ function putPackage(root: string, candidates: Record<string, string>): string {
 }
 
 afterAll(() => { for (const root of roots) { try { fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }) } catch { /* Windows 句柄延迟释放，%TEMP% 残留无害 */ } } })
+
+describe('更正最新账本历史(F07)', () => {
+  it('只替换最新同名段，旧历史、旁边条目及 CRLF 空白原样保留', () => {
+    const root = mkRoot()
+    const earlier = '# 故事线\r\n\r\n\r\n## 主线\r\n名称：主线\r\n状态：进行中\r\n### 正文\r\n早期原文。\r\n\r\n\r\n## 旁边\r\n状态：进行中\r\n### 正文\r\n旁边原文。\r\n\r\n'
+    const current = '## 主线\r\n名称：主线\r\n状态：已兑现\r\n### 正文\r\n当前原文。\r\n\r\n'
+    const later = '## 后文\r\n状态：进行中\r\n### 正文\r\n后文原文。\r\n\r\n\r\n'
+    fs.writeFileSync(path.join(root, '账本/故事线.md'), earlier + current + later)
+    const pkg = putPackage(root, { '账本变更.md': '# 账本变更\n## 故事线\n### 主线\n状态：已结束\n计划来源：卷纲#1\n更正后原文。\n' })
+    const plan = planSettlement(root, path.join(root, pkg), { 章节: key, 批准: true, 裁决记录: '作者更正' }, key, '更正')
+    expect(plan.ok).toBe(true)
+    if (!plan.ok) return
+    const output = plan.ops.find(op => op.relPath === '账本/故事线.md')!.content
+    expect(output.startsWith(earlier)).toBe(true)
+    expect(output.endsWith(later)).toBe(true)
+    expect(output).not.toContain('当前原文')
+    expect(output.match(/^## 主线\r?$/gm)).toHaveLength(2)
+    fs.writeFileSync(path.join(root, '账本/故事线.md'), output)
+    const latest = queryLedger(root, { 分类: '故事线', 名称: '主线' })
+    expect(latest.ok).toBe(true)
+    expect(latest.entries[0]?.字段['状态']).toBe('已结束')
+    expect(latest.entries[0]?.正文).toContain('更正后原文')
+  })
+
+  it.each(['## 主线\n名称：别的名称\n', '## 别的标题\n名称：主线\n', '## 主线\n名称：主线\n名称：主线\n'])('标题与名称有歧义时拒绝更正', (section) => {
+    const root = mkRoot()
+    const original = '# 故事线\n\n' + section + '状态：进行中\n### 正文\n原文。\n'
+    fs.writeFileSync(path.join(root, '账本/故事线.md'), original)
+    const pkg = putPackage(root, { '账本变更.md': '# 账本变更\n## 故事线\n### 主线\n状态：已结束\n计划来源：卷纲#1\n' })
+    expect(planSettlement(root, path.join(root, pkg), { 章节: key, 批准: true, 裁决记录: '作者更正' }, key, '更正'))
+      .toMatchObject({ ok: false, reason: expect.stringMatching(/歧义/) })
+    expect(fs.readFileSync(path.join(root, '账本/故事线.md'), 'utf8')).toBe(original)
+  })
+})
 
 describe('定稿沉淀', () => {
   it('未批准时 fail-closed 且不写任何真源', () => {
@@ -184,17 +219,12 @@ describe('定稿沉淀', () => {
     if (!result.ok) expect(result.reason).toMatch(/缺少作者批准/)
   })
 
-  it('空候选无需批准，同内容重复入档幂等放行(F7:无实质变更→git 层回报 written:true,不覆盖不重复提交)', () => {    const root = mkRoot()
+  it('空候选无需批准，同请求重复入档以可信收据重放成功', () => {    const root = mkRoot()
     initGit(root)
     const pkg = putPackage(root, {})
     expect(archiveChapter({ bookRoot: root, packageDir: pkg, summary: '空候选入档' }).ok).toBe(true)
     const second = archiveChapter({ bookRoot: root, packageDir: pkg, summary: '重复入档' })
-    expect(second.ok).toBe(false)
-    if (!second.ok) {
-      // F7:内容与已提交版完全一致 → 内容一致放行,git 层无实质变更 → 回报「已写入待提交」而非「目标已存在」
-      expect(second.written).toBe(true)
-      expect(second.reason).toMatch(/提交失败/)
-    }
+    expect(second).toMatchObject({ ok: true, alreadyCommitted: true, message: 'ch: 空候选入档' })
     // 作者期间新改(内容不同)仍被拒绝
     fs.writeFileSync(path.join(root, pkg, '正文.md'), serializeDocument({ 身份: { 卷: 1, 章: 1, 章名: '开篇任务' }, 角色: '已定稿' }, '作者改过的正文。'), 'utf-8')
     const third = archiveChapter({ bookRoot: root, packageDir: pkg, summary: '冲突入档' })

@@ -11,7 +11,7 @@ const text = (commitState = 'unchanged') => [{ type: 'text', text: JSON.stringif
 function trace(previous = args, commitState = 'unchanged', toolName = name) {
   return [event('turn/start', { turn: 1 }),
     event('tool/call', { callId: 'one', name: toolName, arguments: JSON.stringify(previous) }),
-    event('tool/result', { message: { content: [{ toolCallId: 'one', content: text(commitState) }] } }),
+    event('tool/result', { message: { toolCallId: 'one', content: text(commitState) } }),
   ]
 }
 function context(events: SessionEvent[]): ToolExecContext {
@@ -20,9 +20,9 @@ function context(events: SessionEvent[]): ToolExecContext {
 
 describe('#167 相同设计空操作的轮次保护', () => {
   it('当前轮相同操作重复无改动才结束，读取与宿主快照不重置已完成证据', () => {
-    const events = [...trace(), event('user/message', { source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt', form: 'snapshot' } }),
+    const events = [...trace(), event('user/message', { source: { kind: 'runtime-context', form: 'snapshot' } }),
       event('tool/call', { callId: 'read', name: 'read', arguments: '{}' }),
-      event('tool/result', { message: { content: [{ toolCallId: 'read', content: [{ type: 'text', text: '正文' }] }] } }),
+      event('tool/result', { message: { toolCallId: 'read', content: [{ type: 'text', text: '正文' }] } }),
     ]
     const exec = context(events)
     expect(repeatedDesignNoChange({ content: args.content, state: args.state, partName: args.partName, bookId: args.bookId, summary: '换了提交摘要' }, exec)).toBe(true)
@@ -43,7 +43,7 @@ describe('#167 相同设计空操作的轮次保护', () => {
   })
 
   it('新轮次、用户新指令或新的书房保存通知不继承上一操作的停止判定', () => {
-    for (const boundary of [event('turn/end'), event('turn/start'), event('user/message', { source: { kind: 'user' } }), event('user/message', { source: { kind: 'plugin', plugin: 'webnovel' } })]) {
+    for (const boundary of [event('turn/end'), event('turn/start'), event('user/message', { source: { kind: 'user' } }), event('user/message', { source: { kind: 'plugin:webnovel' } })]) {
       expect(repeatedDesignNoChange(args, context([...trace(), boundary]))).toBe(false)
     }
     expect(repeatedDesignNoChange(args, { name, agent: { id: 'other' } })).toBe(false)
@@ -53,6 +53,14 @@ describe('#167 相同设计空操作的轮次保护', () => {
     expect(repeatedDesignNoChange(args, context(trace(args, 'unchanged', 'read')))).toBe(false)
     const events = trace()
     events[1] = event('tool/call', { callId: 'one', name, arguments: '{' })
+    expect(repeatedDesignNoChange(args, context(events))).toBe(false)
+  })
+
+  it('只认成功的原生 tool-role 结果，空内容与错误结果不算完成', () => {
+    const events = trace()
+    events[2] = event('tool/result', { message: { toolCallId: 'one', isError: true, content: text() } })
+    expect(repeatedDesignNoChange(args, context(events))).toBe(false)
+    events[2] = event('tool/result', { message: { toolCallId: 'one', content: [] } })
     expect(repeatedDesignNoChange(args, context(events))).toBe(false)
   })
 

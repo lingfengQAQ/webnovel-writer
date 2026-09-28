@@ -41,6 +41,7 @@ export async function checkMaterialSupplements({ root, workspace, main, execute,
     assert.equal(review.ok, true)
     assert.match(JSON.stringify(review.材料段), /宿主补料标记/)
     assert.ok(review.回写载荷.length > 0)
+    assert.ok(review.回写载荷.every(item => item.审读指纹 === review.审读指纹 && /^[a-f0-9]{64}$/.test(item.审读指纹)))
     const oldSnapshot = fs.readFileSync(path.join(dir, '补充/decision.md'), 'utf8')
     fs.appendFileSync(source, '作者现在补充了一条意见。\n')
     const stale = await call({})

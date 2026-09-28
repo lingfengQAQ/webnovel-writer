@@ -3,7 +3,8 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { createServer } from 'node:http'
-import { boot } from '@deepseek-ai/dsh-app-boot'
+import * as appBoot from '@deepseek-ai/dsh-app-boot'
+import { createSettingsProfile } from '../../../bundle/tests/fixtures/settings-profile.mjs'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 
 const root = process.argv[2]
@@ -20,17 +21,17 @@ const server = createServer((req, res) => {
   })().catch(() => res.destroy())
 })
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
-const settingsFile = path.join(root, 'settings.yaml')
 const credentialsFile = path.join(root, 'credentials.yaml')
-const profile = path.join(root, 'cordis.json')
-fs.writeFileSync(profile, JSON.stringify([
-  { id: 'settings', name: '@deepseek-ai/dsh-settings-file', config: { path: settingsFile, watch: false } },
+const fixture = createSettingsProfile(root, [
+  { id: 'config-editor', name: '@deepseek-ai/dsh-config-editor' },
+  { id: 'settings', name: '@deepseek-ai/dsh-settings' },
   { id: 'credentials', name: '@deepseek-ai/dsh-credentials-local', config: { path: credentialsFile, watch: false } },
-  { id: 'embedding', name: plugin },
-]))
+  { id: 'webnovel-embeddings', name: plugin },
+], appBoot)
+const settingsFile = fixture.profile.patchPath
 let ctx
 try {
-  ctx = await boot('webnovel-embedding-settings-test', profile)
+  ctx = await fixture.start('webnovel-embedding-settings-test')
   const settings = ctx.get('settings')
   const credentials = ctx.get('credentials')
   const service = ctx.get('embeddings')
@@ -38,6 +39,7 @@ try {
   assert.equal(service.current(), undefined)
   const descriptor = settings.describe({ redactSecrets: true }).find(item => item.ns === namespace)
   assert.ok(descriptor)
+  assert.equal(descriptor.autoGenerate, false)
   assert.ok(JSON.stringify(descriptor.schema).includes('dimensions'))
   assert.equal(requests.length, 0)
   const base = { enabled: true, protocol: 'openai-compatible', baseURL: `http://127.0.0.1:${server.address().port}/v1`, model: 'fixture-model', apiKeyEnv: 'WEBNOVEL_TEST_EMBED_KEY' }
@@ -52,13 +54,15 @@ try {
   assert.ok(!fs.readFileSync(settingsFile, 'utf8').includes('fixture-native-credential'))
   assert.ok(!JSON.stringify(settings.describe({ redactSecrets: true })).includes('fixture-native-credential'))
   await settings.update(namespace, { dimensions: 4 })
+  await assert.rejects(settings.update(namespace, { dimensions: 5 }, descriptor.revision), { code: 'SETTINGS_CONFLICT' })
+  assert.equal(service.current().metadata.dimensions, 4)
   const next = service.current()
   assert.notEqual(next.metadata.revision, first.metadata.revision)
   assert.equal(next.metadata.dimensions, 4)
   await assert.rejects(first.embed([{ text: '旧配置不可再调用' }], 'query'), /配置已变更/)
   await next.embed([{ text: '新配置' }], 'query')
   assert.equal(requests.at(-1).body.dimensions, 4)
-  const row = [...ctx.get('loader').entries()].find(entry => entry.options.id === 'embedding')
+  const row = [...ctx.get('loader').entries()].find(entry => entry.options.id === namespace)
   await row.update({ disabled: true }, false, true)
   await ctx.get('loader').await()
   assert.equal(ctx.get('embeddings'), undefined)

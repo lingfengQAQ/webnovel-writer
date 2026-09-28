@@ -3,7 +3,7 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { commitWithIsolatedIndex, onBookCommit, readIndexState, withBookWrite, writeBatchAtomic, type EmbeddingProvider } from '@webnovel/core'
+import { changeIndexState, commitWithIsolatedIndex, onBookCommit, readIndexState, searchFinalized, withBookWrite, writeBatchAtomic, type EmbeddingProvider } from '@webnovel/core'
 import { removeSync } from '../../core/src/repo/remove'
 import { BookIndexManager, type IndexBook } from '../src/indexing/manager'
 import { bookGitWatchPaths } from '../src/indexing/git'
@@ -44,8 +44,105 @@ async function ready(head = git('rev-parse', 'HEAD').trim()) {
   await vi.waitFor(() => expect(readIndexState(book.root)).toMatchObject({ phase: 'ready', indexedHead: head }), { timeout: 8000, interval: 30 })
 }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done }); return { promise, resolve } }
+function duplicateBook(): IndexBook {
+  const duplicate = { ...book, root: path.join(workspace, '副本作品'), name: '副本作品' }
+  fs.mkdirSync(path.join(duplicate.root, '作品契约'), { recursive: true })
+  fs.writeFileSync(path.join(duplicate.root, '作品契约/契约.md'), '---\n书id: manager-book\n---\n副本作品')
+  fs.mkdirSync(path.join(duplicate.root, '定稿/卷01'), { recursive: true })
+  fs.writeFileSync(path.join(duplicate.root, '定稿/卷01/0001-副本.md'), '副本正文')
+  return duplicate
+}
 
 describe('Git 驱动的后台索引', () => {
+  it.each(['queued', 'disabled', 'paused'] as const)('新扫描重复书 ID 不启动任何一书或发送通知，保留开关：%s', async phase => {
+    const duplicate = duplicateBook()
+    const auto = phase !== 'disabled', paused = phase === 'paused'
+    const error = { code: 'http-error', message: '既有诊断', retryable: false }
+    for (const root of [book.root, duplicate.root]) await changeIndexState(root, state => ({ ...state, generation: 3, auto, paused, phase,
+      notice: { id: 'pending-notice', generation: 3, error, attempts: 1, completed: 0, total: 1, sessionId: 'owner' } }))
+    const embed = vi.fn<EmbeddingProvider['embed']>(async inputs => inputs.map(() => [1, 0]))
+    const notify = vi.fn(async () => true)
+    const runtime = manager(client(embed), notify)
+    await runtime.refresh()
+    for (const item of [book, duplicate]) {
+      expect(await runtime.status(item)).toMatchObject({ phase: 'failed', auto, paused, lastError: { code: 'duplicate-book-id' } })
+      await expect(runtime.control(item, 'enable', 'owner')).rejects.toThrow(/书id.*重复|重复.*书id/)
+      expect(readIndexState(item.root)).toMatchObject({ generation: 3, phase, auto, paused, notice: { id: 'pending-notice' } })
+      expect(readIndexState(item.root).notice?.delivered).toBeUndefined()
+    }
+    await new Promise(resolve => setTimeout(resolve, 60))
+    expect(embed).not.toHaveBeenCalled()
+    expect(notify).not.toHaveBeenCalled()
+  })
+
+  it('已跟踪书在向量等待时出现重复 ID，未经轮询也拒绝旧发布；恢复唯一后继续原任务', async () => {
+    const entered = deferred<void>(), late = deferred<readonly (readonly number[])[]>()
+    let calls = 0
+    const embed = vi.fn<EmbeddingProvider['embed']>(async inputs => { if (++calls === 1) { entered.resolve(); return late.promise }; return inputs.map(() => [1, 0]) })
+    const notify = vi.fn(async () => true)
+    const runtime = new BookIndexManager({ getProvider: () => provider, pollMs: 60_000, debounceMs: 5, notify })
+    const provider = client(embed)
+    managers.push(runtime)
+    await runtime.control(book, 'enable', 'owner')
+    await entered.promise
+    const original = readIndexState(book.root)
+    const duplicate = duplicateBook()
+    late.resolve([[1, 0]])
+    await vi.waitFor(() => expect(fs.existsSync(path.join(book.root, '.webnovel/finalized-search.worker.lock'))).toBe(false))
+    expect(readIndexState(book.root)).toMatchObject({ auto: true, paused: false, generation: original.generation, completedChunks: 0 })
+    expect(await runtime.status(book)).toMatchObject({ phase: 'failed', lastError: { code: 'duplicate-book-id' } })
+    expect(notify).not.toHaveBeenCalled()
+    expect(embed).toHaveBeenCalledTimes(1)
+    fs.unlinkSync(path.join(duplicate.root, '作品契约/契约.md'))
+    await runtime.refresh()
+    await ready()
+    expect(embed).toHaveBeenCalledTimes(2)
+    expect(readIndexState(book.root)).toMatchObject({ auto: true, paused: false, completedChunks: 1 })
+  })
+
+  it.each(['enabled', 'disabled', 'paused'] as const)('缓存自动隔离后清除完成状态，只恢复原自动任务：%s', async mode => {
+    const embed = vi.fn<EmbeddingProvider['embed']>(async inputs => inputs.map(() => [1, 0]))
+    const provider = client(embed)
+    const segment = vi.fn(async (paragraphs: readonly string[]) => [paragraphs.length])
+    const scenes = { metadata: { provider: 'fixture', model: 'scene', revision: 'v1' }, segment }
+    const original = new BookIndexManager({ getProvider: () => provider, getSceneProvider: () => scenes, debounceMs: 5, pollMs: 60_000 })
+    managers.push(original)
+    await original.control(book, 'enable', 'owner')
+    await ready()
+    if (mode !== 'enabled') await original.control(book, mode === 'paused' ? 'pause' : 'disable', 'owner')
+    await original.close()
+    const before = readIndexState(book.root)
+    const sceneBytes = fs.readFileSync(path.join(book.root, '.webnovel/finalized-scenes.json'))
+    fs.writeFileSync(path.join(book.root, '.webnovel/finalized-search.sqlite'), 'broken SQLite cache')
+    const query = await searchFinalized(book.root, { query: '原文', provider })
+    const phase = mode === 'enabled' ? 'queued' : mode
+    expect(query).toMatchObject({ ok: true, mode: 'keyword', index: { ready: false, missing: 1, phase } })
+    expect(readIndexState(book.root)).toMatchObject({ generation: before.generation + 1, phase,
+      auto: before.auto, paused: before.paused, completedChunks: 0, completedChapters: 0, generated: 0, reused: 0, recipientSession: 'owner' })
+    expect(readIndexState(book.root).indexedHead).toBeUndefined()
+    expect(readIndexState(book.root).fingerprint).toBeUndefined()
+    expect(fs.readdirSync(path.join(book.root, '.webnovel')).filter(name => name.includes('.invalid-'))).toHaveLength(1)
+    expect(embed.mock.calls.map(call => call[1])).toEqual(['document'])
+    expect(fs.readFileSync(path.join(book.root, '.webnovel/finalized-scenes.json'))).toEqual(sceneBytes)
+    const recoveredGeneration = readIndexState(book.root).generation
+    await searchFinalized(book.root, { query: '原文', provider })
+    expect(readIndexState(book.root).generation).toBe(recoveredGeneration)
+    const restarted = new BookIndexManager({ getProvider: () => provider, getSceneProvider: () => scenes, workspaces: () => [workspace], debounceMs: 5, pollMs: 60_000 })
+    managers.push(restarted)
+    expect(await restarted.status(book)).toMatchObject({ phase, completedChunks: 0 })
+    await restarted.refresh()
+    if (mode === 'enabled') {
+      await ready()
+      expect(embed.mock.calls.map(call => call[1])).toEqual(['document', 'document'])
+      expect(readIndexState(book.root).generation).toBe(recoveredGeneration)
+      expect(segment).toHaveBeenCalledTimes(1)
+    } else {
+      await new Promise(resolve => setTimeout(resolve, 60))
+      expect(embed).toHaveBeenCalledTimes(1)
+      expect(readIndexState(book.root)).toMatchObject({ phase, generation: recoveredGeneration })
+    }
+  }, 15_000)
+
   it('重启后发现新启用的场景配置；换模型和向量重建复用边界', async () => {
     const embedding = client()
     const old = manager(embedding)

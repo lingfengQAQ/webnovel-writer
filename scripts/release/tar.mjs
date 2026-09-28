@@ -63,10 +63,15 @@ export function checkEmbeddingPackage(filename, expectedVersion) {
   checkPublishableManifest(manifest)
   assert.ok(read('LICENSE').includes('GNU GENERAL PUBLIC LICENSE'))
   assert.ok(read('THIRD_PARTY_NOTICES.md').includes('Original notices'))
-  for (const name of ['lib/index.js', 'lib/client.js', 'cordis.patch.yml', 'README.md', 'MODEL_DIMENSIONS.md']) read(name)
+  for (const name of ['lib/index.js', 'lib/client.js', 'lib/scenes.js', 'lib/reranking.js', 'cordis.patch.yml', 'README.md', 'MODEL_DIMENSIONS.md']) read(name)
+  for (const entry of ['scenes', 'reranking']) {
+    assert.equal(manifest.exports?.[`./${entry}`], `./lib/${entry}.js`, `Missing auxiliary export: ${entry}`)
+  }
+  assert.equal(read('cordis.patch.yml').replaceAll('\r\n', '\n').trim(),
+    "- insert:\n    - id: webnovel-embeddings\n      name: 'webnovel-embedding-provider'\n    - id: webnovel-scenes\n      name: 'webnovel-embedding-provider/scenes'\n    - id: webnovel-reranking\n      name: 'webnovel-embedding-provider/reranking'")
   assert.ok(read('lib/client.js').startsWith(`window.__ModuleLoader__.load({ id: ${JSON.stringify(manifest.name)},`), 'Embedding client identity must match its installed package name')
   for (const [file, data] of files) {
-    assert.match(file, /^(package\.json|LICENSE|THIRD_PARTY_NOTICES\.md|README\.md|MODEL_DIMENSIONS\.md|cordis\.patch\.yml|lib\/(index|client)\.js|licenses\/[^/]+\.txt)$/)
+    assert.match(file, /^(package\.json|LICENSE|THIRD_PARTY_NOTICES\.md|README\.md|MODEL_DIMENSIONS\.md|cordis\.patch\.yml|lib\/(index|client|scenes|reranking)\.js|licenses\/[^/]+\.txt)$/)
     assert.ok(!/-----BEGIN [A-Z ]*PRIVATE KEY-----|sk-[A-Za-z0-9_-]{30,}/.test(data.toString('utf8')), `Possible credential in ${file}`)
   }
   for (const [name, version] of Object.entries({ ...manifest.dependencies, ...manifest.peerDependencies })) {
@@ -89,7 +94,7 @@ export function checkMetaPackage(filename, expectedVersion, embeddingVersion) {
   })
   assert.equal(manifest.dsh?.bundle?.patch, './cordis.patch.yml')
   assert.equal(read('cordis.patch.yml').replaceAll('\r\n', '\n').trim(),
-    "- insert:\n    - id: webnovel\n      name: '@linfengqaqtat/dsh-scriptor'\n    - id: webnovel-embeddings\n      name: webnovel-embedding-provider")
+    "- insert:\n    - id: webnovel\n      name: '@linfengqaqtat/dsh-scriptor'\n    - id: webnovel-embeddings\n      name: webnovel-embedding-provider\n    - id: webnovel-scenes\n      name: 'webnovel-embedding-provider/scenes'\n    - id: webnovel-reranking\n      name: 'webnovel-embedding-provider/reranking'")
   assert.ok(read('LICENSE').includes('GNU GENERAL PUBLIC LICENSE'))
   read('README.md')
   for (const file of files.keys()) assert.match(file, /^(package\.json|LICENSE|README\.md|RELEASE_NOTES\.md|cordis\.patch\.yml)$/)

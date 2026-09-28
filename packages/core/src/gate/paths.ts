@@ -40,6 +40,14 @@ export function gateFileAccess(bookRoot: string, target: string): FileAccessDeci
   const resolved = resolveInsideBook(bookRoot, target)
   if (!resolved.ok) return { allow: false, reason: resolved.reason, zone: '逃逸' }
   const zone = classifyRelPath(resolved.relPath)
+  // Missing paths have no realpath yet. Windows still treats case and trailing
+  // dots/spaces as aliases, including when an internal directory is first made.
+  const protectedPath = process.platform === 'win32'
+    ? resolved.relPath.split('/').map(part => part.replace(/[. ]+$/, '').toLowerCase()).join('/')
+    : resolved.relPath
+  if (/^草稿区\/\.(archive-receipts|author-edits)(?:\/|$)/.test(protectedPath)) {
+    return { allow: false, zone, relPath: resolved.relPath, reason: '操作收据由受信写入器维护，文件工具不得修改' }
+  }
   if (zone === '草稿区') return { allow: true, zone, relPath: resolved.relPath }
   if (zone === '定稿') {
     return { allow: false, reason: '定稿区只读,禁止文件工具改写(不变量 4)', zone, relPath: resolved.relPath }

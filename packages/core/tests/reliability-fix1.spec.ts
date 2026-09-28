@@ -170,7 +170,7 @@ describe('F7:提交失败后的可重试恢复', () => {
     expect(git(root, ['rev-list', '--count', 'HEAD']).trim()).toBe(String(Number(commitsBefore) + 1))
   })
 
-  it('ch 模式:作者期间新改的目标(内容不同) → 拒绝且指明「内容不同」;内容一致 → 放行至章号冲突检查', () => {
+  it('ch 模式:已有目标缺可信收据时拒绝，不能靠相同正文推断归档完成', () => {
     const root = mkBook(true)
     settledBook(root)
     const 定稿相对 = paths.定稿章(1, 1, key.章名)
@@ -178,10 +178,13 @@ describe('F7:提交失败后的可重试恢复', () => {
     const r1 = archiveChapter({ bookRoot: root, files: [{ 目标: 定稿相对, 内容: serializeDocument({ 身份: { 卷: 1, 章: 1, 章名: key.章名 }, 角色: '已定稿' }, '另一版更正。') }], summary: 'ch: 冲突验证' })
     expect(r1.ok).toBe(false)
     if (!r1.ok) expect(r1.reason).toContain('内容不同')
-    // 内容与归档版逐字一致 → 内容一致放行(不误拒);因无实质变更,git 层「nothing to commit」→ written:true 如实回报
+    // 旧版本已写入但没有收据的中间状态不能自动推断附属沉淀已经完成。
     const 现有定稿全文 = fs.readFileSync(nodePath.join(root, 定稿相对), 'utf-8')
     const r2 = archiveChapter({ bookRoot: root, files: [{ 目标: 定稿相对, 内容: 现有定稿全文 }], summary: 'ch: 幂等验证' })
     expect(r2.ok).toBe(false)
-    if (!r2.ok) expect(r2.written).toBe(true)
+    if (!r2.ok) {
+      expect(r2.written).toBeUndefined()
+      expect(r2.reason).toContain('可信收据')
+    }
   })
 })

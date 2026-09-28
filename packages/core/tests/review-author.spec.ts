@@ -85,7 +85,7 @@ describe('作者意见审读模块(A14)', () => {
     // 回写其余模块后,「完成」为真——「作者意见」不在本轮方案,不压住完成态
     for (const [name, st] of Object.entries(record.模块)) {
       if (name === '作者意见') continue
-      if (st.待回写 === true) expect(ingestFindings(root, key, name, []).ok).toBe(true)
+      if (st.待回写 === true) expect(ingestFindings(root, key, name, [], reviewed.record!.审读指纹).ok).toBe(true)
     }
     const final = loadReviewRecord(root, key)!
     expect(final.完成).toBe(true)

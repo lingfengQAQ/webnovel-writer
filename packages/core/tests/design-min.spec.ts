@@ -103,7 +103,7 @@ describe('卷规划三件', () => {
 })
 
 describe('seedMinDesign', () => {
-  it('建书后写入最小设计→开写就绪', () => {
+  it('建书后写入占位 seed 仍需补充真实设计', () => {
     const author = mkRoot()
     ingestNote(author, '随手记:想写系统流')
     const parent = mkRoot()
@@ -126,6 +126,7 @@ describe('seedMinDesign', () => {
 
     expect(deriveDesign(scanDesign(created.bookRoot)).建议).toBe('作品定调')
     seedMinDesign(created.bookRoot)
-    expect(deriveDesign(scanDesign(created.bookRoot)).建议).toBe('开写就绪')
+    expect(deriveDesign(scanDesign(created.bookRoot)).建议).toBe('作品定调')
+    expect(scanDesign(created.bookRoot).内容问题?.length).toBeGreaterThan(0)
   })
 })

@@ -172,10 +172,10 @@ export async function checkSearch({ root, workspace, main, child, ctx, service, 
       const secondPause = pause()
       await manage('update')
       await secondPause.entered.promise
-      await toggle('embedding', true)
+      await toggle('webnovel-embeddings', true)
       release()
       assert.equal((await search()).mode, 'keyword')
-      await toggle('embedding', false)
+      await toggle('webnovel-embeddings', false)
       await manage('update')
       assert.equal((await ready()).generated, 2)
       const restored = await search()

@@ -1,28 +1,28 @@
 {
-  "@deepseek-ai/cosmokit@1.8.3": {
+  "@deepseek-ai/cosmokit@1.8.5": {
     "repository": "deepseek-ai/deepseek-harness",
-    "commit": "fb2c4b9e698e30edb738bca4cf0618587db7d203",
-    "tag": "dsh-v0.1.5-rc.2"
+    "commit": "477b4f420553e8a52c2fbccc464d7561b239c443",
+    "tag": "dsh-v0.1.7-rc.2"
   },
-  "@deepseek-ai/dsh-brand@0.1.5-rc.2": {
+  "@deepseek-ai/dsh-brand@0.1.7-rc.2": {
     "repository": "deepseek-ai/deepseek-harness",
-    "commit": "fb2c4b9e698e30edb738bca4cf0618587db7d203",
-    "tag": "dsh-v0.1.5-rc.2"
+    "commit": "477b4f420553e8a52c2fbccc464d7561b239c443",
+    "tag": "dsh-v0.1.7-rc.2"
   },
-  "@deepseek-ai/dsh-scope@0.1.5-rc.2": {
+  "@deepseek-ai/dsh-scope@0.1.7-rc.2": {
     "repository": "deepseek-ai/deepseek-harness",
-    "commit": "fb2c4b9e698e30edb738bca4cf0618587db7d203",
-    "tag": "dsh-v0.1.5-rc.2"
+    "commit": "477b4f420553e8a52c2fbccc464d7561b239c443",
+    "tag": "dsh-v0.1.7-rc.2"
   },
-  "@deepseek-ai/dsh-system-prompt@0.1.5-rc.2": {
+  "@deepseek-ai/dsh-system-prompt@0.1.7-rc.2": {
     "repository": "deepseek-ai/deepseek-harness",
-    "commit": "fb2c4b9e698e30edb738bca4cf0618587db7d203",
-    "tag": "dsh-v0.1.5-rc.2"
+    "commit": "477b4f420553e8a52c2fbccc464d7561b239c443",
+    "tag": "dsh-v0.1.7-rc.2"
   },
-  "@deepseek-ai/schemastery@3.18.2": {
+  "@deepseek-ai/schemastery@3.18.4": {
     "repository": "deepseek-ai/deepseek-harness",
-    "commit": "fb2c4b9e698e30edb738bca4cf0618587db7d203",
-    "tag": "dsh-v0.1.5-rc.2"
+    "commit": "477b4f420553e8a52c2fbccc464d7561b239c443",
+    "tag": "dsh-v0.1.7-rc.2"
   },
   "diff@8.0.3": {
     "repository": "kpdecker/jsdiff",
@@ -34,9 +34,9 @@
     "commit": "f12b0de177fbc2a6795e99be065887e72b237123",
     "tag": "0.468.0"
   },
-  "@deepseek-ai/dsh-credentials@0.1.5-rc.2": {
+  "@deepseek-ai/dsh-credentials@0.1.7-rc.2": {
     "repository": "deepseek-ai/deepseek-harness",
-    "commit": "fb2c4b9e698e30edb738bca4cf0618587db7d203",
-    "tag": "dsh-v0.1.5-rc.2"
+    "commit": "477b4f420553e8a52c2fbccc464d7561b239c443",
+    "tag": "dsh-v0.1.7-rc.2"
   }
 }

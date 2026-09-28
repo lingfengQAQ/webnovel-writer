@@ -16,6 +16,8 @@ import { type Context } from '@deepseek-ai/cordis'
 import { scanBooks, type BookOverview } from './bookshelf'
 import { activeChapterLine, readAuthorMemoryCatalog, readBookMemoryCatalog, renderMemoryCatalog } from '@webnovel/core'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { MEMORY_CATALOG_SOURCE, isMemoryCatalogSource } from './message-sources'
+export { MEMORY_CATALOG_SOURCE } from './message-sources'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import type { SessionSeq } from '@deepseek-ai/dsh-session'
 
@@ -86,19 +88,12 @@ export interface SystemPromptLike {
   }): () => void
 }
 
-export const MEMORY_CATALOG_SOURCE = 'webnovel-memory-catalog'
-
 /** Only our own delivery is inspected; this never derives or stores a current book. */
 function catalogWasDelivered(agent: Agent): boolean {
   for (let seq = agent.session.seq - 1; seq >= 0; seq--) {
     const event = agent.session.eventAt(seq as SessionSeq)
     if (event?.type !== 'user/message') continue
-    const source = event.data.source
-    if (source.kind !== 'plugin') continue
-    if (source.plugin === MEMORY_CATALOG_SOURCE) return true
-    // Compatibility with the earlier combined runtime snapshot, if one exists in a session.
-    if (source.plugin === '@deepseek-ai/dsh-system-prompt' && source.form === 'snapshot'
-      && source.sections.some(section => section.name === 'webnovel.memory')) return true
+    if (isMemoryCatalogSource(event.data.source)) return true
   }
   return false
 }
@@ -110,13 +105,13 @@ export function attachInitialMemoryCatalog(ctx: Context, deps: StatusDeps): () =
     const decision = await next()
     if (decision.kind === 'reject' || signal.aborted || delivered || agent.ctx !== ctx) return decision
     delivered = catalogWasDelivered(agent)
-    if (delivered || decision.messages.some(message => message.source.kind === 'plugin' && message.source.plugin === MEMORY_CATALOG_SOURCE)) return decision
+    if (delivered || decision.messages.some(message => isMemoryCatalogSource(message.source))) return decision
     const root = deps.workspaceRoot()
     if (root === undefined) return decision
     const text = authorMemoryCatalogText(root)
     return { ...decision, messages: [...decision.messages, createUserMessage({
       content: [{ type: 'text', text }],
-      source: { kind: 'plugin', plugin: MEMORY_CATALOG_SOURCE, form: 'snapshot', sections: [{ name: 'webnovel.memory', text }] },
+      source: { kind: MEMORY_CATALOG_SOURCE, form: 'snapshot', sections: [{ name: 'webnovel.memory', text }] },
     })] }
   }, { prepend: true })
 }

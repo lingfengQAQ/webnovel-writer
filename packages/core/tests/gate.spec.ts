@@ -62,6 +62,24 @@ describe('文件门禁(不变量 4/5)', () => {
     expect(decidePreExecute(root, { name: 'write', arguments: {} }).kind).toBe('deny')
     expect(decidePreExecute(root, { name: 'edit', arguments: { path: '草稿区/x.md' } }).kind).toBe('deny')
   })
+
+  it('内部收据路径在创建前后都受保护，Windows 别名不能绕过', () => {
+    const root = mkBook()
+    for (const dir of ['.archive-receipts', '.author-edits']) {
+      const exact = path.join(root, '草稿区', dir, 'receipt.json')
+      expect(decidePreExecute(root, write(exact)).kind).toBe('deny')
+      for (const alias of [dir.toUpperCase(), dir.toUpperCase() + '.', dir.toUpperCase() + ' ']) {
+        const target = path.join(root, '草稿区', alias, 'receipt.json')
+        expect(decidePreExecute(root, write(target)).kind).toBe(process.platform === 'win32' ? 'deny' : 'allow')
+      }
+      const actual = path.join(root, '草稿区', dir.toUpperCase(), 'receipt.json')
+      put(root, path.relative(root, actual), 'trusted receipt')
+      expect(decidePreExecute(root, write(actual)).kind).toBe(process.platform === 'win32' ? 'deny' : 'allow')
+      if (process.platform === 'win32') expect(decidePreExecute(root, write(exact)).kind).toBe('deny')
+      expect(fs.readFileSync(actual, 'utf8')).toBe('trusted receipt')
+    }
+    expect(decidePreExecute(root, write(path.join(root, '草稿区/章细纲/正常.md'))).kind).toBe('allow')
+  })
 })
 
 describe('写稿门槛(R1 落码:播报不拒绝)', () => {

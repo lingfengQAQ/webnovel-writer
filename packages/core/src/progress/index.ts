@@ -14,6 +14,8 @@ import { canonicalizeChapterKeys, listChapters, parseWindow, scanChapter, type C
 import { deriveChapterFacts } from '../derive/derive'
 import { parseLabeledStates, parseVolumeAllocations, 契约六部, 故事骨架九部, 分卷布局八部 } from '../derive/design'
 import { isWindowEntryReady } from '../derive/states'
+import { scanDesign, type DesignContentIssue } from '../derive/design'
+import { hasDesignContent, parseDesignContent } from '../design/content'
 import type { LastCommitResult } from '../commit/history'
 import { bookWriter } from '../repo/atomic'
 
@@ -21,7 +23,7 @@ export interface DesignPartDetail {
   readonly 名称: string
   readonly 状态: string
   readonly 待补: readonly string[]
-  /** 标「已确认」却只有状态标注、没有正文(不参与推导,只作提示)。 */
+  /** 标「已确认」却只有状态标注、没有正文(状态标签原样保留，内容事实参与就绪建议)。 */
   readonly 无内容?: true
 }
 
@@ -51,6 +53,7 @@ export interface ChapterProgress {
 }
 
 export interface DesignDetail {
+  readonly 内容问题?: readonly DesignContentIssue[]
   readonly 契约: DesignDocDetail
   readonly 骨架: DesignDocDetail
   readonly 分卷: DesignDocDetail & { readonly 各卷: readonly { readonly 卷号: number; readonly 状态: string }[] }
@@ -78,33 +81,10 @@ function readText(root: string, rel: string): string | null {
  * 空子标题、HTML 注释和 `待补：` 便签不算内容;分卷卷行仍算所属标题的内容。
  */
 function parseDocDetail(text: string): DesignPartDetail[] {
-  const lines = text.replace(/<!--[\s\S]*?(?:-->|$)/g, (comment) => comment.replace(/[^\r\n]/g, '')).split('\n')
-  const parts: { 名称: string; 状态: string; line: number; level: number }[] = []
-  const headings: { line: number; level: number }[] = []
-  const entry = /^\s*(?:#{1,6}\s+)?-\s+(.+?)\s*[〔(]\s*(.+?)\s*[〕)]\s*$/
-  const heading = /^\s*(#{1,6})\s+(.+?)\s*[〔(]\s*(.+?)\s*[〕)]\s*$/
-  for (const [i, line] of lines.entries()) {
-    const boundary = /^\s*(#{1,6})\s+/.exec(line)
-    if (boundary !== null) headings.push({ line: i, level: boundary[1]!.length })
-    const h = heading.exec(line)
-    const m = h === null ? entry.exec(line) : null
-    if (h !== null) parts.push({ 名称: h[2]!.trim(), 状态: h[3]!.trim(), line: i, level: h[1]!.length })
-    else if (m !== null) parts.push({ 名称: m[1]!.trim(), 状态: m[2]!.trim(), line: i, level: Infinity })
-  }
-  return parts.map((p, index) => {
-    const next = parts[index + 1]
-    const upper = next === undefined ? lines.length : next.line
-    const 待补: string[] = []
-    for (let i = p.line + 1; i < upper; i++) {
-      const t = lines[i]!.trim()
-      if (t.startsWith('待补：') || t.startsWith('待补:')) 待补.push(t.replace(/^待补[:：]\s*/, ''))
-    }
-    const headingEnd = headings.find((q) => q.line > p.line && q.level <= p.level)?.line ?? lines.length
-    const contentEnd = p.level === Infinity ? Math.min(upper, headingEnd) : headingEnd
-    const 有内容 = /[：:]\s*\S/.test(p.名称)
-      || lines.slice(p.line + 1, contentEnd).some((l) => l.trim() !== '' && !/^\s*#{1,6}\s/.test(l) && !PENDING_RE.test(l))
-    return { 名称: p.名称, 状态: p.状态, 待补, ...(p.状态 === '已确认' && !有内容 ? { 无内容: true as const } : {}) }
-  })
+  return parseDesignContent(text).flatMap(part => part.状态 === undefined ? [] : [{
+    名称: part.名称, 状态: part.状态, 待补: part.待补,
+    ...(part.状态 === '已确认' && !part.有内容 ? { 无内容: true as const } : {}),
+  }])
 }
 
 function walkFiles(dir: string, fn: (abs: string) => void): void {
@@ -122,7 +102,9 @@ function walkFiles(dir: string, fn: (abs: string) => void): void {
 }
 
 /** 设计侧明细扫描(现算,不落盘);词表与路径全部复用既有定义,不另立第二套。 */
-export function scanDesignDetail(bookRoot: string): DesignDetail {
+export function scanDesignDetail(bookRoot: string, volume?: number): DesignDetail {
+  const selection = selectCurrentVolume(bookRoot)
+  const 卷 = volume ?? (selection.kind === 'active' ? selection.卷 : selection.kind === 'planning' ? (selection.已完成卷 ?? selection.规划卷) : 1)
   const 契约文 = readText(bookRoot, paths.契约())
   const 骨架文 = readText(bookRoot, paths.故事骨架())
   const 分卷文 = readText(bookRoot, paths.分卷布局())
@@ -134,7 +116,7 @@ export function scanDesignDetail(bookRoot: string): DesignDetail {
     return hit ?? { 名称: n, 状态: '留白', 待补: [] }
   })
 
-  // 卷行分配与 scanDesign 同一解析口径(任务21 B2/F21-3):行级优先、缺标注继承小节、缺失不报已确认;
+  // 卷行分配与 scanDesign 同一解析口径：正式段/行级矛盾报冲突，缺标注继承小节，缺失不报已确认；
   // 同卷冲突呈报「冲突」,同态重复行去重。
   const 各卷: { 卷号: number; 状态: string }[] = []
   for (const a of parseVolumeAllocations(分卷文 ?? '')) {
@@ -201,7 +183,7 @@ export function scanDesignDetail(bookRoot: string): DesignDetail {
       if (!r.ok || r.data.fields['状态'] !== '已确认') continue
       已确认数++
       // 只剩标题行(写入器缺省正文是 `# 名称`)即无正文
-      if (!r.data.body.split('\n').some((l) => l.trim() !== '' && !/^\s*#/.test(l))) 无正文.push(n.replace(/\.md$/, ''))
+      if (!hasDesignContent(r.data.body)) 无正文.push(n.replace(/\.md$/, ''))
     }
     return { 名称: m, 条目数: names.length, 已确认数, ...(无正文.length === 0 ? {} : { 无正文 }) }
   })
@@ -217,6 +199,7 @@ export function scanDesignDetail(bookRoot: string): DesignDetail {
   const 活跃章 = canonicalizeChapterKeys(listChapters(bookRoot)).find((k) => !定稿集合.has(`${k.卷}/${k.章}/${k.章名}`)) ?? null
 
   return {
+    内容问题: scanDesign(bookRoot, 卷).内容问题 ?? [],
     契约: { 路径: paths.契约(), 分部: 契约分部 },
     骨架: { 路径: paths.故事骨架(), 分部: parseDocDetail(骨架文 ?? '') },
     分卷: { 路径: paths.分卷布局(), 分部: parseDocDetail(分卷文 ?? ''), 各卷 },
@@ -283,7 +266,7 @@ function 改动章(history: Readonly<Record<string, LastCommitResult>>, relPath:
 
 /**
  * 已确认但无内容的设计分部与世界书条目(`契约·题材与读者定位`、`世界书·人物档案/主角` 形)。
- * 不参与推导(标注即作者确认):状态面与进度卡据此提示补内容——起草拿不到只有标注的设计。
+ * 标注仍是作者确认事实；必要内容缺失由共享内容清单影响就绪建议，远期合法留白不阻塞。
  */
 export function listConfirmedEmpty(detail: DesignDetail): string[] {
   const out: string[] = []
@@ -304,12 +287,15 @@ export function renderBookProgress(
   history: Readonly<Record<string, LastCommitResult>>,
   未决偏离: readonly string[],
   章级待核对数 = 0,
+  疑似占位待核对: readonly { 名称: string; 来源: string }[] = [],
 ): string {
   const lines: string[] = ['【书级进度卡】', '']
   const 无内容数 = listConfirmedEmpty(detail).length
   if (无内容数 > 0) {
-    lines.push(`已确认但无内容：${无内容数} 处（下文标「无内容」；只有状态标注、没有正文，起草拿不到这部分设定。推导照常，建议补内容）`, '')
+    lines.push(`已确认但无内容：${无内容数} 处（下文标「无内容」；只有状态标注、没有正文，起草拿不到这部分设定。必要设计缺内容时会影响就绪建议，请核对下列内容问题）`, '')
   }
+
+  for (const issue of detail.内容问题 ?? []) lines.push(`设计内容：${issue.路径} · ${issue.分部} · ${issue.问题}`)
 
   const part = (d: DesignDocDetail) => d.分部.map((p) => `- ${p.名称}〔${p.状态}〕${p.无内容 === true ? '（无内容）' : ''}${p.待补.length > 0 ? `（待补:${p.待补.join(';')}）` : ''}｜${改动章(history, d.路径)}`)
 
@@ -347,6 +333,7 @@ export function renderBookProgress(
   lines.push('')
 
   lines.push(`本卷未决偏离：${未决偏离.length} 条${未决偏离.length > 0 ? `（${未决偏离.join('；')}）` : ''}`)
+  for (const item of 疑似占位待核对) lines.push(`疑似模板占位待核对：${item.名称}（${item.来源}）；请核实或补全计划，不自动删除原文`)
   // 章级待核对单独计数呈报(任务21, B1):不计入偏离数;非空时任何消费者不得呈报无偏离
   if (章级待核对数 > 0) lines.push(`本卷章级待核对：${章级待核对数} 条（按章号关联同章事实供核对，同章任一事件不等于内容兑现）`)
   return lines.join('\n')

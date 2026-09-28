@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings-models/client'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -14,9 +14,9 @@ import { installAuxiliaryCards } from './auxiliary-client'
 const NS = 'webnovel-embeddings'
 const DEFAULT_REF = 'WEBNOVEL_EMBEDDING_API_KEY'
 const FIELDS = ['enabled', 'protocol', 'baseURL', 'model', 'dimensions', 'apiKeyEnv', 'batchSize', 'timeoutMs', 'maxRetries', 'sendDimensions', 'documentPrefix', 'queryPrefix', 'geminiTaskMode'] as const
-export const inject = ['slots', 'settingsScope', 'remote', 'remote.credentials']
+export const inject = ['slots', 'configForms', 'remote', 'remote.credentials']
 
-function EmbeddingCard({ scope, host }: { scope: SettingsScope<EmbeddingSettings>; host: Context }) {
+function EmbeddingCard({ scope, host }: { scope: ConfigForm<EmbeddingSettings>; host: Context }) {
   const state = useSyncExternalStore(listener => scope.subscribe(listener), () => scope.getSnapshot())
   const [draft, setDraft] = useState<EmbeddingSettings>({})
   const [revision, setRevision] = useState<number>()
@@ -123,9 +123,10 @@ function EmbeddingCard({ scope, host }: { scope: SettingsScope<EmbeddingSettings
         keySaved = true
         if (alive.current) { setKey(''); setCredentialRefresh(value => value + 1) }
       }
-      await scope.mutate(FIELDS.map(field => draft[field] === undefined
+      const accepted = await scope.mutate(FIELDS.map(field => draft[field] === undefined
         ? { op: 'unset' as const, path: [field] }
         : { op: 'set' as const, path: [field], value: draft[field] }), revision)
+      if (!accepted) throw new Error('配置未保存；请载入最新配置后重试')
       if (alive.current) { setDirty(false); setNotice(''); setOpen(false) }
     } catch (error) {
       if (alive.current) setNotice(`${keySaved ? 'API Key 已保存；' : ''}${error instanceof Error ? error.message : '设置保存失败，请重试'}`)
@@ -187,7 +188,7 @@ function EmbeddingCard({ scope, host }: { scope: SettingsScope<EmbeddingSettings
 
 export function apply(host: Context): void {
   installAuxiliaryCards(host)
-  const scope = host.settingsScope.bind<EmbeddingSettings>({ namespace: NS })
+  const scope = host.configForms.get<EmbeddingSettings>(NS)
   host.effect(() => {
     const style = document.createElement('style'); style.textContent = css; document.head.append(style)
     return () => style.remove()

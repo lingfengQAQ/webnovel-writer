@@ -19,7 +19,9 @@ import {
   registerDefaultChecks,
   resetChecks,
   runReview,
+  recordAuthorFinding,
 } from '../src/index'
+import { removeSync } from '../../core/src/repo/remove'
 
 /**
  * 真机缺陷回归（20章连写第1章，D-002）：细纲升 v2 后记录指纹陈旧，模型重跑了
@@ -35,7 +37,7 @@ function mkBook(): string {
   seedMinDesign(dir)
   return dir
 }
-afterAll(() => { for (const r of roots) { try { fs.rmSync(r, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }) } catch { /* 残留无害 */ } } })
+afterAll(() => roots.forEach(root => removeSync(root)))
 beforeEach(() => { resetChecks(); registerDefaultChecks() })
 
 const key = { 卷: 1, 章: 1, 章名: '开篇任务' } as const
@@ -73,11 +75,63 @@ function ingestAll(root: string): void {
   const record = loadReviewRecord(root, key)
   for (const [name, st] of Object.entries(record?.模块 ?? {})) {
     if (st.待回写 === true) {
-      const r = ingestFindings(root, key, name, [])
+      const r = ingestFindings(root, key, name, [], record!.审读指纹)
       if (!r.ok) throw new Error(r.reason)
     }
   }
 }
+
+describe('F05 每条自动审读结果绑定输入', () => {
+  it.each([undefined, '', '   '])('首次回写缺少有效指纹 %s 时拒绝且不建审核记录', (fingerprint) => {
+    const root = mkBook()
+    confirmWithHard(root)
+    assembleMaterials(root, key)
+    putPending(root, `巷口。${HARD}。`)
+    const result = ingestFindings(root, key, '文本规范检查', [], fingerprint)
+    expect(result.ok).toBe(false)
+    expect(result.reason).toMatch(/指纹/)
+    expect(loadReviewRecord(root, key)).toBeNull()
+  })
+
+  it('新轮首个模块回写后，后续自动结果仍逐条拒绝缺失和旧指纹，当前指纹通过', () => {
+    const root = mkBook()
+    confirmWithHard(root)
+    assembleMaterials(root, key)
+    putPending(root, `旧稿。${HARD}。`)
+    const oldFingerprint = runReview(root, key).record!.审读指纹
+    putPending(root, `新稿。${HARD}。`)
+    const currentFingerprint = computeReview(root, key).record!.审读指纹
+    expect(ingestFindings(root, key, '文本规范检查', [], currentFingerprint).ok).toBe(true)
+    const recordPath = path.join(root, '草稿区/审核/卷01-开篇任务.json')
+    const before = fs.readFileSync(recordPath, 'utf8')
+    for (const fingerprint of [undefined, oldFingerprint]) {
+      for (const name of ['文本规范检查', '章节结构审读']) {
+        const result = ingestFindings(root, key, name, [{ 问题说明: '旧稿迟到结果' }], fingerprint)
+        expect(result.ok).toBe(false)
+        expect(result.reason).toMatch(/指纹/)
+        expect(fs.readFileSync(recordPath, 'utf8')).toBe(before)
+      }
+    }
+    expect(ingestFindings(root, key, '章节结构审读', [], currentFingerprint).ok).toBe(true)
+    expect(loadReviewRecord(root, key)!.模块['章节结构审读']?.完成).toBe(true)
+  })
+
+  it('作者意见跨稿回写无需自动指纹，也不能刷新旧审核证据', () => {
+    const root = mkBook()
+    confirmWithHard(root)
+    assembleMaterials(root, key)
+    putPending(root, `旧稿。${HARD}。`)
+    const reviewed = runReview(root, key).record!
+    putPending(root, `新稿。${HARD}。`)
+    expect(recordAuthorFinding(root, key, { 问题说明: '保留作者的跨稿意见' }).ok).toBe(true)
+    const record = loadReviewRecord(root, key)!
+    expect(record.审读指纹).toBe(reviewed.审读指纹)
+    expect(record.审稿哈希).toBe(reviewed.审稿哈希)
+    for (const [name, state] of Object.entries(reviewed.模块)) expect(record.模块[name]).toEqual(state)
+    expect(record.问题.some(item => item.模块名 === '作者意见' && item.问题说明 === '保留作者的跨稿意见')).toBe(true)
+    expect(scanChapter(root, key).审核证据过期).toBe(true)
+  })
+})
 
 describe('陈旧记录的重跑通道（D-002 回归）', () => {
   it.each(['逐模块', '进程内'])('%s重跑先处理确定性模块，重读记录后其他模块仍继承处置与说明', (mode) => {
@@ -85,10 +139,10 @@ describe('陈旧记录的重跑通道（D-002 回归）', () => {
     confirmWithHard(root)
     assembleMaterials(root, key)
     putPending(root, `巷口。${HARD}。`)
-    runReview(root, key)
+    const firstFingerprint = runReview(root, key).record!.审读指纹
     const finding = { 问题说明: '开场较慢', 证据位置: '首段', 影响范围: '正文' }
-    ingestFindings(root, key, '章节结构审读', [{ ...finding, 处置: '作者保留', 处置说明: '作者选择慢开场' }])
-    ingestFindings(root, key, '情节与因果审读', [{ 问题说明: '将消失的旧问题', 证据位置: '末段', 处置: '已驳回' }])
+    ingestFindings(root, key, '章节结构审读', [{ ...finding, 处置: '作者保留', 处置说明: '作者选择慢开场' }], firstFingerprint)
+    ingestFindings(root, key, '情节与因果审读', [{ 问题说明: '将消失的旧问题', 证据位置: '末段', 处置: '已驳回' }], firstFingerprint)
     ingestAll(root)
     putPending(root, `巷口。${HARD}。门内响了两声。`)
     if (mode === '进程内') runReview(root, key)
@@ -99,12 +153,12 @@ describe('陈旧记录的重跑通道（D-002 回归）', () => {
     expect(persisted.完成).toBe(false)
     // Registry recreation cannot lose the saved dispositions; subsequent calls reread the file.
     resetChecks(); registerDefaultChecks()
-    const next = ingestFindings(root, key, '章节结构审读', [finding]).record!
+    const next = ingestFindings(root, key, '章节结构审读', [finding], persisted.审读指纹).record!
     const inherited = next.问题.find(f => f.模块名 === '章节结构审读')!
     expect(inherited.处置状态).toBe('作者保留')
     expect(inherited.处置说明).toBe('作者选择慢开场')
     expect(next.待继承处置?.some(f => f.模块名 === '章节结构审读')).toBe(false)
-    ingestFindings(root, key, '情节与因果审读', [])
+    ingestFindings(root, key, '情节与因果审读', [], persisted.审读指纹)
     expect(loadReviewRecord(root, key)!.待继承处置 ?? []).toEqual([])
     expect(loadReviewRecord(root, key)!.问题.some(f => f.问题说明 === '将消失的旧问题')).toBe(false)
   })
@@ -119,7 +173,7 @@ describe('陈旧记录的重跑通道（D-002 回归）', () => {
     expect(first.ok).toBe(true)
     const semantic = ingestFindings(root, key, '章节结构审读', [
       { 问题说明: '门洞一句不通', 证据位置: '第三段', 影响范围: '正文', 处置: '作者保留', 处置状态: '作者保留' },
-    ])
+    ], first.record!.审读指纹)
     expect(semantic.ok).toBe(true)
     const opinion = ingestFindings(root, key, '作者意见', [{ 问题说明: '开头再冷一点', 证据位置: '首段' }])
     expect(opinion.ok).toBe(true)
@@ -155,8 +209,8 @@ describe('陈旧记录的重跑通道（D-002 回归）', () => {
     expect(record.问题.some((p) => p.模块名 === '作者意见' && p.问题说明 === '开头再冷一点')).toBe(true)
     // 指纹已刷新到当前输入
     expect(record.审读指纹).toBe(fingerprint)
-    // 第二轮继续回写：不再需要证明（记录已不陈旧）
-    expect(ingestFindings(root, key, '文本规范检查', []).ok).toBe(true)
+    // 第二轮继续回写也必须提供这份输入的指纹。
+    expect(ingestFindings(root, key, '文本规范检查', [], fingerprint).ok).toBe(true)
   })
 
   it('重置后逐模块回写至全部完成，推导可进定稿准备', () => {
@@ -175,9 +229,9 @@ describe('陈旧记录的重跑通道（D-002 回归）', () => {
       const r = ingestFindings(root, key, name, [], fingerprint)
       expect(r.ok).toBe(true)
     }
-    // 语义模块回写不需要再带指纹（全部注册模块按名逐个回写）
+    // 全部语义模块仍逐个携带同一份输入的指纹。
     for (const name of listChecks().filter((c) => c.执行形态 !== '作者').map((c) => c.名称)) {
-      const r = ingestFindings(root, key, name, [])
+      const r = ingestFindings(root, key, name, [], fingerprint)
       expect(r.ok, name).toBe(true)
     }
     const record = loadReviewRecord(root, key)!
@@ -195,8 +249,9 @@ describe('待回写模块与完成同源（#162 回归）', () => {
     assembleMaterials(root, key)
     putPending(root, `巷口风大。${HARD}。他没有回头。`)
     const names = allModules()
+    const fingerprint = computeReview(root, key).record!.审读指纹
     for (const [i, name] of names.entries()) {
-      const r = ingestFindings(root, key, name, [])
+      const r = ingestFindings(root, key, name, [], fingerprint)
       expect(r.ok, name).toBe(true)
       expect(r.待回写模块).toEqual(names.slice(i + 1))
       expect(r.record!.完成).toBe(i === names.length - 1)

@@ -34,11 +34,24 @@ function readText(root: string, rel: string): string | null {
   }
 }
 
+/** Compare filenames using the host's case policy without changing their identity. */
+function filenameCase(value: string): string {
+  return process.platform === 'win32' ? value.toLowerCase() : value
+}
+
+export function isDraftMarkdownFile(file: string): boolean {
+  return filenameCase(file).endsWith('.md')
+}
+
+export function isNumberedDraftPath(relative: string): boolean {
+  return /^草稿区\/草稿\/[^/]+\/稿\d+\.md$/.test(filenameCase(relative.replace(/\\/g, '/')))
+}
+
 export function listChapterDrafts(bookRoot: string, key: Pick<ChapterKey, '卷' | '章名'>): readonly DraftFile[] {
   const dir = paths.草稿目录(key.卷, key.章名)
   const abs = path.join(bookRoot, dir)
   if (!fs.existsSync(abs) || !fs.statSync(abs).isDirectory()) return []
-  return fs.readdirSync(abs).filter((f) => f.endsWith('.md')).sort((a, b) => a.localeCompare(b, 'zh')).flatMap((file) => {
+  return fs.readdirSync(abs).filter(isDraftMarkdownFile).sort((a, b) => a.localeCompare(b, 'zh')).flatMap((file) => {
     const relPath = path.posix.join(dir, file)
     const text = readText(bookRoot, relPath)
     if (text === null) return []
@@ -67,7 +80,7 @@ export function countPendingReviewDrafts(bookRoot: string, key: Pick<ChapterKey,
 }
 
 function draftNo(file: string): number {
-  const m = /^稿(\d+)\.md$/.exec(file)
+  const m = /^稿(\d+)\.md$/.exec(filenameCase(file))
   return m === null ? 0 : Number(m[1])
 }
 

@@ -1,6 +1,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { parseDocument } from '../repo/frontmatter'
+import { isLegacySeedPlan } from '../design/legacy-seed'
 import {
   CN_NUMERAL,
   LEDGER_NAMES,
@@ -90,6 +91,8 @@ export interface LedgerReconciliation {
   readonly 未归类计划行: readonly ReconciliationItem[]
   /** 章级计划按章号关联的待核对清单(非空时任何消费者不得呈报无偏离/已兑现)。 */
   readonly 章级待核对: readonly ChapterLevelPendingItem[]
+  /** Entire legacy seed plan matched: provenance is uncertain, not a proven deviation. */
+  readonly 疑似占位待核对?: readonly ReconciliationItem[]
   readonly 状态: '无偏离' | '待核对' | '有偏离'
 }
 
@@ -666,8 +669,11 @@ export function reconcileLedger(bookRoot: string, volume: number, suppliedLedger
   const plannedOnly: ReconciliationItem[] = []
   const actualOnly: ReconciliationItem[] = []
   const 章级待核对: ChapterLevelPendingItem[] = []
+  const 疑似占位待核对: ReconciliationItem[] = []
+  const legacyTemplate = isLegacySeedPlan(planText.text)
   for (const item of plan.items) {
     if (factByName.has(normalizeName(item.名称))) { matched.push(item); continue }
+    if (legacyTemplate) { 疑似占位待核对.push(item); continue }
     // 章级形态计划项(任务21, B1):按全书章号关联同章事实供核对,不落计划未兑现;
     // 同章任一事件入账不等于内容兑现,不同章号不关联。
     const m = /^第\s*([0-9]{1,4}|[一二三四五六七八九十两]{1,3})\s*章/.exec(item.名称)
@@ -692,7 +698,8 @@ export function reconcileLedger(bookRoot: string, volume: number, suppliedLedger
       事实未计划: actualOnly,
       未归类计划行: plan.未归类,
       章级待核对,
-      状态: plannedOnly.length > 0 || actualOnly.length > 0 ? '有偏离' : 章级待核对.length > 0 ? '待核对' : '无偏离',
+      疑似占位待核对,
+      状态: plannedOnly.length > 0 || actualOnly.length > 0 ? '有偏离' : 章级待核对.length > 0 || 疑似占位待核对.length > 0 ? '待核对' : '无偏离',
     },
   }
 }

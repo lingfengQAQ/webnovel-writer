@@ -1,11 +1,11 @@
-@deepseek-ai/dsh-system-prompt@0.1.5-rc.2
+@deepseek-ai/cosmokit@1.8.5
 SPDX: MIT
 Repository: git+https://github.com/deepseek-ai/deepseek-harness.git
 
 --- LICENSE ---
 MIT License
 
-Copyright (c) 2026 DeepSeek
+Copyright (c) 2021-present Shigma
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

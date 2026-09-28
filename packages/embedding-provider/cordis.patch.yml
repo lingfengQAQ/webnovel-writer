@@ -1,3 +1,7 @@
 - insert:
     - id: webnovel-embeddings
       name: 'webnovel-embedding-provider'
+    - id: webnovel-scenes
+      name: 'webnovel-embedding-provider/scenes'
+    - id: webnovel-reranking
+      name: 'webnovel-embedding-provider/reranking'

@@ -94,6 +94,7 @@ function reconciliationSections(bookRoot: string, volume: number): { readonly �
   // 章级计划待核对(任务21, B1):只呈报,同章任一事件不等于内容兑现;非空时不得写「无偏离」
   const 待核对行 = result.report.章级待核对.map((p) =>
     `- 章级计划待核对：${p.计划项.名称}（第${p.章号}章；本章事实：${p.本章事实.length === 0 ? '无' : p.本章事实.map((f) => f.名称).join('、')}；依据：按全书章号关联同章事实供核对，同章任一事件不等于计划内容兑现）`)
+  待核对行.push(...(result.report.疑似占位待核对 ?? []).map(item => `- 疑似模板占位待核对：${item.名称}（${item.来源}）；与旧 seed 完整模板一致，请核实计划，未自动删除原文`))
   const deviation = result.report.状态 === '无偏离'
     ? ['无偏离', ...未归类].join('\n')
     : result.report.状态 === '待核对'

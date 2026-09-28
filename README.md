@@ -1,8 +1,10 @@
 # DSH Scriptor · Webnovel Writer v8
 
+> 本版 Scriptor preview.7 / 嵌入提供方 0.0.9 面向 **DSH 0.1.7-rc.2**。旧版 preview.6 / 提供方 0.0.8 对应 DSH 0.1.5-rc.2；升级时同时对齐宿主与插件，先备份再重启。
+
 基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的长篇小说写作工作台。把构想、设定、大纲、写章、审读、修改、定稿、记忆与导出放进一个能够暂停和继续的工作流程，作品以本地文件保存。
 
-**开发预览版：0.1.0-preview.6。** Windows 首发；重要作品使用前请备份。模型服务由你配置，调用可能产生费用。
+**开发预览版：0.1.0-preview.7。** Windows 首发；重要作品使用前请备份。模型服务由你配置，调用可能产生费用。
 
 DSH Scriptor is a local-first fiction writing workspace for DeepSeek Harness. This is the v8 developer preview. Runtime prompts and skills are included; model services are configured by the user.
 
@@ -11,9 +13,9 @@ DSH Scriptor is a local-first fiction writing workspace for DeepSeek Harness. Th
 | 产品线 | 运行环境 | 入口 |
 | --- | --- | --- |
 | v6 | Claude Code 插件 | [v6 文档与安装](https://github.com/lingfengQAQ/webnovel-writer/tree/master) |
-| v8（本分支） | DeepSeek Harness 工作台 | [下载预览版](https://github.com/lingfengQAQ/webnovel-writer/releases/tag/scriptor-v0.1.0-preview.6) · [安装教程](docs/user/install.md) |
+| v8（本分支） | DeepSeek Harness 工作台 | [下载预览版](https://github.com/lingfengQAQ/webnovel-writer/releases/tag/scriptor-v0.1.0-preview.7) · [安装教程](docs/user/install.md) |
 
-两个版本安装方式不同。当前没有经过验证的 v6/v7 书仓直接迁移方案。`v8` 是产品线名称，`0.1.0-preview.6` 是工作台安装包版本。
+两个版本安装方式不同。当前没有经过验证的 v6/v7 书仓直接迁移方案。`v8` 是产品线名称，`0.1.0-preview.7` 是工作台安装包版本。
 
 ## 能做什么
 
@@ -29,18 +31,18 @@ DSH Scriptor is a local-first fiction writing workspace for DeepSeek Harness. Th
 ## 开始使用
 
 1. 准备 **Git for Windows、PowerShell 7**，安装 **Node.js 24.15.0**（也支持 22.19.0 起的 Node 22）及 **pnpm 11.27.1**。
-2. 安装 **DSH 0.1.5-rc.2**，按 [安装教程](docs/user/install.md) 创建 Web profile，再执行 `dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor@preview`。
+2. 安装 **DSH 0.1.7-rc.2**，按 [安装教程](docs/user/install.md) 创建 Web profile，再执行 `dsh plugin --profile scriptor add C:/scriptor-dist/linfengqaqtat-dsh-scriptor-0.1.0-preview.7.tgz`。
 3. 在宿主设置中配置主模型与凭据，阅读 [最小配置](docs/user/configuration.md)。
 4. 用 [合成练习素材](examples/first-book.md) 走一遍 [第一本书与第一章](docs/user/first-book.md)，熟悉确认、定稿和恢复；需要逐屏对照界面时看 [新手图文教程](docs/user/beginner.md)。
 
-安装包不需要在用户电脑上编译，也不要求 npm 账号。Release 中的 `linfengqaqtat-dsh-scriptor-0.1.0-preview.6.tgz` 是本地安装备选，使用前核对 SHA256；源码压缩包用于开发。
+从对应 Release 下载并核对校验和，或按安装教程使用 npm 精确版本。preview.7 的运行基线是 DSH 0.1.7-rc.2。
 
 
 ### 可选嵌入提供方
 
-如需语义检索增强，在主插件后执行 `dsh plugin --profile scriptor add webnovel-embedding-provider@0.0.8`。
+如需语义检索增强，在主插件后执行 `dsh plugin --profile scriptor add C:/scriptor-dist/webnovel-embedding-provider-0.0.9.tgz`。
 
-新建 profile 时也可直接安装完整版：`dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-full@preview`，同时获得主插件与嵌入提供方。完整版与单独安装二选一；嵌入模型仍需自行配置并启用。
+也可使用 `@linfengqaqtat/dsh-scriptor-full@0.1.0-preview.7` 一次安装主包和提供方。完整版与分别安装二选一，嵌入模型仍需自行配置并启用。
 
 ## 文档
 

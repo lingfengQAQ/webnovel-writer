@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { baseline } from '../../packages/bundle/scripts/dsh-source.mjs'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -54,14 +55,14 @@ let fixtureRegistry
 let fixtureRegistryUrl
 try {
   // Hosted Windows runners with a cold npm cache exceeded 4 minutes for the DSH tree; the network-bound step gets its own bound.
-  log('install-host', run(npm, ['install', '--prefix', host, '--save-exact', '--no-audit', '--no-fund', '@deepseek-ai/dsh@0.1.5-rc.2', 'pnpm@11.27.1'], host, 15 * 60 * 1000))
+  log('install-host', run(npm, ['install', '--prefix', host, '--save-exact', '--no-audit', '--no-fund', '--prefer-offline', `@deepseek-ai/dsh@${baseline.registry.version}`, 'pnpm@11.27.1'], host, 15 * 60 * 1000))
   const pathKey = Object.keys(env).find(key => key.toLowerCase() === 'path') ?? 'PATH'
   env[pathKey] = path.join(host, 'node_modules/.bin') + path.delimiter + (env[pathKey] ?? '')
   report.hostPackageManager = 'pnpm@11.27.1'
   const require = createRequire(path.join(host, 'package.json'))
   const hostAnchor = require.resolve('@deepseek-ai/dsh/package.json')
   const cli = path.join(path.dirname(hostAnchor), 'lib/bin.js')
-  assert.equal(run(cli, ['--version']).trim(), '0.1.5-rc.2')
+  assert.equal(run(cli, ['--version']).trim(), baseline.registry.version)
   report.checks.freshHost = true
   log('web-profile', run(cli, ['--profile', 'scriptor-test', '--from-default-profile', 'web', '--dump-config']))
   const copiedMain = path.join(root, 'main.tgz')
@@ -83,7 +84,7 @@ try {
   fs.copyFileSync(path.join(sourceRoot, 'packages/bundle/tests/fixtures/packaging-isolation.mjs'), script)
   const isolatedReport = path.join(root, 'source-isolation.json')
   const blocked = path.join(sourceRoot, 'packages/bundle/src/index.ts')
-  const output = execFileSync(process.execPath, ['--permission', ...permissionGrants('read'), ...permissionGrants('write'), `--allow-fs-read=${path.dirname(process.execPath)}`, script, profile, hostAnchor, blocked, isolatedReport], { cwd: workspace, env, encoding: 'utf8', windowsHide: true, timeout: 45000 })
+  const output = execFileSync(process.execPath, ['--permission', '--allow-addons', ...permissionGrants('read'), ...permissionGrants('write'), `--allow-fs-read=${path.dirname(process.execPath)}`, script, profile, hostAnchor, blocked, isolatedReport], { cwd: workspace, env, encoding: 'utf8', windowsHide: true, timeout: 45000 })
   log('source-isolation', output)
   assert.equal(JSON.parse(fs.readFileSync(isolatedReport, 'utf8')).ok, true)
   report.checks.sourceDeniedRealLoader = true
@@ -136,7 +137,7 @@ try {
       assert.equal((config.match(/id: webnovel-embeddings(?:\r?\n|$)/g) ?? []).length, 1)
       log(`${label}-prepare`, run(prepare, [fullProfile, hostAnchor]))
       const fullReport = path.join(root, `${label}-isolation.json`)
-      log(`${label}-loader`, execFileSync(process.execPath, ['--permission', ...permissionGrants('read'), ...permissionGrants('write'), `--allow-fs-read=${path.dirname(process.execPath)}`, script, fullProfile, hostAnchor, blocked, fullReport, '--embedding'], { cwd: workspace, env, encoding: 'utf8', windowsHide: true, timeout: 45000 }))
+      log(`${label}-loader`, execFileSync(process.execPath, ['--permission', '--allow-addons', ...permissionGrants('read'), ...permissionGrants('write'), `--allow-fs-read=${path.dirname(process.execPath)}`, script, fullProfile, hostAnchor, blocked, fullReport, '--embedding'], { cwd: workspace, env, encoding: 'utf8', windowsHide: true, timeout: 45000 }))
       assert.equal(JSON.parse(fs.readFileSync(fullReport, 'utf8')).embeddingLoaded, true)
     }
     log('add-meta', run(cli, ['plugin', '--profile', fullName, 'add', fullSpec, ...registryArgs]))

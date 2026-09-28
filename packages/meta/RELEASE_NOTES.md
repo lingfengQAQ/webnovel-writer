@@ -1,10 +1,8 @@
-# 完整版 0.1.0-preview.6
+# 完整版 0.1.0-preview.7
 
-- 主插件：`@linfengqaqtat/dsh-scriptor@0.1.0-preview.6`。
-- 嵌入提供方：`webnovel-embedding-provider@0.0.8`。
-- `dsh.bundle` 组合配置同时启用两个插件；嵌入模型默认关闭。
-- 从 npm 安装：`dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-full@preview`。
-- 在全新 Web profile 安装，或先停止并移除分别安装的旧入口。不要叠加主包和完整版。
-- GitHub Release 保留同字节 tarball；依赖仍由 registry 下载。
-
-旧内部名称 `@webnovel/embedding-provider` 不用于公开安装。升级前停止实例并备份，使用 DSH 的 `plugin remove` 移除旧安装入口后按 [README](README.md) 安装。
+- 主插件：`@linfengqaqtat/dsh-scriptor@0.1.0-preview.7`。
+- 嵌入提供方：`webnovel-embedding-provider@0.0.9`。
+- 固定宿主：DSH `0.1.7-rc.2`，Node 24.15.0 或 22.19.0 起的 Node 22，pnpm 11.27.1。
+- 修正审读/改稿的对话体例保真、空设计就绪建议和历史模板待核对；补保存后影响核对说明，保留保存循环与归档重试保护。
+- 嵌入、场景和重排默认关闭。组合包与分别安装主包/提供方二选一，不能重复启用。
+- 旧版 preview.6 / 提供方 0.0.8 面向 DSH 0.1.5-rc.2，升级前备份并停止实例；不自动重写旧书或迁移不兼容的旧会话。

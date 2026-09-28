@@ -64,7 +64,7 @@ export class HostSceneProvider implements SceneProvider {
         const assembler = new BlockAssembler()
         try {
           for await (const chunk of this.llm.stream({ provider: this.config.provider, model: this.config.model, system, maxTokens: 8192, signal: active,
-            messages: [createUserMessage({ content: [{ type: 'text', text: input }], source: { kind: 'plugin', plugin: 'webnovel-scenes' } })] })) {
+            messages: [createUserMessage({ content: [{ type: 'text', text: input }], source: { kind: 'user' } })] })) {
             active.throwIfAborted()
             assembler.push(chunk)
           }

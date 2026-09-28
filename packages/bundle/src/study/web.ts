@@ -1,3 +1,4 @@
+import { AUTHOR_SAVE_SOURCE } from '../message-sources'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 import { createUserMessage, type UserMessage } from '@deepseek-ai/dsh-llm'
@@ -97,7 +98,7 @@ export function savedMessage(result: Pick<StudySave, 'operationId' | 'document' 
 
 export function notifySaved(agent: StudyAgent, message: string): Pick<StudySave, 'notification' | 'notificationError'> {
   try {
-    agent.followup(createUserMessage({ content: [{ type: 'text', text: message }], source: { kind: 'plugin', plugin: 'webnovel' } }))
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: message }], source: { kind: AUTHOR_SAVE_SOURCE } }))
     return { notification: 'delivered' }
   } catch (error) {
     return { notification: 'failed', notificationError: error instanceof Error ? error.message : '主控未收到通知' }

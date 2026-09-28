@@ -2,8 +2,9 @@ import { Service, type Context } from '@deepseek-ai/cordis'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import type { LlmRuntime } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-settings'
+import { attachLiveSettings } from './live-settings'
 import { HostSceneProvider, HttpRerankingProvider } from './auxiliary-models'
-import { SCENE_NAMESPACE, RERANK_NAMESPACE, SceneConfig, RerankConfig, resolveSceneSettings, resolveRerankSettings, type SceneSettings, type RerankSettings } from './auxiliary-config'
+import { resolveSceneSettings, resolveRerankSettings, type SceneSettings, type RerankSettings } from './auxiliary-config'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -41,9 +42,7 @@ export class AuxiliaryService<T extends Client> extends Service {
   async close(): Promise<void> { this.closed = true; this.refresh(); await Promise.allSettled([...this.retiring]) }
 }
 
-export function attachAuxiliaryModels(ctx: Context): void {
-  let sceneSource: () => SceneSettings = () => ({})
-  let rerankSource: () => RerankSettings = () => ({})
+export function attachSceneModel(ctx: Context, sceneSource: () => SceneSettings): void {
   let llm: LlmRuntime | undefined
   const scenes = new AuxiliaryService(ctx, 'sceneSegmentation', () => {
     const config = resolveSceneSettings(sceneSource())
@@ -51,15 +50,8 @@ export function attachAuxiliaryModels(ctx: Context): void {
     const runtime = llm
     return { key: JSON.stringify(config), dependency: runtime, create: () => new HostSceneProvider(config, runtime) }
   })
-  const reranking = new AuxiliaryService(ctx, 'reranking', () => {
-    const config = resolveRerankSettings(rerankSource())
-    if (!config) return undefined
-    return { key: JSON.stringify(config), create: () => new HttpRerankingProvider(config, async () => {
-      const credentials = ctx.get('credentials')
-      return credentials ? (await credentials.resolve(credentialRef(config.apiKeyEnv)))?.value : undefined
-    }) }
-  })
-  ctx.effect(() => () => Promise.allSettled([scenes.close(), reranking.close()]), 'webnovel: auxiliary model requests')
+  ctx.effect(() => () => scenes.close(), 'webnovel: scene model requests')
+  attachLiveSettings(ctx, resolveSceneSettings, () => scenes.refresh())
   ctx.on('llm/adapters-updated', () => scenes.refresh())
   // Cordis contextual facades are not identity-stable across get() calls.
   // Capture one injected service generation and cancel it when that scope ends.
@@ -69,12 +61,17 @@ export function attachAuxiliaryModels(ctx: Context): void {
     scenes.refresh()
     scope.effect(() => () => { if (llm === runtime) { llm = undefined; scenes.refresh() } }, 'webnovel: scene LLM generation')
   })
-  ctx.inject(['settings'], scope => {
-    scope.settings.installSection(ctx, SCENE_NAMESPACE, SceneConfig, {}, {
-      setSource: source => { sceneSource = source }, onChange: () => scenes.refresh(), validate: value => { resolveSceneSettings(value) },
-    })
-    scope.settings.installSection(ctx, RERANK_NAMESPACE, RerankConfig, {}, {
-      setSource: source => { rerankSource = source }, onChange: () => reranking.refresh(), validate: value => { resolveRerankSettings(value) },
-    })
+}
+
+export function attachRerankingModel(ctx: Context, rerankSource: () => RerankSettings): void {
+  const reranking = new AuxiliaryService(ctx, 'reranking', () => {
+    const config = resolveRerankSettings(rerankSource())
+    if (!config) return undefined
+    return { key: JSON.stringify(config), create: () => new HttpRerankingProvider(config, async () => {
+      const credentials = ctx.get('credentials')
+      return credentials ? (await credentials.resolve(credentialRef(config.apiKeyEnv)))?.value : undefined
+    }) }
   })
+  ctx.effect(() => () => reranking.close(), 'webnovel: reranking requests')
+  attachLiveSettings(ctx, resolveRerankSettings, () => reranking.refresh())
 }

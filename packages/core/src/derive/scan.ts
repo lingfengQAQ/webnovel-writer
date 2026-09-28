@@ -11,6 +11,7 @@ import { isWindowEntryReady } from './states'
 import { draftHashOf, reviewInputFingerprintOf, reviewRecordHashOf } from '../evidence/record'
 import { chapterNo } from '../repo/paths'
 import { materialReviewIdentity } from '../assembly/read'
+import { isDraftMarkdownFile } from '../repo/drafts'
 
 export interface ChapterKey {
   readonly 卷: number
@@ -119,7 +120,7 @@ export function scanChapter(root: string, key: ChapterKey): ChapterFacts {
   let 唯一待审稿 = false
   let 唯一待审稿正文: string | null = null
   if (fs.existsSync(草稿目录) && fs.statSync(草稿目录).isDirectory()) {
-    const drafts = fs.readdirSync(草稿目录).filter((f) => f.endsWith('.md'))
+    const drafts = fs.readdirSync(草稿目录).filter(isDraftMarkdownFile)
     有草稿 = drafts.length > 0
     const 待审 = drafts.filter((f) => {
       const doc = parseDocument(fs.readFileSync(path.join(草稿目录, f), 'utf-8'))

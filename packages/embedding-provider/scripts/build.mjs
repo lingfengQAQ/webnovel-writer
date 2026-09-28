@@ -7,7 +7,7 @@ import { writeNotices } from '../../../scripts/release/notices.mjs'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const manifest = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'))
 const hostBuild = await build({
-  entryPoints: [path.join(root, 'src/index.ts')], outfile: path.join(root, 'lib/index.js'),
+  entryPoints: ['index', 'scenes', 'reranking'].map(name => path.join(root, `src/${name}.ts`)), outdir: path.join(root, 'lib'),
   bundle: true, platform: 'node', format: 'esm', target: 'node22', legalComments: 'inline', metafile: true,
   external: ['@deepseek-ai/cordis', '@deepseek-ai/dsh-llm', 'node:*'],
 })
