@@ -8,6 +8,7 @@ import { CHUNK_VERSION } from './source'
 import { SearchError, type SearchSnapshot } from './types'
 import { readVector, vectorBytes } from './vectors'
 import { snapshotInputs, type IndexedEmbeddingInput } from './embedding'
+import { invalidateIndexCache, readIndexState } from './state'
 
 export const CACHE_PATH = '.webnovel/finalized-search.sqlite'
 const APPLICATION_ID = 0x57565336
@@ -39,6 +40,12 @@ export class SearchCache {
     catch { throw new SearchError('sqlite-unavailable', '当前 Node 不支持内置 SQLite，无法建立检索索引') }
     const filename = assertCachePaths(root)
     let state: SearchCache['state'] = fs.existsSync(filename) ? 'ready' : 'created'
+    if (state === 'created') {
+      const previous = readIndexState(root)
+      // A missing cache after completed work is also data loss. Initial creation
+      // must not replace the generation of the worker that is building it.
+      if (previous.completedChunks || previous.fingerprint || previous.indexedHead || previous.phase === 'ready') invalidateIndexCache(root)
+    }
     for (let attempt = 0; attempt < 2; attempt++) {
       let db: DatabaseSync | undefined
       let owned = false
@@ -51,6 +58,11 @@ export class SearchCache {
         owned = appId === APPLICATION_ID
         if (appId === 0) {
           if (db.prepare('SELECT name FROM sqlite_master').all().length) throw new SearchError('foreign-cache', '缓存位置存在未知数据库，未改动该文件')
+          const previous = readIndexState(root)
+          if (previous.completedChunks || previous.fingerprint || previous.indexedHead || previous.phase === 'ready') {
+            invalidateIndexCache(root)
+            state = 'rebuilt'
+          }
           db.exec(`BEGIN;
             CREATE TABLE chunks (id TEXT PRIMARY KEY, body TEXT NOT NULL, vector BLOB, revision TEXT, dimensions INTEGER);
             CREATE VIRTUAL TABLE terms USING fts5(id UNINDEXED, body, tokenize='trigram case_sensitive 1');
@@ -90,6 +102,7 @@ export class SearchCache {
         for (const suffix of ['', '-journal', '-wal', '-shm']) {
           if (fs.existsSync(filename + suffix)) renameSync(filename + suffix, backup + suffix)
         }
+        invalidateIndexCache(root)
         state = 'rebuilt'
       }
     }

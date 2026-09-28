@@ -83,6 +83,8 @@ beforeAll(async () => {
       'lib/webnovel': path.join(packageRoot, 'src', 'index.ts'),
       'native-write-core': path.join(packageRoot, 'tests/fixtures/native-write-core.ts'),
       'embedding-provider': path.join(packageRoot, '../embedding-provider/src/index.ts'),
+      scenes: path.join(packageRoot, '../embedding-provider/src/scenes.ts'),
+      reranking: path.join(packageRoot, '../embedding-provider/src/reranking.ts'),
     },
     outdir: root,
     outExtension: { '.js': '.mjs' },
@@ -99,15 +101,23 @@ beforeAll(async () => {
   ], {
     cwd: workspace,
     env: { ...process.env, DSH_HOME: path.join(root, '.dsh'), DSH_AGENTS_HOME: path.join(root, '.agents'), DSH_TELEMETRY_DISABLED: '1' },
-    timeout: 60_000,
+    // The shared process runs 35 integration scenarios, including native settings
+    // reloads and local HTTP. Keep a total bound without treating it as one test.
+    timeout: 90_000,
     windowsHide: true,
     maxBuffer: 2 * 1024 * 1024,
+  }).catch((error: unknown) => {
+    const partialPath = path.join(root, 'report.json')
+    const partial = fs.existsSync(partialPath) ? fs.readFileSync(partialPath, 'utf8') : '(report not created)'
+    const reportPath = process.env['WEBNOVEL_LOADER_REPORT']
+    if (reportPath !== undefined) fs.writeFileSync(path.resolve(reportPath), partial)
+    throw new Error(`Loader process failed; last progress report:\n${partial}`, { cause: error })
   })
   report = JSON.parse(fs.readFileSync(path.join(root, 'report.json'), 'utf8')) as LoaderReport
   const reportPath = process.env['WEBNOVEL_LOADER_REPORT']
   if (reportPath !== undefined) fs.writeFileSync(path.resolve(reportPath), JSON.stringify({ ...report, stdout: result.stdout, stderr: result.stderr }, null, 2))
   expect(result.stderr).not.toContain('UNHANDLED')
-}, 70_000)
+}, 100_000)
 
 afterAll(() => {
   if (root === undefined) return
@@ -120,7 +130,7 @@ describe('真实 DSH Loader 验收（独立进程）', () => {
     const loopRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'webnovel-save-loop-'))
     try {
       linkHostDependencies(loopRoot)
-      for (const file of ['native-write-core.mjs', 'embedding-provider.mjs']) fs.copyFileSync(path.join(root, file), path.join(loopRoot, file))
+      for (const file of ['native-write-core.mjs', 'embedding-provider.mjs', 'scenes.mjs', 'reranking.mjs']) fs.copyFileSync(path.join(root, file), path.join(loopRoot, file))
       await run(process.execPath, [path.join(packageRoot, 'tests/fixtures/host-loader.mjs'), loopRoot, path.join(root, 'lib/webnovel.mjs'), 'save-loop'], {
         cwd: loopRoot, env: { ...process.env, DSH_HOME: path.join(loopRoot, '.dsh'), DSH_AGENTS_HOME: path.join(loopRoot, '.agents'), DSH_TELEMETRY_DISABLED: '1' },
         timeout: 45000, windowsHide: true, maxBuffer: 2 * 1024 * 1024,
@@ -128,6 +138,7 @@ describe('真实 DSH Loader 验收（独立进程）', () => {
       const result = JSON.parse(fs.readFileSync(path.join(loopRoot, 'report.json'), 'utf8'))
       expect(result.checks['保存后的重复空操作终止且下一轮可修改']).toEqual({ ok: true })
       expect(result.saveLoop).toMatchObject({ repeatedTurnRequests: 3, totalRequests: 6, noExtraCommit: true, nextTurnChanged: true })
+      expect(result.saveInspection).toMatchObject({ notificationReceived: true, nativeReadCalls: 2, impactReferences: ['大纲/故事骨架.md'], noAutomaticWrites: true })
     } finally { removeSync(loopRoot) }
   }, 60000)
 

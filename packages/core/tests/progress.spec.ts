@@ -64,7 +64,7 @@ describe('待补便签(算不出来的才落盘)', () => {
   })
 })
 
-describe('已确认但无内容(#165,只提示不参与推导)', () => {
+describe('已确认但无内容(#165,标签保留且内容参与建议)', () => {
   it('未标注的同级标题也截断正文范围,空子标题与注释不冒充设计内容', () => {
     const root = mkBook()
     fs.mkdirSync(path.join(root, '大纲'), { recursive: true })
@@ -103,7 +103,7 @@ describe('已确认但无内容(#165,只提示不参与推导)', () => {
     expect(listConfirmedEmpty(d)).toEqual(['故事骨架·核心冲突与对抗力量', '故事骨架·信息披露'])
   })
 
-  it('seed 占位设计:契约、骨架、空卷行与无正文世界书条目全部列出;推导仍判开写就绪', () => {
+  it('seed 占位设计:契约、骨架、空卷行与无正文世界书条目全部列出;标签保留而就绪建议拒绝空壳', () => {
     const root = mkBook(true)
     const empty = listConfirmedEmpty(scanDesignDetail(root))
     expect(empty).toHaveLength(18)
@@ -278,9 +278,10 @@ describe('卷行确认门槛(任务21, B2)', () => {
   ].join('\n')
 
   it('行级/小节级/缺失/冲突八行输入期望表;中文卷号;首个出现卷行生效', () => {
-    // 1. 旧行级已确认(小节留白)→ 行级优先
+    // 1. 正式小节与行级矛盾→显式冲突
     let root = mkLayoutBook(layout('留白', ['- 卷01 〔已确认〕']))
-    expect(scanDesign(root, 1).当前卷分配完整).toBe(true)
+    expect(scanDesign(root, 1).当前卷分配完整).toBe(false)
+    expect(scanDesign(root, 1).内容问题?.some(issue => issue.问题 === '状态冲突')).toBe(true)
     // 2. 行级暂定(小节已确认)→ 暂定
     root = mkLayoutBook(layout('已确认', ['- 卷01 〔暂定〕']))
     expect(scanDesign(root, 1).当前卷分配完整).toBe(false)
@@ -297,10 +298,10 @@ describe('卷行确认门槛(任务21, B2)', () => {
     // 6. 同上,小节无标注 → 缺失,不默认确认
     root = mkLayoutBook(layout(null, ['- 卷二·誊正（江州府城，3 案／15 章）：中间。']))
     expect(scanDesign(root, 2).当前卷分配完整).toBe(false)
-    // 7. 冲突:行级已确认+小节暂定 → 行级优先
+    // 7. 冲突:行级已确认+小节暂定 → 不静默挑一个
     root = mkLayoutBook(layout('暂定', ['- 卷01 〔已确认〕']))
-    expect(scanDesign(root, 1).当前卷分配完整).toBe(true)
-    // 8. 冲突:行级暂定+小节已确认 → 行级优先
+    expect(scanDesign(root, 1).当前卷分配完整).toBe(false)
+    // 8. 冲突:行级暂定+小节已确认 → 不算已确认
     root = mkLayoutBook(layout('已确认', ['- 卷01 〔暂定〕']))
     expect(scanDesign(root, 1).当前卷分配完整).toBe(false)
     // 解析面:行级/小节级字段齐全;同卷有效状态互斥的重复行呈报冲突(不按文件顺序放行)

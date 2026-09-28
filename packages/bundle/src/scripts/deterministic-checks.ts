@@ -66,7 +66,7 @@ export function runChecksCli(argv: readonly string[]): number {
       .map(([name]) => `${name}:${record.问题.filter((finding) => finding.模块名 === name).length}`)
       .join('、') || '（无）'
     // 回写载荷(R21 只算不写):确定性模块(注册了 run 的)逐模块输出发现项,
-    // 由主 Agent 对每个模块调用 novel_record_review_findings 落盘;空发现项也要回写(置完成)。
+    // 每个模块都携带这次实际输入的指纹，主 Agent 原样回写；空发现项也要回写(置完成)。
     const deterministic = new Set(listChecks().filter((c) => c.run !== undefined).map((c) => c.名称))
     const 回写 = [...deterministic].map((模块名) => ({
       模块名,
@@ -78,7 +78,7 @@ export function runChecksCli(argv: readonly string[]): number {
       return 0
     }
     console.log(`确定性检查完成：${counts}`)
-    console.log(`审核完成：${record.完成 ? 'true' : 'false'}`)
+    console.log(`模块回写齐全：${record.完成 ? 'true' : 'false'}`)
     console.log('回写载荷(经 novel_record_review_findings 逐模块回写):')
     console.log(JSON.stringify(回写, null, 2))
     return 0

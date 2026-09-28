@@ -102,7 +102,7 @@ describe('最小链 e2e', () => {
     expect(pendingModules.length).toBeGreaterThan(0)
     let ingested = reviewed.record
     for (const [name] of pendingModules) {
-      const ing = ingestFindings(root, key, name, [])
+      const ing = ingestFindings(root, key, name, [], reviewed.record!.审读指纹)
       expect(ing.ok).toBe(true)
       ingested = ing.record
     }

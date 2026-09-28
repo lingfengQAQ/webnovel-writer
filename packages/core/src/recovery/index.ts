@@ -69,7 +69,7 @@ function bookStatus(bookRoot: string, volume: number): BookStatus {
     ? `本书记忆：${memory.entries.length} 条`
     : `本书记忆：${degraded(memory.kind, memory.entries.length)}（${memory.entries.length} 条可用）`
   const reconcileLine = reconciliation.ok
-    ? `计划对账：${reconciliation.report.状态}（匹配${reconciliation.report.已匹配.length}，待兑现${reconciliation.report.计划未兑现.length}，未计划${reconciliation.report.事实未计划.length}，待核对${reconciliation.report.章级待核对.length}）`
+    ? `计划对账：${reconciliation.report.状态}（匹配${reconciliation.report.已匹配.length}，待兑现${reconciliation.report.计划未兑现.length}，未计划${reconciliation.report.事实未计划.length}，待核对${reconciliation.report.章级待核对.length + (reconciliation.report.疑似占位待核对?.length ?? 0)}）`
     : `计划对账：${reconciliation.kind === 'missing' ? '数据未初始化' : '解析失败'}`
   return { ledger, memory, reconciliation, lines: [ledgerLine, memoryLine, reconcileLine] }
 }

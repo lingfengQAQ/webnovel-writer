@@ -104,7 +104,7 @@ function ingestAll(root: string, key: { 卷: number; 章: number; 章名: string
   const record = loadReviewRecord(root, key)
   for (const [name, st] of Object.entries(record?.模块 ?? {})) {
     if (st.待回写 === true) {
-      const r = ingestFindings(root, key, name, [])
+      const r = ingestFindings(root, key, name, [], record!.审读指纹)
       if (!r.ok) throw new Error(r.reason)
     }
   }
@@ -184,7 +184,7 @@ describe('审核检查项库', () => {
       不确定性说明: '',
       材料完整性: '完整',
     }
-    const ingested = ingestFindings(root, key, '章节结构审读', [finding])
+    const ingested = ingestFindings(root, key, '章节结构审读', [finding], first.record!.审读指纹)
     expect(ingested.ok).toBe(true)
     expect(runReview(root, key).ok).toBe(true)
     const loaded = loadReviewRecord(root, key)!

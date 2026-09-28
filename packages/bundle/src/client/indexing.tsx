@@ -4,6 +4,7 @@ import type { IndexAction } from '@webnovel/core'
 import type { IndexView } from '../indexing/manager'
 import type { StudyShelf } from '../study/types'
 import type { ClientHost } from './host'
+import { mainSessionOf } from './host'
 import { callStudy } from './api'
 import { useStudy } from './hooks'
 import { createIndexSelection, isNewerIndexView, type IndexSelection } from './index-state'
@@ -23,15 +24,15 @@ function IndexPanel({ sessionId, selection }: { sessionId: string; selection: In
   const space = books.some(book => book.id === chosen) ? chosen : books[0]?.id
   const key = `${sessionId}\0${space ?? ''}`
   const [snapshot, setSnapshot] = useState<{ key: string; value?: IndexView; error?: string }>()
-  const [busyKey, setBusyKey] = useState<string>()
+  const [busyRequest, setBusyRequest] = useState<{ key: string; abort: AbortController }>()
   const [sceneChapter, setSceneChapter] = useState('')
   const [confirmation, setConfirmation] = useState<{ key: string; action: 'rebuild' | 'rescan-scenes'; chapter?: number }>()
   const active = useRef(key)
-  const control = useRef<AbortController>()
+  const control = useRef<typeof busyRequest>()
   active.current = key
   const value = snapshot?.key === key ? snapshot.value : undefined
   const error = snapshot?.key === key ? snapshot.error : undefined
-  const busy = busyKey === key
+  const busy = busyRequest?.key === key
 
   const accept = (requestKey: string, next: IndexView) => setSnapshot(previous => {
     if (active.current !== requestKey) return previous
@@ -50,12 +51,20 @@ function IndexPanel({ sessionId, selection }: { sessionId: string; selection: In
       } finally { if (live) timer = setTimeout(() => { void poll() }, 1200) }
     }
     void poll()
-    return () => { live = false; abort.abort(); if (timer) clearTimeout(timer); control.current?.abort() }
+    return () => {
+      live = false; abort.abort(); if (timer) clearTimeout(timer)
+      const request = control.current
+      if (request?.key === key) {
+        control.current = undefined
+        request.abort.abort()
+        setBusyRequest(previous => previous === request ? undefined : previous)
+      }
+    }
   }, [sessionId, space])
 
   const pending = confirmation?.key === key ? confirmation : undefined
   const run = async (action: IndexAction, confirmed = false, chapter?: number) => {
-    if (!space || busy) return
+    if (!space || busy || control.current?.key === key) return
     if (!confirmed && (action === 'rebuild' || action === 'rescan-scenes')) {
       if (action === 'rescan-scenes' && sceneChapter && (!Number.isSafeInteger(Number(sceneChapter)) || Number(sceneChapter) < 1)) {
         setSnapshot(previous => ({ ...previous, key, error: '章号须为正整数，留空表示全书' })); return
@@ -64,14 +73,21 @@ function IndexPanel({ sessionId, selection }: { sessionId: string; selection: In
       return
     }
     setConfirmation(undefined)
-    control.current?.abort()
+    control.current?.abort.abort()
     const abort = new AbortController()
-    control.current = abort
-    setBusyKey(key)
-    try { accept(key, await callStudy<IndexView>(sessionId, 'index-control', { space, action, ...(action === 'rescan-scenes' && chapter !== undefined ? { chapter } : {}) }, abort.signal)) }
+    const request = { key, abort }
+    control.current = request
+    setBusyRequest(request)
+    try {
+      const next = await callStudy<IndexView>(sessionId, 'index-control', { space, action, ...(action === 'rescan-scenes' && chapter !== undefined ? { chapter } : {}) }, abort.signal)
+      if (!abort.signal.aborted && control.current === request) accept(key, next)
+    }
     catch (failure) {
       if (!abort.signal.aborted && active.current === key) setSnapshot(previous => ({ key, value: previous?.key === key ? previous.value : undefined, error: failure instanceof Error ? failure.message : '索引操作失败' }))
-    } finally { if (active.current === key) setBusyKey(undefined) }
+    } finally {
+      if (control.current === request) control.current = undefined
+      setBusyRequest(previous => previous === request ? undefined : previous)
+    }
   }
 
   const working = !!value && ['queued', 'scanning', 'scenes', 'embedding', 'retrying'].includes(value.phase)
@@ -128,11 +144,11 @@ export function installIndexSidebar(host: ClientHost): OpenIndex {
   const selection = createIndexSelection()
   host.effect(() => () => selection.dispose(), 'webnovel: index view selection')
   host.effect(() => host.sidebarRightTabs.register({ id: TAB_ID, kind: TAB_KIND, title: () => '检索索引',
-    guide: [{ order: 51, title: () => '检索索引', description: () => '查看当前书的后台索引进度、重试和错误。' }] }), 'webnovel: index progress tab')
+    guide: [{ id: TAB_ID, order: 51, title: () => '检索索引', description: () => '查看当前书的后台索引进度、重试和错误。' }] }), 'webnovel: index progress tab')
   host.slots.inject('sidebar.right.pane.tab', () => host.slots.register({ name: 'sidebar.right.pane.tab', key: TAB_ID,
     inject: (sessionId: string) => ({ sessionId, selection }) }, IndexPanel))
   return (sessionId, space) => {
-    if (host.sessions.list.getSnapshot().current !== sessionId) return
+    if (mainSessionOf(host) !== sessionId) return
     if (space) selection.choose(sessionId, space)
     host.sidebarRight.openTab(TAB_KIND)
   }

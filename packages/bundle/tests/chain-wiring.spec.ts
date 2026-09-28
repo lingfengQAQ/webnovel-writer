@@ -1,3 +1,4 @@
+import { writeReadyDesign } from '../../core/tests/fixtures/ready-design'
 import { afterAll, describe, expect, it } from 'vitest'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -6,6 +7,7 @@ import { spawnSync } from 'node:child_process'
 import { createNovelTools } from '../src/novel-tools'
 import { computeReview, listChecks, registerDefaultChecks } from '@webnovel/review'
 import { nativeWriteStub } from './fixtures/native-write-stub'
+import { paths, serializeDocument } from '@webnovel/core'
 
 const roots: string[] = []
 function mkWs(): string {
@@ -66,10 +68,39 @@ async function makeBook(ws: string, call: (name: string, args: Record<string, un
   await call('novel_select_book', { bookId })
   const seeded = await call('novel_seed_min_design', { bookId })
   expect(seeded.ok).toBe(true)
+  writeReadyDesign(path.join(ws, '链路书'))
   return { ...created, bookId }
 }
 
 describe('运行链路接线(工具面验收)', () => {
+  it('#165 状态、进度卡与定稿包一致呈报空设计和模板待核对', async () => {
+    const ws = mkWs()
+    const { call } = makeTools(ws)
+    const { bookId } = await makeBook(ws, call)
+    const root = path.join(ws, '链路书')
+    const seeded = await call('novel_seed_min_design', { bookId })
+    expect(seeded.ok).toBe(true)
+    expect(seeded.message).not.toContain('已进入开写就绪')
+    const status = await call('novel_get_story_status', { bookId })
+    const design = status.design as { 建议: string; 内容问题: unknown[] }
+    expect(design.建议).not.toBe('开写就绪')
+    const progress = await call('novel_get_book_progress', { bookId })
+    expect(progress.内容问题).toEqual(design.内容问题)
+    expect(progress.未决偏离).toEqual([])
+    expect(progress.疑似占位待核对).toHaveLength(2)
+    expect(progress.渲染).toContain('疑似模板占位待核对')
+    const key = { 卷: 1, 章: 1, 章名: '开篇任务' }
+    const dir = path.join(root, paths.草稿目录(1, key.章名))
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, '稿1.md'), serializeDocument({ 角色: '待审稿', 选定: true }, '少年在雨中听见铜铃。'))
+    const pack = await call('novel_prepare_pack', { bookId, ...key })
+    expect(pack.ok, JSON.stringify(pack)).toBe(true)
+    const report = fs.readFileSync(path.join(root, paths.待定稿包目录(1, key.章名), '卷对账.md'), 'utf8')
+    expect(report).toContain('疑似模板占位待核对')
+    expect(report).not.toContain('计划未兑现：开篇任务')
+    expect(report).not.toContain('无偏离')
+  })
+
   it('确认细纲:design(chNNNN): 提交;批次文件同提交;幂等重放不重写不重复提交', async () => {
     const ws = mkWs()
     const { call } = makeTools(ws)
@@ -152,6 +183,7 @@ describe('运行链路接线(工具面验收)', () => {
 
     const r = await call('novel_record_review_findings', {
       bookId, 卷: 1, 章: 1, 章名: '开篇任务', 模块名: '章节结构审读',
+      审读指纹: computeReview(path.join(ws, '链路书'), { 卷: 1, 章: 1, 章名: '开篇任务' }).record!.审读指纹,
       发现项: [{ 严重程度: '中', 证据位置: '草稿区/草稿/卷01-开篇任务/稿1.md:1', 问题说明: '开场未点名主角', 所依据材料及版本: '稿1@1', 影响范围: '本章', 修改建议: '补点名', 建议返回节点: '改稿', 建议复审模块: '', 不确定性说明: '', 材料完整性: '完整' }],
     })
     expect(r.ok).toBe(true)
@@ -171,9 +203,10 @@ describe('运行链路接线(工具面验收)', () => {
     const all = listChecks().filter((c) => c.执行形态 !== '作者').map((c) => c.名称)
     const chapter = { 卷: 1, 章: 1, 章名: '开篇任务' }
     const kept = { 问题说明: '开场偏慢', 证据位置: '首段', 影响范围: '正文', 处置: '作者保留' }
+    const firstFingerprint = computeReview(bookRoot, chapter).record!.审读指纹
 
     for (const [i, 模块名] of all.entries()) {
-      const r = await call('novel_record_review_findings', { bookId, ...chapter, 模块名, 发现项: 模块名 === '章节结构审读' ? [kept] : [] })
+      const r = await call('novel_record_review_findings', { bookId, ...chapter, 模块名, 发现项: 模块名 === '章节结构审读' ? [kept] : [], 审读指纹: firstFingerprint })
       expect(r.ok, 模块名).toBe(true)
       expect(r.待回写模块).toEqual(all.slice(i + 1))
       expect(r.完成).toBe(i === all.length - 1)

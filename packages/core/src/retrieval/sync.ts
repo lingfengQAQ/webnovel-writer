@@ -81,6 +81,10 @@ export async function syncFinalizedIndex(bookRoot: string, options: SyncIndexOpt
       const snapshot = await scanFinalized(root, signal)
       const cache = await SearchCache.open(root)
       try {
+        // A direct manual sync can adopt its own initial cache recovery. Managed
+        // runs keep their assigned generation so the manager cancels/requeues it.
+        if (options.generation === undefined && cache.state !== 'ready') generation = readIndexState(root).generation
+        checkProvider()
         if (checkGeneration().rebuild) cache.clearEmbeddings()
         const vectors = cache.vectors(snapshot, revision!, dimensions!)
         cache.publish(snapshot, new Map(), undefined, signal)
@@ -134,7 +138,7 @@ export async function syncFinalizedIndex(bookRoot: string, options: SyncIndexOpt
         }
         checkProvider()
         const cache = await SearchCache.open(root)
-        try { cache.saveEmbeddings(batch, vectors, revision!, signal) } finally { cache.close() }
+        try { checkProvider(); cache.saveEmbeddings(batch, vectors, revision!, signal) } finally { cache.close() }
         for (const input of batch) for (const id of input.chunkIds) completed.add(id)
         generated += batch.reduce((sum, input) => sum + input.chunkIds.length, 0)
         const state = checkGeneration()
@@ -151,6 +155,7 @@ export async function syncFinalizedIndex(bookRoot: string, options: SyncIndexOpt
       if (snapshot.issues.length) throw new SearchError('source-incomplete', '部分定稿来源异常')
       const cache = await SearchCache.open(root)
       try {
+        checkProvider()
         cache.publish(snapshot, new Map(), undefined, signal)
         cache.pruneEmbeddings(snapshot, revision!)
       } finally { cache.close() }

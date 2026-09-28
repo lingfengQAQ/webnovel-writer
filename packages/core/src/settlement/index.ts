@@ -324,19 +324,35 @@ function factOps(bookRoot: string, sections: readonly FactSection[], chapter: Ch
  * 静默追加会造成同名双条目,当前态判定要靠归并兜底,等于把错误留给读侧。
  */
 function replaceEntry(existing: string, title: string, block: string, label: string): string {
-  const lines = normal(existing).split('\n')
-  const head = new RegExp(`^##\\s+${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`)
-  const start = lines.findIndex((line) => head.test(line.trim()))
-  if (start < 0) throw new Error(`${label}更正目标条目不存在:${title}`)
-  let end = lines.length
-  for (let i = start + 1; i < lines.length; i += 1) {
-    if (/^##\s+/.test(lines[i]!.trim()) && !/^###\s+/.test(lines[i]!.trim())) {
-      end = i
-      break
+  // Match the reader's top-level sections, retaining byte offsets so unrelated
+  // history, whitespace and line endings remain exactly as the author left them.
+  const sections: Array<{ title: string; start: number; end: number }> = []
+  let offset = 0
+  for (const line of existing.split(/(?<=\n)/)) {
+    const heading = /^##\s+(.+?)\s*$/.exec(line.trim())
+    if (heading) {
+      if (sections.length) sections[sections.length - 1]!.end = offset
+      sections.push({ title: heading[1]!.trim(), start: offset, end: existing.length })
+    }
+    offset += line.length
+  }
+  let target: (typeof sections)[number] | undefined
+  for (const section of sections) {
+    const metadata = existing.slice(section.start, section.end).split(/^\s*###\s+正文\s*$/m)[0]!
+    const names = [...metadata.matchAll(/^\s*(?:[-*]\s*)?名称[：:]\s*(.*?)\s*$/gm)].map(match => match[1]!.trim())
+    if (section.title === title || names.includes(title)) {
+      if (names.length > 1 || (names.length === 1 && names[0] !== section.title)) {
+        throw new Error(`${label}更正目标名称与标题存在歧义:${title}`)
+      }
+      if (section.title === title) target = section
     }
   }
-  const merged = [...lines.slice(0, start), ...block.trim().split('\n'), '', ...lines.slice(end)]
-  return `${merged.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\n+$/, '')}\n`
+  if (target === undefined) throw new Error(`${label}更正目标条目不存在:${title}`)
+  const replacementName = extractField(block.split(/^\s*###\s+正文\s*$/m)[0]!, '名称')
+  if (replacementName !== null && replacementName !== title) throw new Error(`${label}更正候选名称与标题存在歧义:${title}`)
+  const newline = existing.includes('\r\n') ? '\r\n' : '\n'
+  const replacement = block.trim().replace(/\r?\n/g, newline) + newline + newline
+  return existing.slice(0, target.start) + replacement + existing.slice(target.end)
 }
 
 /** 账本条目字段级校验(预校验与 ledgerBlock 共用;报错即入档时会说的原话)。 */
@@ -510,6 +526,14 @@ function planSettlementUnsafe(
   for (const kind of ledgerKinds) {
     const entries = ledger.filter((item) => item.kind === kind)
     if (entries.length === 0) continue
+    if (mode === '更正') {
+      for (const entry of entries) {
+        const names = [...entry.body.matchAll(/^\s*(?:[-*]\s*)?名称[：:]\s*(.*?)\s*$/gm)].map(match => match[1]!.trim())
+        if (names.length > 1 || (names.length === 1 && names[0] !== entry.title)) {
+          return { ok: false, reason: `账本「${kind}」更正候选名称与标题存在歧义:${entry.title}` }
+        }
+      }
+    }
     const target = paths.账本(kind)
     const existing = readExisting(bookRoot, target)
     if (existing === null) return { ok: false, reason: `真源不存在:${target}` }

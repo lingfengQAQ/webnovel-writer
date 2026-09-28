@@ -59,6 +59,7 @@ export class StudyService {
     if (space === 'shared') {
       const root = authorDocumentPath(this.workspace, '书房')
       if (!fs.existsSync(root)) throw new AuthorDocumentError('not-found', '当前工作范围尚无共享资料')
+      if (fs.existsSync(path.join(root, paths.契约()))) throw new AuthorDocumentError('read-only', '共享目录与书仓重叠，请通过书目入口访问；共享写入已关闭')
       return { root, owner: '共享资料' }
     }
     const books = scanBooks(this.workspace).filter(book => book.bookId && 'book:' + book.bookId === space)
@@ -79,8 +80,8 @@ export class StudyService {
     }))
     let shared = false
     let sharedError: string | undefined
-    try { shared = fs.statSync(authorDocumentPath(this.workspace, '书房')).isDirectory() } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') sharedError = error instanceof Error ? error.message : '共享资料不可访问'
+    try { shared = fs.statSync(this.source('shared').root).isDirectory() } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT' && !(error instanceof AuthorDocumentError && error.code === 'not-found')) sharedError = error instanceof Error ? error.message : '共享资料不可访问'
     }
     return { workspace: this.workspace, books, shared, ...(sharedError ? { sharedError } : {}) }
   }
@@ -137,6 +138,7 @@ export class StudyService {
   read(ref: FileRef): StudyDocument {
     const source = this.source(ref.space)
     const absolutePath = authorDocumentPath(source.root, ref.path)
+    ref = { ...ref, path: path.relative(canonicalizePath(source.root), absolutePath).split(path.sep).join('/') }
     const text = textOf(absolutePath)
     const parsed = parseDocument(text)
     const metadata = fieldLabel(text)
@@ -173,7 +175,7 @@ export class StudyService {
     const entries: TreeEntry[] = []
     const scanned = scanBooks(this.workspace)
     const spaces = scanned.filter(book => book.bookId && scanned.filter(other => other.bookId === book.bookId).length === 1).map(book => 'book:' + book.bookId)
-    try { if (fs.statSync(authorDocumentPath(this.workspace, '书房')).isDirectory()) spaces.push('shared') } catch { /* Report unavailable shared roots in the shelf view. */ }
+    try { if (fs.statSync(this.source('shared').root).isDirectory()) spaces.push('shared') } catch { /* Report unavailable shared roots in the shelf view. */ }
     const term = query.trim().toLocaleLowerCase()
     const visited = new Set<string>()
     let inspected = 0

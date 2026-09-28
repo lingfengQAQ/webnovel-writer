@@ -69,7 +69,7 @@ function withRecord(root: string): void {
     是否建议阻断: false,
     影响范围: '本章草稿',
     修改建议: '补一句交接仪式的过渡',
-  }])
+  }], r.record!.审读指纹)
   if (!w.ok) throw new Error(`ingestFindings failed:${w.reason ?? ''}`)
 }
 

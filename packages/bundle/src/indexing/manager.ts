@@ -33,6 +33,7 @@ interface TrackedBook {
   delivering: boolean
   controls?: Promise<void>
   localError?: IndexFailure
+  identityError?: IndexFailure
 }
 const resumable = (state: IndexSyncState) => !state.paused && ['queued', 'scanning', 'scenes', 'embedding', 'retrying', 'paused'].includes(state.phase)
 
@@ -115,8 +116,27 @@ export class BookIndexManager {
 
   private provider(): EmbeddingProvider | undefined { return this.options.getProvider() }
 
+  /** Re-read identity at dispatch and publication boundaries, not just discovery. */
+  private hasIdentity(record: TrackedBook): boolean {
+    const matches = scanBooks(record.book.workspace).filter(book => book.bookId === record.book.bookId)
+    if (matches.length === 1 && canonicalizePath(matches[0]!.root) === record.book.root) {
+      record.identityError = undefined
+      return true
+    }
+    record.identityError = { code: matches.length > 1 ? 'duplicate-book-id' : 'book-identity-changed', retryable: false,
+      message: matches.length > 1 ? `当前工作范围书id「${record.book.bookId}」重复，确认唯一后才能继续索引`
+        : '书仓身份已变化或不可读取，确认唯一身份后才能继续索引' }
+    record.active?.controller.abort()
+    if (record.timer) { clearTimeout(record.timer); record.timer = undefined }
+    return false
+  }
+
+  private requireIdentity(record: TrackedBook): void {
+    if (!this.hasIdentity(record)) throw new Error(record.identityError!.message)
+  }
+
   private async probe(record: TrackedBook, sessionId?: string): Promise<void> {
-    if (this.closing) return
+    if (this.closing || !this.hasIdentity(record)) return
     if (record.probing) return record.probing
     const running = (async () => {
       try {
@@ -137,18 +157,22 @@ export class BookIndexManager {
         record.providerSeen = true
         record.lastProvider = provider
         const head = await bookHead(record.book.root)
-        if (this.closing || state.paused) return
+        if (this.closing || !this.hasIdentity(record) || state.paused) return
         const changedHead = head !== state.head
         if (state.auto && (changedHead || revision !== state.targetRevision || changedProvider || changedScene)) {
           if (changedHead && state.phase === 'ready' && revision === state.targetRevision && !changedProvider && !changedScene
             && !await finalizedChanged(record.book.root, state.indexedHead, head)) {
-            await changeIndexState(record.book.root, latest => latest.generation === state.generation
-              ? { ...latest, head, indexedHead: head, updatedAt: Date.now() } : latest)
+            await changeIndexState(record.book.root, latest => {
+              this.requireIdentity(record)
+              return latest.generation === state.generation ? { ...latest, head, indexedHead: head, updatedAt: Date.now() } : latest
+            })
           } else {
             state = await this.enqueue(record, head, revision, sessionId, sceneRevision)
           }
         }
         state = readIndexState(record.book.root)
+        // Cache recovery queues its own new generation even when HEAD and model
+        // are unchanged. Disabled/paused recoveries remain non-resumable.
         if (resumable(state)) this.scheduleRun(record)
         record.localError = undefined
       } catch (error) {
@@ -163,6 +187,7 @@ export class BookIndexManager {
   private async enqueue(record: TrackedBook, head: string | undefined, revision: string | undefined, sessionId?: string, sceneRevision?: string): Promise<IndexSyncState> {
     record.reschedules = 0
     const next = await changeIndexState(record.book.root, state => {
+      this.requireIdentity(record)
       if (!state.auto || state.paused || state.head === head && state.targetRevision === revision && state.sceneRevision === sceneRevision && resumable(state)) return state
       return { ...state, generation: state.generation + 1, phase: 'queued', head, targetRevision: revision, sceneRevision,
         recipientSession: sessionId ?? state.recipientSession, retryAt: undefined, lastError: undefined, notice: undefined, updatedAt: Date.now() }
@@ -172,13 +197,13 @@ export class BookIndexManager {
   }
 
   private scheduleRun(record: TrackedBook, delay = this.options.debounceMs ?? 250): void {
-    if (this.closing || record.active || record.timer || record.controls) return
+    if (this.closing || record.active || record.timer || record.controls || !this.hasIdentity(record)) return
     record.timer = setTimeout(() => { record.timer = undefined; void this.run(record) }, delay)
     record.timer.unref()
   }
 
   private async run(record: TrackedBook): Promise<void> {
-    if (this.closing || record.active || record.controls) return
+    if (this.closing || record.active || record.controls || !this.hasIdentity(record)) return
     const activeCount = [...this.books.values()].filter(item => item.active).length
     if (activeCount >= (this.options.maxConcurrent ?? 2)) { this.scheduleRun(record, 500); return }
     let state: IndexSyncState
@@ -187,7 +212,10 @@ export class BookIndexManager {
     const controller = new AbortController()
     const generation = state.generation
     const promise = (async () => {
-      const result = await syncFinalizedIndex(record.book.root, { getProvider: () => this.provider(), generation, signal: controller.signal, retry: this.options.retry, getSceneProvider: this.options.getSceneProvider })
+      const result = await syncFinalizedIndex(record.book.root, {
+        getProvider: () => { this.requireIdentity(record); return this.provider() }, generation, signal: controller.signal, retry: this.options.retry,
+        ...(this.options.getSceneProvider ? { getSceneProvider: () => { this.requireIdentity(record); return this.options.getSceneProvider?.() } } : {}),
+      })
       if (result.ok) record.localError = undefined
       if (!result.ok && !this.closing) {
         if (result.failure.code === 'index-busy' || result.failure.code === 'book-busy') {
@@ -212,13 +240,13 @@ export class BookIndexManager {
   }
 
   private async fail(record: TrackedBook, generation: number, failure: IndexFailure): Promise<void> {
-    await changeIndexState(record.book.root, state => state.generation !== generation ? state : ({ ...state, phase: 'failed', lastError: failure,
+    await changeIndexState(record.book.root, state => !this.hasIdentity(record) || state.generation !== generation ? state : ({ ...state, phase: 'failed', lastError: failure,
       updatedAt: Date.now(), notice: { id: `${generation}-${failure.code}`, generation, error: failure, attempts: state.attempt,
         completed: state.completedChunks, total: state.chunks, head: state.head, sessionId: state.recipientSession } }))
   }
 
   private async deliver(record: TrackedBook): Promise<void> {
-    if (record.delivering || this.closing || !this.options.notify) return
+    if (record.delivering || this.closing || !this.options.notify || !this.hasIdentity(record)) return
     const notice = readIndexState(record.book.root).notice
     if (!notice || notice.delivered || !notice.sessionId) return
     record.delivering = true
@@ -234,12 +262,14 @@ export class BookIndexManager {
 
   async status(book: IndexBook): Promise<IndexView> {
     const record = this.track(book)
-    void this.probe(record)
+    if (this.hasIdentity(record)) void this.probe(record)
     let state: IndexSyncState
     try { state = readIndexState(record.book.root) } catch (error) { state = { ...emptyIndexState(), phase: 'failed', lastError: indexFailure(error) } }
     let providerConfigured = false
     try { providerConfigured = !!this.provider() } catch { /* Shown as configuration unavailable. */ }
-    return { ...state, ...(record.localError && !state.lastError ? { lastError: record.localError } : {}), bookId: book.bookId, bookName: book.name, providerConfigured, sceneConfigured: this.sceneConfigured() }
+    return { ...state, ...(record.localError && !state.lastError ? { lastError: record.localError } : {}),
+      ...(record.identityError ? { phase: 'failed', lastError: record.identityError } as const : {}),
+      bookId: book.bookId, bookName: book.name, providerConfigured, sceneConfigured: this.sceneConfigured() }
   }
 
   private sceneConfigured(): boolean { try { return !!this.options.getSceneProvider?.() } catch { return false } }
@@ -248,6 +278,7 @@ export class BookIndexManager {
     if (!['enable', 'disable', 'update', 'pause', 'resume', 'retry', 'rebuild', 'rescan-scenes'].includes(action)) throw new Error('未知索引操作')
     if (this.closing) throw new Error('索引服务正在关闭，请稍后重试')
     const record = this.track(book)
+    this.requireIdentity(record)
     const operation = (record.controls ?? Promise.resolve()).then(() => this.applyControl(record, action, sessionId, chapter))
     const settled = operation.then(() => {}, () => {})
     record.controls = settled
@@ -262,10 +293,12 @@ export class BookIndexManager {
 
   private async applyControl(record: TrackedBook, action: IndexAction, sessionId: string, chapter?: number): Promise<IndexView> {
     if (this.closing) throw new Error('索引服务正在关闭，请稍后重试')
+    this.requireIdentity(record)
     if (record.timer) { clearTimeout(record.timer); record.timer = undefined }
     record.active?.controller.abort()
     // Abort first; wait until its short source snapshot/book lock has been released.
     await record.active?.promise
+    this.requireIdentity(record)
     if (record.timer) { clearTimeout(record.timer); record.timer = undefined }
     if (action === 'rescan-scenes') {
       if (!this.sceneConfigured()) throw new Error('请先启用并配置场景识别模型')
@@ -275,6 +308,7 @@ export class BookIndexManager {
     let revision: string | undefined
     try { revision = embeddingRevision(this.provider()) } catch { /* Worker reports the invalid configuration. */ }
     await changeIndexState(record.book.root, state => {
+      this.requireIdentity(record)
       const base = { ...state, generation: state.generation + 1, recipientSession: sessionId, updatedAt: Date.now(), retryAt: undefined, notice: undefined, lastError: undefined }
       if (action === 'pause') return { ...base, paused: true, phase: 'paused' }
       if (action === 'disable') return { ...base, auto: false, paused: false, phase: 'disabled' }

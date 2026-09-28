@@ -52,3 +52,5 @@ export {
   草稿字段序,
   type DraftFile,
 } from './repo/drafts'
+
+export { scanWorkspaceBooks, uniqueBookRoot, hasBooks, type WorkspaceBook } from './book/identity'

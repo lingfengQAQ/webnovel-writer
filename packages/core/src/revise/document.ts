@@ -9,7 +9,7 @@ import { checkCommitPath } from '../commit/paths'
 import { commitConfirmed, type CommitConfirmedResult } from '../commit/design'
 import { listChapters } from '../derive/scan'
 import { paths } from '../repo/paths'
-import { nextDraftFileName, listChapterDrafts, 草稿字段序 } from '../repo/drafts'
+import { nextDraftFileName, listChapterDrafts, isNumberedDraftPath, 草稿字段序 } from '../repo/drafts'
 import type { OperationProvenance } from '../repo/transaction'
 
 export class AuthorDocumentError extends Error {
@@ -137,6 +137,12 @@ export function retryAuthorSaveCommit(root: string, operationId: string, hash: s
 /** Trusted author UI writer. This is not exposed as an LLM approval parameter. */
 export function saveAuthorDocument(root: string, input: AuthorSaveInput): AuthorSaveResult {
   return withBookWrite(root, () => {
+    const target = authorDocumentPath(root, input.path)
+    const relative = path.relative(canonicalizePath(root), target).split(path.sep).join('/')
+    input = { ...input, path: relative }
+    if (input.shared && fs.existsSync(path.join(root, paths.契约()))) {
+      throw new AuthorDocumentError('read-only', '共享目录与书仓重叠，拒绝共享写入；请通过书目入口访问')
+    }
     const operationId = input.operationId ?? randomUUID()
     const receiptRelative = receiptPath(root, operationId, input.shared)
     const inputHash = documentHash(JSON.stringify([input.path, input.expectedHash, input.body, !!input.shared]))
@@ -148,7 +154,6 @@ export function saveAuthorDocument(root: string, input: AuthorSaveInput): Author
       if (documentHash(fs.readFileSync(savedTarget, 'utf8')) !== result.hash) throw new AuthorDocumentError('conflict', '这次修改已保存，但文件后来又有变动，请核对磁盘版本')
       return commitSaved(root, result, input.shared, input.provenance)
     }
-    const target = authorDocumentPath(root, input.path)
     const readonly = authorReadOnlyReason(input.path, input.shared)
     if (readonly) throw new AuthorDocumentError('read-only', readonly)
     if (!fs.existsSync(target) || !fs.statSync(target).isFile()) throw new AuthorDocumentError('not-found', '源文件不存在')
@@ -167,7 +172,7 @@ export function saveAuthorDocument(root: string, input: AuthorSaveInput): Author
     const posix = input.path.replace(/\\/g, '/')
     let destination = posix
     let fields = { ...parsed.data.fields }
-    const isDraft = /^草稿区\/草稿\/[^/]+\/稿\d+\.md$/.test(posix)
+    const isDraft = isNumberedDraftPath(posix)
     const operations: Array<{ relPath: string; content: string }> = []
     if (!input.shared) {
       const protocol = version === null ? initialVersion('作者手改') : bumpVersion(version, '作者手改', fields['来源快照'])

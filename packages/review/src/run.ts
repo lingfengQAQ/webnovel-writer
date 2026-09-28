@@ -8,10 +8,8 @@ import {
   MACHINE_SCHEMA_VERSION,
   countPendingReviewDrafts,
   emptyReviewRecord,
-  extractVersionFields,
   findPendingReviewDraft,
   loadReviewRecord,
-  parseDocument,
   paths,
   planReviewRecord,
   writeReviewRecord,
@@ -20,6 +18,7 @@ import {
   reviewInputFingerprintOf,
   loadMaterialPackage,
   type LoadedMaterialPackage,
+  type DraftFile,
   type ChapterKey,
   type Finding,
   type ModuleRunState,
@@ -56,13 +55,14 @@ function reviewId(key: ReviewKey): string {
   return `审-${String(key.卷).padStart(2, '0')}-${String(key.章).padStart(4, '0')}`
 }
 
-function reviewInput(bookRoot: string, key: ReviewKey, plan: ReviewPlan | undefined): { body: string; bodyHash: string; fingerprint: string; materials: LoadedMaterialPackage } | null {
+function reviewInput(bookRoot: string, key: ReviewKey, plan: ReviewPlan | undefined): { pending: DraftFile; outline: string; bodyHash: string; fingerprint: string; materials: LoadedMaterialPackage } | null {
   const pending = findPendingReviewDraft(bookRoot, key)
   if (pending === null) return null
   const outline = readText(bookRoot, paths.确认细纲(key.卷, key.章, key.章名)) ?? ''
   const materials = loadMaterialPackage(bookRoot, key)
   return {
-    body: pending.body,
+    pending,
+    outline,
     bodyHash: draftHashOf(pending.body),
     fingerprint: reviewInputFingerprintOf({ 正文: pending.body, 细纲: outline, 材料清单: materials.审读材料标识, 方案: plan }),
     materials,
@@ -113,11 +113,10 @@ export const planReview = bookWriter(planReviewLocked)
 export function computeReview(bookRoot: string, key: ReviewKey): RunReviewResult {
   registerDefaultChecks()
   const pendingCount = countPendingReviewDrafts(bookRoot, key)
-  const pending = findPendingReviewDraft(bookRoot, key)
   if (pendingCount === 0) {
     return { ok: false, reason: '无待审稿', record: null }
   }
-  if (pendingCount > 1 || pending === null) {
+  if (pendingCount > 1) {
     return { ok: false, reason: `待审稿不唯一:${pendingCount}份`, record: null }
   }
 
@@ -128,13 +127,10 @@ export function computeReview(bookRoot: string, key: ReviewKey): RunReviewResult
     if (item.理由.trim() !== '') skips.set(item.模块, item.理由)
   }
 
-  const 细纲 = readText(bookRoot, paths.确认细纲(key.卷, key.章, key.章名)) ?? ''
-  const pendingDoc = parseDocument(pending.text)
-  const 材料版本 = extractVersionFields(pendingDoc.ok ? pendingDoc.data.fields : {}).版本
   // F5(2026-09-05):审核证据绑定被审正文哈希。换稿(哈希失配)→新审读轮:模块态重置、
   // 旧稿发现项不保留(作者意见条目除外——作者指示跨稿有效),旧完成态不再冒充当前稿已审。
   const inputIdentity = reviewInput(bookRoot, key, plan)
-  if (inputIdentity === null) return { ok: false, reason: '待审稿在审核过程中消失', record: null }
+  if (inputIdentity === null) return { ok: false, reason: '待审稿在审核过程中消失或不再唯一', record: null }
   if (inputIdentity.materials.问题.length > 0) {
     return { ok: false, reason: `材料需要核对：${inputIdentity.materials.问题.join('；')}`, record: null }
   }
@@ -142,11 +138,14 @@ export function computeReview(bookRoot: string, key: ReviewKey): RunReviewResult
   const 审读指纹 = inputIdentity.fingerprint
   const stale = existing.审读指纹 !== 审读指纹
   const 审核编号 = reviewId(key)
+  // 检查与指纹消费同一份读入快照，读取间作者改动不能把旧结果绑定到新输入。
+  const pending = inputIdentity.pending
+  const 材料版本 = pending.版本
   const input = {
     bookRoot,
     key: key as ChapterKey,
     待审稿: pending.body,
-    细纲,
+    细纲: inputIdentity.outline,
     审核编号,
     材料版本: 材料版本 === null ? pending.relPath : `${pending.relPath}@${材料版本}`,
     材料段: inputIdentity.materials.段,
@@ -234,6 +233,7 @@ export const runReview = bookWriter(runReviewLocked)
  *
  * 该模块置为 {完成:true, 待回写:false};并入复用 runReview 既有的跨轮认亲
  * (模块名+证据位置+问题说明三元组沿用旧处置),不另写第二套认亲规则。
+ * 每次自动模块回写必须携带实际审读输入的指纹；作者意见跨稿有效，不刷新自动证据身份。
  * 本模块本轮结果整批替换、其他模块留痕不动;全部模块完成且无待回写时记录完成为真。
  */
 function ingestFindingsLocked(
@@ -244,15 +244,23 @@ function ingestFindingsLocked(
   expectedFingerprint?: string,
 ): { readonly ok: boolean; readonly reason?: string; readonly record: ReviewRecord | null; readonly 待回写模块?: readonly string[] } {
   registerDefaultChecks()
-  if (getCheck(模块名) === undefined) {
+  const check = getCheck(模块名)
+  if (check === undefined) {
     return { ok: false, reason: `未注册的审读模块:${模块名}`, record: null }
+  }
+  const authorOpinion = check.执行形态 === '作者'
+  if (!authorOpinion && (typeof expectedFingerprint !== 'string' || expectedFingerprint.trim() === '')) {
+    return { ok: false, reason: '自动审读结果必须携带审读指纹：每个模块回写均需提供实际审读输入的指纹，请重新运行审核', record: null }
   }
   const existing = loadReviewRecord(bookRoot, key) ?? emptyReviewRecord()
 
   const inputIdentity = reviewInput(bookRoot, key, existing.方案)
   if (inputIdentity === null) return { ok: false, reason: '无唯一待审稿，拒绝回写可能属于旧稿的结果', record: null }
-  if (expectedFingerprint !== undefined && expectedFingerprint !== inputIdentity.fingerprint) {
+  if (!authorOpinion && expectedFingerprint !== inputIdentity.fingerprint) {
     return { ok: false, reason: '审读结果已过期：回写指纹与当前审核输入不一致，请重新运行审核', record: null }
+  }
+  if (!authorOpinion && inputIdentity.materials.问题.length > 0) {
+    return { ok: false, reason: `材料需要核对：${inputIdentity.materials.问题.join('；')}`, record: null }
   }
   const hasPriorReviewState = existing.完成 || existing.问题.length > 0 || Object.keys(existing.模块).length > 0
   const stale = (existing.审读指纹 !== undefined && existing.审读指纹 !== inputIdentity.fingerprint)
@@ -260,13 +268,8 @@ function ingestFindingsLocked(
   // 重跑通道（2026-09-18 真机缺陷 D-002）：记录陈旧时，调用方传与当前输入一致的
   // 审读指纹（确定性脚本当轮产出）即证明发现项是新跑的，按 F5 语义重置旧轮次后
   // 接收——旧完成态与旧稿发现项不再冒充当前稿已审（作者意见条目跨稿保留，处置
-  // 认亲照旧）。无指纹证明的陈旧记录仍拒绝迟到回写。
-  const resetting = stale && expectedFingerprint !== undefined
-  if (stale && !resetting) {
-    return { ok: false, reason: existing.审读指纹 === undefined
-      ? '旧审核记录没有输入指纹，不能接收迟到回写；请重新运行审核'
-      : '审读结果已过期：待审稿、确认细纲、材料清单或审核方案已改变，请重新运行审核（重跑后请带上脚本当轮的审读指纹）', record: null }
-  }
+  // 认亲照旧）。本轮后续结果仍逐条验指纹；作者意见本身不能重开自动审读轮次。
+  const resetting = stale && !authorOpinion
 
   const 旧处置 = dispositionMap(existing)
 
@@ -299,8 +302,7 @@ function ingestFindingsLocked(
     完成,
     问题,
     模块,
-    审稿哈希: inputIdentity.bodyHash,
-    审读指纹: inputIdentity.fingerprint,
+    ...(authorOpinion ? {} : { 审稿哈希: inputIdentity.bodyHash, 审读指纹: inputIdentity.fingerprint }),
     待继承处置: remainingDispositions(existing, resetting, new Set([模块名])),
   }
   writeReviewRecord(bookRoot, key, record)

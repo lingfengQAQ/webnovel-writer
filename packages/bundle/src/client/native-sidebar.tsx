@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
-import type { ClientHost } from './host'
+import { mainSessionOf, type ClientHost } from './host'
 import { EditorPanel, type EditorActions, type EditorMemory } from './editor'
 import { useEditor } from './hooks'
 import type { EditorStore } from './store'
@@ -11,7 +11,7 @@ export const WRITING_TAB_KIND = 'webnovel-writing'
 
 /** Never let a late document response open a tab in a different active session. */
 export function revealWriting(host: Pick<ClientHost, 'sessions' | 'sidebarRight'>, sessionId: string): void {
-  if (host.sessions.list.getSnapshot().current === sessionId) host.sidebarRight.openTab(WRITING_TAB_KIND)
+  if (mainSessionOf(host) === sessionId) host.sidebarRight.openTab(WRITING_TAB_KIND)
 }
 
 type WritingTabProps = PropsRuntime<'sidebar.right.pane.tab'> & {
@@ -39,7 +39,7 @@ function WritingTitle({ sessionId, store }: { sessionId: string; store: EditorSt
 export function installWritingSidebar(host: ClientHost, store: EditorStore, actions: EditorActions, memory: EditorMemory): void {
   host.effect(() => host.sidebarRightTabs.register({
     id: WRITING_TAB_ID, kind: WRITING_TAB_KIND, title: () => '书稿与资料',
-    guide: [{ order: 50, title: () => '书稿与资料', description: () => '阅读、编辑书稿并引用到对话。关闭标签后，未保存内容可重新打开继续编辑。' }],
+    guide: [{ id: WRITING_TAB_ID, order: 50, title: () => '书稿与资料', description: () => '阅读、编辑书稿并引用到对话。关闭标签后，未保存内容可重新打开继续编辑。' }],
   }), 'webnovel: native writing tab')
   host.slots.inject('sidebar.right.pane.tab', () => host.slots.register({
     name: 'sidebar.right.pane.tab', key: WRITING_TAB_ID,

@@ -8,6 +8,7 @@ import { VisualView } from './visualization'
 import visualizationStyles from './visualization.css'
 import { type EditorActions, type EditorMemory } from './editor'
 import { useSession } from './hooks'
+import { mainSessionOf } from './host'
 import { installWritingSidebar, revealWriting } from './native-sidebar'
 import { createEditorStore } from './store'
 import { documentQuote } from './quote'
@@ -16,7 +17,7 @@ import styles from './styles.css'
 import indexStyles from './indexing.css'
 import { installIndexSidebar } from './indexing'
 
-export const inject = ['slots', 'sidebarRight', 'sidebarRightTabs', 'conversation', 'sessions']
+export const inject = ['slots', 'sidebarRight', 'sidebarRightTabs', 'conversation', 'sessions', 'uiWorkspace']
 
 export function apply(host: ClientHost) {
   const store = createEditorStore(id => revealWriting(host, id))
@@ -25,7 +26,7 @@ export function apply(host: ClientHost) {
   const actions: EditorActions = {
     close: id => {
       store.cancelOpen(id)
-      if (host.sessions.list.getSnapshot().current === id && host.sidebarRight.isExpanded()) host.sidebarRight.toggleExpanded()
+      if (mainSessionOf(host) === id && host.sidebarRight.isExpanded()) host.sidebarRight.toggleExpanded()
     },
     openLink: (id, href, source) => {
       if (/^https?:\/\//i.test(href)) { window.open(href, '_blank', 'noopener,noreferrer'); return }
@@ -40,7 +41,7 @@ export function apply(host: ClientHost) {
       } catch { store.update(id, { error: '文档链接格式不正确' }) }
     },
     quote: id => {
-      if (host.sessions.list.getSnapshot().current !== id) return
+      if (mainSessionOf(host) !== id) return
       const state = store.get(id)
       const buffer = state.current ? state.buffers[state.current] : undefined
       const scope = host.sessions.scope(id)
@@ -71,7 +72,7 @@ export function apply(host: ClientHost) {
   installWritingSidebar(host, store, actions, memory)
   host.effect(() => {
     const openLink = (link: NonNullable<ReturnType<typeof parseStudyLink>>) => {
-      if (host.sessions.list.getSnapshot().current !== link.sessionId) host.sessions.open(link.sessionId)
+      if (mainSessionOf(host) !== link.sessionId) host.uiWorkspace.openSession(link.sessionId)
       void store.open(link.sessionId, link.ref)
     }
     const intercept = (event: MouseEvent) => {
@@ -120,13 +121,13 @@ export function apply(host: ClientHost) {
     const original = remote.openWorkspacePath
     const descriptor = Object.getOwnPropertyDescriptor(remote, 'openWorkspacePath')
     const intercepted: NativeOpenService['openWorkspacePath'] = async (request, signal) => {
-      const id = host.sessions.list.getSnapshot().current
+      const id = mainSessionOf(host)
       if (id) {
         try {
           const document = await callStudy<StudyDocument | null>(id, 'resolve', { path: request.path.replace(/#L\d+(?:-L?\d+)?$/, '') }, signal)
           if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
           if (document) {
-            if (host.sessions.list.getSnapshot().current !== id) return { ok: true, value: { opened: false } }
+            if (mainSessionOf(host) !== id) return { ok: true, value: { opened: false } }
             await store.open(id, document.ref)
             return { ok: true, value: { opened: !store.get(id).error } }
           }

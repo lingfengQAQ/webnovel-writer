@@ -100,6 +100,7 @@ export async function searchFinalized(root: string, options: SearchOptions): Pro
       if (active !== originalProvider || embeddingRevision(active) !== revision) throw new SearchError('provider-changed', '嵌入配置在检索期间已变化，请重新检索')
       const cache = await SearchCache.open(root)
       try {
+        if (readIndexState(root).generation !== first.sync.generation) throw new SearchError('index-changed', '索引在检索期间已重建或变更，请重新检索')
         cache.publish(current, new Map(), undefined, signal)
         const literalMatches = new Set([...indexed].filter(([, { chunk }]) => chunk.text.includes(query)).map(([id]) => id))
         const lexical = cache.keyword(query, literalMatches)
@@ -164,6 +165,7 @@ export async function searchFinalized(root: string, options: SearchOptions): Pro
       signal?.throwIfAborted()
       const current = await scanFinalized(root, signal)
       if (current.fingerprint !== first.snapshot.fingerprint) throw new SearchError('source-changed', '原文或场景边界在重排期间已变化，请重新检索')
+      if (readIndexState(root).generation !== first.sync.generation) throw new SearchError('index-changed', '索引在重排期间已重建或变更，请重新检索')
       let active: EmbeddingProvider | undefined
       let activeReranker: RerankingProvider | undefined
       try { active = options.getProvider ? options.getProvider() : options.provider; activeReranker = options.getReranker?.() } catch { /* Compared below. */ }

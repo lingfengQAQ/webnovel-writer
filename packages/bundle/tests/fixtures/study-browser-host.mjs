@@ -30,7 +30,10 @@ export async function apply(ctx) {
   put('书房/作者记忆/偏好.md', '# 作者偏好\n\n保留作者自己的句子。\n')
   const report = { requests: 0, savesReceived: 0, indexErrorsReceived: 0, complete: 0, customEvents: 0 }
   const persist = () => fs.writeFileSync(reportPath, JSON.stringify(report, null, 2))
-  if (process.env.WEBNOVEL_INDEX_CHECK) await attachIndexFixture(ctx, root, report, persist)
+  // Settings writes await Loader settlement in DSH 0.1.7. Do not await them from
+  // this plugin's apply: that would keep the very Loader settlement they need pending.
+  const indexReady = (process.env.WEBNOVEL_INDEX_CHECK ? attachIndexFixture(ctx, root, report, persist) : Promise.resolve())
+    .then(() => true).catch(error => { report.fixtureError = String(error); persist(); return false })
   class AcceptanceAdapter extends LlmAdapter {
     providerInfo(provider) { return { id: provider, name: '本地验收提供方' } }
     async listModels() { return [{ id: 'fixture', name: '本地验收' }] }
@@ -92,9 +95,22 @@ export async function apply(ctx) {
   const secondExists = (await ctx.sessionPersistence.list()).some(snapshot => snapshot.header.id === secondId)
   const second = secondExists ? await ctx.agents.resume({ resumeSessionId: secondId, agentOptions: options })
     : await ctx.agents.create({ sessionId: secondId, meta: { cwd: secondRoot, title: 'S5 会话隔离验收' }, agentOptions: options })
+  // DSH 0.1.7 restores the most recent workspace on load and ADOPTS an empty-log
+  // session in it as its blank "新会话", which displaces the fixture's title and
+  // lets the probe's named lookup find nothing. One real turn makes this session
+  // non-blank, so the title it was renamed to below is what the list renders.
+  if (!secondExists) await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { done(); reject(new Error('Second acceptance session did not finish')) }, 10000)
+    const done = ctx.on('agent/status', ({ agent, status }) => {
+      if (agent !== second.agent || status !== 'idle') return
+      clearTimeout(timer); done(); resolve()
+    })
+    second.agent.followup(createUserMessage({ content: [{ type: 'text', text: '确认这个工作范围是空的。' }], source: { kind: 'user' } }))
+  })
   await ctx.sessionPersistence.flush()
   await secondWorkspace.attachSession(secondId)
   await ctx.sessionController.rename({ sessionId: secondId, title: 'S5 会话隔离验收' })
   persist()
+  void indexReady.then(ready => { report.ready = ready; persist() })
   ctx.on('dispose', () => { off(); return Promise.all([handle.dispose(), second.dispose()]) })
 }

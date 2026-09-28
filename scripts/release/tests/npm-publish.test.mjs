@@ -38,7 +38,10 @@ async function fixture(callback) {
     const manifest = { name: item.name, version: item.version, license: 'GPL-3.0-only', publishConfig,
       repository: { url: 'https://github.com/lingfengQAQ/webnovel-writer.git' } }
     const files = { 'package.json': manifest, LICENSE: 'GNU GENERAL PUBLIC LICENSE', 'README.md': 'Example' }
-    if (index === 1) Object.assign(files, { 'lib/index.js': '', 'lib/client.js': `window.__ModuleLoader__.load({ id: ${JSON.stringify(item.name)},`, 'cordis.patch.yml': '', 'MODEL_DIMENSIONS.md': '', 'THIRD_PARTY_NOTICES.md': 'Original notices' })
+    if (index === 1) {
+      manifest.exports = { './scenes': './lib/scenes.js', './reranking': './lib/reranking.js' }
+      Object.assign(files, { 'lib/index.js': '', 'lib/scenes.js': '', 'lib/reranking.js': '', 'lib/client.js': `window.__ModuleLoader__.load({ id: ${JSON.stringify(item.name)},`, 'cordis.patch.yml': fs.readFileSync(path.join(root, 'packages/embedding-provider/cordis.patch.yml'), 'utf8'), 'MODEL_DIMENSIONS.md': '', 'THIRD_PARTY_NOTICES.md': 'Original notices' })
+    }
     if (index === 2) {
       manifest.dependencies = { '@linfengqaqtat/dsh-scriptor': version, 'webnovel-embedding-provider': '0.0.8' }
       manifest.dsh = { bundle: { patch: './cordis.patch.yml' } }

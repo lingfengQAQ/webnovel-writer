@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { deriveDesign, scanDesign, type DesignFacts } from '../src/derive/design'
 import { serializeDocument } from '../src/repo/frontmatter'
+import { writeReadyDesign } from './fixtures/ready-design'
 
 function facts(over: Partial<DesignFacts> = {}): DesignFacts {
   return {
@@ -65,27 +66,7 @@ function put(root: string, rel: string, content: string): void {
 }
 afterAll(() => { for (const r of roots) { try { fs.rmSync(r, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }) } catch { /* Windows 句柄延迟释放，%TEMP% 残留无害 */ } } })
 
-const 契约齐 = [
-  '- 题材与读者定位 〔已确认〕',
-  '- 核心看点与差异化 〔已确认〕',
-  '- 阅读体验与情绪承诺 〔已确认〕',
-  '- 主角原则与关系边界 〔已确认〕',
-  '- 叙事方式与文风基调 〔已确认〕',
-  '- 创作禁区与不可妥协项 〔已确认〕',
-].join('\n')
-
-function seedReady(root: string): void {
-  put(root, '构想/构想快照.md', '# 构想\n')
-  put(root, '作品契约/契约.md', `# 契约\n\n${契约齐}\n`)
-  put(root, '世界书/模块声明.md', '- 人物档案\n- 世界规则\n')
-  put(root, '世界书/人物档案/主角.md', serializeDocument({ 状态: '已确认' }, '主角'))
-  put(root, '世界书/世界规则/修炼.md', serializeDocument({ 状态: '已确认' }, '规则'))
-  put(root, '大纲/故事骨架.md', '- 主角目标与成长轨迹 〔已确认〕\n- 核心冲突与对抗力量 〔已确认〕\n')
-  put(root, '大纲/分卷布局.md', '- 卷01 〔已确认〕\n')
-  put(root, '大纲/卷规划/卷01/卷纲.md', '# 卷纲\n')
-  put(root, '大纲/卷规划/卷01/计划时间线.md', '# 计划时间线\n')
-  put(root, '大纲/卷规划/卷01/近期窗口.md', '- 初见 〔已确认〕\n')
-}
+function seedReady(root: string): void { writeReadyDesign(root) }
 
 describe('设计侧扫描(文件事实)', () => {
   it('空目录→灵感阶段', () => {
@@ -103,7 +84,7 @@ describe('设计侧扫描(文件事实)', () => {
   it('最小模块缺已确认条目→世界构建', () => {
     const root = mkBook()
     seedReady(root)
-    put(root, '世界书/世界规则/修炼.md', serializeDocument({ 状态: '暂定' }, '规则'))
+    put(root, '世界书/世界规则/基础规则.md', serializeDocument({ 状态: '暂定' }, '规则'))
     expect(deriveDesign(scanDesign(root)).建议).toBe('世界构建')
   })
 

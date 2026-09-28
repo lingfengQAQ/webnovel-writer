@@ -269,7 +269,7 @@ describe('F5:审稿哈希绑定', () => {
     // 回写全部隔离子 Agent 模块(空审 fail-closed:回写后才算完成)
     for (const [name, st] of Object.entries(r.record?.模块 ?? {})) {
       if (st.待回写 === true) {
-        expect(ingestFindings(root, key, name, []).ok).toBe(true)
+        expect(ingestFindings(root, key, name, [], r.record!.审读指纹).ok).toBe(true)
       }
     }
   }

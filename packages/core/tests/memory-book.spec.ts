@@ -82,4 +82,23 @@ describe('本书记忆一事一文件(A10)', () => {
     expect(writeBookMemory(root, { 类: '文风', 名称: '索引', 正文: 'x', 来源: 'x', 裁决记录: 'x' }).ok).toBe(false)
     expect(writeBookMemory(root, { 类: '文风', 名称: '  ', 正文: 'x', 来源: 'x', 裁决记录: 'x' }).ok).toBe(false)
   })
+
+  it('拒绝与旧分类文件同名的新条目，保留全部旧记忆及索引', () => {
+    const root = mkDir('webnovel-membook-collision-')
+    const legacy = '# 文风\n\n## 旧条目甲\n状态：已确认\n### 正文\n甲原文。\n\n## 旧条目乙\n状态：已确认\n### 正文\n乙原文。\n'
+    writeFileAtomic(root, paths.记忆('文风'), legacy)
+    writeFileAtomic(root, paths.本书记忆索引(), '# 作者已有索引\n')
+    expect(writeBookMemory(root, { 类: '文风', 名称: '文风', 正文: '新记忆', 来源: 'x', 裁决记录: 'y' }))
+      .toMatchObject({ ok: false, reason: expect.stringMatching(/旧格式|冲突/) })
+    expect(fs.readFileSync(path.join(root, paths.记忆('文风')), 'utf8')).toBe(legacy)
+    expect(fs.readFileSync(path.join(root, paths.本书记忆索引()), 'utf8')).toBe('# 作者已有索引\n')
+    expect(queryMemory(root, { 类: '文风' }).entries.map(entry => entry.名称)).toEqual(['旧条目甲', '旧条目乙'])
+  })
+
+  it.each(['---\n类: 文风\n名称: 别的名称\n---\n原文\n', '---\n类: 未知\n名称: 同名\n---\n原文\n', '---\n名称: [坏格式\n---\n原文\n'])('无法确认的一事一文件格式不被覆盖', (original) => {
+    const root = mkDir('webnovel-membook-unknown-')
+    writeFileAtomic(root, paths.本书记忆条目('同名'), original)
+    expect(writeBookMemory(root, { 类: '文风', 名称: '同名', 正文: '替换', 来源: 'x', 裁决记录: 'y' }).ok).toBe(false)
+    expect(fs.readFileSync(path.join(root, paths.本书记忆条目('同名')), 'utf8')).toBe(original)
+  })
 })

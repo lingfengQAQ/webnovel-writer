@@ -1,4 +1,4 @@
-@deepseek-ai/cosmokit@1.8.3
+@deepseek-ai/schemastery@3.18.4
 SPDX: MIT
 Repository: git+https://github.com/deepseek-ai/deepseek-harness.git
 

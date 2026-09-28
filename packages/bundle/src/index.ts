@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url'
 import { existsSync } from 'node:fs'
 import type { ToolExecutionToken, ToolRuntime } from '@deepseek-ai/dsh-tools'
 import { attachFileGateToAgent } from './gates'
-import { scanBooks } from './bookshelf'
+import { uniqueBookRoot, scanBooks } from './bookshelf'
 import { attachStatusToAgent, type SystemPromptLike } from './status-context'
 import { canonicalizePath, isFullyQualifiedPath, isInsidePath } from '@webnovel/core'
 import { attachPersonaToAgent, type AgentCtxLike } from './persona'
@@ -180,7 +180,7 @@ function step(ctx: Context, label: string, execute: () => void | (() => void)): 
 export function bookRootOfBookId(bookId: string): string | undefined {
   const root = currentWorkspaceRoot()
   if (root === undefined) return undefined
-  return scanBooks(root).find((b) => b.bookId === bookId)?.root
+  return uniqueBookRoot(root, bookId)
 }
 
 /**
@@ -203,7 +203,7 @@ export function agentWorkspaceRoot(agent: AgentLike | undefined): string | undef
 export function bookRootOfBookIdFor(bookId: string, agent: AgentLike | undefined): string | undefined {
   const root = agentWorkspaceRoot(agent)
   if (root === undefined) return undefined
-  return scanBooks(root).find((b) => b.bookId === bookId)?.root
+  return uniqueBookRoot(root, bookId)
 }
 
 /** 子路径判定(dsh 运行时对齐批:canonical 化后比较,junction/盘符大小写别名不再误判)。 */
@@ -545,7 +545,7 @@ export function apply(ctx: Context) {
         bookRootOfId: (bookId) => {
           const root = rootOf()
           if (root === undefined) return undefined
-          return scanBooks(root).find((b) => b.bookId === bookId)?.root
+          return uniqueBookRoot(root, bookId)
         },
         bookRootForAbs: (abs) => {
           const root = rootOf()

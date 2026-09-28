@@ -36,7 +36,7 @@ export async function checkMemoryCatalog({ host, ctx, workspace, book, service, 
       agent.followup(createUserMessage({ content: [{ type: 'text', text: '核对本次上下文。' }], source: { kind: 'user' } }))
     })
     const catalogs = Array.from({ length: agent.session.seq }, (_, i) => agent.session.eventAt(i))
-      .filter(event => event.type === 'user/message' && event.data.source.plugin === 'webnovel-memory-catalog')
+      .filter(event => event.type === 'user/message' && event.data.source.kind === 'plugin:webnovel-memory-catalog')
     assert.equal(catalogs.length, expectedCatalogs)
     return { rendered: catalogs.map(catalog => ({ text: catalog.data.content[0].text })) }
   }

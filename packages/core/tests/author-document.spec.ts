@@ -6,7 +6,8 @@ import { execFileSync } from 'node:child_process'
 import { authorDocumentPath, documentHash, readAuthorSave, saveAuthorDocument } from '../src/revise/document'
 import { parseDocument, serializeDocument } from '../src/repo/frontmatter'
 import { paths } from '../src/repo/paths'
-import { listChapterDrafts } from '../src/repo/drafts'
+import { listChapterDrafts, nextDraftFileName } from '../src/repo/drafts'
+import { scanChapter } from '../src/derive/scan'
 import { removeSync } from '../src/repo/remove'
 
 let root: string
@@ -69,6 +70,41 @@ describe('作者文档保存边界', () => {
     expect(drafts.find(item => item.file === '稿2.md')?.body).toContain('人物：林舟到港')
     const saved = parseDocument(fs.readFileSync(path.join(root, result.path), 'utf8'))
     expect(saved.ok && saved.data.fields).toMatchObject({ 身份: draftKey, 父版本: 1, 生成模块: '作者手改', 来源快照: { 细纲: 1 } })
+  })
+
+  it('实际大写扩展名在 Windows 仍是草稿，POSIX 保持区分大小写', () => {
+    const { relative, text } = draft('待审稿', 1, '稿1.MD')
+    expect(fs.readdirSync(path.dirname(path.join(root, relative)))).toContain('稿1.MD')
+    if (process.platform !== 'win32') {
+      expect(listChapterDrafts(root, draftKey)).toEqual([])
+      expect(nextDraftFileName(root, draftKey)).toBe('稿1.md')
+      expect(scanChapter(root, draftKey).有草稿).toBe(false)
+      return
+    }
+    expect(nextDraftFileName(root, draftKey)).toBe('稿2.md')
+    expect(scanChapter(root, draftKey).唯一待审稿).toBe(true)
+    const input = { path: relative.replace('.MD', '.md'), expectedHash: documentHash(text), body: '大写旧稿之后的新正文', provenance, operationId }
+    const saved = saveAuthorDocument(root, input)
+    expect(saved).toMatchObject({ path: relative.replace('稿1.MD', '稿2.md'), previousPath: relative, version: 2 })
+    const previous = parseDocument(fs.readFileSync(path.join(root, relative), 'utf8'))
+    expect(previous.ok && previous.data.body).toContain('原来的正文')
+    expect(previous.ok && previous.data.fields['角色']).toBe('草稿')
+    expect(listChapterDrafts(root, draftKey).filter(item => item.角色 === '待审稿')).toHaveLength(1)
+    expect(scanChapter(root, draftKey).唯一待审稿).toBe(true)
+    expect(saveAuthorDocument(root, { ...input, path: relative })).toEqual(saved)
+    expect(fs.readdirSync(path.dirname(path.join(root, relative))).sort()).toEqual(['稿1.MD', '稿2.md'])
+  })
+
+  it('Windows 大写新稿参与版本冲突检查，不能被旧稿保存忽略', () => {
+    const { relative, text } = draft('草稿', 1)
+    const later = draft('待审稿', 2, '稿2.MD')
+    if (process.platform !== 'win32') {
+      expect(listChapterDrafts(root, draftKey).map(item => item.file)).toEqual(['稿1.md'])
+      return
+    }
+    expect(() => saveAuthorDocument(root, { path: relative, expectedHash: documentHash(text), body: '不应写入的新正文', provenance })).toThrow(/更新版本/)
+    expect(fs.readFileSync(path.join(root, relative), 'utf8')).toBe(text)
+    expect(fs.readFileSync(path.join(root, later.relative), 'utf8')).toBe(later.text)
   })
 
   it('进程重试同一编号不重复生成新稿，保留原差异供通知使用', () => {

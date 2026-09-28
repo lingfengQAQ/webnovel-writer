@@ -27,6 +27,7 @@ import type { ToolExecutionToken } from '@deepseek-ai/dsh-tools'
  * 裁决点仍只有定稿入档与吃书补偿，设计侧确认走 design:（幂等可重放）。
  */
 
+import { captureApprovalFiles } from './approval-snapshot'
 import * as fs from 'node:fs'
 import * as nodePath from 'node:path'
 import type { ToolOutputDefinition } from '@deepseek-ai/dsh-tools'
@@ -35,7 +36,7 @@ import { DESIGN_COMMIT_FIELDS, NATIVE_DESIGN_TOOLS, designCommitResult, type Des
 import {
   activeChapterLine,
   applyVersionFields,
-  archiveRetcon,
+  archiveRetconRequest,
   bumpVersion,
   applyRevision,
   applyRevisionBatch,
@@ -50,6 +51,7 @@ import {
   parseWindow,
   paths,
   preparePack,
+  scanChapter,
   archiveChapter,
   reconcileLedger,
   renderBookProgress,
@@ -226,7 +228,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
     const bookId = args['bookId'] ? String(args['bookId']).trim() : undefined
     if (!bookId) return { ok: false, reason: '未指定 bookId 参数（必填）' }
     const bookRoot = deps.bookRootOfBookId(bookId, sessionContext?.agent)
-    if (!bookRoot) return { ok: false, reason: `未能定位书仓路径（bookId: ${bookId}）——若在工作台多工作区环境，请确认会话已附上书所在的工作范围` }
+    if (!bookRoot) return { ok: false, reason: `书id不存在或不唯一，未能定位书仓路径（bookId: ${bookId}）——若在工作台多工作区环境，请确认会话已附上书所在的工作范围` }
     return { ok: true, bookRoot }
   }
 
@@ -273,7 +275,11 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
         if (root === undefined) return { ok: false, reason: '工作范围未就绪（未装机）' }
         const books = scanBooks(root)
         const target = String(args['bookId']).trim()
-        const matched = books.find((b) => b.bookId === target || b.name === target)
+        const matches = books.filter((b) => b.bookId === target || b.name === target)
+        const matched = matches[0]
+        if (matches.length > 1 || matched?.bookId && books.filter(b => b.bookId === matched.bookId).length > 1) {
+          return { ok: false, reason: `书目或书id不唯一：${target}，请先核对重复书仓；不会自动选择或改写书id` }
+        }
         if (!matched || !matched.bookId) {
           return {
             ok: false,
@@ -411,7 +417,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
     },
     {
       name: 'novel_seed_min_design',
-      description: '【测试/走查专用】为测试书一键写入占位设计（各部只有「已确认」标注、没有正文），直接满足开写就绪门槛；不得用于作者的书。成功后整批一次 design: 提交；重跑幂等（已提交过则无改动、不重复提交）。',
+      description: '【测试/走查专用】为测试书一键写入占位设计（各部只有「已确认」标注、没有正文），用于验证空内容与模板待核对提示，不代表开写就绪；不得用于作者的书。成功后整批一次 design: 提交；重跑幂等（已提交过则无改动、不重复提交）。',
       parameters: {
         type: 'object',
         properties: {
@@ -462,8 +468,8 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
         return {
           ok: true,
           message: commit.noChanges === true
-            ? '最小设计初始化完成（本次无改动，未产生新提交），全书处于开写就绪状态。'
-            : `最小设计初始化完成，全书已进入开写就绪状态！（${commit.message}）`,
+            ? '测试占位设计已存在（本次无改动，未产生新提交）；仍需真实设计内容，不能据此判断开写就绪。'
+            : `测试占位设计已写入；仍需真实设计内容，不能据此判断开写就绪。（${commit.message}）`,
         }
       },
     },
@@ -483,7 +489,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
           properties: {
             ok: { type: 'boolean', description: '是否成功' },
             bookId: { type: 'string', description: '书id' },
-            design: { type: 'object', description: '设计面事实清单与建议（R1：建议仅供参考，不参与门禁）；「已确认无内容」列出只有状态标注、没有正文的设计分部（不参与推导，提示补内容）' },
+            design: { type: 'object', description: '设计面事实清单与建议（R1：建议仅供参考，不参与门禁）；「内容问题」影响就绪建议，「已确认无内容」保留全部已确认空分部的提示，合法远期留白不阻塞' },
             chapters: { type: 'array', description: '章节事实清单列表（每章含 §8 逐行事实项与建议）' },
             reason: { type: 'string', description: '失败原因' },
           },
@@ -502,7 +508,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
           // 设计面事实按当前卷选择器取卷(任务21, B3):active 取该卷;planning 检查规划目标卷;empty 默认卷1
           const selection = selectCurrentVolume(bookRoot)
           const derived = deriveDesign(scanDesign(bookRoot, selection.kind === 'active' ? selection.卷 : selection.kind === 'planning' ? selection.规划卷 : 1))
-          // 只有标注没有正文的分部照常计入推导(标注即作者确认),这里单列出来,免得「开写就绪」掩盖空设计
+          // 原状态标注保留；必要内容问题已参与建议，全部空分部另列供作者核对。
           const 已确认无内容 = listConfirmedEmpty(scanDesignDetail(bookRoot))
           const design = 已确认无内容.length === 0 ? derived : { ...derived, 已确认无内容 }
           const resumable = listResumable(bookRoot)
@@ -731,12 +737,20 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
         const keyResult = chapterKeyOf(args)
         if (!keyResult.ok) return keyResult
         const key = keyResult.key
+        const approvalFiles = [paths.待定稿包目录(key.卷, key.章名), paths.契约()]
+        const before = captureApprovalFiles(bookRoot, approvalFiles, args)
+        if (!before.ok) return before
         const decision = await askAuthor(deps.askFn, '定稿入档', { 范围: `卷${key.卷.toString().padStart(2, '0')}/${key.章名}` }, { agent: sessionContext?.agent, signal: sessionContext?.signal })
         if (!decision.ok) return { ok: false, reason: `未获作者批准: ${decision.reason}` }
         if (sessionContext?.signal?.aborted) return { ok: false, reason: '作者裁决已取消（ASK_ABORTED）' }
         // decision.ok 只表示答案有效;退回同样是有效答案,须按 决定 判。
         const 裁决 = decision.决定 === '已批准' ? '已批准' : '已退回'
         return withBookWrite(bookRoot, () => {
+          if (sessionContext?.signal?.aborted) return { ok: false, reason: '作者裁决已取消（ASK_ABORTED）' }
+          const currentBook = resolveBook(args, sessionContext)
+        if (!currentBook.ok || currentBook.bookRoot !== bookRoot) return { ok: false, reason: '等待作者裁决期间书id或归属已变化，请核对书目后重新呈报' }
+        const current = captureApprovalFiles(bookRoot, approvalFiles, args)
+          if (!current.ok || current.fingerprint !== before.fingerprint) return { ok: false, reason: '待定稿包在等待作者裁决期间已变化，旧批准不可使用；请重新呈报作者裁决' }
           const decisionWrite = writeSettlementDecision(bookRoot, key, 裁决)
           if (裁决 !== '已批准') {
             // 驳回本身必须保留原有语义;清单缺失时无法落裁决,但不能把作者决定
@@ -1431,7 +1445,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
             description: '发现项数组（每条含 证据位置/问题说明 等；无问题传空数组）',
             items: { type: 'object' },
           },
-          审读指纹: { type: 'string', description: '确定性检查脚本输出的审核输入指纹；用于拒绝迟到结果' },
+          审读指纹: { type: 'string', description: '自动模块每次必填：使用派发该模块时的审核输入指纹，不得省略或换成后来取得的值；作者意见可不提供' },
         },
         required: ['bookId', '卷', '章', '章名', '模块名', '发现项'],
       },
@@ -1441,6 +1455,8 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
           properties: {
             ok: { type: 'boolean', description: '是否成功' },
             完成: { type: 'boolean', description: '全部审读模块（确定性＋语义）是否回写完毕' },
+            审核通过: { type: 'boolean', description: '当前证据有效且所有发现项已处置' },
+            待处置数: { type: 'number', description: '仍未处置的发现项数量' },
             待回写模块: { type: 'array', description: '尚未回写的模块名（与「完成」同源：为空即完成）' },
             待继承处置数: { type: 'number', description: '上一轮已给处置中暂存待继承的条数' },
             message: { type: 'string', description: '结果说明' },
@@ -1460,15 +1476,20 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
             typeof args['审读指纹'] === 'string' ? args['审读指纹'] : undefined)
           if (!r.ok) return { ok: false, reason: r.reason }
           const 完成 = r.record?.完成 === true
+          const 审核通过 = scanChapter(book.bookRoot, keyResult.key).审核完成
+          const 待处置数 = r.record?.问题.filter(item => !item.处置状态 || item.处置状态 === '待处理').length ?? 0
           const pending = r.待回写模块 ?? []
           const 待继承处置数 = r.record?.待继承处置?.length ?? 0
           return {
             ok: true,
             完成,
+            审核通过,
+            待处置数,
             待回写模块: pending,
             待继承处置数,
-            message: 完成
+            message: 审核通过
               ? '发现项已回写，全部模块完成，审核通过。'
+              : 完成 ? `全部模块已回写，但审核尚未通过；仍有 ${待处置数} 项待处置，请核对当前证据并完成处置。`
               : `发现项已回写。尚待回写模块：${pending.join('、')}（全部回写后审核才完成）。${inheritNote(待继承处置数)}`,
           }
         } catch (err) {
@@ -1593,25 +1614,45 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
         const keyResult = chapterKeyOf(args)
         if (!keyResult.ok) return keyResult
         const key = keyResult.key
+        args = structuredClone(args)
+        // Normalize exactly what the writer consumes before any version/event is generated.
+        let 更正正文输入 = String(args['更正后正文'] ?? '')
+        const passthrough = parseDocument(更正正文输入)
+        if (passthrough.ok && (passthrough.data.fields['身份'] !== undefined || passthrough.data.fields['角色'] !== undefined)) {
+          更正正文输入 = passthrough.data.body
+        }
+        更正正文输入 = serializeDocument({}, 更正正文输入)
+        const 候选字段 = ['事实变更', '时间线变更', '账本变更', '记忆候选'] as const
+        const optionalText = (field: string) => String(args[field] ?? '').trim() ? String(args[field]) : null
+        const request = {
+          更正后正文: 更正正文输入,
+          更正后章摘要: optionalText('更正后章摘要'),
+          提案编号: args['提案编号'] === undefined ? null : String(args['提案编号']),
+          摘要: String(args['摘要'] ?? '吃书补偿').trim(),
+          ...Object.fromEntries(候选字段.map(field => [field, optionalText(field)])),
+        }
+        const approvalFiles = [paths.定稿章(key.卷, key.章, key.章名), paths.章摘要(key.卷, key.章, key.章名), paths.契约(),
+          ...(候选字段.some(field => optionalText(field) !== null) ? ['世界书', '账本', '本书记忆'] : [])]
+        const before = captureApprovalFiles(bookRoot, approvalFiles, args)
+        if (!before.ok) return before
         const decision = await askAuthor(deps.askFn, '吃书补偿', { 范围: `定稿/卷${key.卷.toString().padStart(2, '0')}/${key.章名}` }, { agent: sessionContext?.agent, signal: sessionContext?.signal })
         if (!decision.ok) return { ok: false, reason: `未获作者批准: ${decision.reason}` }
         if (sessionContext?.signal?.aborted) return { ok: false, reason: '作者裁决已取消（ASK_ABORTED）' }
         if (decision.决定 !== '已批准') return { ok: false, reason: `作者${decision.决定}，拒绝补偿执行` }
 
         return withBookWrite(bookRoot, () => {
+        if (sessionContext?.signal?.aborted) return { ok: false, reason: '作者裁决已取消（ASK_ABORTED）' }
+        const currentBook = resolveBook(args, sessionContext)
+        if (!currentBook.ok || currentBook.bookRoot !== bookRoot) return { ok: false, reason: '等待作者裁决期间书id或归属已变化，请核对书目后重新呈报' }
+        const current = captureApprovalFiles(bookRoot, approvalFiles, args)
+        if (!current.ok || current.fingerprint !== before.fingerprint) return { ok: false, reason: '待补偿内容在等待作者裁决期间已变化，请重新呈报作者裁决' }
         const 定稿相对 = paths.定稿章(key.卷, key.章, key.章名)
+        const res = archiveRetconRequest({ bookRoot, chapter: 定稿相对, request, provenance: provenanceOf(sessionContext) }, plannedPackageDir => {
         let 更正后全文: string
         try {
           const src = fs.readFileSync(nodePath.join(bookRoot, 定稿相对), 'utf-8')
           const doc = parseDocument(src)
           if (!doc.ok) return { ok: false, reason: `定稿章解析失败:${doc.detail}` }
-          // D11 修正:调用方可能把「整文件」当 更正后正文 传回(含 frontmatter)——一律剥离,
-          // 本工具只接受纯正文并自行重建 frontmatter(版本/生成模块/补偿关联由本处统一写)。
-          let 更正正文输入 = String(args['更正后正文'] ?? '')
-          const passthrough = parseDocument(更正正文输入)
-          if (passthrough.ok && (passthrough.data.fields['身份'] !== undefined || passthrough.data.fields['角色'] !== undefined)) {
-            更正正文输入 = passthrough.data.body
-          }
           const parent = extractVersionFields(doc.data.fields).版本
           const baseVer = parent === null ? initialVersion('吃书补偿') : bumpVersion(parent, '吃书补偿')
           const fields = applyVersionFields(
@@ -1625,19 +1666,32 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
 
         // 沉淀候选（可选）：写入补偿包目录，走 planSettlement 整条更正既有条目
         let packageDir: string | undefined
-        const 候选字段 = ['事实变更', '时间线变更', '账本变更', '记忆候选'] as const
-        const has候选 = 候选字段.some((f) => args[f] !== undefined && String(args[f]).trim() !== '')
+        const has候选 = 候选字段.some(f => optionalText(f) !== null)
         if (has候选) {
-          const 补偿包名 = `retcon-${Date.now()}`
-          const 包相对 = `草稿区/提案/${补偿包名}`
+          const 包相对 = plannedPackageDir
           const 包绝对 = nodePath.join(bookRoot, 包相对)
-          fs.mkdirSync(包绝对, { recursive: true })
           const 候选文件: Record<string, string> = {
             事实变更: '事实变更.md', 时间线变更: '时间线变更.md', 账本变更: '账本变更.md', 记忆候选: '本书层记忆候选.md',
           }
-          for (const f of 候选字段) {
-            const v = args[f] === undefined ? undefined : String(args[f])
-            if (v !== undefined && v.trim() !== '') fs.writeFileSync(nodePath.join(包绝对, 候选文件[f]!), v, 'utf-8')
+          const contents = new Map(候选字段.flatMap(f => {
+            const value = optionalText(f)
+            return value === null ? [] : [[候选文件[f]!, value] as const]
+          }))
+          // A failed pre-write attempt may have prepared this package. Reuse only exact
+          // ordinary files; never overwrite an unknown or author-edited candidate.
+          if (fs.existsSync(包绝对)) {
+            for (const name of fs.readdirSync(包绝对)) {
+              const file = nodePath.join(包绝对, name)
+              const stat = fs.lstatSync(file)
+              if (!contents.has(name) || !stat.isFile() || stat.isSymbolicLink() || fs.readFileSync(file, 'utf8') !== contents.get(name)) {
+                return { ok: false, reason: '补偿包候选冲突，已保留，请核对后处理' }
+              }
+            }
+          }
+          fs.mkdirSync(包绝对, { recursive: true })
+          for (const [name, value] of contents) {
+            const file = nodePath.join(包绝对, name)
+            if (!fs.existsSync(file)) fs.writeFileSync(file, value, { encoding: 'utf8', flag: 'wx' })
           }
           packageDir = 包相对
         }
@@ -1648,8 +1702,8 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
             ...(args['提案编号'] === undefined ? {} : { 提案编号: String(args['提案编号']) }),
             受影响工件: [定稿相对],
             卷: key.卷,
-            账本留痕: `吃书补偿：${String(args['摘要'] ?? '')}`,
-            摘要: String(args['摘要'] ?? '吃书补偿'),
+            账本留痕: `吃书补偿：${request.摘要}`,
+            摘要: request.摘要,
           })
           const retconFiles: Array<{ 目标: string; 内容: string }> = [
             { 目标: 定稿相对, 内容: 更正后全文 },
@@ -1657,8 +1711,8 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
           ]
           // F3:章摘要随 retcon 同提交——传更正后摘要则整件更新,未传则加失效标记(不冒充已更新)
           const 摘要相对 = paths.章摘要(key.卷, key.章, key.章名)
-          if (args['更正后章摘要'] !== undefined && String(args['更正后章摘要']).trim() !== '') {
-            retconFiles.push({ 目标: 摘要相对, 内容: String(args['更正后章摘要']) })
+          if (request.更正后章摘要 !== null) {
+            retconFiles.push({ 目标: 摘要相对, 内容: request.更正后章摘要 })
           } else {
             try {
               const 摘要现文 = fs.readFileSync(nodePath.join(bookRoot, 摘要相对), 'utf-8')
@@ -1670,23 +1724,24 @@ ${摘要现文}`,
               })
             } catch { /* 无章摘要文件则无失效动作 */ }
           }
-          const res = archiveRetcon({
+          return {
             bookRoot,
             ...(packageDir === undefined ? {} : { packageDir }),
             files: retconFiles,
-            summary: String(args['摘要'] ?? '吃书补偿'),
+            summary: request.摘要,
             settlement: { 章节: key, 批准: true, 裁决记录: `作者于 ${new Date().toISOString()} 批准吃书补偿（kind=${decision.kind}, 决定=${decision.决定}）` },
             provenance: provenanceOf(sessionContext),
-          })
-          if (!res.ok) return { ok: false, reason: res.reason }
-          return {
-            ok: true,
-            dests: res.dests,
-            补偿事件: retconFiles.find((f) => f.目标.includes('/补偿/'))?.目标 ?? '（随 retcon: 提交留痕）',
-            message: `吃书补偿完成（${res.message}）。补偿事件记录随本次 retcon: 提交留痕。受影响未定稿下游须同批整改（确认类工具「批次文件」）。`,
           }
         } catch (err) {
           return { ok: false, reason: `吃书补偿失败: ${err instanceof Error ? err.message : String(err)}` }
+        }
+        })
+        if (!res.ok) return { ok: false, reason: res.reason }
+        return {
+          ok: true,
+          dests: res.dests,
+          补偿事件: res.dests.find(dest => dest.includes('/补偿/')) ?? '（随 retcon: 提交留痕）',
+          message: `吃书补偿完成（${res.message}）。补偿事件记录随本次 retcon: 提交留痕。受影响未定稿下游须同批整改（确认类工具「批次文件」）。`,
         }
         }, provenanceOf(sessionContext))
       },
@@ -1818,7 +1873,6 @@ ${摘要现文}`,
         const book = resolveBook(args, sessionContext)
         if (!book.ok) return book
         try {
-          const detail = scanDesignDetail(book.bookRoot)
           // 默认对账卷与选择器同一口径(任务21, B3):active 取该卷;planning 保留已完成卷并呈报规划目标;empty 默认1
           const selection = selectCurrentVolume(book.bookRoot)
           const 卷 = args['卷'] !== undefined
@@ -1828,6 +1882,7 @@ ${摘要现文}`,
               : selection.kind === 'planning'
                 ? (selection.已完成卷 ?? selection.规划卷)
                 : 1
+          const detail = scanDesignDetail(book.bookRoot, 卷)
           const docPaths = [
             detail.契约.路径, detail.骨架.路径, detail.分卷.路径,
             ...detail.卷规划.flatMap((v) => [paths.卷纲(v.卷号), paths.计划时间线(v.卷号), paths.近期窗口(v.卷号)]),
@@ -1839,6 +1894,7 @@ ${摘要现文}`,
           // 未决偏离 = 对账偏离项 − 作者层已处置条目（按本书标签筛,拍板 4）
           let 未决偏离: string[] = []
           let 待核对: { 名称: string; 章号: number; 本章事实: string[] }[] = []
+          let 疑似占位待核对: { 名称: string; 来源: string }[] = []
           const recon = reconcileLedger(book.bookRoot, 卷)
           if (recon.ok) {
             const 偏离 = [...recon.report.计划未兑现, ...recon.report.事实未计划].map((item) => item.名称)
@@ -1850,13 +1906,16 @@ ${摘要现文}`,
             未决偏离 = 偏离.filter((名) => !处置文本.some((text) => text.includes(名)))
             // 章级待核对单独计数呈报(任务21, B1):不进未决偏离;非空时不得呈报无偏离
             待核对 = recon.report.章级待核对.map((p) => ({ 名称: p.计划项.名称, 章号: p.章号, 本章事实: p.本章事实.map((f) => f.名称) }))
+            疑似占位待核对 = [...(recon.report.疑似占位待核对 ?? [])]
           }
-          const 渲染 = renderBookProgress(detail, history, 未决偏离, 待核对.length)
+          const 渲染 = renderBookProgress(detail, history, 未决偏离, 待核对.length, 疑似占位待核对)
           return {
             ok: true,
             渲染,
             未决偏离,
             ...(待核对.length > 0 ? { 待核对 } : {}),
+            ...(疑似占位待核对.length > 0 ? { 疑似占位待核对 } : {}),
+            内容问题: detail.内容问题 ?? [],
             卷,
             ...(selection.kind === 'planning' ? { 规划卷: selection.规划卷 } : {}),
           }

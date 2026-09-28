@@ -1,10 +1,12 @@
 # 新手图文教程：从安装到第一章
 
-本教程按装运行环境 → 启动工作台 → 配置模型 → 打开工作区 → 建书 → 写第一章 → 定稿与恢复组织。安装基线为 **DSH 0.1.5-rc.2、Scriptor 0.1.0-preview.6、嵌入提供方 0.0.8**，细节分支见各专题文档。
+> 本版 Scriptor preview.7 / 嵌入提供方 0.0.9 面向 **DSH 0.1.7-rc.2**。旧版 preview.6 / 提供方 0.0.8 对应 DSH 0.1.5-rc.2；升级时同时对齐宿主与插件，先备份再重启。
+
+本教程按装运行环境 → 启动工作台 → 配置模型 → 打开工作区 → 建书 → 写第一章 → 定稿与恢复组织。preview.7 要求 **DSH 0.1.7-rc.2**，可安装精确 npm 版本或对应 Release 原件，细节见各专题文档。
 
 截图取自 preview.5 的独立演示环境（合成作品《灯塔来信》、占位凭据、未调用收费模型），用于说明界面位置。
 
-**旧版升级**：preview.6 包含快速设计、审核回写与保存后重复调用的修复。升级不会自动补全旧书的设计正文；按 [首书教程](first-book.md) 核对内容，遇到模块缺失按 [排错](troubleshooting.md) 处理。版本变化见 [更新记录](../../CHANGELOG.md)。
+**旧版升级**：preview.7 包含设计内容检查、对话体例保真和归档重试保护，并保留 preview.6 的快速设计、审核回写与保存循环修复。升级不会自动补全旧书的设计正文；按 [首书教程](first-book.md) 核对内容，遇到模块缺失按 [排错](troubleshooting.md) 处理。版本变化见 [更新记录](../../CHANGELOG.md)。
 
 ## 0. 先分清五个概念
 
@@ -20,26 +22,29 @@
 
 ## 1. 安装运行环境与插件
 
+**为什么固定版本？** 插件使用 DSH 的设置、会话和工具接口，预发布宿主更新可能改变这些接口，所以要使用一起验证过的组合，不能直接换成 latest。preview.7 对应 0.1.7-rc.2；旧版 preview.6 对应 0.1.5-rc.2，详见 [版本对应表](install.md#为什么要固定-dsh-版本)。
+
+**发现版本不对时**，先停止实例并备份，再核对 `dsh --version` 和 `Get-Command dsh -All`，按目标组合精确重装、重新打开终端验证。若重装后版本没变，检查 PATH 中的另一份 DSH；新版已写入的会话不能直接降级读取。完整命令见 [版本修复步骤](troubleshooting.md#dsh-版本不对怎么修复)。
+
 先装 **Node.js 24.15.0**（也支持 22.19.0 起的 Node 22）、**Git for Windows**、**PowerShell 7**，然后在 PowerShell 里执行：
 
 ```powershell
-npm install --global pnpm@11.27.1 @deepseek-ai/dsh@0.1.5-rc.2
-dsh --version          # 期望输出 0.1.5-rc.2
+npm install --global pnpm@11.27.1 @deepseek-ai/dsh@0.1.7-rc.2
+dsh --version          # 期望输出 0.1.7-rc.2
 ```
 
-创建 profile 并安装插件（二选一，不要都装）：
+先按 [安装教程](install.md) 构建并放置本分支的 tarball，再创建 profile 并安装：
 
 ```powershell
 # 只要主插件
 dsh --profile scriptor --from-default-profile web --dump-config
-dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor@0.1.0-preview.6
+dsh plugin --profile scriptor add C:/scriptor-dist/linfengqaqtat-dsh-scriptor-0.1.0-preview.7.tgz
 
-# 主插件 + 嵌入提供方（想用增强索引时选这个）
-dsh --profile scriptor --from-default-profile web --dump-config
-dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-full@0.1.0-preview.6
+# 可选：在上面的主插件之后增加检索提供方
+dsh plugin --profile scriptor add C:/scriptor-dist/webnovel-embedding-provider-0.0.9.tgz
 ```
 
-**成功标志**：`dsh --profile scriptor --dump-config` 的输出里能看到 `id: webnovel`；装完整版时还应看到 `id: webnovel-embeddings`。没有出现就停下排查，不要继续往下走。
+**成功标志**：`dsh --profile scriptor --dump-config` 的输出里能看到 `id: webnovel`；加装提供方时还应看到 `id: webnovel-embeddings`、`id: webnovel-scenes`、`id: webnovel-reranking`。没有出现就停下排查，不要继续往下走。
 
 首次创建必须用 `web` 模板；不要向不存在的 profile 直接加插件，那样只会得到没有网页界面的基础配置。离线包、SHA256 核对、换 profile 名等分支见 [安装教程](install.md)。
 

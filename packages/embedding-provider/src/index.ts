@@ -1,13 +1,13 @@
 import { Service, type Context } from '@deepseek-ai/cordis'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-settings'
-import { Config, SETTINGS_NAMESPACE, resolveSettings, type EmbeddingSettings } from './config'
+import { Config as SettingsConfig, resolveSettings, type EmbeddingSettings } from './config'
 import { HttpEmbeddingProvider } from './http'
 import type { EmbeddingProvider } from '@webnovel/core'
 import { attachDiscovery } from './discovery'
-import { attachAuxiliaryModels } from './auxiliary'
+import { attachLiveSettings } from './live-settings'
 
-export { Config }
+export const Config = SettingsConfig.volatile()
 export const name = 'webnovel-embedding-provider'
 export const inject = ['credentials']
 
@@ -45,18 +45,11 @@ export class EmbeddingService extends Service {
   async close(): Promise<void> { this.retire(); await Promise.allSettled([...this.closing]) }
 }
 
-export function apply(ctx: Context, entry: EmbeddingSettings = {}): void {
-  resolveSettings(entry)
-  let current = () => entry
-  const service = new EmbeddingService(ctx, () => current())
+export function apply(ctx: Context, entry: ReturnType<typeof Config>): void {
+  const current = () => entry.get() ?? {}
+  resolveSettings(current())
+  const service = new EmbeddingService(ctx, current)
   attachDiscovery(ctx)
-  attachAuxiliaryModels(ctx)
   ctx.effect(() => () => service.close(), 'webnovel embeddings: cancel pending requests')
-  ctx.inject(['settings'], settingsCtx => {
-    settingsCtx.settings.installSection(ctx, SETTINGS_NAMESPACE, Config, entry, {
-      setSource: source => { current = source },
-      onChange: () => service.refresh(),
-      validate: value => { resolveSettings(value) },
-    })
-  })
+  attachLiveSettings(ctx, resolveSettings, () => service.refresh())
 }

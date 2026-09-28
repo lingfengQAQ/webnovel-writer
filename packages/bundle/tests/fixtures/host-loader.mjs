@@ -1,3 +1,4 @@
+import { createSettingsProfile } from './settings-profile.mjs'
 import assert from 'node:assert/strict'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -18,18 +19,22 @@ const bundleUrl = pathToFileURL(path.resolve(process.argv[3])).href
 const workspace = path.join(root, 'workspace')
 const require = createRequire(import.meta.url)
 const host = process.env.WEBNOVEL_DSH_SOURCE === undefined ? undefined : loadSourceHost(process.env.WEBNOVEL_DSH_SOURCE)
-const { boot } = await import(host === undefined ? '@deepseek-ai/dsh-app-boot' : pathToFileURL(host.entry('@deepseek-ai/dsh-app-boot')).href)
+const appBoot = await import(host === undefined ? '@deepseek-ai/dsh-app-boot' : pathToFileURL(host.entry('@deepseek-ai/dsh-app-boot')).href)
 const expectedVersion = host?.version ?? baseline.registry.version
 const report = { node: process.version, checks: {}, versions: {}, baseline: { version: expectedVersion, sourceCommit: host?.commit ?? null, kind: host === undefined ? 'npm' : 'source' } }
 const check = async (name, fn) => {
   report.running = name
   fs.writeFileSync(path.join(root, 'report.json'), JSON.stringify(report, null, 2))
   try {
-    await fn()
+    await fn(step => {
+      report.runningStep = step
+      fs.writeFileSync(path.join(root, 'report.json'), JSON.stringify(report, null, 2))
+    })
     report.checks[name] = { ok: true }
   } catch (error) {
     report.checks[name] = { ok: false, error: error.stack ?? String(error) }
   }
+  delete report.runningStep
   fs.writeFileSync(path.join(root, 'report.json'), JSON.stringify(report, null, 2))
 }
 
@@ -52,16 +57,18 @@ const profile = [
   { id: 'storage-domain', name: '@deepseek-ai/dsh-storage-domain', config: { backend: 'json' } },
   { id: 'persistence', name: '@deepseek-ai/dsh-session-persistence-jsonl', config: { root: path.join(root, 'sessions'), compression: 'none' } },
   { id: 'workspace', name: '@deepseek-ai/dsh-workspace' },
-  { id: 'settings', name: '@deepseek-ai/dsh-settings-file', config: { path: path.join(root, 'settings.yaml'), watch: false } },
+  { id: 'config-editor', name: '@deepseek-ai/dsh-config-editor' },
+  { id: 'settings', name: '@deepseek-ai/dsh-settings' },
   { id: 'credentials', name: '@deepseek-ai/dsh-credentials-local', config: { path: path.join(root, 'credentials.yaml'), watch: false } },
-  { id: 'embedding', name: pathToFileURL(path.join(root, 'embedding-provider.mjs')).href },
+  { id: 'webnovel-embeddings', name: pathToFileURL(path.join(root, 'embedding-provider.mjs')).href },
+  { id: 'webnovel-scenes', name: pathToFileURL(path.join(root, 'scenes.mjs')).href },
+  { id: 'webnovel-reranking', name: pathToFileURL(path.join(root, 'reranking.mjs')).href },
   { id: 'webnovel', name: bundleUrl },
 ]
-const configPath = path.join(root, 'cordis.yml')
 const configuredProfile = host === undefined ? profile : profile.map(row => row.name.startsWith('@deepseek-ai/')
   ? { ...row, name: pathToFileURL(host.entry(row.name)).href }
   : row)
-fs.writeFileSync(configPath, JSON.stringify(configuredProfile, null, 2))
+const settingsProfile = createSettingsProfile(root, configuredProfile, appBoot)
 const book = path.join(workspace, '测试书')
 fs.mkdirSync(path.join(book, '作品契约'), { recursive: true })
 fs.writeFileSync(path.join(book, '作品契约', '契约.md'), '---\n书id: loader-book\n---\n\n# 测试书\n')
@@ -78,7 +85,7 @@ git('config', 'core.autocrlf', 'false')
 git('add', '.')
 git('commit', '--quiet', '-m', 'ch: fixture')
 
-const ctx = await boot('webnovel-loader-test', configPath)
+const ctx = await settingsProfile.start('webnovel-loader-test')
 const service = name => ctx.get(name)
 const schemas = agent => service('tools').schemas(agent).map(tool => tool.name).filter(name => name.startsWith('novel_')).sort()
 let sequence = 0
@@ -505,14 +512,14 @@ try {
     const catalogHits = adapter.requests.map(request => snapshotMessages(request).length)
     assert.deepEqual(catalogHits, [1, 1, 1], JSON.stringify(catalogHits))
     assert.equal(snapshotMessages(adapter.requests[0])[0].source?.form, 'snapshot')
-    assert.equal(snapshotMessages(adapter.requests[0])[0].source?.plugin, 'webnovel-memory-catalog')
+    assert.equal(snapshotMessages(adapter.requests[0])[0].source?.kind, 'plugin:webnovel-memory-catalog')
     assert.match(JSON.stringify(adapter.requests[0].messages), /- 冷开场 — 作者偏好 \{\{冷开场\}\} 直接入戏/)
     assert.match(JSON.stringify(adapter.requests[1].messages), /【本书记忆目录】选书时/)
     assert.ok(events(previous.agent).some(event => event.type === 'tool/result'))
     assert.ok(events(previous.agent).every(event => !event.type.startsWith('novel/')))
     await ctx.fiber.dispose()
 
-    const restoredHost = await boot('webnovel-native-resume', configPath)
+    const restoredHost = await settingsProfile.start('webnovel-native-resume')
     try {
       restoredHost.get('llm').registerAdapter(['loader-native'], adapter)
       const restored = await restoredHost.get('agents').resume({ resumeSessionId: 'loader-native-resume', agentOptions: options })
