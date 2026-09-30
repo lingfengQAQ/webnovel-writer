@@ -1,106 +1,51 @@
-# 安装 v8 预览版
+# 安装 Scriptor 8.0.0
 
-> 本版 Scriptor preview.7 / 嵌入提供方 0.0.9 面向 **DSH 0.1.7-rc.2**。旧版 preview.6 / 提供方 0.0.8 对应 DSH 0.1.5-rc.2；升级时同时对齐宿主与插件，先备份再重启。
+本版配套 **DSH 0.2.0-rc.2**。从 [DSH 官方页面](https://github.com/deepseek-ai/deepseek-harness) 安装对应桌面端，再通过 DSH 自带的插件管理页面安装。桌面端自带运行时，无需为了安装插件另装 Node.js 或 pnpm。
 
-适用于 Windows。推荐 Node.js 24.15.0；也支持 22.19.0 起的 Node 22。DSH 固定为 0.1.7-rc.2，宿主插件管理使用 pnpm 11.27.1。v6 的 Claude Code 安装方式不适用于此分支。
+## 1. 打开插件管理
 
-## 为什么要固定 DSH 版本
+启动 DSH，在侧栏选择 **插件**，点击 **添加插件**。这里的“官方”分组列出 DSH 随附插件；Scriptor 是另行安装的第三方插件，成功后出现在 **已安装** 分组。
 
-Scriptor 运行在 DSH 内部，使用它提供的设置、会话、工具和侧栏接口。DSH 目前仍是预发布版本，这些接口会变化。例如 0.1.7 更换了设置接口和消息来源格式，并把会话格式升为 v4；只升级宿主而保留旧插件，可能出现设置卡片消失、插件加载失败或会话读取报错。
+## 2. 填入包名
 
-因此这里固定的是**已一起验证的宿主与插件组合**，并非“版本越新越好”。安装或更新插件不会自动替你切换全局 DSH；不要把命令里的精确版本改成 `latest`、`next` 或不带版本号。
+首次使用只需安装写作工作台。在添加插件的输入框粘贴下面的完整标识，核对预览中的包名、版本和来源，再确认安装：
 
-| 插件来源 | 配套 DSH |
-| --- | --- |
-| Scriptor 0.1.0-preview.7 / 提供方 0.0.9，以及本分支源码 | **0.1.7-rc.2** |
-| 旧版 Scriptor preview.6 / 提供方 0.0.8 | **0.1.5-rc.2** |
+| 插件 | 输入框内容 | 用途 |
+| --- | --- | --- |
+| 写作工作台 | `@linfengqaqtat/dsh-scriptor@8.0.0` | 书房、设计、写章、审读、定稿与导出 |
+| 检索增强（可选） | `@linfengqaqtat/dsh-scriptor-retrieval@8.0.0` | 嵌入、场景识别、重排，分别配置和启用 |
+| 鲸鱼娘（可选） | `@linfengqaqtat/dsh-scriptor-companion@8.0.0` | 窗口内陪伴及会话状态反馈 |
+| 完整版（二选一） | `@linfengqaqtat/dsh-scriptor-full@8.0.0` | 一次安装写作与检索，不含桌宠 |
 
-每次升级先查目标版本的兼容说明，再同时对齐宿主和插件。下面的命令均面向 preview.7。
+**完整版与分别安装写作/检索二选一。** 不要重复安装这两种入口。后续正式版本发布到 npm 的 latest；教程使用精确版本，便于核对配套宿主。
 
-## 1. 准备运行环境
+安装源优先选官方 npm。新版本刚发布时镜像可能尚未同步；查不到时切回官方 npm 后重试。等待安装完成，不要在应用变更时强行关闭程序。
 
-先安装对应的 Node.js、Git for Windows 和 PowerShell 7，再在 PowerShell 执行：
+## 3. 应用变更并核对
 
-```powershell
-node --version
-git --version
-pwsh --version
-npm install --global pnpm@11.27.1 @deepseek-ai/dsh@0.1.7-rc.2
-pnpm --version
-dsh --version
-```
+按插件管理器提示启用、应用变更或重启。需要重启时，从应用菜单完全退出再打开；Windows 标题栏关闭按钮可能只是隐藏到托盘。
 
-Node、pnpm、DSH 预期版本分别属于上述范围、11.27.1、0.1.7-rc.2；Git 与 PowerShell 7 应能正常输出版本。安装依赖需要网络。Git 用于建书和保存确认后的版本历史；安装包无需编译，也不需要 npm 账号。若另一个 DSH 已在使用，请先阅读备份说明，并用不同的 profile 名称安装本工作台。
+- **写作工作台**：已安装列表出现正确包名和 8.0.0，启用后可打开书房。
+- **检索增强**：可找到嵌入、场景识别和重排配置；默认关闭，无需为基础写作先填这些项目。
+- **鲸鱼娘**：出现角色；隐藏后可从对应设置恢复。
 
-安装插件时如果报 `ERR_PNPM_ADDING_TO_ROOT`，多半是终端里的 pnpm 不是 11.27.1：先执行 `pnpm --version` 核对，版本不对就按上面的命令重装。
+设置中的内置插件列表主要用于查看状态，安装和卸载使用侧栏“插件”页面。
 
-## 2. 安装插件
+## 4. 配置模型，开始第一本书
 
-首次创建 Web profile，再安装精确版本的主包：
+在 DSH 中配置聊天模型和凭据，选择一个存放作品的工作区。书仓版本记录需要可用的 Git；桌面端如提示缺少所需工具，按其提示补齐。
 
-```powershell
-dsh --profile scriptor --from-default-profile web --dump-config
-dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor@0.1.0-preview.7
-# 可选：增加嵌入、场景识别与重排；默认关闭
-dsh plugin --profile scriptor add webnovel-embedding-provider@0.0.9
-```
+随后阅读 [新手图文教程](beginner.md) 和 [第一本书与第一章](first-book.md)。10 个写作技能随主插件提供，不需要另外安装技能。
 
-也可下载对应 Release 的 tarball，核对 SHA256 后放到无空格目录安装。源码构建方式见 [开发说明](../development.md)。以下本地包命令与上面的 npm 安装方式二选一：
+## 从旧包升级
 
-```powershell
-dsh --profile scriptor --from-default-profile web --dump-config
-dsh plugin --profile scriptor add C:/scriptor-dist/linfengqaqtat-dsh-scriptor-0.1.0-preview.7.tgz
-# 可选：增加嵌入、场景识别与重排；默认关闭
-dsh plugin --profile scriptor add C:/scriptor-dist/webnovel-embedding-provider-0.0.9.tgz
-dsh --profile scriptor --dump-config
-```
+先阅读 [备份与升级](upgrade-backup.md)。旧检索包是 `webnovel-embedding-provider`，旧桌宠包是 `@linfengqaqtat/dsh-whale-companion`；不要与新名称同时启用。
 
-配置应包含 `id: webnovel`；增加提供方后还应包含 `webnovel-embeddings`、`webnovel-scenes`、`webnovel-reranking`，各一份。首次必须使用 `web` 模板；已有同名 profile 时请换名。
+1. 备份作品目录与当前 DSH profile，保存配置和凭据引用，停止正在运行的会话。
+2. 在插件管理页卸载旧检索包、旧桌宠或旧 full 入口，按提示重启；保留备份，不删除作品。
+3. 用上表的新包名安装，再核对原有配置和启用状态。若自定义 profile 覆盖中仍写了旧模块名称，按维护文档更新模块引用；不要改条目 id 或凭据引用。
+4. 确认主包、检索各只有一个有效入口后再继续写作。书稿不会因改包名自动搬迁。
 
-安装时 missing peer 提示本身无需处理，宿主提供这些组件；实际启动缺模块时按排错教程处理。若希望一次安装主包和提供方，可改用 `@linfengqaqtat/dsh-scriptor-full@0.1.0-preview.7`；不要同时保留完整版和分别安装入口。
+0.1.0-preview.7 / 旧提供方 0.0.9 对应 DSH 0.1.7-rc.2；8.0.0 对应 DSH 0.2.0-rc.2。旧版资料保留在相应 Release，不能交叉套用宿主。
 
-### 从单装切换为完整版
-
-full 不会自动接管已经单独安装的主包或提供方。包管理器复用依赖文件，也不代表 DSH 会合并安装入口；混装会叠加重复配置。
-
-先停止该 profile 的实例，按 [备份说明](upgrade-backup.md) 保存资料，再查看当前直接安装的包：
-
-```powershell
-dsh plugin --profile scriptor list --depth 0
-dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-full@0.1.0-preview.7
-```
-
-只有上面的安装成功后才继续。根据列表移除原有的单装入口；如果原来两个都安装了，执行：
-
-```powershell
-dsh plugin --profile scriptor remove @linfengqaqtat/dsh-scriptor webnovel-embedding-provider
-dsh --profile scriptor --dump-config
-```
-
-只单装了一个包时，`remove` 后只写那个包名。不要把未安装的包名一起传入，pnpm 会拒绝该次卸载。full 会继续保留所需依赖，这一步只是撤掉独立安装入口。整个切换期间不要启动实例；确认 `webnovel`、`webnovel-embeddings`、`webnovel-scenes`、`webnovel-reranking` 各一份后再启动。
-
-完成切换后，移除 full 即可撤掉整套插件入口。尚未切换的混装或单装状态，需要按 [实际安装组合卸载](upgrade-backup.md#卸载与重装)。
-
-## 3. 核对安装包
-
-首次安装宿主及依赖仍可能需要网络。使用构建方提供的校验和核对实际 tarball：
-
-```powershell
-Get-FileHash -Algorithm SHA256 C:/scriptor-dist/linfengqaqtat-dsh-scriptor-0.1.0-preview.7.tgz
-```
-
-校验和应来自同一份 [preview.7 Release](https://github.com/lingfengQAQ/webnovel-writer/releases/tag/scriptor-v0.1.0-preview.7) 的 SHA256SUMS；不能拿旧版本的校验和核对新包。
-
-## 4. 启动
-
-先准备一个专门存作品的空白工作目录，在该目录启动：
-
-```powershell
-dsh --profile scriptor --host 127.0.0.1 --port 6104 --no-open
-```
-
-使用**当前进程输出的完整启动链接**打开页面，链接中的 token 不要发到 Issue 或截图。端口占用时换一个空闲端口。关闭这个终端或按 Ctrl+C 停止实例。
-
-在界面中新建会话，工作区选择准备好的目录。配置主模型后，按 [首书教程](first-book.md) 开始；写作技能随插件自动加载，不需要额外设置。逐屏对照界面安装与首次配置，看 [新手图文教程](beginner.md)。
-
-可选检索提供方见 [配置教程](configuration.md)；界面元素逐个说明见 [界面与按钮参考](ui-reference.md)，检索配置与运行状态见 [增强索引操作指南](enhanced-index.md)。升级或卸载见 [备份与升级](upgrade-backup.md)，启动失败见 [排错](troubleshooting.md)。
+[下载本版及校验和](https://github.com/lingfengQAQ/webnovel-writer/releases/tag/scriptor-v8.0.0) · [配置教程](configuration.md) · [故障排查](troubleshooting.md) · [维护者命令行安装](../maintenance/cli-install.md)

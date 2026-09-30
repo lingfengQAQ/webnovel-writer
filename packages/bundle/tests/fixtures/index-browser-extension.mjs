@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 
 /** Synthetic API and controls exist only inside the isolated browser test profile. */
-export async function attachIndexFixture(ctx, root, report, persist) {
+export async function attachIndexFixture(ctx, root, report, persist, { seed = true } = {}) {
   const book = path.join(root, '验收作品甲')
   const stats = { requests: 0, successes: 0, failures: 0, documents: 0, mode: 'ok', holdAfter: null }
   const pending = new Set()
@@ -50,11 +50,13 @@ export async function attachIndexFixture(ctx, root, report, persist) {
     api.closeAllConnections()
     return new Promise(resolve => api.close(resolve))
   }, 'index acceptance API')
-  for (let number = 3; number <= 7; number++) {
-    const file = path.join(book, `定稿/卷01/${String(number).padStart(4, '0')}-索引验收.md`)
-    fs.writeFileSync(file, `---\n版本: 1\n角色: 已定稿\n---\n第${number}章的独立测试正文，书信、渡口和归航。\n`)
+  if (seed) {
+    for (let number = 3; number <= 7; number++) {
+      const file = path.join(book, `定稿/卷01/${String(number).padStart(4, '0')}-索引验收.md`)
+      fs.writeFileSync(file, `---\n版本: 1\n角色: 已定稿\n---\n第${number}章的独立测试正文，书信、渡口和归航。\n`)
+    }
+    fs.writeFileSync(path.join(book, '.gitignore'), '草稿区/\n.webnovel/\n')
   }
-  fs.writeFileSync(path.join(book, '.gitignore'), '草稿区/\n.webnovel/\n')
   const git = (...args) => execFileSync('git', args, { cwd: book, encoding: 'utf8', windowsHide: true })
   if (!fs.existsSync(path.join(book, '.git'))) {
     git('init', '--quiet'); git('config', 'user.name', 'Browser Index Test'); git('config', 'user.email', 'browser-index@example.invalid')

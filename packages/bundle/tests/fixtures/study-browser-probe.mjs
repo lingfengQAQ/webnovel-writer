@@ -34,7 +34,7 @@ async function settleLayout() {
 page.on('response', async response => {
   if (response.status() < 400) return
   const url = new URL(response.url()).pathname
-  failedResponses.push({ url, status: response.status(), ...(url.startsWith('/webnovel/') ? { body: (await response.text()).slice(0,500) } : {}) })
+  failedResponses.push({ url, status: response.status(), ...(url.startsWith('/api/webnovel/') ? { body: (await response.text()).slice(0,500) } : {}) })
 })
 page.on('request', request => { if (request.method() === 'POST') requests.push({ url: new URL(request.url()).pathname, body: request.postData()?.slice(0,800) }) })
 page.on('pageerror', error => errors.push(error.message))

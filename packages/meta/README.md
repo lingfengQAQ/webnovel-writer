@@ -1,25 +1,16 @@
 # DSH Scriptor 完整版
 
-> 本版 Scriptor preview.7 / 嵌入提供方 0.0.9 面向 **DSH 0.1.7-rc.2**。旧版 preview.6 / 提供方 0.0.8 对应 DSH 0.1.5-rc.2；升级时同时对齐宿主与插件，先备份再重启。
+> Scriptor 8.0.0 正式版配套 **DSH 0.2.0-rc.2**，三个功能插件与完整版均为 8.0.0。旧版升级先备份，参阅安装与升级说明。
 
 `@linfengqaqtat/dsh-scriptor-full` 同时安装主插件和可选嵌入提供方，通过 DSH 组合配置各加载一份。
 
 ## 安装
 
-本版要求 Node.js 24.15.0（也支持 22.19.0 起的 Node 22）、pnpm 11.27.1 和 DSH 0.1.7-rc.2。组合包绑定主包 preview.7 与提供方 0.0.9。
+配套 DSH 0.2.0-rc.2。在 DSH 侧栏“插件 → 添加插件”输入 `@linfengqaqtat/dsh-scriptor-full@8.0.0`，核对预览并安装，按提示启用或重启。Desktop 自带运行时，不需要另装 Node/pnpm。
 
-以下为本版安装命令：
+完整版绑定写作工作台和检索增强 8.0.0，不包含鲸鱼娘。它与分别安装写作/检索二选一，不要同时启用两个入口。旧版本先备份、卸载旧入口，再安装新版本，详见 [安装与迁移](https://github.com/lingfengQAQ/webnovel-writer/blob/v8/docs/user/install.md)。
 
-```powershell
-dsh --profile scriptor --from-default-profile web --dump-config
-dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-full@0.1.0-preview.7
-dsh --profile scriptor --host 127.0.0.1 --port 6104 --no-open
-```
-
-本版为 `0.1.0-preview.7`，固定版本可使用 `@linfengqaqtat/dsh-scriptor-full@0.1.0-preview.7`。
-完整版与分别安装二选一。full 不会自动接管已有的主包或提供方：直接叠加安装会留下重复配置，即使包文件被包管理器复用也是如此。已经单装时，先停止实例，安装 full 成功后移除原来的单装入口，核对配置各一份再重启。具体步骤见 [切换为完整版](https://github.com/lingfengQAQ/webnovel-writer/blob/v8/docs/user/install.md#从单装切换为完整版)。
-
-嵌入 API 默认关闭，需要在宿主设置中配置模型、维度和凭据。主聊天模型也由用户配置，包不包含模型额度。
+检索辅助功能默认关闭，需要自行配置模型和凭据；主聊天模型也由用户配置，包不包含模型额度。
 
 ## 更新与卸载
 

@@ -4,6 +4,7 @@ import { callStudy, StudyApiError } from './api'
 export const fileKey = (ref: FileRef): string => JSON.stringify([ref.space, ref.path])
 interface SaveAttempt { readonly operationId: string; readonly hash: string; readonly body: string; readonly ref: FileRef }
 export interface BufferState {
+  mode?: 'read' | 'edit' | 'changes'
   document: StudyDocument
   text: string
   saving?: boolean
@@ -28,6 +29,9 @@ export function createEditorStore(reveal?: (sessionId: string) => void) {
   const sessions = new Map<string, SessionEditor>()
   const listeners = new Set<() => void>()
   const openSequence = new Map<string, number>()
+  const readSequence = new Map<string, number>()
+  const moved = new Set<(id: string, previous: StudyDocument, next: StudyDocument) => void>()
+  const refreshTimers = new Map<string, ReturnType<typeof setTimeout>>()
   let live = true
   const get = (id: string): SessionEditor => {
     let current = sessions.get(id)
@@ -43,8 +47,37 @@ export function createEditorStore(reveal?: (sessionId: string) => void) {
     if (existing) update(id, { buffers: { ...state.buffers, [key]: { ...existing, ...patch } } })
   }
   const failure = (error: unknown) => ({ error: error instanceof Error ? error.message : '操作失败', errorCode: error instanceof StudyApiError ? error.code : 'network' })
+  const receive = (id: string, document: StudyDocument) => {
+    const key = fileKey(document.ref), current = get(id).buffers[key]
+    if (!current) { update(id, { buffers: { ...get(id).buffers, [key]: { document, text: document.body } } }); return }
+    if (current.saving || current.attempt) return
+    if (current.document.hash === document.hash) { if (current.disk) updateBuffer(id, key, { disk: undefined }); return }
+    if (current.text !== current.document.body) updateBuffer(id, key, { disk: document })
+    else updateBuffer(id, key, { document, text: document.body, disk: undefined, saved: undefined, error: undefined, errorCode: undefined })
+  }
+  const reload = async (id: string, key: string) => {
+    const buffer = get(id).buffers[key]
+    if (!buffer || buffer.saving || buffer.attempt) return
+    const token = id + ':' + key, seq = (readSequence.get(token) ?? 0) + 1
+    readSequence.set(token, seq)
+    try {
+      const document = await callStudy<StudyDocument>(id, 'read', { ref: buffer.document.ref })
+      if (live && readSequence.get(token) === seq && get(id).buffers[key]?.document === buffer.document) receive(id, document)
+    } catch (error) { if (live && readSequence.get(token) === seq && get(id).buffers[key]) updateBuffer(id, key, failure(error)) }
+  }
   return {
-    get, update, updateBuffer,
+    get, update, updateBuffer, receive, reload,
+    onMove(listener: (id: string, previous: StudyDocument, next: StudyDocument) => void) { moved.add(listener); return () => { moved.delete(listener) } },
+    refresh(id: string) { update(id, { refresh: get(id).refresh + 1 }); return Promise.all(Object.keys(get(id).buffers).map(key => reload(id, key))) },
+    invalidate(id: string) {
+      if (!live || refreshTimers.has(id)) return
+      refreshTimers.set(id, setTimeout(() => {
+        refreshTimers.delete(id)
+        if (!live) return
+        update(id, { refresh: get(id).refresh + 1 })
+        for (const key of Object.keys(get(id).buffers)) void reload(id, key)
+      }, 250))
+    },
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } },
     hasUnsaved() { return [...sessions.values()].some(state => Object.values(state.buffers).some(buffer => buffer.text !== buffer.document.body || buffer.saving || buffer.attempt)) },
     async open(id: string, ref: FileRef) {
@@ -86,8 +119,9 @@ export function createEditorStore(reveal?: (sessionId: string) => void) {
         }
         const buffers = { ...state.buffers }
         delete buffers[key]
-        buffers[nextKey] = { document: saved.document, text: latest.text === attempt.body ? saved.document.body : latest.text, saved }
+        buffers[nextKey] = { document: saved.document, text: latest.text === attempt.body ? saved.document.body : latest.text, saved, ...(latest.mode ? { mode: latest.mode } : {}) }
         update(id, { buffers, current: state.current === key ? nextKey : state.current, refresh: state.refresh + 1, selection: '', notice: saved.changed ? '文档已保存' : '文档没有变化' })
+        if (nextKey !== key) for (const listener of moved) listener(id, buffer.document, saved.document)
       } catch (error) {
         const refused = error instanceof StudyApiError && ['conflict', 'invalid-path', 'invalid-document', 'not-found', 'read-only', 'forbidden'].includes(error.code)
         if (live) updateBuffer(id, key, { saving: false, ...failure(error), ...(refused ? { attempt: undefined } : {}) })
@@ -134,7 +168,7 @@ export function createEditorStore(reveal?: (sessionId: string) => void) {
       update(id, { buffers, current, selection: '' })
       return true
     },
-    dispose() { live = false; listeners.clear(); sessions.clear(); openSequence.clear() },
+    dispose() { live = false; for (const timer of refreshTimers.values()) clearTimeout(timer); refreshTimers.clear(); listeners.clear(); moved.clear(); sessions.clear(); openSequence.clear(); readSequence.clear() },
   }
 }
 export type EditorStore = ReturnType<typeof createEditorStore>

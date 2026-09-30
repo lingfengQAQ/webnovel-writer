@@ -1,12 +1,12 @@
 # 新手图文教程：从安装到第一章
 
-> 本版 Scriptor preview.7 / 嵌入提供方 0.0.9 面向 **DSH 0.1.7-rc.2**。旧版 preview.6 / 提供方 0.0.8 对应 DSH 0.1.5-rc.2；升级时同时对齐宿主与插件，先备份再重启。
+> Scriptor 8.0.0 正式版配套 **DSH 0.2.0-rc.2**，三个功能插件与完整版均为 8.0.0。旧版升级先备份，参阅安装与升级说明。
 
-本教程按装运行环境 → 启动工作台 → 配置模型 → 打开工作区 → 建书 → 写第一章 → 定稿与恢复组织。preview.7 要求 **DSH 0.1.7-rc.2**，可安装精确 npm 版本或对应 Release 原件，细节见各专题文档。
+本教程按装运行环境 → 启动工作台 → 配置模型 → 打开工作区 → 建书 → 写第一章 → 定稿与恢复组织。8.0.0 要求 **DSH 0.2.0-rc.2**，可安装精确 npm 版本或对应 Release 原件，细节见各专题文档。
 
 截图取自 preview.5 的独立演示环境（合成作品《灯塔来信》、占位凭据、未调用收费模型），用于说明界面位置。
 
-**旧版升级**：preview.7 包含设计内容检查、对话体例保真和归档重试保护，并保留 preview.6 的快速设计、审核回写与保存循环修复。升级不会自动补全旧书的设计正文；按 [首书教程](first-book.md) 核对内容，遇到模块缺失按 [排错](troubleshooting.md) 处理。版本变化见 [更新记录](../../CHANGELOG.md)。
+**旧版升级**：8.0.0 包含设计内容检查、对话体例保真和归档重试保护，并保留 preview.6 的快速设计、审核回写与保存循环修复。升级不会自动补全旧书的设计正文；按 [首书教程](first-book.md) 核对内容，遇到模块缺失按 [排错](troubleshooting.md) 处理。版本变化见 [更新记录](../../CHANGELOG.md)。
 
 ## 0. 先分清五个概念
 
@@ -20,47 +20,19 @@
 
 一本书 = 工作区下的一个子目录，判断标准是它含 `作品契约/契约.md`。同一个工作区可以放多本书；一个 profile 可以先后服务多个工作区。
 
-## 1. 安装运行环境与插件
+## 1. 通过插件管理安装
 
-**为什么固定版本？** 插件使用 DSH 的设置、会话和工具接口，预发布宿主更新可能改变这些接口，所以要使用一起验证过的组合，不能直接换成 latest。preview.7 对应 0.1.7-rc.2；旧版 preview.6 对应 0.1.5-rc.2，详见 [版本对应表](install.md#为什么要固定-dsh-版本)。
+安装配套的 DSH 0.2.0-rc.2 桌面端，打开侧栏 **插件 → 添加插件**，输入 `@linfengqaqtat/dsh-scriptor@8.0.0`，核对预览并安装。按页面提示启用、应用变更或重启。
 
-**发现版本不对时**，先停止实例并备份，再核对 `dsh --version` 和 `Get-Command dsh -All`，按目标组合精确重装、重新打开终端验证。若重装后版本没变，检查 PATH 中的另一份 DSH；新版已写入的会话不能直接降级读取。完整命令见 [版本修复步骤](troubleshooting.md#dsh-版本不对怎么修复)。
+可选检索增强和鲸鱼娘的包名、完整版选择及旧版迁移见 [安装教程](install.md)。安装成功后，已安装列表显示 8.0.0，书房入口可用。无需在终端安装插件。
 
-先装 **Node.js 24.15.0**（也支持 22.19.0 起的 Node 22）、**Git for Windows**、**PowerShell 7**，然后在 PowerShell 里执行：
+## 2. 第一次打开工作区
 
-```powershell
-npm install --global pnpm@11.27.1 @deepseek-ai/dsh@0.1.7-rc.2
-dsh --version          # 期望输出 0.1.7-rc.2
-```
+准备一个专门存作品的目录，在 DSH 中新建会话并选择该工作区，然后配置主模型。不同工作区的作品互不自动搬迁。
 
-先按 [安装教程](install.md) 构建并放置本分支的 tarball，再创建 profile 并安装：
+![工作台示意](images/beginner/01-workbench.png)
 
-```powershell
-# 只要主插件
-dsh --profile scriptor --from-default-profile web --dump-config
-dsh plugin --profile scriptor add C:/scriptor-dist/linfengqaqtat-dsh-scriptor-0.1.0-preview.7.tgz
-
-# 可选：在上面的主插件之后增加检索提供方
-dsh plugin --profile scriptor add C:/scriptor-dist/webnovel-embedding-provider-0.0.9.tgz
-```
-
-**成功标志**：`dsh --profile scriptor --dump-config` 的输出里能看到 `id: webnovel`；加装提供方时还应看到 `id: webnovel-embeddings`、`id: webnovel-scenes`、`id: webnovel-reranking`。没有出现就停下排查，不要继续往下走。
-
-首次创建必须用 `web` 模板；不要向不存在的 profile 直接加插件，那样只会得到没有网页界面的基础配置。离线包、SHA256 核对、换 profile 名等分支见 [安装教程](install.md)。
-
-## 2. 第一次启动
-
-先准备一个专门存作品的**空目录**（可以带空格，路径中不要放密钥或作品备份），在该目录打开 PowerShell 7，再启动：
-
-```powershell
-dsh --profile scriptor --host 127.0.0.1 --port 6104 --no-open
-```
-
-终端会打印一行 `dsh web: http://127.0.0.1:6104/?token=...`。用**这条带 token 的完整链接**打开浏览器；token 相当于临时登录口令，不要截图外发。端口被占用时换一个空闲端口即可。
-
-![启动后的工作台首屏](images/beginner/01-workbench.png)
-
-首屏三块：左侧是导航（新会话／工作区／书房／设置），中间是对话区与输入框，右上角随会话打开的面板（书稿与资料、检索索引）。此时还没有工作区，所以输入框提示「选择一个工作区开始」。
+下面旧版示意图用于说明基本布局；安装和插件管理以 DSH 0.2.0-rc.2 当前页面为准。
 
 ## 3. 配置主模型
 

@@ -7,8 +7,8 @@ Shared DSH/React peers are provided by the host and are not included in this bun
 | Component | Version | License | Text |
 | --- | --- | --- | --- |
 | @deepseek-ai/cosmokit | 1.8.5 | MIT | [Original notices](licenses/deepseek-ai__cosmokit--1.8.5.txt) |
-| @deepseek-ai/dsh-brand | 0.1.7-rc.2 | MIT | [Original notices](licenses/deepseek-ai__dsh-brand--0.1.7-rc.2.txt) |
-| @deepseek-ai/dsh-credentials | 0.1.7-rc.2 | MIT | [Original notices](licenses/deepseek-ai__dsh-credentials--0.1.7-rc.2.txt) |
+| @deepseek-ai/dsh-brand | 0.2.0-rc.2 | MIT | [Original notices](licenses/deepseek-ai__dsh-brand--0.2.0-rc.2.txt) |
+| @deepseek-ai/dsh-credentials | 0.2.0-rc.2 | MIT | [Original notices](licenses/deepseek-ai__dsh-credentials--0.2.0-rc.2.txt) |
 | @deepseek-ai/schemastery | 3.18.4 | MIT | [Original notices](licenses/deepseek-ai__schemastery--3.18.4.txt) |
 
 The release includes source materials and a manifest for these bundled components. Build from the corresponding public source tag with the lockfile.

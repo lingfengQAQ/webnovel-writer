@@ -22,13 +22,13 @@ const linkPackage = (name, target) => {
   fs.symlinkSync(target, link, process.platform === 'win32' ? 'junction' : 'dir')
 }
 linkPackage('@linfengqaqtat/dsh-scriptor', packageRoot)
-if (indexCheck) linkPackage('webnovel-embedding-provider', path.resolve(packageRoot, '../embedding-provider'))
+if (indexCheck) linkPackage('@linfengqaqtat/dsh-scriptor-retrieval', path.resolve(packageRoot, '../embedding-provider'))
 fs.writeFileSync(path.join(profile, 'package.json'), JSON.stringify({ name: 'webnovel-acceptance-profile', private: true, type: 'module', dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'], patchReload: 'live' } } }, null, 2))
 fs.writeFileSync(path.join(profile, 'cordis.yml'), '[]\n')
 fs.writeFileSync(path.join(profile, 'cordis.patch.yml'), JSON.stringify([
   { id: 'agent-default-model', config: { provider: 'webnovel-acceptance', model: 'fixture' } },
   { insert: [{ id: 'webnovel', name: '@linfengqaqtat/dsh-scriptor' },
-    ...(indexCheck ? [['webnovel-embeddings', ''], ['webnovel-scenes', '/scenes'], ['webnovel-reranking', '/reranking']].map(([id, entry]) => ({ id, name: `webnovel-embedding-provider${entry}` })) : []),
+    ...(indexCheck ? [['webnovel-embeddings', ''], ['webnovel-scenes', '/scenes'], ['webnovel-reranking', '/reranking']].map(([id, entry]) => ({ id, name: `@linfengqaqtat/dsh-scriptor-retrieval${entry}` })) : []),
     { id: 'webnovel-browser-acceptance', name: pathToFileURL(path.join(packageRoot, 'tests/fixtures/study-browser-host.mjs')).href }] },
 ], null, 2))
 const stdout = fs.openSync(path.join(root, 'stdout.log'), 'a')

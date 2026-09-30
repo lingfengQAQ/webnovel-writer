@@ -9,18 +9,21 @@ import visualizationStyles from './visualization.css'
 import { type EditorActions, type EditorMemory } from './editor'
 import { useSession } from './hooks'
 import { mainSessionOf } from './host'
-import { installWritingSidebar, revealWriting } from './native-sidebar'
+import { installNativeDocuments, openWritingDocument } from './native-documents'
 import { createEditorStore } from './store'
 import { documentQuote } from './quote'
-import { parseStudyLink, studyLink } from '../study/links'
+import { parseStudyLink, studyFileLink } from '../study/links'
 import styles from './styles.css'
 import indexStyles from './indexing.css'
 import { installIndexSidebar } from './indexing'
+import { installNovelToolCards } from './tool-result-card'
+import resultStyles from './tool-result.css'
 
-export const inject = ['slots', 'sidebarRight', 'sidebarRightTabs', 'conversation', 'sessions', 'uiWorkspace']
+export const inject = ['slots', 'sidebarRight', 'sidebarRightTabs', 'conversation', 'sessions', 'uiWorkspace', 'remote', 'remote.workspaceFiles']
 
 export function apply(host: ClientHost) {
-  const store = createEditorStore(id => revealWriting(host, id))
+  installNovelToolCards(host)
+  const store = createEditorStore(id => openWritingDocument(host, store, id))
   const openIndex = installIndexSidebar(host)
   const memory: EditorMemory = new Map()
   const actions: EditorActions = {
@@ -49,7 +52,7 @@ export function apply(host: ClientHost) {
       const input = host.conversation.input.for(scope)
       const previous = input.state.getSnapshot().draft
       input.setDraft(previous + (previous && !previous.endsWith('\n\n') ? '\n\n' : '') + documentQuote(buffer.document, buffer.text, state.selection)
-        + '\n[在书房打开原文](<' + studyLink(window.location.origin, id, buffer.document.ref) + '>)\n')
+        + '\n[在书房打开原文](<' + studyFileLink(buffer.document.absolutePath) + '>)\n')
       store.update(id, { selection: '', notice: '引用已放入当前对话输入框，等待你发送' })
       window.getSelection()?.removeAllRanges()
       if (window.innerWidth < 1024) actions.close(id)
@@ -58,7 +61,7 @@ export function apply(host: ClientHost) {
   host.effect(() => {
     const style = document.createElement('style')
     style.dataset.webnovel = ''
-    style.textContent = styles + '\n' + indexStyles + '\n' + visualizationStyles
+    style.textContent = styles + '\n' + indexStyles + '\n' + visualizationStyles + '\n' + resultStyles
     document.head.append(style)
     const preventLoss = (event: BeforeUnloadEvent) => { if (store.hasUnsaved()) { event.preventDefault(); event.returnValue = '' } }
     window.addEventListener('beforeunload', preventLoss)
@@ -66,10 +69,10 @@ export function apply(host: ClientHost) {
   }, 'webnovel: client lifetime')
   host.slots.inject('conversation.input.right', () => host.slots.register({ name: 'conversation.input.right', id: 'webnovel-open', order: 50 }, () => {
     const id = useSession(host)
-    return <button type="button" className="webnovel nw-launch" disabled={!id} title="打开书稿与资料" aria-label="打开书稿与资料" onClick={() => { if (id) revealWriting(host, id) }}><BookOpen size={17} /><span>书稿</span></button>
+    return <button type="button" className="webnovel nw-launch" disabled={!id} title="打开书稿与资料" aria-label="打开书稿与资料" onClick={() => { if (id) openWritingDocument(host, store, id) }}><BookOpen size={17} /><span>书稿</span></button>
   }))
   host.slots.inject('conversation.view', () => host.slots.register({ name: 'conversation.view', id: 'webnovel-visual', label: '可视化', order: 30, inject: () => ({ host, store, openIndex }) }, VisualView))
-  installWritingSidebar(host, store, actions, memory)
+  installNativeDocuments(host, store, actions, memory)
   host.effect(() => {
     const openLink = (link: NonNullable<ReturnType<typeof parseStudyLink>>) => {
       if (mainSessionOf(host) !== link.sessionId) host.uiWorkspace.openSession(link.sessionId)
@@ -78,12 +81,12 @@ export function apply(host: ClientHost) {
     const intercept = (event: MouseEvent) => {
       if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return
       const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null
-      const link = anchor ? parseStudyLink(anchor.getAttribute('href')!, window.location.origin) : undefined
+      const link = anchor ? parseStudyLink(anchor.getAttribute('href')!, window.location.href) : undefined
       if (!link) return
       event.preventDefault(); event.stopPropagation(); openLink(link)
     }
     document.addEventListener('click', intercept, true)
-    const initial = parseStudyLink(window.location.href, window.location.origin)
+    const initial = parseStudyLink(window.location.href, window.location.href)
     let offInitial = () => {}
     if (initial) {
       const openInitial = () => {

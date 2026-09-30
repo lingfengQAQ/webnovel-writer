@@ -1,28 +1,28 @@
 {
   "@deepseek-ai/cosmokit@1.8.5": {
     "repository": "deepseek-ai/deepseek-harness",
-    "commit": "477b4f420553e8a52c2fbccc464d7561b239c443",
-    "tag": "dsh-v0.1.7-rc.2"
+    "commit": "4878cdabd87d4041bdaff61d04c966883b9fd07a",
+    "tag": "dsh-v0.2.0-rc.1"
   },
-  "@deepseek-ai/dsh-brand@0.1.7-rc.2": {
+  "@deepseek-ai/dsh-brand@0.2.0-rc.2": {
     "repository": "deepseek-ai/deepseek-harness",
-    "commit": "477b4f420553e8a52c2fbccc464d7561b239c443",
-    "tag": "dsh-v0.1.7-rc.2"
+    "commit": "639ed015397290b3745d163aafe02ffee4aa3f84",
+    "tag": "dsh-v0.2.0-rc.2"
   },
-  "@deepseek-ai/dsh-scope@0.1.7-rc.2": {
+  "@deepseek-ai/dsh-scope@0.2.0-rc.2": {
     "repository": "deepseek-ai/deepseek-harness",
-    "commit": "477b4f420553e8a52c2fbccc464d7561b239c443",
-    "tag": "dsh-v0.1.7-rc.2"
+    "commit": "639ed015397290b3745d163aafe02ffee4aa3f84",
+    "tag": "dsh-v0.2.0-rc.2"
   },
-  "@deepseek-ai/dsh-system-prompt@0.1.7-rc.2": {
+  "@deepseek-ai/dsh-system-prompt@0.2.0-rc.2": {
     "repository": "deepseek-ai/deepseek-harness",
-    "commit": "477b4f420553e8a52c2fbccc464d7561b239c443",
-    "tag": "dsh-v0.1.7-rc.2"
+    "commit": "639ed015397290b3745d163aafe02ffee4aa3f84",
+    "tag": "dsh-v0.2.0-rc.2"
   },
   "@deepseek-ai/schemastery@3.18.4": {
     "repository": "deepseek-ai/deepseek-harness",
-    "commit": "477b4f420553e8a52c2fbccc464d7561b239c443",
-    "tag": "dsh-v0.1.7-rc.2"
+    "commit": "4878cdabd87d4041bdaff61d04c966883b9fd07a",
+    "tag": "dsh-v0.2.0-rc.1"
   },
   "diff@8.0.3": {
     "repository": "kpdecker/jsdiff",
@@ -34,9 +34,14 @@
     "commit": "f12b0de177fbc2a6795e99be065887e72b237123",
     "tag": "0.468.0"
   },
-  "@deepseek-ai/dsh-credentials@0.1.7-rc.2": {
+  "@deepseek-ai/dsh-credentials@0.2.0-rc.2": {
     "repository": "deepseek-ai/deepseek-harness",
-    "commit": "477b4f420553e8a52c2fbccc464d7561b239c443",
-    "tag": "dsh-v0.1.7-rc.2"
+    "commit": "639ed015397290b3745d163aafe02ffee4aa3f84",
+    "tag": "dsh-v0.2.0-rc.2"
+  },
+  "@deepseek-ai/dsh-util-workspace-path@0.2.0-rc.2": {
+    "repository": "deepseek-ai/deepseek-harness",
+    "commit": "639ed015397290b3745d163aafe02ffee4aa3f84",
+    "tag": "dsh-v0.2.0-rc.2"
   }
 }

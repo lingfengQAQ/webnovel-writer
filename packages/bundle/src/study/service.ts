@@ -74,6 +74,7 @@ export class StudyService {
     const books = scanned.map(book => ({
       id: book.bookId ? 'book:' + book.bookId : 'invalid:' + book.name,
       name: book.name,
+      absolutePath: book.root,
       progress: book.bookId ? progressLineOf(book.root) : '书目缺少有效书id',
       ...(!book.bookId || scanned.filter(other => other.bookId === book.bookId).length > 1
         ? { error: '书id缺失或重复，请检查作品契约' } : {}),
@@ -122,7 +123,7 @@ export class StudyService {
           if (!info.isDirectory() && !info.isFile()) return { ...item, error: '不支持的文件类型' }
           const badge = info.isFile() && entry.name.endsWith('.md') && info.size <= MAX_DOCUMENT_BYTES
             ? fieldLabel(textOf(target)).badge : undefined
-          return { ...item, directory: info.isDirectory(), ...(badge ? { badge } : {}) }
+          return { ...item, absolutePath: target, directory: info.isDirectory(), ...(badge ? { badge } : {}) }
         } catch (error) {
           return { ...item, error: error instanceof Error ? error.message : '无法访问' }
         }

@@ -25,7 +25,7 @@ if (checkEmbedding) {
   config.unshift({ id: 'credentials', name: pathToFileURL(require.resolve('@deepseek-ai/dsh-credentials-local')).href,
     config: { path: path.join(path.dirname(reportPath), 'full-credentials.yaml'), watch: false } })
   for (const [id, subpath] of [['webnovel-embeddings', ''], ['webnovel-scenes', '/scenes'], ['webnovel-reranking', '/reranking']]) {
-    config.push({ id, name: pathToFileURL(packageRequire.resolve(`webnovel-embedding-provider${subpath}`)).href })
+    config.push({ id, name: pathToFileURL(packageRequire.resolve(`@linfengqaqtat/dsh-scriptor-retrieval${subpath}`)).href })
   }
 }
 fs.writeFileSync(configPath, JSON.stringify(config))

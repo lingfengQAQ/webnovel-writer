@@ -101,7 +101,7 @@ describe('包冒烟', () => {
       logger: { info: () => {}, warn: () => {} },
       // headless:workspaceRegistry 缺席
       get: (n: string) => (n === 'agents' ? { list: () => [{ id: 'h-1', ctx: fakeCtx }] } : undefined),
-      inject: (_d: unknown, cb: (s: unknown) => void) => { cb(hostCtx); return undefined },
+      inject: (deps: readonly string[], cb: (s: unknown) => void) => { if (!deps.includes('connection')) cb(hostCtx); return undefined },
       on: () => {},
     }
 

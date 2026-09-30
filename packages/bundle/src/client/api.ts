@@ -3,7 +3,7 @@ export class StudyApiError extends Error {
 }
 
 export async function callStudy<T>(sessionId: string, method: string, body: object = {}, signal?: AbortSignal): Promise<T> {
-  const response = await fetch('/webnovel/api/' + method, {
+  const response = await fetch('/api/webnovel/study/' + method, {
     method: 'POST', credentials: 'same-origin', signal,
     headers: { 'content-type': 'application/json', 'x-webnovel-request': '1' },
     body: JSON.stringify({ ...body, sessionId }),

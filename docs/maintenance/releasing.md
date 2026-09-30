@@ -10,7 +10,7 @@
 
 主包 `packages/bundle/package.json` 是安装包版本真源，根 workspace 同步该版本。`pnpm check:version` 核对 CHANGELOG；发行时 `RELEASE_TAG` 必须等于 `scriptor-v<version>`。
 
-- 同一预览目标递增 preview.1、preview.2；每份公开安装包的版本唯一。
+- 从 8.0.0 起仅发布正式 SemVer，兼容修复递增 patch，功能更新递增 minor；每份公开安装包版本唯一。
 - 兼容修复递增 patch；0.x 的新增能力/不兼容变化递增 minor，并说明迁移影响。
 - 1.x 后按 SemVer 承诺：破坏兼容递增 major，兼容功能 minor，修复 patch。
 - 纯文档修改不必发包。内部 workspace 包不独立发版；可选提供方按自己的变更递增并列出兼容组合。
@@ -47,30 +47,23 @@ pnpm release:build
 
 Issue/PR 模板在默认 master 生效。v8 的 CI 使用 push/pull_request；发行使用 tag push。只放在 v8 的 workflow_dispatch/schedule 不能作为默认分支上的常规操作入口。
 
-维护者核对 draft 的 tag、公共 SHA、版本、SHA256、附件和说明后发布。预览版设 prerelease=true、latest=false，README 下载链接指向明确版本；不抢占 v6 的默认 Latest。
+维护者核对 draft 的 tag、公共 SHA、版本、SHA256、附件和说明后发布。正式版设 prerelease=false、latest=true，README 下载链接指向明确版本；默认分支保持 master，v6 历史与安装入口不变。
 
-## npm 预览包发布
+## npm 正式包发布
 
-三个公开包通过 `v8-npm-publish.yml` 发布；根 workspace 和 `@webnovel/*` 不发布。三个包的 `publishConfig` 固定为 `access: public`、`tag: preview` 和官方 registry。
+从 8.0.0 起，写作、检索增强、鲸鱼娘、完整版四个公开包同步版本，publishConfig 固定 public/latest/npmjs。根 workspace 与 @webnovel/* 不发布。旧 preview 标签保留历史，不再更新。
 
-### 首次发布：当前工作流
+Release 草稿生成时，发布器核对公共 SHA、tag、四包身份、版本、校验和、许可证与 full 精确依赖，对所有待发布包先 dry-run，再允许上传。同版本只能接受字节一致的重试，不能重新打包覆盖。
 
-1. 使用拥有 `@linfengqaqtat` scope 及 `webnovel-embedding-provider` 发布权限、已启用 2FA 的 npm 账号创建短期 granular access token。Packages and scopes 的权限选择 **Read and write (publish and stage)**，启用 **Bypass two-factor authentication**。不能选择 **stage only**，否则当前 `npm publish` 会报 `E_STAGE_REQUIRED`。未首发的包须确保 token 包含创建它们的权限；只勾选已存在包不能代表已授权新包，Organizations 管理权限也不等于包发布权限。token 保存到 GitHub 仓库 Settings → Secrets and variables → Actions → `NPM_TOKEN`，不要提交或粘贴到 Issue/对话。
-2. Release 草稿生成时已对全部 tarball 执行 npm dry-run。核对附件、校验和和安装报告后，通过 GitHub 界面发布预览 Release；订阅的是 `release: published`，可以覆盖从草稿发布预览版的情况。
-3. Ubuntu 发布 job checkout 对应 tag、确认属于公共 v8，下载原 `.tgz`、manifest 与 SHA256SUMS。发布器校验 tag、公共 commit、包版本及哈希，先检查全部包的 registry 状态，再预检所有待上传包，按主包 → 嵌入包 → 完整版上传原 tarball。不重新打包。实际命令形状为：
+正式 Release 设 prerelease=false、latest=true。发布触发 v8-npm-publish.yml，使用 GitHub Actions provenance 及 NPM_TOKEN；新检索与桌宠包需要令牌具有在 scope 内创建包的权限。验证 npm latest 与 SHA512 后，再跑空白 profile 的 registry 安装、卸载与重装验收。缺凭据时保留发行草稿和产物，不能宣布发布完成。
 
-   ```text
-   npm publish <已验收的原件.tgz> --dry-run --ignore-scripts --access public --tag preview --registry=https://registry.npmjs.org/
-   npm publish <同一原件.tgz> --ignore-scripts --access public --tag preview --registry=https://registry.npmjs.org/ --provenance
-   ```
+本地默认只预检：node scripts/release/publish-npm.mjs --assets <附件目录>。--verify-only 检查 registry；--publish 只在 Actions 中可用。
 
-   第一条须对所有待上传包成功执行后，才能执行任何第二条。dry-run 不证明账号具备发布权限，也不验证完整 provenance 上传链路。
-4. 工作流使用 `id-token: write` 生成 provenance，`NPM_TOKEN` 只注入发布步骤；安装 job 不接收 npm token。npm 发布成功后，Windows job 按 registry 上的精确版本安装，并验证主包/完整版真实 Loader。
-5. 核对 `npm view <包名> dist-tags --json`：`preview` 为本次版本。包的首个版本会同时持有 `latest`（见下），安装示例必须使用 `@preview` 或精确版本，不要依赖 `latest`。
+安装验收必须传入 --companion <同批桌宠.tgz>。full 只依赖写作与检索，桌宠独立安装。用户通过侧栏插件页安装，进阶命令见 [CLI 维护说明](cli-install.md)。
 
-本地仅预检：在该公共 tag checkout 中设置 `RELEASE_TAG`，执行 `node scripts/release/publish-npm.mjs --assets <附件目录>`。默认不发布；`--verify-only` 仅验证已发 registry 版本及完整性。
+### 早期 preview 发行记录
 
-部分发布失败时重跑同一 Actions run，保留原附件。已存在版本只有 tarball 的 SHA512 与 registry integrity 完全一致才同时跳过 dry-run 和上传，最后仍核对全部包的字节与 `preview`。npm 11/12 对已发布正式版本连 dry-run 也会拒绝，因此嵌入包 `0.0.8` 已成功、完整版失败时不能再预检嵌入包。字节不同，或 registry 已有正式版本而 `latest` 仍指向预览版时停止，由维护者调查。不要以同一版本重新 pack 后重试。实际 registry 发布与安装 job 全绿后才能宣布 npm 安装可用。
+以下内容保留早期预览发行的 registry 经验，不是 8.x 发布步骤。
 
 ### 首发后的 `latest`：npm 的固定行为
 

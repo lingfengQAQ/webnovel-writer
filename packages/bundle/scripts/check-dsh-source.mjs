@@ -19,7 +19,7 @@ for (const name of ['@deepseek-ai/cordis', '@deepseek-ai/dsh-tools', '@deepseek-
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'webnovel-dsh-types-'))
 const config = path.join(temp, 'tsconfig.json')
 try {
-  for (const name of ['bundle', 'embedding-provider']) {
+  for (const name of ['bundle', 'embedding-provider', 'companion']) {
     fs.writeFileSync(config, JSON.stringify({
       extends: path.join(repoRoot, 'packages', name, 'tsconfig.json'),
       compilerOptions: { paths: host.typePaths },

@@ -12,7 +12,7 @@
 
 ## 0. 前提
 
-- 安装时选择完整版 `@linfengqaqtat/dsh-scriptor-full@0.1.0-preview.7`，或单独安装 `webnovel-embedding-provider@0.0.9`（见 [最小可用配置](configuration.md)）。
+- 安装时选择完整版 `@linfengqaqtat/dsh-scriptor-full@8.0.0`，或单独安装 `@linfengqaqtat/dsh-scriptor-retrieval@8.0.0`（见 [最小可用配置](configuration.md)）。
 - 有一个真实可用的嵌入服务（OpenAI 兼容或 Gemini 原生协议），并知道它的模型标识与向量维度。
 - 嵌入服务会产生费用。先读 [隐私与费用](privacy.md)，确认发送范围可以接受。
 

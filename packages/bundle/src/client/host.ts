@@ -15,6 +15,7 @@ export interface SessionList {
 export type UseSessions = <T>(selector: (state: SessionList) => T) => T
 export type RenderSlot = (name: string, owner: object, options?: object) => ReactNode
 export interface NativeEntry {
+  readonly options?: { readonly key?: string }
   readonly component: ComponentType<WorkspaceProps>
   readonly store?: unknown
   readonly locale?: string

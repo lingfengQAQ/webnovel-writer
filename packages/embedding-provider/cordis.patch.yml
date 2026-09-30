@@ -1,7 +1,7 @@
 - insert:
     - id: webnovel-embeddings
-      name: 'webnovel-embedding-provider'
+      name: '@linfengqaqtat/dsh-scriptor-retrieval'
     - id: webnovel-scenes
-      name: 'webnovel-embedding-provider/scenes'
+      name: '@linfengqaqtat/dsh-scriptor-retrieval/scenes'
     - id: webnovel-reranking
-      name: 'webnovel-embedding-provider/reranking'
+      name: '@linfengqaqtat/dsh-scriptor-retrieval/reranking'

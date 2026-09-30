@@ -1,5 +1,12 @@
 # 备份、升级与卸载
 
+## 8.0.0 新包名迁移
+
+本版将旧 webnovel-embedding-provider 更名为 @linfengqaqtat/dsh-scriptor-retrieval，旧 @linfengqaqtat/dsh-whale-companion 更名为 @linfengqaqtat/dsh-scriptor-companion。所有新版安装包为 8.0.0，使用 DSH 0.2.0-rc.2。
+
+先备份作品、profile 配置及凭据引用，停止会话。在 DSH 侧栏“插件”中卸载旧入口，按提示重启，再安装新入口；不要同时启用新旧包。自定义模块 name 覆盖需按 [维护者迁移说明](../maintenance/cli-install.md) 更新，稳定条目 id 和 config 保留。完整版与写作/检索单装二选一。
+
+
 ## 备份两类资产
 
 停止相关实例，再分别备份：
@@ -17,13 +24,13 @@
 4. 检查书房入口、技能是否各一份，核对实际书仓状态；先用合成副本试写。
 
 ```powershell
-dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor@0.1.0-preview.7
+dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor@8.0.0
 dsh --profile scriptor --dump-config
 ```
 
 上面展示命令写法，更新时换成实际目标版本。
 
-完整版安装对应使用 `@linfengqaqtat/dsh-scriptor-full@0.1.0-preview.7`。不要在保留完整版时另外安装主包；单装转 full 按 [切换步骤](install.md#从单装切换为完整版) 操作，切回单装时先停机并移除 full，再安装所需单包。
+完整版安装对应使用 `@linfengqaqtat/dsh-scriptor-full@8.0.0`。不要在保留完整版时另外安装主包；单装转 full 按 [切换步骤](install.md#从单装切换为完整版) 操作，切回单装时先停机并移除 full，再安装所需单包。
 
 ## 回退
 
@@ -41,14 +48,14 @@ dsh --profile scriptor --dump-config
 | --- | --- |
 | 仅 full，或已切换完成 | `@linfengqaqtat/dsh-scriptor-full` |
 | 仅主包 | `@linfengqaqtat/dsh-scriptor` |
-| 仅提供方 | `webnovel-embedding-provider` |
-| 主包与提供方分别安装 | `@linfengqaqtat/dsh-scriptor webnovel-embedding-provider` |
+| 仅提供方 | `@linfengqaqtat/dsh-scriptor-retrieval` |
+| 主包与提供方分别安装 | `@linfengqaqtat/dsh-scriptor @linfengqaqtat/dsh-scriptor-retrieval` |
 | full 与单装包混装 | full 加上列表中实际存在的单装包名 |
 
 例如两个单包都装过、希望整套卸载：
 
 ```powershell
-dsh plugin --profile scriptor remove @linfengqaqtat/dsh-scriptor webnovel-embedding-provider
+dsh plugin --profile scriptor remove @linfengqaqtat/dsh-scriptor @linfengqaqtat/dsh-scriptor-retrieval
 dsh --profile scriptor --dump-config
 ```
 
