@@ -55,7 +55,7 @@ Issue/PR 模板在默认 master 生效。v8 的 CI 使用 push/pull_request；�
 
 Release 草稿生成时，发布器核对公共 SHA、tag、四包身份、版本、校验和、许可证与 full 精确依赖，对所有待发布包先 dry-run，再允许上传。同版本只能接受字节一致的重试，不能重新打包覆盖。
 
-正式 Release 设 prerelease=false、latest=true。发布触发 v8-npm-publish.yml，使用 GitHub Actions provenance 及 NPM_TOKEN；新检索与桌宠包需要令牌具有在 scope 内创建包的权限。验证 npm latest 与 SHA512 后，再跑空白 profile 的 registry 安装、卸载与重装验收。缺凭据时保留发行草稿和产物，不能宣布发布完成。
+正式 Release 设 prerelease=false、latest=true。发布触发 v8-npm-publish.yml，使用 GitHub Actions OIDC Trusted Publishing 与 provenance，不注入 NPM_TOKEN。四个包须分别绑定本仓库的 v8-npm-publish.yml，并允许 npm publish。验证 npm latest 与 SHA512 后，再跑空白 profile 的 registry 安装、卸载与重装验收。信任配置或首次初始化未完成时保留发行草稿和产物，不能宣布发布完成。
 
 本地默认只预检：node scripts/release/publish-npm.mjs --assets <附件目录>。--verify-only 检查 registry；--publish 只在 Actions 中可用。
 
@@ -75,28 +75,19 @@ npm 会把包的**首个版本**同时标为 `latest`，即使上传指定了 `-
 
 2026-09-22 的真实首发（`scriptor-v0.1.0-preview.5`）确认了两个 registry 行为：发布前的 404 可被 CDN 缓存五分钟；三个新包在显式 `--tag preview` 上传后都同时出现 `preview` 与 `latest`。当时的发布器把后者当作污染而在上传后的校验阶段失败（三包已上传、字节与附件一致、provenance 正常），随后尝试清除 `latest` 的恢复工作流在 registry 处 403，两者都已按上述规则修正。发布器现用独立查询参数绕过旧缓存，并为每包进行至多 40 轮、间隔 3 秒的可见性检查（单次请求超时 30 秒）。不能仅凭 CLI 的上传成功行或指定过 `--tag preview` 就宣布发行验收通过。
 
-### 后续自动发布：推荐迁移到 Trusted Publishing
+### Trusted Publishing 配置与首次初始化
 
-截至 2026-09-22，npm 推荐 OIDC Trusted Publishing，避免长期保存发布 token。npm 官方已宣布 **2027 年 1 月移除 granular token 直接发布新版本的能力**；当前 token 工作流可用于首次发布，但需要在此之前迁移。
+npm >=11.5.1、Node >=22.14.0 支持 GitHub-hosted Actions 的 OIDC 发布；工作流固定安装 npm 12.0.1，授予 id-token: write，发布器要求 Actions 的 OIDC 环境而非长期 npm token。
 
-Trusted Publisher 要求包已存在，staged publishing 也不能用于创建全新包。因此先完成三个包的真实首发，再为每个包配置可信发布者：
+每个包的 npm Settings → Trusted Publisher 使用 GitHub Actions，owner 为 lingfengQAQ，repository 为 webnovel-writer，workflow 为 v8-npm-publish.yml，environment 留空。启用 Allow npm publish，才能直接发布；只允许 stage publish 时仍须维护者批准候选。
 
-| npm 设置项 | 本项目值 |
-| --- | --- |
-| Provider | GitHub Actions |
-| Organization or user | `lingfengQAQ` |
-| Repository | `webnovel-writer` |
-| Workflow filename | `v8-npm-publish.yml`（只填文件名） |
-| Environment name | 当前工作流未声明 environment，留空 |
-| Allowed actions | 允许 `npm publish`，保持当前自动发布方式 |
+包必须先存在才能配置 trust。npm 最新 [staged publishing](https://docs.npmjs.com/staged-publishing/)（2026-09-29 更新）支持新包：交互登录后暂存真实发行 tgz，会公开创建 0.0.0-stage 占位；维护者通过网页或 CLI 加 2FA 批准后才发布候选内容。npm stage 要求 >=11.15.0。不能从 GitHub OIDC 直接初始化完全不存在、尚未配置 trust 的包；也不要为占位随意发布虚假代码。
 
-2026-09-03 后创建的可信发布者默认允许暂存；要直接发布须额外允许 `npm publish`。使用 GitHub-hosted runner、`id-token: write`、Node ≥22.14.0 和 npm ≥11.5.1，三个包的 `repository.url` 必须与公共 GitHub 仓库精确匹配。公开仓库和公开包在 OIDC 发布时自动生成 provenance。
+对于已经生成的不可变 tag，不能移动 tag 或重打包。可从默认分支注册的 workflow_dispatch 入口选择 v8 分支及原 release_tag：工具从已审阅 v8 取得，源码按原 tag checkout，校验 manifest.publicCommit 与原 tag HEAD 后消费原附件。registry 安装验收通过后由工作流发布 draft 为 Latest；GitHub token 发布不会重复触发旧标签中的发布流程。
 
-**当前发布器仍强制要求 `NODE_AUTH_TOKEN`，尚未迁移为无 token 发布。** 迁移时须修改该断言、验证工作流使用的 npm 版本并补无 token 的认证回归；仅在 npm 网站设置 Trusted Publisher 不够。验证 OIDC 实际发布成功后，再撤销首发 token 并移除 GitHub 的 `NPM_TOKEN`。`npm whoami` 不反映 OIDC 发布认证状态，不能当作它的预检。
+浏览器保存信任关系可能要求密码和 2FA。维护者自行完成账户验证，不把密码或验证码写进仓库或日志。npm whoami 只反映 CLI 登录，不代表 Actions OIDC 配置有效。实际四包发布与 registry 安装验证才是成功证据。
 
-如果希望每个版本增加人工确认，可改为 `npm stage publish <原件.tgz>`，维护者用 2FA 审查并批准，再运行 registry 安装验收。这会改变当前自动发布与安装 job 的衔接，不能只替换 token 权限或一条命令。
-
-官方依据（核对于 2026-09-22）：[发布命令](https://docs.npmjs.com/cli/v12/commands/npm-publish/)、[创建 granular token](https://docs.npmjs.com/creating-and-viewing-access-tokens/)、[token 权限与淘汰时间](https://docs.npmjs.com/about-access-tokens/)、[Trusted Publishing](https://docs.npmjs.com/trusted-publishers/)、[首次配置的前提](https://docs.npmjs.com/cli/v12/commands/npm-trust/)、[provenance](https://docs.npmjs.com/generating-provenance-statements/)、[staged publishing](https://docs.npmjs.com/staged-publishing/)。
+官方资料：[Trusted Publishing](https://docs.npmjs.com/trusted-publishers/) · [npm trust](https://docs.npmjs.com/cli/v11/commands/npm-trust/) · [Staged publishing](https://docs.npmjs.com/staged-publishing/)。
 
 ## 失败与恢复
 

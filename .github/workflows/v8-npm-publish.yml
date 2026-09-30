@@ -2,62 +2,89 @@ name: v8 npm publish
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing Scriptor release tag whose original assets should be published
+        required: true
+        type: string
 permissions:
   contents: read
 concurrency:
-  group: v8-npm-${{ github.event.release.tag_name }}
+  group: v8-npm-${{ github.event.release.tag_name || inputs.release_tag }}
   cancel-in-progress: false
 jobs:
   publish:
-    if: github.repository == 'lingfengQAQ/webnovel-writer' && startsWith(github.event.release.tag_name, 'scriptor-v') && !github.event.release.prerelease
+    if: github.repository == 'lingfengQAQ/webnovel-writer' && (github.event_name == 'workflow_dispatch' || (startsWith(github.event.release.tag_name, 'scriptor-v') && !github.event.release.prerelease))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
       id-token: write
     env:
-      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Check out reviewed publication tooling
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: v8
+          path: publisher
+          persist-credentials: false
+      - name: Validate requested tag
+        shell: bash
+        run: '[[ "$RELEASE_TAG" =~ ^scriptor-v[0-9]+\.[0-9]+\.[0-9]+$ ]]'
+      - name: Check out immutable release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          path: source
           fetch-depth: 0
           persist-credentials: false
       - name: Tag belongs to accepted public v8
+        working-directory: source
         run: git merge-base --is-ancestor HEAD origin/v8
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24.15.0'
-          registry-url: https://registry.npmjs.org
+      - name: Install npm with Trusted Publishing support
+        run: npm install --global npm@12.0.1
       - name: Download the original release packages and checksums
+        working-directory: source
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release download "$RELEASE_TAG" --dir .tmp/npm-release --pattern '*.tgz' --pattern 'SHA256SUMS' --pattern 'release-manifest.json'
-      - name: Verify all packages and publish in dependency order
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: node scripts/release/publish-npm.mjs --assets .tmp/npm-release --publish
+      - name: Validate and publish original assets using OIDC
+        working-directory: source
+        run: node ../publisher/scripts/release/publish-npm.mjs --assets .tmp/npm-release --publish
   installation:
     needs: publish
     runs-on: windows-latest
     timeout-minutes: 25
     env:
-      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: v8
+          path: publisher
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          path: source
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24.15.0'
       - name: Download the exact release assets
+        working-directory: source
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release download $env:RELEASE_TAG --dir .tmp/npm-release --pattern '*.tgz' --pattern 'SHA256SUMS' --pattern 'release-manifest.json'
-      - name: Verify registry bytes and install main and full in clean profiles
+      - name: Verify registry bytes and install in clean profiles
+        working-directory: source
         run: |
-          node scripts/release/publish-npm.mjs --assets .tmp/npm-release --verify-only
+          node ../publisher/scripts/release/publish-npm.mjs --assets .tmp/npm-release --verify-only
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $manifest = Get-Content .tmp/npm-release/release-manifest.json -Raw | ConvertFrom-Json
           $main = Join-Path .tmp/npm-release $manifest.filename
@@ -66,3 +93,16 @@ jobs:
           $companion = Join-Path .tmp/npm-release ($manifest.optionalPackages | Where-Object name -eq '@linfengqaqtat/dsh-scriptor-companion').tarball
           node scripts/release/install-smoke.mjs $main $embedding $meta --registry --companion $companion
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  finalize:
+    if: github.event_name == 'workflow_dispatch'
+    needs: installation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - name: Publish verified draft as Latest
+        run: gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest
