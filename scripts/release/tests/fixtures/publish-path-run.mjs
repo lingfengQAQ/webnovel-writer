@@ -63,10 +63,16 @@ registry.listen(0, '127.0.0.1', async () => {
       SCRIPTOR_STUB_PUBLISH: publishState,
       NPM_CLI_ENTRY: stub,
       GITHUB_ACTIONS: 'true',
-      NODE_AUTH_TOKEN: 'fixture-token',
+      ACTIONS_ID_TOKEN_REQUEST_URL: 'https://example.invalid/oidc',
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'fixture-oidc-token',
     }
     // The publisher must refuse to upload without the Actions provenance authority.
     if (environment.SCRIPTOR_STRIP_GITHUB) delete environment.GITHUB_ACTIONS
+    delete environment.NODE_AUTH_TOKEN
+    if (environment.SCRIPTOR_STRIP_OIDC) {
+      delete environment.ACTIONS_ID_TOKEN_REQUEST_URL
+      delete environment.ACTIONS_ID_TOKEN_REQUEST_TOKEN
+    }
     const child = spawn(process.execPath, [publisher, '--assets', assets, ...mode.split(' ')], {
       env: environment,
       stdio: ['ignore', 'pipe', 'pipe'],
