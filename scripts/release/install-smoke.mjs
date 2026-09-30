@@ -15,6 +15,8 @@ assert.ok(args[0], 'Usage: pnpm release:smoke <main.tgz> [embedding.tgz] [meta.t
 const main = path.resolve(args[0])
 const embedding = args[1] && args[1] !== '--root' ? path.resolve(args[1]) : undefined
 const meta = args[2] && args[2] !== '--root' ? path.resolve(args[2]) : undefined
+const companionIndex = args.indexOf('--companion')
+const companion = companionIndex >= 0 ? path.resolve(args[companionIndex + 1]) : undefined
 const rootIndex = args.indexOf('--root')
 const root = rootIndex >= 0 ? path.resolve(args[rootIndex + 1]) : fs.mkdtempSync(path.join(os.tmpdir(), 'scriptor-install-'))
 assert.ok(root !== sourceRoot && !root.startsWith(sourceRoot + path.sep), 'Use an isolated directory outside the source checkout')
@@ -55,7 +57,7 @@ let fixtureRegistry
 let fixtureRegistryUrl
 try {
   // Hosted Windows runners with a cold npm cache exceeded 4 minutes for the DSH tree; the network-bound step gets its own bound.
-  log('install-host', run(npm, ['install', '--prefix', host, '--save-exact', '--no-audit', '--no-fund', '--prefer-offline', `@deepseek-ai/dsh@${baseline.registry.version}`, 'pnpm@11.27.1'], host, 15 * 60 * 1000))
+  log('install-host', run(npm, ['install', '--prefix', host, '--save-exact', '--no-audit', '--no-fund', '--prefer-online', `@deepseek-ai/dsh@${baseline.registry.version}`, 'pnpm@11.27.1'], host, 15 * 60 * 1000))
   const pathKey = Object.keys(env).find(key => key.toLowerCase() === 'path') ?? 'PATH'
   env[pathKey] = path.join(host, 'node_modules/.bin') + path.delimiter + (env[pathKey] ?? '')
   report.hostPackageManager = 'pnpm@11.27.1'
@@ -89,11 +91,26 @@ try {
   assert.equal(JSON.parse(fs.readFileSync(isolatedReport, 'utf8')).ok, true)
   report.checks.sourceDeniedRealLoader = true
   report.checks.skills = 10
+  if (companion) {
+    const companionName = 'scriptor-companion-test'
+    log('companion-web-profile', run(cli, ['--profile', companionName, '--from-default-profile', 'web', '--dump-config']))
+    const copied = path.join(root, 'companion.tgz')
+    fs.copyFileSync(companion, copied)
+    const spec = fromRegistry ? packageSpec(companion) : copied
+    log('add-companion', run(cli, ['plugin', '--profile', companionName, 'add', spec]))
+    const companionDump = () => run(cli, ['--profile', companionName, '--dump-config'])
+    assert.ok(companionDump().includes('@linfengqaqtat/dsh-scriptor-companion'))
+    log('remove-companion', run(cli, ['plugin', '--profile', companionName, 'remove', '@linfengqaqtat/dsh-scriptor-companion']))
+    assert.ok(!companionDump().includes('@linfengqaqtat/dsh-scriptor-companion'))
+    log('reinstall-companion', run(cli, ['plugin', '--profile', companionName, 'add', spec]))
+    assert.ok(companionDump().includes('@linfengqaqtat/dsh-scriptor-companion'))
+    report.checks.companionStandaloneLifecycle = true
+  }
   if (embedding) {
     const copiedEmbedding = path.join(root, 'embedding.tgz')
     fs.copyFileSync(embedding, copiedEmbedding)
     log('add-embedding', run(cli, ['plugin', '--profile', 'scriptor-test', 'add', fromRegistry ? packageSpec(embedding) : copiedEmbedding]))
-    assert.ok(run(cli, ['--profile', 'scriptor-test', '--dump-config']).includes('webnovel-embedding-provider'))
+    assert.ok(run(cli, ['--profile', 'scriptor-test', '--dump-config']).includes('@linfengqaqtat/dsh-scriptor-retrieval'))
     report.checks.embeddingInstalled = true
   }
   fs.writeFileSync(path.join(workspace, 'author-sentinel.txt'), 'synthetic author asset')
@@ -148,7 +165,7 @@ try {
     if (fixtureRegistryUrl) fs.writeFileSync(path.join(fullProfile, '.npmrc'), `registry=${fixtureRegistryUrl}\n`)
     log('remove-meta', run(cli, ['plugin', '--profile', fullName, 'remove', '@linfengqaqtat/dsh-scriptor-full']))
     assert.ok(!fullDump().includes('@linfengqaqtat/dsh-scriptor'))
-    assert.ok(!fullDump().includes('webnovel-embedding-provider'))
+    assert.ok(!fullDump().includes('@linfengqaqtat/dsh-scriptor-retrieval'))
     log('reinstall-meta', run(cli, ['plugin', '--profile', fullName, 'add', fullSpec, ...registryArgs]))
     verifyFull('full-reinstall')
     report.checks.metaFreshProfile = true

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEditorStore, fileKey } from '../src/client/store'
 import { callStudy, StudyApiError } from '../src/client/api'
 import { documentQuote } from '../src/client/quote'
-import { parseStudyLink, studyLink } from '../src/study/links'
+import { parseStudyLink, studyLink, studyFileLink } from '../src/study/links'
 import type { StudyDocument, StudySave } from '../src/study/types'
 
 vi.mock('../src/client/api', async importOriginal => ({ ...await importOriginal<typeof import('../src/client/api')>(), callStudy: vi.fn() }))
@@ -105,6 +105,19 @@ describe('编辑器会话与保存竞态', () => {
 })
 
 describe('完整原文引用', () => {
+  it('原生文件链接保留中文、空格和文件名中的特殊字符', () => {
+    const source = 'C:\\书房 甲\\稿件#1?(修订)%.md'
+    const link = studyFileLink(source)
+    expect(decodeURIComponent(link)).toBe(source.replace(/\\/g, '/'))
+    expect(link).not.toMatch(/[?#<>()[\]]/)
+  })
+  it('桌面旧链接校验协议和完整主机，不把不透明 origin 当成同源', () => {
+    const ref = { space: 'book:one', path: '草稿区/稿1.md' }
+    const link = studyLink('dsh-app://app/', 'one', ref)
+    expect(parseStudyLink(link, 'dsh-app://app/')).toEqual({ sessionId: 'one', ref })
+    expect(parseStudyLink(link.replace('://app/', '://other/'), 'dsh-app://app/')).toBeUndefined()
+    expect(parseStudyLink('file:///?webnovel={}', 'dsh-app://app/')).toBeUndefined()
+  })
   it('文档链接结构化往返中文路径，拒绝外站和非法载荷', () => {
     const ref = { space: 'book:one', path: '草稿区/稿1.md' }
     const link = studyLink('http://127.0.0.1:6094', 'one', ref)

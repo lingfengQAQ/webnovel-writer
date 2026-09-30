@@ -43,7 +43,7 @@ export function packageFiles(filename) {
 export function checkPublishableManifest(manifest) {
   assert.notEqual(manifest.private, true, 'Release packages must not be private')
   assert.equal(manifest.publishConfig?.access, 'public')
-  assert.equal(manifest.publishConfig?.tag, 'preview')
+  assert.equal(manifest.publishConfig?.tag, 'latest')
   assert.equal(manifest.publishConfig?.registry, 'https://registry.npmjs.org/')
   for (const hook of ['preinstall', 'install', 'postinstall', 'prepare', 'prepublishOnly', 'prepack', 'postpack', 'publish', 'postpublish']) {
     assert.equal(manifest.scripts?.[hook], undefined, `Release packages must not run ${hook}`)
@@ -57,7 +57,7 @@ export function checkEmbeddingPackage(filename, expectedVersion) {
   const files = packageFiles(filename)
   const read = file => { assert.ok(files.has(file), `Missing ${file}`); return files.get(file).toString('utf8') }
   const manifest = JSON.parse(read('package.json'))
-  assert.equal(manifest.name, 'webnovel-embedding-provider')
+  assert.equal(manifest.name, '@linfengqaqtat/dsh-scriptor-retrieval')
   assert.equal(manifest.version, expectedVersion)
   assert.equal(manifest.license, 'GPL-3.0-only')
   checkPublishableManifest(manifest)
@@ -68,7 +68,7 @@ export function checkEmbeddingPackage(filename, expectedVersion) {
     assert.equal(manifest.exports?.[`./${entry}`], `./lib/${entry}.js`, `Missing auxiliary export: ${entry}`)
   }
   assert.equal(read('cordis.patch.yml').replaceAll('\r\n', '\n').trim(),
-    "- insert:\n    - id: webnovel-embeddings\n      name: 'webnovel-embedding-provider'\n    - id: webnovel-scenes\n      name: 'webnovel-embedding-provider/scenes'\n    - id: webnovel-reranking\n      name: 'webnovel-embedding-provider/reranking'")
+    "- insert:\n    - id: webnovel-embeddings\n      name: '@linfengqaqtat/dsh-scriptor-retrieval'\n    - id: webnovel-scenes\n      name: '@linfengqaqtat/dsh-scriptor-retrieval/scenes'\n    - id: webnovel-reranking\n      name: '@linfengqaqtat/dsh-scriptor-retrieval/reranking'")
   assert.ok(read('lib/client.js').startsWith(`window.__ModuleLoader__.load({ id: ${JSON.stringify(manifest.name)},`), 'Embedding client identity must match its installed package name')
   for (const [file, data] of files) {
     assert.match(file, /^(package\.json|LICENSE|THIRD_PARTY_NOTICES\.md|README\.md|MODEL_DIMENSIONS\.md|cordis\.patch\.yml|lib\/(index|client|scenes|reranking)\.js|licenses\/[^/]+\.txt)$/)
@@ -90,13 +90,31 @@ export function checkMetaPackage(filename, expectedVersion, embeddingVersion) {
   checkPublishableManifest(manifest)
   assert.deepEqual(manifest.dependencies, {
     '@linfengqaqtat/dsh-scriptor': expectedVersion,
-    'webnovel-embedding-provider': embeddingVersion,
+    '@linfengqaqtat/dsh-scriptor-retrieval': embeddingVersion,
   })
   assert.equal(manifest.dsh?.bundle?.patch, './cordis.patch.yml')
   assert.equal(read('cordis.patch.yml').replaceAll('\r\n', '\n').trim(),
-    "- insert:\n    - id: webnovel\n      name: '@linfengqaqtat/dsh-scriptor'\n    - id: webnovel-embeddings\n      name: webnovel-embedding-provider\n    - id: webnovel-scenes\n      name: 'webnovel-embedding-provider/scenes'\n    - id: webnovel-reranking\n      name: 'webnovel-embedding-provider/reranking'")
+    "- insert:\n    - id: webnovel\n      name: '@linfengqaqtat/dsh-scriptor'\n    - id: webnovel-embeddings\n      name: '@linfengqaqtat/dsh-scriptor-retrieval'\n    - id: webnovel-scenes\n      name: '@linfengqaqtat/dsh-scriptor-retrieval/scenes'\n    - id: webnovel-reranking\n      name: '@linfengqaqtat/dsh-scriptor-retrieval/reranking'")
   assert.ok(read('LICENSE').includes('GNU GENERAL PUBLIC LICENSE'))
   read('README.md')
   for (const file of files.keys()) assert.match(file, /^(package\.json|LICENSE|README\.md|RELEASE_NOTES\.md|cordis\.patch\.yml)$/)
+  return { ok: true, files: files.size, version: manifest.version }
+}
+
+export function checkCompanionPackage(filename, expectedVersion) {
+  const files = packageFiles(filename)
+  const read = name => { assert.ok(files.has(name), `Missing ${name}`); return files.get(name).toString('utf8') }
+  const manifest = JSON.parse(read('package.json'))
+  assert.equal(manifest.name, '@linfengqaqtat/dsh-scriptor-companion')
+  assert.equal(manifest.version, expectedVersion)
+  checkPublishableManifest(manifest)
+  assert.equal(manifest.license, 'GPL-3.0-only')
+  assert.equal(manifest.dsh?.bundle?.patch, './cordis.patch.yml')
+  assert.equal(manifest.dsh?.client?.platform, 'web')
+  assert.equal(manifest.exports?.['./client'], './lib/client.js')
+  assert.deepEqual([...files.keys()].sort(), ['package.json', 'lib/index.js', 'lib/client.js', 'assets/manifest.json', 'cordis.patch.yml', 'README.md', 'LICENSE', 'MEDIA.md'].sort())
+  assert.ok(read('LICENSE').includes('GNU GENERAL PUBLIC LICENSE'))
+  assert.ok(read('cordis.patch.yml').includes("name: '@linfengqaqtat/dsh-scriptor-companion'"))
+  assert.ok(read('lib/client.js').startsWith(`window.__ModuleLoader__.load({ id: ${JSON.stringify(manifest.name)},`))
   return { ok: true, files: files.size, version: manifest.version }
 }

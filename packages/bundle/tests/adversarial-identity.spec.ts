@@ -3,7 +3,6 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { removeSync } from '../../core/src/repo/remove'
-import { createServer } from 'node:http'
 import { createBook, documentHash, parseDocument, saveAuthorDocument, serializeDocument, paths } from '../../core/src/index'
 import { bookRootOfBookIdFor } from '../src/index'
 import { createNovelTools } from '../src/novel-tools'
@@ -67,17 +66,15 @@ describe('host adversarial repro', () => {
     const relative = path.posix.join(paths.草稿目录(1, '开篇'), '稿1.md')
     const original = put(root, relative, serializeDocument({ 身份: { 卷: 1, 章: 1, 章名: '开篇' }, 版本: 1, 角色: '待审稿', 选定: true }, '原稿正文'))
     const agent = { id: 'audit', session: { header: { cwd: ws } }, followup: () => {} }
-    const runtime = { agents: { get: (id: string) => id === 'audit' ? agent : undefined, roots: () => [agent] }, webRuntime: { trustedHosts: [] }, connection: { requestRejection: () => undefined } } as unknown as StudyWebRuntime
-    const server = createServer(createStudyHandler(runtime))
-    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
-    const address = server.address() as { port: number }
-    const origin = 'http://127.0.0.1:' + address.port
+    const runtime: StudyWebRuntime = { agents: { get: id => id === 'audit' ? agent : undefined, roots: () => [agent] } }
+    const handler = createStudyHandler(runtime)
+    const origin = 'http://127.0.0.1'
     const ref = { space: 'book:b-audit', path: relative.replace(/\.md$/, '.MD') }
     const post = async (method: string, input: object) => {
-      const response = await fetch(origin + '/webnovel/api/' + method, { method: 'POST', headers: { origin, 'sec-fetch-site': 'same-origin', 'x-webnovel-request': '1', 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: 'audit', ...input }) })
+      const response = await handler(new Request(origin + '/api/webnovel/study/' + method, { method: 'POST', headers: { 'x-webnovel-request': '1', 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: 'audit', ...input }) }))
       return { status: response.status, value: await response.json() as any }
     }
-    try {
+    {
       const read = await post('read', { ref })
       expect(read.status).toBe(200)
       const saved = await post('save', { ref, hash: read.value.value.hash, body: '覆盖原稿', operationId: 'audit-draft-case-0001' })
@@ -88,6 +85,6 @@ describe('host adversarial repro', () => {
       expect(parseDocument(fs.readFileSync(path.join(root, relative), 'utf8')).data?.body).toContain('原稿正文')
       expect(fs.readFileSync(path.join(root, relative), 'utf8')).not.toBe(original)
       fs.writeFileSync(path.join(ws, 'evidence.json'), JSON.stringify({ read, saved, createdDraft2: true }, null, 2))
-    } finally { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())) }
+    }
   })
 })

@@ -1,8 +1,8 @@
-# 完整版 0.1.0-preview.7
+# 完整版 8.0.0
 
-- 主插件：`@linfengqaqtat/dsh-scriptor@0.1.0-preview.7`。
-- 嵌入提供方：`webnovel-embedding-provider@0.0.9`。
-- 固定宿主：DSH `0.1.7-rc.2`，Node 24.15.0 或 22.19.0 起的 Node 22，pnpm 11.27.1。
+- 主插件：`@linfengqaqtat/dsh-scriptor@8.0.0`。
+- 嵌入提供方：`@linfengqaqtat/dsh-scriptor-retrieval@8.0.0`。
+- 固定宿主：DSH `0.2.0-rc.2`，Node 24.15.0 或 22.19.0 起的 Node 22，pnpm 11.27.1。
 - 修正审读/改稿的对话体例保真、空设计就绪建议和历史模板待核对；补保存后影响核对说明，保留保存循环与归档重试保护。
 - 嵌入、场景和重排默认关闭。组合包与分别安装主包/提供方二选一，不能重复启用。
 - 旧版 preview.6 / 提供方 0.0.8 面向 DSH 0.1.5-rc.2，升级前备份并停止实例；不自动重写旧书或迁移不兼容的旧会话。

@@ -137,7 +137,7 @@ try {
     // Playwright's fetch engine drops browser fetch-metadata headers, and the
     // study API requires sec-fetch-site: same-origin; restore it on replays.
     const replay = route => route.fetch({ headers: { ...route.request().headers(), 'sec-fetch-site': 'same-origin' } })
-    await page.route('**/webnovel/api/save', async route => {
+    await page.route('**/api/webnovel/study/save', async route => {
       const payload = route.request().postDataJSON()
       report.saveRequests.push({ operationId: payload.operationId, ref: payload.ref, body: payload.body, sessionId: payload.sessionId }); persist()
       if (!firstPayload) {
@@ -184,7 +184,7 @@ try {
     assert.deepEqual(fs.readdirSync(dir).filter(name => /^稿\d+\.md$/.test(name)).sort(), ['稿1.md', '稿2.md'])
     report.F01 = { sameOperationId: firstPayload.operationId, bothDirty: true, savedTargetUnchanged: true, versions: ['稿1.md', '稿2.md'] }
     await screenshot('F01-target-preserved')
-    await page.unroute('**/webnovel/api/save')
+    await page.unroute('**/api/webnovel/study/save')
   })
   await stage('sidebar-keeps-dirty-editor', async () => {
     const text = await editorEndText()
@@ -200,7 +200,7 @@ try {
     const checkbox = page.getByRole('checkbox', { name: '提交后自动更新', exact: true })
     await checkbox.waitFor()
     assert.equal(await checkbox.isEnabled(), true)
-    await page.route('**/webnovel/api/index-control', async route => {
+    await page.route('**/api/webnovel/study/index-control', async route => {
       const payload = route.request().postDataJSON()
       let release
       const gate = new Promise(resolve => { release = resolve })
@@ -242,7 +242,7 @@ try {
     assert.equal(report.controlRequests.every(item => item.sessionId === 'webnovel-browser-acceptance' && item.space === 'book:acceptance-a'), true)
     report.F11 = { cancelledBookReusable: true, staleResponseKeptNewRequestBusy: true, newRequestReleased: true }
     await screenshot('F11-controls-recovered')
-    await page.unroute('**/webnovel/api/index-control')
+    await page.unroute('**/api/webnovel/study/index-control')
   })
   await stage('settings-open-and-return', async () => {
     // Use the host's own settings entry, discovered by its accessible label.
@@ -257,7 +257,7 @@ try {
   assert.ok(report.host.savesReceived > 0)
   assert.equal(report.host.customEvents, 0)
   assert.deepEqual(report.pageErrors, [])
-  report.expectedConsoleErrors = report.consoleErrors.filter(item => item.path === '/webnovel/api/save' && item.message.includes('net::ERR_FAILED'))
+  report.expectedConsoleErrors = report.consoleErrors.filter(item => item.path === '/api/webnovel/study/save' && item.message.includes('net::ERR_FAILED'))
   report.unexpectedConsoleErrors = report.consoleErrors.filter(item => !report.expectedConsoleErrors.includes(item))
   assert.deepEqual(report.unexpectedConsoleErrors, [])
   report.ok = true; report.current = 'complete'; persist()

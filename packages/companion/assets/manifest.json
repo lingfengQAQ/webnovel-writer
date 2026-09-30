@@ -1,0 +1,218 @@
+{
+  "version": 1,
+  "width": 288,
+  "height": 384,
+  "fps": 24,
+  "assets": {
+    "idle": {
+      "file": "idle.webm",
+      "frames": 119,
+      "duration": 4.958333333333333,
+      "bytes": 192958,
+      "sha256": "913cc16595d40ee1cf6b56dc5410d3eab70b0044159daf06ac40638837d8fdbe",
+      "end_hold_frames": 72,
+      "closed_eye_hold_frames": 0,
+      "source_frames": [
+        0,
+        47
+      ],
+      "source_seconds": [
+        0.0,
+        1.9583333333333333
+      ]
+    },
+    "thinking": {
+      "file": "thinking.webm",
+      "frames": 87,
+      "duration": 3.625,
+      "bytes": 356469,
+      "sha256": "1e72ba06003a3906e2123bf9b223b6c65449b17033c7c147ce3d5db5f3c7feea",
+      "end_hold_frames": 0,
+      "closed_eye_hold_frames": 0,
+      "source_frames": [
+        47,
+        134
+      ],
+      "source_seconds": [
+        1.9583333333333333,
+        5.583333333333333
+      ]
+    },
+    "writing": {
+      "file": "writing.webm",
+      "frames": 253,
+      "duration": 10.541666666666666,
+      "bytes": 1348120,
+      "sha256": "6e38daa9fe824a4f52918a072ef117f99bf52f4501af46b9fc39175b4446e4b6",
+      "end_hold_frames": 0,
+      "closed_eye_hold_frames": 0,
+      "source_frames": [
+        134,
+        387
+      ],
+      "source_seconds": [
+        5.583333333333333,
+        16.125
+      ]
+    },
+    "complete": {
+      "file": "complete.webm",
+      "frames": 52,
+      "duration": 2.1666666666666665,
+      "bytes": 235958,
+      "sha256": "bd520db9be5f1539f402b7d38c03ee196d1b5f679857523809dd3b2104d7b95a",
+      "end_hold_frames": 0,
+      "closed_eye_hold_frames": 0,
+      "source_frames": [
+        387,
+        439
+      ],
+      "source_seconds": [
+        16.125,
+        18.291666666666668
+      ]
+    },
+    "interact": {
+      "file": "interact.webm",
+      "frames": 80,
+      "duration": 3.3333333333333335,
+      "bytes": 425677,
+      "sha256": "efffc3e820a792b533d16c447970c41218f5b4efcad88150fb4f2cf2117e978b",
+      "end_hold_frames": 0,
+      "closed_eye_hold_frames": 0,
+      "source_frames": [
+        439,
+        519
+      ],
+      "source_seconds": [
+        18.291666666666668,
+        21.625
+      ]
+    },
+    "waiting": {
+      "file": "waiting.webm",
+      "frames": 87,
+      "duration": 3.625,
+      "bytes": 344505,
+      "sha256": "258f9d4b6af59bab0153ade1b70ab5f1a2067b85e83312ffecda7905a707a78a",
+      "end_hold_frames": 0,
+      "closed_eye_hold_frames": 0,
+      "source_frames": [
+        519,
+        606
+      ],
+      "source_seconds": [
+        21.625,
+        25.25
+      ]
+    },
+    "rest": {
+      "file": "rest.webm",
+      "frames": 174,
+      "duration": 7.25,
+      "bytes": 373125,
+      "sha256": "e2893aecd0abea2c9e4b42cdef8b27932fadbbfabc1bd76c6141691d00b08f26",
+      "end_hold_frames": 0,
+      "closed_eye_hold_frames": 60,
+      "source_frames": [
+        606,
+        720
+      ],
+      "source_seconds": [
+        25.25,
+        30.0
+      ]
+    },
+    "writing-enter": {
+      "file": "writing-enter.webm",
+      "frames": 101,
+      "duration": 4.208333333333333,
+      "bytes": 551465,
+      "sha256": "57ceca2a772e672792e77891d7ff60a0fabfa5dce3aa09f9c45c3b917761c9a8",
+      "end_hold_frames": 0,
+      "closed_eye_hold_frames": 0,
+      "source_frames": [
+        134,
+        235
+      ],
+      "source_seconds": [
+        5.583333333333333,
+        9.791666666666666
+      ]
+    },
+    "writing-loop": {
+      "file": "writing-loop.webm",
+      "frames": 48,
+      "duration": 2.0,
+      "bytes": 261406,
+      "sha256": "1d8ba3483122e4c9cec83dbd3ce966bc3f690a69d4613ce1cbddbd2e40062d5f",
+      "end_hold_frames": 0,
+      "closed_eye_hold_frames": 0,
+      "source_frames": [
+        235,
+        283
+      ],
+      "source_seconds": [
+        9.791666666666666,
+        11.791666666666666
+      ]
+    },
+    "writing-exit": {
+      "file": "writing-exit.webm",
+      "frames": 104,
+      "duration": 4.333333333333333,
+      "bytes": 560552,
+      "sha256": "efba5b962e7d02a744301f40135cb1ef6e26f2a218441fe84469120ea7ef33d1",
+      "end_hold_frames": 0,
+      "closed_eye_hold_frames": 0,
+      "source_frames": [
+        283,
+        387
+      ],
+      "source_seconds": [
+        11.791666666666666,
+        16.125
+      ]
+    }
+  },
+  "sources": [
+    {
+      "name": "whalegirl_video.mp4",
+      "sha256": "160ab279c8656465b0d406e8ce63a3b43e1307db9351bcbd93a51d5187beead3",
+      "frames": 721
+    }
+  ],
+  "processing": {
+    "script": "prepare-continuous-media.py",
+    "script_sha256": "125edc1c5730c1c3209860526be23384e925aac06569f11b0ff99cea2da82f9d",
+    "av": "18.1.0",
+    "opencv": "5.0.0",
+    "numpy": "2.5.3",
+    "ffmpeg": "7.1-essentials_build-www.gyan.dev",
+    "alignment": "one fixed source canvas, uniform resize; no lower-body replacement",
+    "writing_loop": "natural forward frames 235..282, no blend or reverse",
+    "idle": "hold the open-eye seated endpoint for 3 seconds; preserve blink speed",
+    "rest": "hold closed-eye source frame 672 for an additional 2.5 seconds",
+    "detached_detail_regions": [
+      {
+        "name": "forelock",
+        "bounds": [
+          80,
+          12,
+          160,
+          66
+        ],
+        "max_area": 220
+      }
+    ],
+    "limitations": [
+      "source tail tip touches and is slightly clipped at the right edge",
+      "natural loop endpoints are similar, not pixel-identical"
+    ]
+  },
+  "poster": {
+    "file": "poster.png",
+    "sha256": "8c64a3f8865da21ffaa0fb28de2fa932ca3bb231faa594d39811f8e358dc028c"
+  },
+  "hitPath": "M132,16h8v4h-8zM112,20h36v4h-36zM104,24h48v4h-48zM96,28h56v4h-56zM92,32h16v4h-16zM124,32h28v4h-28zM88,36h20v4h-20zM128,36h44v4h-44zM88,40h16v4h-16zM116,40h64v4h-64zM84,44h12v4h-12zM112,44h76v4h-76zM84,48h12v4h-12zM108,48h84v4h-84zM84,52h8v4h-8zM104,52h92v4h-92zM100,56h96v4h-96zM96,60h104v4h-104zM96,64h104v4h-104zM92,68h112v4h-112zM92,72h112v4h-112zM88,76h116v4h-116zM92,80h116v4h-116zM88,84h120v4h-120zM84,88h124v4h-124zM84,92h132v4h-132zM84,96h136v4h-136zM88,100h132v4h-132zM88,104h136v4h-136zM84,108h144v4h-144zM76,112h144v4h-144zM56,116h156v4h-156zM56,120h156v4h-156zM52,124h164v4h-164zM52,128h164v4h-164zM52,132h168v4h-168zM56,136h168v4h-168zM56,140h160v4h-160zM220,140h8v4h-8zM56,144h176v4h-176zM60,148h176v4h-176zM60,152h176v4h-176zM60,156h176v4h-176zM60,160h180v4h-180zM56,164h188v4h-188zM48,168h196v4h-196zM44,172h204v4h-204zM44,176h204v4h-204zM44,180h204v4h-204zM44,184h204v4h-204zM40,188h212v4h-212zM40,192h212v4h-212zM36,196h12v4h-12zM52,196h204v4h-204zM36,200h220v4h-220zM36,204h220v4h-220zM36,208h220v4h-220zM40,212h216v4h-216zM44,216h212v4h-212zM52,220h200v4h-200zM52,224h192v4h-192zM48,228h192v4h-192zM248,228h8v4h-8zM40,232h200v4h-200zM244,232h20v4h-20zM40,236h196v4h-196zM240,236h32v4h-32zM36,240h196v4h-196zM236,240h36v4h-36zM40,244h232v4h-232zM44,248h184v4h-184zM232,248h36v4h-36zM44,252h224v4h-224zM44,256h180v4h-180zM228,256h40v4h-40zM48,260h164v4h-164zM216,260h52v4h-52zM40,264h172v4h-172zM228,264h40v4h-40zM40,268h172v4h-172zM228,268h48v4h-48zM40,272h172v4h-172zM232,272h56v4h-56zM44,276h164v4h-164zM232,276h56v4h-56zM44,280h172v4h-172zM232,280h56v4h-56zM40,284h248v4h-248zM36,288h252v4h-252zM32,292h256v4h-256zM32,296h212v4h-212zM252,296h36v4h-36zM40,300h200v4h-200zM264,300h12v4h-12zM44,304h196v4h-196zM56,308h180v4h-180zM56,312h176v4h-176zM52,316h24v4h-24zM88,316h140v4h-140zM52,320h24v4h-24zM92,320h132v4h-132zM48,324h28v4h-28zM92,324h24v4h-24zM120,324h100v4h-100zM44,328h32v4h-32zM92,328h24v4h-24zM124,328h92v4h-92zM40,332h36v4h-36zM88,332h32v4h-32zM132,332h76v4h-76zM36,336h40v4h-40zM84,336h36v4h-36zM148,336h52v4h-52zM36,340h32v4h-32zM84,340h36v4h-36zM152,340h40v4h-40zM36,344h28v4h-28zM80,344h40v4h-40zM160,344h16v4h-16zM36,348h28v4h-28zM76,348h40v4h-40zM40,352h16v4h-16zM72,352h40v4h-40zM72,356h36v4h-36zM72,360h32v4h-32zM72,364h28v4h-28zM84,368h8v4h-8z"
+}

@@ -45,13 +45,14 @@ jobs:
           # 以构建清单为准定位主包与可选包；glob 会把 *-full-*.tgz 误并入主包位置。
           $manifest = Get-Content .tmp/release/release-manifest.json -Raw | ConvertFrom-Json
           $mainPackage = Join-Path .tmp/release $manifest.filename
-          $embeddingTarball = ($manifest.optionalPackages | Where-Object { $_.name -eq 'webnovel-embedding-provider' }).tarball
+          $embeddingTarball = ($manifest.optionalPackages | Where-Object { $_.name -eq '@linfengqaqtat/dsh-scriptor-retrieval' }).tarball
           if (-not $embeddingTarball) { throw 'Embedding package missing from release manifest' }
           $embeddingPackage = Join-Path .tmp/release $embeddingTarball
           $metaTarball = ($manifest.optionalPackages | Where-Object { $_.name -eq '@linfengqaqtat/dsh-scriptor-full' }).tarball
           if (-not $metaTarball) { throw 'Full package missing from release manifest' }
           $metaPackage = Join-Path .tmp/release $metaTarball
-          pnpm release:smoke -- $mainPackage $embeddingPackage $metaPackage
+          $companionPackage = Join-Path .tmp/release ($manifest.optionalPackages | Where-Object name -eq '@linfengqaqtat/dsh-scriptor-companion').tarball
+          pnpm release:smoke -- $mainPackage $embeddingPackage $metaPackage --companion $companionPackage
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate npm publish inputs without publishing
         run: node scripts/release/publish-npm.mjs --assets .tmp/release
@@ -62,7 +63,7 @@ jobs:
           gh release view $env:RELEASE_TAG *> $null
           if ($LASTEXITCODE -eq 0) { throw 'Release already exists; inspect it without overwriting its assets.' }
           $manifest = Get-Content .tmp/release/release-manifest.json -Raw | ConvertFrom-Json
-          $releaseArgs = @('release', 'create', $env:RELEASE_TAG, '--verify-tag', '--draft', '--latest=false', '--title', "DSH Scriptor · v8 · $($manifest.version)", '--notes-file', '.tmp/release/release-notes.md')
+          $releaseArgs = @('release', 'create', $env:RELEASE_TAG, '--verify-tag', '--draft', '--latest', '--title', "DSH Scriptor · v8 · $($manifest.version)", '--notes-file', '.tmp/release/release-notes.md')
           if ($manifest.prerelease) { $releaseArgs += '--prerelease' }
           $releaseArgs += Get-ChildItem .tmp/release -File | Where-Object Name -ne 'release-notes.md' | Select-Object -ExpandProperty FullName
           & gh @releaseArgs

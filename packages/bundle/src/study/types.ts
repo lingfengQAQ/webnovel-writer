@@ -4,6 +4,7 @@ export interface FileRef {
 }
 
 export interface StudyBook {
+  readonly absolutePath?: string
   readonly id: string
   readonly name: string
   readonly progress: string
@@ -18,6 +19,7 @@ export interface StudyShelf {
 }
 
 export interface TreeEntry {
+  readonly absolutePath?: string
   readonly ref: FileRef
   readonly name: string
   readonly directory: boolean

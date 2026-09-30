@@ -28,6 +28,7 @@ function applyWith(services: Record<string, unknown>): Registered[] {
     on: () => {},
     inject: (deps: readonly string[], cb: (s: unknown) => void) => {
       declared.push([...deps])
+      if (deps.includes('connection')) return undefined
       cb(scope)
       return undefined
     },
@@ -38,6 +39,7 @@ function applyWith(services: Record<string, unknown>): Registered[] {
   }
   ;(host as { inject: unknown }).inject = (deps: readonly string[], cb: (s: unknown) => void) => {
     declared.push([...deps])
+    if (deps.includes('connection')) return undefined
     cb(host)
     return undefined
   }

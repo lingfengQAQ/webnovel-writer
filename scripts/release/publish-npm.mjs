@@ -4,18 +4,19 @@ import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
-import { packageFiles, checkPublishableManifest, checkEmbeddingPackage, checkMetaPackage } from './tar.mjs'
+import { packageFiles, checkPublishableManifest, checkEmbeddingPackage, checkMetaPackage, checkCompanionPackage } from './tar.mjs'
 
 // The official registry is the only release target. The environment override exists so
 // the publish path itself can be exercised against a first-publication fixture.
 const registry = process.env.SCRIPTOR_NPM_REGISTRY ?? 'https://registry.npmjs.org/'
 const mainName = '@linfengqaqtat/dsh-scriptor'
-const embeddingName = 'webnovel-embedding-provider'
+const embeddingName = '@linfengqaqtat/dsh-scriptor-retrieval'
+const companionName = '@linfengqaqtat/dsh-scriptor-companion'
 const metaName = '@linfengqaqtat/dsh-scriptor-full'
 const digest = (bytes, algorithm = 'sha256', encoding = 'hex') => createHash(algorithm).update(bytes).digest(encoding)
 
 export function validateReleaseAssets(directory, expectedTag, expectedCommit) {
-  assert.match(expectedTag ?? '', /^scriptor-v\d+\.\d+\.\d+-preview\.[1-9]\d*$/)
+  assert.match(expectedTag ?? '', /^scriptor-v\d+\.\d+\.\d*$/)
   assert.match(expectedCommit ?? '', /^[a-f0-9]{40}$/)
   const read = filename => {
     assert.match(filename, /^[A-Za-z0-9][A-Za-z0-9._-]*$/, 'Release assets must be flat filenames')
@@ -40,16 +41,19 @@ export function validateReleaseAssets(directory, expectedTag, expectedCommit) {
   assert.equal(manifest.tag, expectedTag)
   assert.equal(`scriptor-v${manifest.version}`, expectedTag)
   assert.equal(manifest.publicCommit, expectedCommit)
-  assert.equal(manifest.prerelease, true)
+  assert.equal(manifest.prerelease, false)
   assert.equal(manifest.packageName, mainName)
   assert.equal(manifest.filename, `linfengqaqtat-dsh-scriptor-${manifest.version}.tgz`)
-  assert.equal(manifest.optionalPackages?.length, 2)
+  assert.equal(manifest.optionalPackages?.length, 3)
   const optional = new Map(manifest.optionalPackages.map(item => [item.name, item]))
-  assert.deepEqual([...optional.keys()].sort(), [embeddingName, metaName].sort())
+  assert.deepEqual([...optional.keys()].sort(), [embeddingName, metaName, companionName].sort())
+  const companion = optional.get(companionName)
+  assert.equal(companion.version, manifest.version)
+  assert.equal(companion.tarball, `linfengqaqtat-dsh-scriptor-companion-${companion.version}.tgz`)
   const embedding = optional.get(embeddingName)
   const meta = optional.get(metaName)
   assert.match(embedding.version, /^\d+\.\d+\.\d+$/)
-  assert.equal(embedding.tarball, `webnovel-embedding-provider-${embedding.version}.tgz`)
+  assert.equal(embedding.tarball, `linfengqaqtat-dsh-scriptor-retrieval-${embedding.version}.tgz`)
   assert.equal(meta.version, manifest.version)
   assert.equal(meta.tarball, `linfengqaqtat-dsh-scriptor-full-${meta.version}.tgz`)
   const assets = new Map()
@@ -60,7 +64,7 @@ export function validateReleaseAssets(directory, expectedTag, expectedCommit) {
   }
   const packages = [
     { name: mainName, version: manifest.version, tarball: manifest.filename },
-    embedding, meta,
+    embedding, meta, companion,
   ].map(item => {
     const bytes = checkedRead(item.tarball)
     assert.equal(digest(bytes), assets.get(item.tarball), 'Package absent from release manifest')
@@ -75,6 +79,7 @@ export function validateReleaseAssets(directory, expectedTag, expectedCommit) {
   })
   checkEmbeddingPackage(packages[1].filename, embedding.version)
   checkMetaPackage(packages[2].filename, manifest.version, embedding.version)
+  checkCompanionPackage(packages[3].filename, manifest.version)
   return packages
 }
 
@@ -107,13 +112,13 @@ async function verifyRegistry(packages) {
     let verified = false
     for (let attempt = 0; attempt < 40; attempt++) {
       const metadata = await metadataFor(pkg.name)
-      if (registryStatus(pkg, metadata) === 'identical' && metadata['dist-tags']?.preview === pkg.version) {
+      if (registryStatus(pkg, metadata) === 'identical' && metadata['dist-tags']?.latest === pkg.version) {
         verified = true
         break
       }
       await new Promise(resolve => setTimeout(resolve, 3000))
     }
-    assert.ok(verified, `Registry version/preview not visible: ${pkg.name}@${pkg.version}`)
+    assert.ok(verified, `Registry version/latest not visible: ${pkg.name}@${pkg.version}`)
     console.log(`[npm] verified ${pkg.name}@${pkg.version}`)
   }
 }
@@ -137,14 +142,14 @@ async function main() {
   for (const { pkg, state } of plan) {
     // npm rejects already-published stable versions even in --dry-run mode.
     if (state === 'identical') continue
-    runNpm(['publish', pkg.filename, '--dry-run', '--ignore-scripts', '--access', 'public', '--tag', 'preview', `--registry=${registry}`])
+    runNpm(['publish', pkg.filename, '--dry-run', '--ignore-scripts', '--access', 'public', '--tag', 'latest', `--registry=${registry}`])
   }
   if (!args.includes('--publish')) return console.log('[npm] preflight passed; no packages published')
   assert.equal(process.env.GITHUB_ACTIONS, 'true', 'Publish with provenance from GitHub Actions')
   assert.ok(process.env.NODE_AUTH_TOKEN, 'Configure repository secret NPM_TOKEN before publishing')
   for (const { pkg, state } of plan) {
     if (state === 'identical') console.log(`[npm] already published with identical bytes: ${pkg.name}@${pkg.version}`)
-    else runNpm(['publish', pkg.filename, '--ignore-scripts', '--access', 'public', '--tag', 'preview', '--provenance', `--registry=${registry}`])
+    else runNpm(['publish', pkg.filename, '--ignore-scripts', '--access', 'public', '--tag', 'latest', '--provenance', `--registry=${registry}`])
   }
   await verifyRegistry(packages)
 }

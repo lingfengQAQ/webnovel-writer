@@ -1,11 +1,11 @@
 import { AUTHOR_SAVE_SOURCE } from '../message-sources'
-import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-client-connection'
 import { createUserMessage, type UserMessage } from '@deepseek-ai/dsh-llm'
 import { AuthorDocumentError, isFullyQualifiedPath } from '@webnovel/core'
 import { StudyService } from './service'
 import type { FileRef, StudySave } from './types'
-import { studyLink } from './links'
+import { studyFileLink } from './links'
 import type { BookIndexManager } from '../indexing/manager'
 import type { IndexAction } from '@webnovel/core'
 
@@ -17,29 +17,10 @@ interface StudyAgent {
 
 export interface StudyWebRuntime {
   readonly agents: { get(id: string): StudyAgent | undefined; roots(): readonly StudyAgent[] }
-  readonly webRuntime: { readonly trustedHosts: readonly string[] }
-  readonly connection: { requestRejection(request: Pick<IncomingMessage, 'headers'>): 401 | 403 | undefined }
-  readonly webServer: {
-    register(route: { kind: 'prefix'; path: string; handler(request: IncomingMessage, response: ServerResponse): Promise<void> }): () => void
-  }
 }
 
-export function trustedStudyRequest(request: Pick<IncomingMessage, 'headers'>, trustedHosts: readonly string[]): boolean {
-  if (request.headers['x-webnovel-request'] !== '1' || request.headers['sec-fetch-site'] !== 'same-origin') return false
-  const host = request.headers.host
-  if (!host || typeof host !== 'string') return false
-  try {
-    const url = new URL('http://' + host)
-    const loopback = url.hostname === 'localhost' || url.hostname === '[::1]' || /^127(?:\.\d{1,3}){3}$/.test(url.hostname)
-    const trusted = trustedHosts.some(authority => {
-      const expected = new URL('http://' + authority)
-      return expected.host === url.host || (!expected.port && expected.hostname === url.hostname)
-    })
-    if (!loopback && !trusted) return false
-    const origin = request.headers.origin
-    return typeof origin === 'string' && /^https?:$/.test(new URL(origin).protocol) && new URL(origin).host === url.host
-  } catch { return false }
-}
+export const STUDY_API_PATH = '/api/webnovel/study/'
+const METHODS = ['shelf', 'tree', 'read', 'resolve', 'search', 'chapters', 'graph', 'save', 'notify', 'retry-commit', 'index-status', 'index-control']
 
 function stringOf(record: Record<string, unknown>, key: string): string {
   const value = record[key]
@@ -53,27 +34,35 @@ function refOf(record: Record<string, unknown>): FileRef {
   return { space: stringOf(raw as Record<string, unknown>, 'space'), path: stringOf(raw as Record<string, unknown>, 'path') }
 }
 
-async function readRequest(request: IncomingMessage): Promise<Record<string, unknown>> {
-  if (!request.headers['content-type']?.startsWith('application/json')) throw new AuthorDocumentError('invalid-document', '需要 JSON 请求')
-  const parts: Buffer[] = []
+async function readRequest(request: Request): Promise<Record<string, unknown>> {
+  if (!request.headers.get('content-type')?.startsWith('application/json')) throw new AuthorDocumentError('invalid-document', '需要 JSON 请求')
+  const reader = request.body?.getReader()
+  if (!reader) throw new AuthorDocumentError('invalid-document', '缺少 JSON 请求')
+  const parts: Uint8Array[] = []
   let size = 0
-  for await (const chunk of request) {
-    const part = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-    size += part.length
-    if (size > 8 * 1024 * 1024) throw new AuthorDocumentError('invalid-document', '请求超过 8 MiB')
-    parts.push(part)
-  }
+  try {
+    while (true) {
+      request.signal.throwIfAborted()
+      const { done, value } = await reader.read()
+      if (done) break
+      size += value.byteLength
+      if (size > 8 * 1024 * 1024) {
+        await reader.cancel()
+        throw new AuthorDocumentError('invalid-document', '请求超过 8 MiB')
+      }
+      parts.push(value)
+    }
+  } finally { reader.releaseLock() }
   const value: unknown = JSON.parse(Buffer.concat(parts).toString('utf8'))
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new AuthorDocumentError('invalid-document', '请求格式不正确')
   return value as Record<string, unknown>
 }
 
-function reply(response: ServerResponse, status: number, value: unknown): void {
-  response.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
-  response.end(JSON.stringify(value))
+function reply(status: number, value: unknown): Response {
+  return Response.json(value, { status, headers: { 'cache-control': 'no-store' } })
 }
 
-export function savedMessage(result: Pick<StudySave, 'operationId' | 'document' | 'changes' | 'route' | 'commit' | 'commitError'>, documentUrl?: string): string {
+export function savedMessage(result: Pick<StudySave, 'operationId' | 'document' | 'changes' | 'route' | 'commit' | 'commitError'>, documentUrl = studyFileLink(result.document.absolutePath)): string {
   const commitInstruction = result.commit === 'failed'
     ? '正文已保存，但提交失败；指引作者在编辑器重试提交，不调用设计工具重写正文来补提交。'
     : result.commit === 'saved' ? '保存已完成且已提交，无需补提交。' : '保存已完成，本次无需提交。'
@@ -107,19 +96,13 @@ export function notifySaved(agent: StudyAgent, message: string): Pick<StudySave,
 
 export function createStudyHandler(runtime: StudyWebRuntime, indexing?: BookIndexManager) {
   const delivered = new Map<string, StudyAgent>()
-  return async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
-    if (request.method !== 'POST' || !trustedStudyRequest(request, runtime.webRuntime.trustedHosts)) {
-      reply(response, 403, { ok: false, code: 'forbidden', error: '请求来源不被允许' })
-      return
-    }
-    const rejection = runtime.connection.requestRejection(request)
-    if (rejection !== undefined) {
-      reply(response, rejection, { ok: false, code: 'forbidden', error: '请在已登录的 DSH 页面中使用书房' })
-      return
+  return async (request: Request): Promise<Response> => {
+    if (request.method !== 'POST' || request.headers.get('x-webnovel-request') !== '1') {
+      return reply(403, { ok: false, code: 'forbidden', error: '请求来源不被允许' })
     }
     try {
       const input = await readRequest(request)
-      if (request.aborted) return
+      request.signal.throwIfAborted()
       const sessionId = stringOf(input, 'sessionId')
       const agent = runtime.agents.get(sessionId)
       if (!agent || !runtime.agents.roots().includes(agent)) throw new AuthorDocumentError('read-only', '请在当前主会话中打开书房')
@@ -128,14 +111,14 @@ export function createStudyHandler(runtime: StudyWebRuntime, indexing?: BookInde
       const service = new StudyService(cwd)
       const notify = (saved: Omit<StudySave, 'notification' | 'notificationError'>): Pick<StudySave, 'notification' | 'notificationError'> => {
         if (delivered.get(saved.operationId) === agent) return { notification: 'delivered' }
-        const result = notifySaved(agent, savedMessage(saved, studyLink(request.headers.origin as string, sessionId, saved.document.ref)))
+        const result = notifySaved(agent, savedMessage(saved))
         if (result.notification === 'delivered') {
           delivered.set(saved.operationId, agent)
           if (delivered.size > 256) delivered.delete(delivered.keys().next().value!)
         }
         return result
       }
-      const method = new URL(request.url ?? '/', 'http://localhost').pathname.slice('/webnovel/api/'.length)
+      const method = new URL(request.url).pathname.slice(STUDY_API_PATH.length)
       let value: unknown
       switch (method) {
         case 'index-status': {
@@ -166,12 +149,12 @@ export function createStudyHandler(runtime: StudyWebRuntime, indexing?: BookInde
           break
         }
         case 'retry-commit': value = service.retryCommit(refOf(input), stringOf(input, 'hash'), stringOf(input, 'operationId'), sessionId); break
-        default: reply(response, 404, { ok: false, code: 'not-found', error: '未知书房操作' }); return
+        default: return reply(404, { ok: false, code: 'not-found', error: '未知书房操作' })
       }
-      reply(response, 200, { ok: true, value })
+      return reply(200, { ok: true, value })
     } catch (error) {
       const code = error instanceof AuthorDocumentError ? error.code : 'failed'
-      reply(response, code === 'conflict' ? 409 : code === 'not-found' ? 404 : 400, {
+      return reply(code === 'conflict' ? 409 : code === 'not-found' ? 404 : 400, {
         ok: false, code, error: error instanceof Error ? error.message : '书房操作失败',
       })
     }
@@ -180,9 +163,10 @@ export function createStudyHandler(runtime: StudyWebRuntime, indexing?: BookInde
 
 export function attachStudyWeb(ctx: Context, indexing?: BookIndexManager): void {
   if (typeof ctx.inject !== 'function') return
-  ctx.inject(['webServer', 'webRuntime', 'agents', 'connection'], scope => {
-    const runtime = scope as unknown as StudyWebRuntime
-    if (typeof scope.effect !== 'function' || typeof runtime.webServer?.register !== 'function' || typeof runtime.connection?.requestRejection !== 'function') return
-    scope.effect(() => runtime.webServer.register({ kind: 'prefix', path: '/webnovel/api', handler: createStudyHandler(runtime, indexing) }), 'webnovel: author workspace API')
+  ctx.inject(['connection', 'agents'], scope => {
+    const handler = createStudyHandler(scope, indexing)
+    for (const method of METHODS) {
+      scope.connection.fetch.register({ path: STUDY_API_PATH + method, methods: ['POST'], requestBody: 'streaming', fetch: handler })
+    }
   })
 }

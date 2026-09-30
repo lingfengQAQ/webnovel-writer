@@ -1,0 +1,58 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { CompanionStore, constrain, readPreferences } from '../src/state'
+
+afterEach(() => vi.useRealTimers())
+describe('companion presentation', () => {
+  it('recovers from blocked or malformed local storage and clamps offscreen coordinates', () => {
+    expect(readPreferences({ getItem: () => '{', setItem() {} })).toEqual({ visible: true, size: 'medium', position: null })
+    expect(readPreferences({ getItem: () => '{"visible":false,"size":"giant","position":{"x":null,"y":0}}', setItem() {} })).toEqual({ visible: false, size: 'medium', position: null })
+    expect(constrain({ x: 5000, y: -99 }, 220, 800, 600)).toEqual({ x: 627, y: 8 })
+    expect(constrain(null, 100, 60, 90)).toEqual({ x: 8, y: 8 })
+  })
+  it('lets work and approval interrupt previews without replaying old interaction', () => {
+    vi.useFakeTimers()
+    const store = new CompanionStore()
+    store.preview('interact'); expect(store.getSnapshot().action).toBe('interact')
+    store.setActivity('writing'); store.preview('complete')
+    expect(store.getSnapshot().action).toBe('writing')
+    store.setActivity('waiting'); vi.advanceTimersByTime(20000)
+    expect(store.getSnapshot().action).toBe('waiting')
+    store.setActivity('idle'); expect(store.getSnapshot().action).toBe('idle')
+    store.complete(); expect(store.getSnapshot().action).toBe('complete')
+    store.finishPreview(); expect(store.getSnapshot().action).toBe('idle')
+    store.dispose(); expect(vi.getTimerCount()).toBe(0)
+  })
+  it('rests after inactivity, wakes on input and cancels timers on disposal', () => {
+    vi.useFakeTimers()
+    const store = new CompanionStore()
+    vi.advanceTimersByTime(119999); expect(store.getSnapshot().action).toBe('idle')
+    vi.advanceTimersByTime(1); expect(store.getSnapshot().action).toBe('rest')
+    store.touch(); expect(store.getSnapshot().action).toBe('idle')
+    store.sleep(); store.setActivity('thinking')
+    expect(store.getSnapshot().action).toBe('thinking')
+    vi.advanceTimersByTime(180000); expect(store.getSnapshot().action).toBe('thinking')
+    store.dispose(); expect(vi.getTimerCount()).toBe(0)
+  })
+  it('allows the longer closed-eye preview to finish, while new work still interrupts it', () => {
+    vi.useFakeTimers()
+    const store = new CompanionStore()
+    store.preview('rest')
+    vi.advanceTimersByTime(7300)
+    expect(store.getSnapshot().action).toBe('rest')
+    store.setActivity('thinking')
+    expect(store.getSnapshot().action).toBe('thinking')
+    vi.advanceTimersByTime(2000)
+    expect(store.getSnapshot().action).toBe('thinking')
+    store.dispose()
+  })
+  it('persists controls and remains usable when writes are denied', () => {
+    const data = new Map<string,string>()
+    const storage = { getItem: (k:string) => data.get(k) ?? null, setItem: (k:string,v:string) => {data.set(k,v)} }
+    const first = new CompanionStore(storage)
+    first.preferences({ visible: false, size: 'large', position: { x: 90, y: 20 } }); first.dispose()
+    const second = new CompanionStore(storage)
+    expect(second.getSnapshot().preferences).toEqual({ visible:false, size:'large', position:{x:90,y:20} }); second.dispose()
+    const blocked = new CompanionStore({ getItem: () => null, setItem: () => { throw Error('denied') } })
+    blocked.preferences({visible:false}); expect(blocked.getSnapshot().preferences.visible).toBe(false); blocked.dispose()
+  })
+})

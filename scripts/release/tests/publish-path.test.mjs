@@ -9,8 +9,8 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { root } from '../version.mjs'
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex')
-const version = '0.1.0-preview.4'
-const publishConfig = { access: 'public', tag: 'preview', registry: 'https://registry.npmjs.org/' }
+const version = '8.0.0'
+const publishConfig = { access: 'public', tag: 'latest', registry: 'https://registry.npmjs.org/' }
 function archive(files) {
   const rows = Object.entries(files).map(([name, text]) => {
     const body = Buffer.from(typeof text === 'object' ? JSON.stringify(text) : text)
@@ -28,8 +28,9 @@ const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding:
 function writeAssets(directory) {
   const entries = [
     ['@linfengqaqtat/dsh-scriptor', version, `linfengqaqtat-dsh-scriptor-${version}.tgz`],
-    ['webnovel-embedding-provider', '0.0.8', 'webnovel-embedding-provider-0.0.8.tgz'],
+    ['@linfengqaqtat/dsh-scriptor-retrieval', version, 'linfengqaqtat-dsh-scriptor-retrieval-8.0.0.tgz'],
     ['@linfengqaqtat/dsh-scriptor-full', version, `linfengqaqtat-dsh-scriptor-full-${version}.tgz`],
+    ['@linfengqaqtat/dsh-scriptor-companion', version, `linfengqaqtat-dsh-scriptor-companion-${version}.tgz`],
   ]
   const packages = entries.map(([name, v, tarball]) => ({ name, version: v, tarball }))
   for (const [index, item] of packages.entries()) {
@@ -41,13 +42,18 @@ function writeAssets(directory) {
       Object.assign(files, { 'lib/index.js': '', 'lib/scenes.js': '', 'lib/reranking.js': '', 'lib/client.js': `window.__ModuleLoader__.load({ id: ${JSON.stringify(item.name)},`, 'cordis.patch.yml': fs.readFileSync(path.join(root, 'packages/embedding-provider/cordis.patch.yml'), 'utf8'), 'MODEL_DIMENSIONS.md': '', 'THIRD_PARTY_NOTICES.md': 'Original notices' })
     }
     if (index === 2) {
-      manifest.dependencies = { '@linfengqaqtat/dsh-scriptor': version, 'webnovel-embedding-provider': '0.0.8' }
+      manifest.dependencies = { '@linfengqaqtat/dsh-scriptor': version, '@linfengqaqtat/dsh-scriptor-retrieval': version }
       manifest.dsh = { bundle: { patch: './cordis.patch.yml' } }
       files['cordis.patch.yml'] = fs.readFileSync(path.join(root, 'packages/meta/cordis.patch.yml'), 'utf8')
     }
+    if (index === 3) {
+      manifest.dsh = { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web' } }
+      manifest.exports = { './client': './lib/client.js' }
+      Object.assign(files, { 'lib/index.js': '', 'lib/client.js': `window.__ModuleLoader__.load({ id: ${JSON.stringify(item.name)},`, 'assets/manifest.json': '{}', 'MEDIA.md': '', 'cordis.patch.yml': fs.readFileSync(path.join(root, 'packages/companion/cordis.patch.yml'), 'utf8') })
+    }
     fs.writeFileSync(path.join(directory, item.tarball), archive(files))
   }
-  const manifest = { schemaVersion: 1, packageName: packages[0].name, version, tag: `scriptor-v${version}`, publicCommit: commit, prerelease: true,
+  const manifest = { schemaVersion: 1, packageName: packages[0].name, version, tag: `scriptor-v${version}`, publicCommit: commit, prerelease: false,
     filename: packages[0].tarball, optionalPackages: packages.slice(1),
     assets: packages.map(item => ({ file: item.tarball, sha256: hash(fs.readFileSync(path.join(directory, item.tarball))) })) }
   fs.writeFileSync(path.join(directory, 'release-manifest.json'), JSON.stringify(manifest))
@@ -106,7 +112,7 @@ test('publish path preflights every package, then uploads the same tarballs in d
   const { invocations } = runPublisher({ assets, fixture })
   const dryRuns = invocations.filter(item => item.dryRun)
   const uploads = invocations.filter(item => !item.dryRun)
-  assert.equal(dryRuns.length, 3, 'every package must be preflighted before any upload')
+  assert.equal(dryRuns.length, 4, 'every package must be preflighted before any upload')
   assert.deepEqual(invocations.map(item => ({ name: item.name, dryRun: item.dryRun })), [
     ...packages.map(item => ({ name: item.name, dryRun: true })),
     ...packages.map(item => ({ name: item.name, dryRun: false })),
@@ -117,7 +123,7 @@ test('publish path preflights every package, then uploads the same tarballs in d
     assert.ok(item.rest.includes('--access'), 'public access flag is required')
     assert.equal(item.rest[item.rest.indexOf('--access') + 1], 'public')
     assert.ok(item.rest.includes('--ignore-scripts'), 'lifecycle scripts must stay disabled')
-    assert.equal(item.rest[item.rest.indexOf('--tag') + 1], 'preview', 'preview releases must not take latest')
+    assert.equal(item.rest[item.rest.indexOf('--tag') + 1], 'latest', 'stable releases must take latest')
     const target = item.rest.find(value => value.startsWith('--registry='))
     assert.ok(target, 'every npm invocation must name its registry explicitly')
     assert.ok(target === '--registry=https://registry.npmjs.org/' || /^--registry=http:\/\/127\.0\.0\.1:\d+\/$/.test(target), `unexpected registry target: ${target}`)
@@ -130,9 +136,9 @@ test('publish path preflights every package, then uploads the same tarballs in d
   const published = JSON.parse(fs.readFileSync(path.join(fixture, 'published.json'), 'utf8'))
   assert.deepEqual(Object.keys(published).sort(), packages.map(item => item.name).sort())
   for (const item of packages) assert.equal(published[item.name].tarball, item.tarball)
-  for (const item of packages) assert.equal(published[item.name].distTag, 'preview')
-  assert.ok(!Object.values(published).some(item => item.distTag === 'latest'), 'no preview upload may move latest')
-  assert.deepEqual(uploads.slice(-1).map(item => item.integrity), [published[packages[2].name].integrity])
+  for (const item of packages) assert.equal(published[item.name].distTag, 'latest')
+  assert.ok(Object.values(published).every(item => item.distTag === 'latest'), 'all stable packages must use latest')
+  assert.deepEqual(uploads.slice(-1).map(item => item.integrity), [published[packages[3].name].integrity])
 }))
 
 test('publish retry skips a byte-identical version and never re-uploads it', () => withFixture(({ assets, fixture, packages }) => {
@@ -143,7 +149,7 @@ test('publish retry skips a byte-identical version and never re-uploads it', () 
   assert.deepEqual(uploads, [], 'a re-run must not publish an existing name/version again')
   assert.deepEqual(invocations, [], 'identical versions must skip dry-run too, including the stable embedding version')
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(fixture, 'published.json'), 'utf8')), firstUploads)
-  for (const item of packages) assert.equal(firstUploads[item.name].distTag, 'preview')
+  for (const item of packages) assert.equal(firstUploads[item.name].distTag, 'latest')
 }))
 
 test('partial publish retry preflights and uploads only the missing package', () => withFixture(({ assets, fixture, packages }) => {
@@ -171,7 +177,7 @@ test('publish retry rejects different registry bytes before invoking npm', () =>
 }))
 
 test('a failed final preflight prevents every upload', () => withFixture(({ assets, fixture, packages }) => {
-  assert.throws(() => runPublisher({ assets, fixture, environment: { SCRIPTOR_FAIL_DRY_RUN: packages[2].name } }), /Injected dry-run failure/)
+  assert.throws(() => runPublisher({ assets, fixture, environment: { SCRIPTOR_FAIL_DRY_RUN: packages[3].name } }), /Injected dry-run failure/)
   assert.deepEqual(readInvocations(fixture).map(item => ({ name: item.name, dryRun: item.dryRun })),
     packages.map(item => ({ name: item.name, dryRun: true })))
 }))

@@ -95,34 +95,35 @@ function SaveStatus({ buffer, store, sessionId, bufferKey }: { buffer: BufferSta
   </div>
 }
 
-export function EditorPanel({ sessionId, store, actions, memory }: {
-  sessionId: string; store: EditorStore; actions: EditorActions; memory: EditorMemory
+export function EditorPanel({ sessionId, store, actions, memory, documentKey, embedded = false, plainText = false }: {
+  sessionId: string; store: EditorStore; actions: EditorActions; memory: EditorMemory; documentKey?: string; embedded?: boolean; plainText?: boolean
 }) {
   const state = useEditor(store, sessionId)
-  const key = state.current
+  const key = documentKey ?? state.current
   const buffer = key ? state.buffers[key] : undefined
   const view = useRef<EditorView | null>(null)
   if (!key || !buffer) return <div className="webnovel nw-panel"><p className="nw-empty">暂无打开的文档</p></div>
   const dirty = buffer.text !== buffer.document.body
-  const editing = state.mode === 'edit' && !buffer.document.readOnly
+  const mode = embedded ? buffer.mode ?? 'read' : state.mode
+  const editing = mode === 'edit' && !buffer.document.readOnly
   const editorCommand = (run: (view: EditorView) => boolean) => { if (view.current) { run(view.current); view.current.focus() } }
-  return <div className="webnovel nw-panel">
-    <div className="nw-document-tabs" role="tablist" aria-label="已打开文档">{Object.entries(state.buffers).map(([tabKey, tab]) => <div key={tabKey} className={tabKey === key ? 'is-selected' : ''}>
+  return <div className="webnovel nw-panel" onPointerDownCapture={() => { if (embedded && state.current !== key) store.update(sessionId, { current: key }) }} onFocusCapture={() => { if (embedded && state.current !== key) store.update(sessionId, { current: key }) }}>
+    {!embedded && <div className="nw-document-tabs" role="tablist" aria-label="已打开文档">{Object.entries(state.buffers).map(([tabKey, tab]) => <div key={tabKey} className={tabKey === key ? 'is-selected' : ''}>
       <button type="button" role="tab" aria-selected={tabKey === key} title={`${tab.document.owner} / ${tab.document.ref.path}`} onClick={() => store.update(sessionId, { current: tabKey, selection: '', mode: state.mode === 'changes' ? 'read' : state.mode })}>{tab.document.name}{tab.text !== tab.document.body ? <span className="nw-dirty" aria-label="未保存">●</span> : null}</button>
       <button type="button" aria-label={`关闭 ${tab.document.name}`} title={`关闭 ${tab.document.name}`} disabled={tab.saving} onClick={() => { if (store.close(sessionId, tabKey)) memory.delete(sessionId + ':' + tabKey) }}><X size={12} /></button>
-    </div>)}</div>
-    <div className="nw-document-source"><strong>{buffer.document.owner}</strong><span title={buffer.document.absolutePath}>{buffer.document.ref.path}</span><small>{buffer.document.badge ? buffer.document.badge + ' · ' : ''}{buffer.document.version === null ? '无版本字段' : '版本 ' + buffer.document.version}{dirty ? ' · 未保存修改' : ''}</small></div>
+    </div>)}</div>}
+    <div className="nw-document-source"><strong>{buffer.document.owner}</strong>{!embedded && <span title={buffer.document.absolutePath}>{buffer.document.ref.path}</span>}<small>{buffer.document.badge ? buffer.document.badge + ' · ' : ''}{buffer.document.version === null ? '无版本字段' : '版本 ' + buffer.document.version}{dirty ? ' · 未保存修改' : ''}</small></div>
     <div className="nw-editor-toolbar">
-      <div className="nw-segment" role="group" aria-label="文档视图">{(['read', 'edit', 'changes'] as const).map(mode => <button type="button" key={mode} aria-pressed={state.mode === mode} disabled={mode === 'edit' && !!buffer.document.readOnly || mode === 'changes' && !buffer.saved} onClick={() => store.update(sessionId, { mode, selection: '' })}>{mode === 'read' ? '阅读' : mode === 'edit' ? '编辑' : '改动'}</button>)}</div>
+      <div className="nw-segment" role="group" aria-label="文档视图">{(['read', 'edit', 'changes'] as const).map(nextMode => <button type="button" key={nextMode} aria-pressed={mode === nextMode} disabled={nextMode === 'edit' && !!buffer.document.readOnly || nextMode === 'changes' && !buffer.saved} onClick={() => { if (embedded) store.updateBuffer(sessionId, key, { mode: nextMode }); else store.update(sessionId, { mode: nextMode, selection: '' }) }}>{nextMode === 'read' ? '阅读' : nextMode === 'edit' ? '编辑' : '改动'}</button>)}</div>
       <div className="nw-edit-tools"><button type="button" className="nw-icon" disabled={!editing} aria-label="撤销" title="撤销" onClick={() => editorCommand(undo)}><Undo2 size={15} /></button><button type="button" className="nw-icon" disabled={!editing} aria-label="重做" title="重做" onClick={() => editorCommand(redo)}><Redo2 size={15} /></button><button type="button" className="nw-icon" disabled={!editing} aria-label="搜索文档" title="搜索文档" onClick={() => editorCommand(openSearchPanel)}><Search size={15} /></button></div>
     </div>
     {buffer.document.readOnly ? <p className="nw-readonly">{buffer.document.readOnly}</p> : null}
     {state.notice ? <p className="nw-readonly" role="status">{state.notice}</p> : null}
     {buffer.error ? <div className="nw-error nw-error-bar" role="alert"><span>{buffer.error}</span><button type="button" disabled={buffer.saving} onClick={() => void store.compare(sessionId, key)}>比较磁盘版本</button></div> : null}
-    {buffer.disk ? <div className="nw-conflict"><strong>磁盘版本</strong><pre>{buffer.disk.body}</pre><p>对照当前编辑后选择处理方式；保留编辑会采用此磁盘版本作为新的保存基线。</p><div><button type="button" onClick={() => store.useDisk(sessionId, key, false)}><ArrowDownToLine size={14} />载入磁盘内容</button><button type="button" onClick={() => store.useDisk(sessionId, key, true)}>已比较，保留我的编辑</button></div></div> : null}
-    <div className="nw-editor-content">{state.mode === 'changes' ? <div className="nw-changes"><p>{buffer.saved?.route}</p>{buffer.saved?.changes.map((change, index) => <pre key={index} className={change.added ? 'nw-added' : 'nw-removed'}><span>{change.added ? '+ ' : '− '}</span>{change.value}</pre>)}</div>
+    {buffer.disk ? <div className="nw-conflict" role="status"><strong>磁盘内容已变化，未保存的编辑已保留</strong><details><summary>比较磁盘版本</summary><pre>{buffer.disk.body}</pre></details><p>对照当前编辑后选择处理方式；保留编辑会采用此磁盘版本作为新的保存基线。</p><div><button type="button" onClick={() => store.useDisk(sessionId, key, false)}><ArrowDownToLine size={14} />载入磁盘内容</button><button type="button" onClick={() => store.useDisk(sessionId, key, true)}>已比较，保留我的编辑</button></div></div> : null}
+    <div className="nw-editor-content">{mode === 'changes' ? <div className="nw-changes"><p>{buffer.saved?.route}</p>{buffer.saved?.changes.map((change, index) => <pre key={index} className={change.added ? 'nw-added' : 'nw-removed'}><span>{change.added ? '+ ' : '− '}</span>{change.value}</pre>)}</div>
       : editing ? <CodeEditor key={sessionId + ':' + key} identity={sessionId + ':' + key} buffer={buffer} store={store} sessionId={sessionId} bufferKey={key} memory={memory} viewRef={view} />
-        : <Reading text={buffer.text} markdown={/\.md$/i.test(buffer.document.name)} selection={text => store.update(sessionId, { selection: text })} openLink={href => actions.openLink(sessionId, href, buffer.document.absolutePath)} />}</div>
+        : <Reading text={buffer.text} markdown={!plainText && /\.md$/i.test(buffer.document.name)} selection={text => store.update(sessionId, { selection: text })} openLink={href => actions.openLink(sessionId, href, buffer.document.absolutePath)} />}</div>
     <SaveStatus {...{ buffer, store, sessionId }} bufferKey={key} />
     <footer className="nw-editor-footer"><button type="button" className="nw-quote" disabled={!state.selection.trim()} onMouseDown={event => event.preventDefault()} onClick={() => actions.quote(sessionId)}><Quote size={15} />引用到对话{state.selection ? ` · ${Array.from(state.selection).length} 字` : ''}</button>
       <span className="nw-count">{Array.from(buffer.text).length.toLocaleString()} 字</span>

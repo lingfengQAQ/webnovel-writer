@@ -1,4 +1,4 @@
-@deepseek-ai/dsh-scope@0.1.7-rc.2
+@deepseek-ai/dsh-util-workspace-path@0.2.0-rc.2
 SPDX: MIT
 Repository: git+https://github.com/deepseek-ai/deepseek-harness.git
 

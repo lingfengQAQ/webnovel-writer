@@ -1,6 +1,6 @@
 {
   "name": "@linfengqaqtat/dsh-scriptor-full",
-  "version": "0.1.0-preview.7",
+  "version": "8.0.0",
   "description": "网文写作工作台完整版（含可选嵌入提供方）",
   "keywords": [
     "dsh-plugin",
@@ -35,11 +35,11 @@
   "author": "lingfengQAQ",
   "dependencies": {
     "@linfengqaqtat/dsh-scriptor": "workspace:*",
-    "webnovel-embedding-provider": "workspace:*"
+    "@linfengqaqtat/dsh-scriptor-retrieval": "workspace:*"
   },
   "publishConfig": {
     "access": "public",
-    "tag": "preview",
+    "tag": "latest",
     "registry": "https://registry.npmjs.org/"
   }
 }

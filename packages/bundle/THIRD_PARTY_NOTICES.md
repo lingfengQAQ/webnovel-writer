@@ -17,9 +17,10 @@ Shared DSH/React peers are provided by the host and are not included in this bun
 | @codemirror/state | 6.7.1 | MIT | [Original notices](licenses/codemirror__state--6.7.1.txt) |
 | @codemirror/view | 6.43.8 | MIT | [Original notices](licenses/codemirror__view--6.43.8.txt) |
 | @deepseek-ai/cosmokit | 1.8.5 | MIT | [Original notices](licenses/deepseek-ai__cosmokit--1.8.5.txt) |
-| @deepseek-ai/dsh-brand | 0.1.7-rc.2 | MIT | [Original notices](licenses/deepseek-ai__dsh-brand--0.1.7-rc.2.txt) |
-| @deepseek-ai/dsh-scope | 0.1.7-rc.2 | MIT | [Original notices](licenses/deepseek-ai__dsh-scope--0.1.7-rc.2.txt) |
-| @deepseek-ai/dsh-system-prompt | 0.1.7-rc.2 | MIT | [Original notices](licenses/deepseek-ai__dsh-system-prompt--0.1.7-rc.2.txt) |
+| @deepseek-ai/dsh-brand | 0.2.0-rc.2 | MIT | [Original notices](licenses/deepseek-ai__dsh-brand--0.2.0-rc.2.txt) |
+| @deepseek-ai/dsh-scope | 0.2.0-rc.2 | MIT | [Original notices](licenses/deepseek-ai__dsh-scope--0.2.0-rc.2.txt) |
+| @deepseek-ai/dsh-system-prompt | 0.2.0-rc.2 | MIT | [Original notices](licenses/deepseek-ai__dsh-system-prompt--0.2.0-rc.2.txt) |
+| @deepseek-ai/dsh-util-workspace-path | 0.2.0-rc.2 | MIT | [Original notices](licenses/deepseek-ai__dsh-util-workspace-path--0.2.0-rc.2.txt) |
 | @deepseek-ai/schemastery | 3.18.4 | MIT | [Original notices](licenses/deepseek-ai__schemastery--3.18.4.txt) |
 | @lezer/common | 1.5.2 | MIT | [Original notices](licenses/lezer__common--1.5.2.txt) |
 | @lezer/css | 1.3.6 | MIT | [Original notices](licenses/lezer__css--1.3.6.txt) |

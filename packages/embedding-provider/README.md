@@ -1,8 +1,8 @@
 # Webnovel 嵌入 API 提供方
 
-> 本版 Scriptor preview.7 / 嵌入提供方 0.0.9 面向 **DSH 0.1.7-rc.2**。旧版 preview.6 / 提供方 0.0.8 对应 DSH 0.1.5-rc.2；升级时同时对齐宿主与插件，先备份再重启。
+> Scriptor 8.0.0 正式版配套 **DSH 0.2.0-rc.2**，三个功能插件与完整版均为 8.0.0。旧版升级先备份，参阅安装与升级说明。
 
-当前版本 0.0.9，GPL-3.0-only。本版适配 DSH 0.1.7-rc.2 的原生 profile 配置表单，保留嵌入、场景识别和重排的独立开关、凭据隔离与请求取消。
+当前版本 8.0.0，GPL-3.0-only。本版适配 DSH 0.2.0-rc.2 的原生 profile 配置表单，保留嵌入、场景识别和重排的独立开关、凭据隔离与请求取消。
 
 0.0.7 将重排默认等待时间改为 30 秒，可在原生“设置 → 模型 → 检索辅助模型 → 重排序 API”的主要设置中按秒填写，范围 0.1–120 秒。检索执行按同一预算等待，已有显式值继续生效；超时回退原排序，可随时取消。
 
@@ -12,7 +12,7 @@
 
 重排填写完整 API 地址、专用模型和凭据引用，默认对 40 个候选评分。接口采用 POST {model,query,documents,top_n} 与 results[{index,relevance_score}]，只在语义查询时调用，失败退回原排序；换重排模型不重建索引。
 
-用于 DSH `0.1.7-rc.2` 的独立插件，提供可选 `embeddings` 服务和原生设置卡片。首次安装保持停用，不会自动请求外部 API。
+用于 DSH `0.2.0-rc.2` 的独立插件，提供可选 `embeddings` 服务和原生设置卡片。首次安装保持停用，不会自动请求外部 API。
 
 在 **设置 → 模型 → 嵌入模型 → 混合检索 · 嵌入 API** 展开卡片后填写：
 
@@ -28,7 +28,7 @@ Gemini 原生每条文本单独构造请求，使用 `batchEmbedContents` 保持
 
 启用后，写作工作台的后台索引会调用提供方发送已启用书仓的定稿切片；检索时仅发送查询文本。后台使用单次 `embedBatch` 请求并统一管理退避重试，已成功批次保存后可继续复用。超时、临时错误有界重试；批次数量、索引、维数或数值异常会明确失败，不过滤输入造成错配。不跟随 HTTP 重定向转交凭据，不回显远端响应正文。取消、设置变更及卸载会终止在途请求。
 
-构建：`pnpm --filter webnovel-embedding-provider build`。本地分发包只包含 `lib/index.js`、`lib/client.js`、包描述、本说明、模型维度表、LICENSE 及第三方声明。安装到 profile 后，Cordis 条目使用 `name: 'webnovel-embedding-provider'`，无需把密钥写入条目配置。
+构建：`pnpm --filter @linfengqaqtat/dsh-scriptor-retrieval build`。本地分发包只包含 `lib/index.js`、`lib/client.js`、包描述、本说明、模型维度表、LICENSE 及第三方声明。安装到 profile 后，Cordis 条目使用 `name: '@linfengqaqtat/dsh-scriptor-retrieval'`，无需把密钥写入条目配置。
 
 协议依据：
 

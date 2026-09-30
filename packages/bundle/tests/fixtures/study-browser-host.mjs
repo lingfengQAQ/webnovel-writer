@@ -4,6 +4,8 @@ import * as path from 'node:path'
 import { LlmAdapter, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { attachIndexFixture } from './index-browser-extension.mjs'
 import { seedGraphFixture } from './graph-data.mjs'
+import { prepareResultCardDemo, demoToolChunks } from './result-card-demo.mjs'
+import * as present from '@deepseek-ai/dsh-tool-present'
 
 export const name = 'webnovel-browser-acceptance'
 export const inject = ['agents', 'agentLoop', 'sessionPersistence', 'workspaceRegistry', 'llm', 'sessionController', 'webServer', ...(process.env.WEBNOVEL_INDEX_CHECK ? ['embeddings', 'settings', 'credentials'] : [])]
@@ -12,7 +14,10 @@ export async function apply(ctx) {
   const root = process.env.WEBNOVEL_BROWSER_WORKSPACE
   const reportPath = process.env.WEBNOVEL_BROWSER_REPORT
   if (!root || !path.isAbsolute(root) || !reportPath) throw new Error('Missing isolated browser acceptance paths')
+  const sessionId = process.env.WEBNOVEL_BROWSER_SESSION ?? 'webnovel-browser-acceptance'
+  const exists = (await ctx.sessionPersistence.list()).some(snapshot => snapshot.header.id === sessionId)
   const put = (relative, text) => {
+    if (exists) return
     const target = path.join(root, relative)
     if (fs.existsSync(target)) return
     fs.mkdirSync(path.dirname(target), { recursive: true })
@@ -25,20 +30,30 @@ export async function apply(ctx) {
     put(`${book}/草稿区/草稿/卷01-来信/稿1.md`, `---\n身份:\n  卷: 1\n  章: 1\n  章名: 来信\n版本: 1\n父版本: null\n角色: 待审稿\n选定: true\n---\n# 来信\n\n${longText}`)
     put(`${book}/定稿/卷01/0002-归航.md`, '---\n身份:\n  卷: 1\n  章: 2\n  章名: 归航\n角色: 已定稿\n版本: 1\n---\n# 归航\n\n已定稿的原文，只读验证。\n')
   }
-  seedGraphFixture(path.join(root, '验收作品甲'))
+  if (!exists) seedGraphFixture(path.join(root, '验收作品甲'))
   put('书房/知识库/写作笔记.md', '# 写作笔记\n\n共享资料的原始内容。\n')
   put('书房/作者记忆/偏好.md', '# 作者偏好\n\n保留作者自己的句子。\n')
-  const report = { requests: 0, savesReceived: 0, indexErrorsReceived: 0, complete: 0, customEvents: 0 }
+  const report = { requests: 0, savesReceived: 0, indexErrorsReceived: 0, complete: 0, customEvents: 0, resumed: exists }
+  // Restored cards describe an earlier export. The book may have changed since;
+  // resume its runtime without reseeding files, revalidating old exports or replaying tools.
+  const demo = !exists && process.env.WEBNOVEL_RESULT_DEMO ? prepareResultCardDemo(root) : []
+  let demoStep = 0
   const persist = () => fs.writeFileSync(reportPath, JSON.stringify(report, null, 2))
   // Settings writes await Loader settlement in DSH 0.1.7. Do not await them from
   // this plugin's apply: that would keep the very Loader settlement they need pending.
-  const indexReady = (process.env.WEBNOVEL_INDEX_CHECK ? attachIndexFixture(ctx, root, report, persist) : Promise.resolve())
+  const indexReady = (process.env.WEBNOVEL_INDEX_CHECK ? attachIndexFixture(ctx, root, report, persist, { seed: !exists }) : Promise.resolve())
     .then(() => true).catch(error => { report.fixtureError = String(error); persist(); return false })
   class AcceptanceAdapter extends LlmAdapter {
     providerInfo(provider) { return { id: provider, name: '本地验收提供方' } }
     async listModels() { return [{ id: 'fixture', name: '本地验收' }] }
     async * stream(options) {
       report.requests++
+      if (demoStep < demo.length && options.tools?.some(tool => tool.name === 'novel_select_book')) {
+        const index = demoStep++
+        yield* demoToolChunks(index, demo[index])
+        persist()
+        return
+      }
       if (options.system?.includes('你为小说原文识别连续场景')) {
         const paragraphs = JSON.parse(options.messages[0].content[0].text)
         const text = JSON.stringify({ ends: [paragraphs.length] })
@@ -54,8 +69,10 @@ export async function apply(ctx) {
       if (messages.includes('作者通过书房编辑器保存了文档')) report.savesReceived++
       if (messages.includes('后台检索索引需要处理')) report.indexErrorsReceived++
       const document = new URL(`http://127.0.0.1:${ctx.webServer.port}/`)
-      document.searchParams.set('webnovel', JSON.stringify({ sessionId: 'webnovel-browser-acceptance', ref: { space: 'book:acceptance-a', path: '草稿区/草稿/卷01-来信/稿1.md' } }))
-      const text = '浏览器验收会话。\n\n[打开原文](<' + document + '>)\n\n保存通知已进入本次原生对话。'
+      document.searchParams.set('webnovel', JSON.stringify({ sessionId, ref: { space: 'book:acceptance-a', path: '草稿区/草稿/卷01-来信/稿1.md' } }))
+      const text = process.env.WEBNOVEL_RESULT_DEMO
+        ? '演示草稿、已校验的定稿合集与来源清单已准备好。'
+        : '浏览器验收会话。\n\n[打开原文](<' + document + '>)\n\n保存通知已进入本次原生对话。'
       yield { type: 'block-start', index: 0, blockType: 'text' }
       yield { type: 'text-delta', index: 0, text }
       yield { type: 'block-end', index: 0, block: { type: 'text', text } }
@@ -66,11 +83,10 @@ export async function apply(ctx) {
   }
   ctx.llm.registerAdapter(['webnovel-acceptance'], new AcceptanceAdapter())
   const workspace = await ctx.workspaceRegistry.create(root, 'S5 临时验收书房')
-  const sessionId = 'webnovel-browser-acceptance'
-  const exists = (await ctx.sessionPersistence.list()).some(snapshot => snapshot.header.id === sessionId)
   const options = { provider: 'webnovel-acceptance', model: 'fixture' }
   const handle = exists ? await ctx.agents.resume({ resumeSessionId: sessionId, agentOptions: options })
     : await ctx.agents.create({ sessionId, meta: { cwd: root, title: 'S5 书房验收' }, agentOptions: options })
+  if (process.env.WEBNOVEL_RESULT_DEMO) handle.agent.ctx.plugin(present, { maxFiles: 8 })
   const off = ctx.on('agent/status', ({ agent, status }) => {
     if (agent !== handle.agent || status !== 'idle') return
     report.complete++
@@ -78,7 +94,7 @@ export async function apply(ctx) {
     persist()
   })
   if (!exists) await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { done(); reject(new Error('Acceptance session did not finish')) }, 10000)
+    const timer = setTimeout(() => { done(); reject(new Error('Acceptance session did not finish')) }, process.env.WEBNOVEL_RESULT_DEMO ? 30000 : 10000)
     const done = ctx.on('agent/status', ({ agent, status }) => {
       if (agent !== handle.agent || status !== 'idle') return
       clearTimeout(timer); done(); resolve()
@@ -87,11 +103,11 @@ export async function apply(ctx) {
   })
   await ctx.sessionPersistence.flush()
   await workspace.attachSession(sessionId)
-  await ctx.sessionController.rename({ sessionId, title: process.env.WEBNOVEL_INDEX_CHECK ? 'S6 后台索引验收' : 'S5 书房验收' })
+  await ctx.sessionController.rename({ sessionId, title: process.env.WEBNOVEL_RESULT_DEMO ? '写作交互演示 · DSH 0.2' : process.env.WEBNOVEL_INDEX_CHECK ? 'S6 后台索引验收' : 'S5 书房验收' })
   const secondRoot = path.join(root, '另一工作范围')
   fs.mkdirSync(secondRoot, { recursive: true })
   const secondWorkspace = await ctx.workspaceRegistry.create(secondRoot, 'S5 空工作范围')
-  const secondId = 'webnovel-browser-second'
+  const secondId = process.env.WEBNOVEL_BROWSER_SESSION ? sessionId + '-second' : 'webnovel-browser-second'
   const secondExists = (await ctx.sessionPersistence.list()).some(snapshot => snapshot.header.id === secondId)
   const second = secondExists ? await ctx.agents.resume({ resumeSessionId: secondId, agentOptions: options })
     : await ctx.agents.create({ sessionId: secondId, meta: { cwd: secondRoot, title: 'S5 会话隔离验收' }, agentOptions: options })

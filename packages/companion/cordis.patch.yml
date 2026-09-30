@@ -1,0 +1,3 @@
+- insert:
+    - id: whale-companion
+      name: '@linfengqaqtat/dsh-scriptor-companion'

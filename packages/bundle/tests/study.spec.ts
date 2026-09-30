@@ -2,16 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
-import { createServer, type Server } from 'node:http'
 import { documentHash, serializeDocument } from '@webnovel/core'
 import { removeSync } from '../../core/src/repo/remove'
 import { StudyService } from '../src/study/service'
-import { createStudyHandler, savedMessage, trustedStudyRequest, type StudyWebRuntime } from '../src/study/web'
+import { createStudyHandler, savedMessage, STUDY_API_PATH, type StudyWebRuntime } from '../src/study/web'
 import type { StudySave } from '../src/study/types'
 import { BookIndexManager } from '../src/indexing/manager'
 
 let root: string
-let server: Server | undefined
 function put(relative: string, text: string) { const target = path.join(root, relative); fs.mkdirSync(path.dirname(target), { recursive: true }); fs.writeFileSync(target, text); return target }
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'webnovel-study-'))
@@ -24,7 +22,6 @@ beforeEach(() => {
   put('书房/知识库/笔记.md', '# 资料\n\n原文。\n')
 })
 afterEach(async () => {
-  if (server) { server.closeAllConnections(); await new Promise<void>(resolve => server!.close(() => resolve())); server = undefined }
   removeSync(root)
 })
 
@@ -94,25 +91,19 @@ async function serve(followup = vi.fn(), indexing?: BookIndexManager) {
   const child = { ...agent, id: 'child' }
   const runtime: StudyWebRuntime = {
     agents: { get: id => id === 'main' ? agent : id === 'child' ? child : undefined, roots: () => [agent] },
-    webRuntime: { trustedHosts: [] },
-    webServer: { register: () => () => {} },
-    connection: { requestRejection: request => request.headers.cookie === 'session=valid' ? undefined : 401 },
   }
-  server = createServer(createStudyHandler(runtime, indexing))
-  await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve))
-  const address = server.address()
-  if (!address || typeof address === 'string') throw new Error('no listener')
-  const base = `http://127.0.0.1:${address.port}`
+  const handler = createStudyHandler(runtime, indexing)
+  const base = 'http://127.0.0.1'
   const post = async (method: string, input: object, headers: Record<string, string> = {}) => {
-    const response = await fetch(base + '/webnovel/api/' + method, { method: 'POST', headers: {
-      origin: base, 'sec-fetch-site': 'same-origin', 'x-webnovel-request': '1', 'content-type': 'application/json', cookie: 'session=valid', ...headers,
-    }, body: JSON.stringify({ sessionId: 'main', ...input }) })
+    const response = await handler(new Request(base + STUDY_API_PATH + method, { method: 'POST', headers: {
+      'x-webnovel-request': '1', 'content-type': 'application/json', ...headers,
+    }, body: JSON.stringify({ sessionId: 'main', ...input }) }))
     return { status: response.status, body: await response.json() as { ok: boolean; value: StudySave; error: string } }
   }
-  return { post, followup }
+  return { post, followup, handler }
 }
 
-describe('书房 HTTP 保存和原生通知入口', () => {
+describe('已通过宿主认证的书房 Fetch 保存和原生通知入口', () => {
   it('#167 保存通知有核对完成条件，提交成功与失败不会混为补写设计', async () => {
     const { post, followup } = await serve()
     const ref = { space: 'book:fog', path: '作品契约/契约.md' }
@@ -132,7 +123,6 @@ describe('书房 HTTP 保存和原生通知入口', () => {
     const indexing = new BookIndexManager({ getProvider: () => undefined })
     try {
       const { post } = await serve(vi.fn(), indexing)
-      expect((await post('index-status', { space: 'book:fog' }, { cookie: '' })).status).toBe(401)
       expect((await post('index-control', { space: 'book:fog', action: 'enable', sessionId: 'child' })).status).toBe(400)
       expect((await post('index-status', { space: 'shared' })).status).toBe(400)
       expect((await post('index-control', { space: 'book:fog', action: 'invalid' })).status).toBe(400)
@@ -143,12 +133,22 @@ describe('书房 HTTP 保存和原生通知入口', () => {
       expect(fs.existsSync(path.join(root, '长夜/.webnovel/finalized-search-state.json'))).toBe(false)
     } finally { await indexing.close() }
   })
-  it('同源标识不能替代宿主认证，跨站和无浏览器来源都拒绝', async () => {
-    expect(trustedStudyRequest({ headers: { host: '127.0.0.1', 'x-webnovel-request': '1' } }, [])).toBe(false)
+  it('接收已认证的桌面请求，仍要求业务标识和 JSON 格式', async () => {
     const { post } = await serve()
-    expect((await post('shelf', {}, { cookie: '' })).status).toBe(401)
-    expect((await post('shelf', {}, { 'sec-fetch-site': 'cross-site' })).status).toBe(403)
-    expect((await post('shelf', {}, { origin: 'http://evil.example' })).status).toBe(403)
+    expect((await post('shelf', {})).status).toBe(200)
+    expect((await post('shelf', {}, { 'x-webnovel-request': '' })).status).toBe(403)
+    expect((await post('shelf', {}, { 'content-type': 'text/plain' })).status).toBe(400)
+  })
+  it('取消与超限请求不会进入保存', async () => {
+    const { handler, followup } = await serve()
+    const headers = { 'x-webnovel-request': '1', 'content-type': 'application/json' }
+    const abort = new AbortController(); abort.abort()
+    const canceled = await handler(new Request('http://127.0.0.1' + STUDY_API_PATH + 'save', { method: 'POST', headers, signal: abort.signal, body: '{}' }))
+    expect(canceled.status).toBe(400)
+    const oversized = await handler(new Request('http://127.0.0.1' + STUDY_API_PATH + 'save', { method: 'POST', headers, body: ' '.repeat(8 * 1024 * 1024 + 1) }))
+    expect(oversized.status).toBe(400)
+    expect(await oversized.text()).toContain('8 MiB')
+    expect(followup).not.toHaveBeenCalled()
   })
   it('只接受真实根 Agent，拒绝子级或任意客户端 cwd', async () => {
     const { post } = await serve()
