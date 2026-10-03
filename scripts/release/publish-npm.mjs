@@ -146,8 +146,9 @@ async function main() {
   }
   if (!args.includes('--publish')) return console.log('[npm] preflight passed; no packages published')
   assert.equal(process.env.GITHUB_ACTIONS, 'true', 'Publish with provenance from GitHub Actions')
+  assert.ok(process.env.NODE_AUTH_TOKEN?.trim(), 'Configure the NPM_TOKEN secret as NODE_AUTH_TOKEN before publishing')
   assert.ok(process.env.ACTIONS_ID_TOKEN_REQUEST_URL && process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN,
-    'Configure npm Trusted Publishing and GitHub id-token: write before publishing')
+    'Grant GitHub id-token: write for npm provenance before publishing')
   for (const { pkg, state } of plan) {
     if (state === 'identical') console.log(`[npm] already published with identical bytes: ${pkg.name}@${pkg.version}`)
     else runNpm(['publish', pkg.filename, '--ignore-scripts', '--access', 'public', '--tag', 'latest', '--provenance', `--registry=${registry}`])

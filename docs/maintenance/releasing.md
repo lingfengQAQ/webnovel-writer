@@ -55,7 +55,7 @@ Issue/PR 模板在默认 master 生效。v8 的 CI 使用 push/pull_request；�
 
 Release 草稿生成时，发布器核对公共 SHA、tag、四包身份、版本、校验和、许可证与 full 精确依赖，对所有待发布包先 dry-run，再允许上传。同版本只能接受字节一致的重试，不能重新打包覆盖。
 
-正式 Release 设 prerelease=false、latest=true。发布触发 v8-npm-publish.yml，使用 GitHub Actions OIDC Trusted Publishing 与 provenance，不注入 NPM_TOKEN。四个包须分别绑定本仓库的 v8-npm-publish.yml，并允许 npm publish。验证 npm latest 与 SHA512 后，再跑空白 profile 的 registry 安装、卸载与重装验收。信任配置或首次初始化未完成时保留发行草稿和产物，不能宣布发布完成。
+正式 Release 设 prerelease=false、latest=true。发布使用 v8-npm-publish.yml，由仓库 NPM_TOKEN secret 在发布步骤中注入 NODE_AUTH_TOKEN；setup-node 为 npmjs 配置认证。token 须允许四包直接发布，并满足包的 2FA 要求，不能使用仅暂存权限的 token。id-token: write 仅用于 provenance 来源证明。验证 npm latest 与 SHA512 后，再跑空白 profile 的 registry 安装、卸载与重装验收。token 缺失、过期或无权限时保留发行草稿和产物，不能宣布发布完成。
 
 本地默认只预检：node scripts/release/publish-npm.mjs --assets <附件目录>。--verify-only 检查 registry；--publish 只在 Actions 中可用。
 
@@ -75,7 +75,9 @@ npm 会把包的**首个版本**同时标为 `latest`，即使上传指定了 `-
 
 2026-09-22 的真实首发（`scriptor-v0.1.0-preview.5`）确认了两个 registry 行为：发布前的 404 可被 CDN 缓存五分钟；三个新包在显式 `--tag preview` 上传后都同时出现 `preview` 与 `latest`。当时的发布器把后者当作污染而在上传后的校验阶段失败（三包已上传、字节与附件一致、provenance 正常），随后尝试清除 `latest` 的恢复工作流在 registry 处 403，两者都已按上述规则修正。发布器现用独立查询参数绕过旧缓存，并为每包进行至多 40 轮、间隔 3 秒的可见性检查（单次请求超时 30 秒）。不能仅凭 CLI 的上传成功行或指定过 `--tag preview` 就宣布发行验收通过。
 
-### Trusted Publishing 配置与首次初始化
+### Trusted Publishing 历史配置与首次初始化
+
+2026-10-03 起按维护者要求恢复 npm token 认证，上节为当前流程。以下保留此前 OIDC 配置与首次初始化经验；已有 trust 不代替当前工作流要求的 NPM_TOKEN。
 
 npm >=11.5.1、Node >=22.14.0 支持 GitHub-hosted Actions 的 OIDC 发布；工作流固定安装 npm 12.0.1，授予 id-token: write，发布器要求 Actions 的 OIDC 环境而非长期 npm token。
 

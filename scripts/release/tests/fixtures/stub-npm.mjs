@@ -44,7 +44,8 @@ const state = JSON.parse(fs.existsSync(publish) ? fs.readFileSync(publish, 'utf8
 if (!dryRun) state[manifest.name] = entry
 fs.writeFileSync(publish, JSON.stringify(state, null, 2) + '\n')
 record({ command, rest, dryRun, name: manifest.name, version: manifest.version, tarball: entry.tarball,
-  integrity: entry.integrity, provenance: entry.provenance, distTag: entry.distTag, registryConfigured: registry })
+  integrity: entry.integrity, provenance: entry.provenance, distTag: entry.distTag, registryConfigured: registry,
+  tokenPresent: Boolean(process.env.NODE_AUTH_TOKEN?.trim()) })
 // npm 11/12 reject an existing stable version even during --dry-run.
 if (dryRun && state[manifest.name]?.version === manifest.version && !manifest.version.includes('-')) {
   console.error(`You cannot publish over the previously published versions: ${manifest.version}.`)
