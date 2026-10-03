@@ -46,15 +46,18 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24.15.0'
-      - name: Install npm with Trusted Publishing support
+          registry-url: https://registry.npmjs.org/
+      - name: Install pinned npm
         run: npm install --global npm@12.0.1
       - name: Download the original release packages and checksums
         working-directory: source
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release download "$RELEASE_TAG" --dir .tmp/npm-release --pattern '*.tgz' --pattern 'SHA256SUMS' --pattern 'release-manifest.json'
-      - name: Validate and publish original assets using OIDC
+      - name: Validate and publish original assets using npm token
         working-directory: source
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: node ../publisher/scripts/release/publish-npm.mjs --assets .tmp/npm-release --publish
   installation:
     needs: publish

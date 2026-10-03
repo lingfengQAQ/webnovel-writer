@@ -202,9 +202,13 @@ test('publish requires the GitHub Actions environment before any upload', () => 
   assert.deepEqual(invocations.filter(item => !item.dryRun), [], 'nothing may be uploaded without provenance authority')
 }))
 
-test('OIDC publishing succeeds without npm token and rejects missing id-token permission before uploads', () => withFixture(({ assets, fixture }) => {
+test('token publishing passes credentials to npm and rejects missing token or provenance permission before uploads', () => withFixture(({ assets, fixture }) => {
   const { invocations } = runPublisher({ assets, fixture })
-  assert.ok(invocations.some(item => !item.dryRun))
-  assert.throws(() => runPublisher({ assets, fixture, environment: { SCRIPTOR_STRIP_OIDC: '1' } }), /Configure npm Trusted Publishing/)
+  const uploads = invocations.filter(item => !item.dryRun)
+  assert.equal(uploads.length, 4)
+  assert.ok(uploads.every(item => item.tokenPresent && item.provenance))
+  assert.throws(() => runPublisher({ assets, fixture, environment: { SCRIPTOR_STRIP_NPM_TOKEN: '1' } }), /Configure the NPM_TOKEN secret/)
+  assert.deepEqual(readInvocations(fixture).filter(item => !item.dryRun), [])
+  assert.throws(() => runPublisher({ assets, fixture, environment: { SCRIPTOR_STRIP_OIDC: '1' } }), /id-token: write for npm provenance/)
   assert.deepEqual(readInvocations(fixture).filter(item => !item.dryRun), [])
 }))
