@@ -86,7 +86,7 @@ describe('提交说明(D4)', () => {
   })
 
   it('retcon 仅补偿通道', () => {
-    expect(() => formatCommitMessage({ prefix: 'retcon', summary: '偷改' })).toThrow(/不变量 4/)
+    expect(() => formatCommitMessage({ prefix: 'retcon', summary: '偷改' })).toThrow(/retcon: 前缀仅补偿通道可产生/)
   })
 })
 
@@ -94,7 +94,7 @@ describe('提交路径(不变量 8)', () => {
   it('拒绝知识库正文', () => {
     const r = checkCommitRelPath('知识库/写作方法库/节拍.md')
     expect(r.ok).toBe(false)
-    if (!r.ok) expect(r.reason).toMatch(/不变量 8/)
+    if (!r.ok) expect(r.reason).toMatch(/知识库条目正文不得进入定稿提交/)
   })
 
   it('允许定稿真源', () => {

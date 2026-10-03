@@ -1,0 +1,29 @@
+The published package and its upstream repository omit a standalone license file.
+Original npm metadata declares MIT. This snapshot preserves that declaration; the accompanying SPDX reference is not an upstream copyright notice.
+
+{
+  "name": "@antv/algorithm",
+  "version": "0.1.26",
+  "license": "MIT",
+  "author": {
+    "name": "https://github.com/orgs/antvis/people"
+  },
+  "repository": {
+    "url": "git+https://github.com/antvis/algorithm.git",
+    "type": "git"
+  },
+  "gitHead": "58b99ab9c937b8ec3e5e99b57624ad5a007682e5",
+  "dist": {
+    "shasum": "e3f5e7f1d8db5b415c3f31e32b119cbcafc8f5de",
+    "tarball": "https://registry.npmjs.org/@antv/algorithm/-/algorithm-0.1.26.tgz",
+    "fileCount": 164,
+    "integrity": "sha512-DVhcFSQ8YQnMNW34Mk8BSsfc61iC1sAnmcfYoXTAshYHuU50p/6b7x3QYaGctDNKWGvi1ub7mPcSY0bK+aN0qg==",
+    "signatures": [
+      {
+        "sig": "MEQCIF6HSIWpKtj2O1GO24dV0IZWNcyV/lg29jmcS4z3DK2FAiBBf/4mkans0PCZGY+y3KRZVRK++UMr/Map1acwO94cRw==",
+        "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA"
+      }
+    ],
+    "unpackedSize": 1235058
+  }
+}

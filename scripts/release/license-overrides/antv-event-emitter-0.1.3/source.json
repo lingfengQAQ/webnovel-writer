@@ -1,0 +1,12 @@
+{
+  "package": "@antv/event-emitter",
+  "version": "0.1.3",
+  "license": "MIT",
+  "metadataUrl": "https://registry.npmjs.org/@antv/event-emitter/0.1.3",
+  "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/MIT.txt",
+  "reason": "Exact published version declares a license but includes no separate license notice; retain the declaration and standard terms with distinct provenance.",
+  "files": {
+    "DECLARATION.txt": "4e68d9ec0542e16085d5013b40dd0c84dc2bc7683fd831298cd7d59c9b6eadbd",
+    "SPDX.txt": "3a616f2f59d852f24154a98d7e1a983bd6ee43a6c52dea4af6a54f3eb786b1be"
+  }
+}

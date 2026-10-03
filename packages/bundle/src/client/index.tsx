@@ -1,11 +1,12 @@
 import React from 'react'
 import { BookOpen } from 'lucide-react'
-import type { ClientHost, NativeEntry, NativeOpenService, WorkspaceProps } from './host'
+import type { ClientHost, NativeOpenService } from './host'
 import type { StudyDocument } from '../study/types'
 import { callStudy } from './api'
-import { WorkspaceStudyTabs } from './browser'
+import { installWorkspaceStudyTabs } from './workspace-slots'
 import { VisualView } from './visualization'
 import visualizationStyles from './visualization.css'
+import workflowArtworkStyles from './workflow-artwork.css'
 import { type EditorActions, type EditorMemory } from './editor'
 import { useSession } from './hooks'
 import { mainSessionOf } from './host'
@@ -61,7 +62,7 @@ export function apply(host: ClientHost) {
   host.effect(() => {
     const style = document.createElement('style')
     style.dataset.webnovel = ''
-    style.textContent = styles + '\n' + indexStyles + '\n' + visualizationStyles + '\n' + resultStyles
+    style.textContent = styles + '\n' + indexStyles + '\n' + visualizationStyles + '\n' + workflowArtworkStyles + '\n' + resultStyles
     document.head.append(style)
     const preventLoss = (event: BeforeUnloadEvent) => { if (store.hasUnsaved()) { event.preventDefault(); event.returnValue = '' } }
     window.addEventListener('beforeunload', preventLoss)
@@ -99,25 +100,7 @@ export function apply(host: ClientHost) {
     }
     return () => { offInitial(); document.removeEventListener('click', intercept, true) }
   }, 'webnovel: conversation document links')
-  host.slots.inject('sidebar.workspaces.directoryFlow', () => {
-    const original = host.slots.entries('sidebar.workspaces')[0]
-    if (!original) return
-    const NativeWorkspaces = original.component
-    const offRegion = host.slots.register({ name: 'sidebar.workspaces', priority: -40, children: { 'webnovel.workspaces': { kind: 'single', scope: 'root' } }, inject: () => ({ host, store, openIndex }) }, WorkspaceStudyTabs)
-    const nativeOptions = (entry: NativeEntry) => ({ ...(entry.store ? { store: entry.store } : {}), ...(entry.locale ? { locale: entry.locale } : {}), ...(entry.inject ? { inject: entry.inject } : {}) })
-    const offNative = host.slots.register({ name: 'webnovel.workspaces', ...nativeOptions(original), children: { 'webnovel.directoryFlow': { kind: 'single', scope: 'root' } } }, (props: WorkspaceProps) => <NativeWorkspaces {...props} renderSlot={(_key, owner, options) => props.renderSlot('webnovel.directoryFlow', owner, options)} />)
-    let offFlow: (() => void) | undefined
-    let previous: NativeEntry | undefined
-    const syncFlow = () => {
-      const flow = host.slots.entries('sidebar.workspaces.directoryFlow')[0]
-      if (flow === previous) return
-      offFlow?.(); offFlow = undefined; previous = flow
-      if (flow) offFlow = host.slots.register({ name: 'webnovel.directoryFlow', ...nativeOptions(flow) }, flow.component)
-    }
-    const offSubscribe = host.slots.subscribe('sidebar.workspaces.directoryFlow', syncFlow)
-    syncFlow()
-    return () => { offSubscribe(); offFlow?.(); offNative(); offRegion() }
-  })
+  installWorkspaceStudyTabs({ host, store, openIndex })
   host.inject(['remote.session'], scope => scope.effect(() => {
     const remote = scope.get('remote.session') as NativeOpenService | undefined
     if (!remote || typeof remote.openWorkspacePath !== 'function') return () => {}

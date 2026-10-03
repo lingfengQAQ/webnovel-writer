@@ -1,0 +1,57 @@
+@antv/g-lite@2.7.0
+SPDX: MIT
+Repository: git+https://github.com/antvis/g.git
+
+--- DECLARATION.txt ---
+The published package and its upstream repository omit a standalone license file.
+Original npm metadata declares MIT. This snapshot preserves that declaration; the accompanying SPDX reference is not an upstream copyright notice.
+
+{
+  "name": "@antv/g-lite",
+  "version": "2.7.0",
+  "license": "MIT",
+  "author": {
+    "name": "https://github.com/orgs/antvis/people"
+  },
+  "repository": {
+    "url": "git+https://github.com/antvis/g.git",
+    "type": "git",
+    "directory": "packages/g-lite"
+  },
+  "dist": {
+    "shasum": "f4e5a4b35376ddf11dfc21a60f0c4a7becf30499",
+    "tarball": "https://registry.npmjs.org/@antv/g-lite/-/g-lite-2.7.0.tgz",
+    "fileCount": 322,
+    "integrity": "sha512-uSzgHYa5bwR5L2Au7/5tsOhFmXKZKLPBH90+Q9bP9teVs5VT4kOAi0isPSpDI8uhdDC2/VrfTWu5K9HhWI6FWw==",
+    "signatures": [
+      {
+        "sig": "MEUCIFlQwcRbTQr8sXqtehLTxk25ho9DZpu7vJIqzD4UdbiJAiEA7X264Xg16OLZX0fuKsrSboTfcWFdxekbMA1wnJ+NACg=",
+        "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+      }
+    ],
+    "unpackedSize": 6063593
+  }
+}
+
+
+--- SPDX.txt ---
+Standard MIT license reference from SPDX v3.27.0. Template copyright placeholders are retained verbatim; no upstream copyright holders are invented.
+
+MIT License
+
+Copyright (c) <year> <copyright holders>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the
+following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
+EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.

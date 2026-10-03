@@ -32,7 +32,7 @@ export function isMutatingFileTool(exec: ToolCall): boolean {
 
 export function extractToolPath(exec: ToolCall): string | null {
   const args = asRecord(exec.arguments)
-  if (exec.name === 'write' || exec.name === 'edit') return stringField(args, 'file_path')
+  if (exec.name === 'read' || exec.name === 'write' || exec.name === 'edit') return stringField(args, 'file_path')
   if (exec.name === 'str_replace_editor') return stringField(args, 'path')
   return null
 }

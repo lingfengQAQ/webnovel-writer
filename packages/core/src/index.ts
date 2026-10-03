@@ -54,3 +54,4 @@ export {
 } from './repo/drafts'
 
 export { scanWorkspaceBooks, uniqueBookRoot, hasBooks, type WorkspaceBook } from './book/identity'
+export * from './reference'

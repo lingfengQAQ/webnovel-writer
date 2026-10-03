@@ -106,3 +106,5 @@ for (const [rel, fn] of THIN_SCRIPTS) {
 console.log(`[bundle] 脚本薄入口接缝校验 ok (${THIN_SCRIPTS.length} 个薄入口 -> lib/index.js)`)
 
 writeNotices(packageRoot, [hostBuild, clientBuild])
+// Vendored diagram artwork is source input rather than an npm dependency.
+fs.appendFileSync(path.join(packageRoot, 'THIRD_PARTY_NOTICES.md'), '\n## Archify artwork\n\nWriting workflow geometry and semantic styling derive from Archify 3.0.1 (MIT).\nCopyright (c) 2026 tt-a1i (Archify); Copyright (c) 2025 Cocoon AI.\n[Original notice](licenses/archify.txt). Source: https://github.com/tt-a1i/archify\n')

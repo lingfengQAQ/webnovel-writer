@@ -260,7 +260,7 @@ function archiveLocked(opts: ArchiveOptions, mode: 'ch' | 'retcon', identity?: R
     const existing = loaded.ops.find(op => fs.existsSync(path.join(opts.bookRoot, op.relPath)))
     if (existing) {
       const different = fs.readFileSync(path.join(opts.bookRoot, existing.relPath), 'utf8') !== existing.content
-      return { ok: false, reason: `定稿只增不改,目标已存在${different ? '且内容不同' : ''}，无匹配可信收据，请核对后处理:${existing.relPath}(不变量 4)` }
+      return { ok: false, reason: `定稿只增不改,目标已存在${different ? '且内容不同' : ''}，无匹配可信收据，请核对后处理:${existing.relPath}` }
     }
   } else if (loaded.ops.every(op => fs.existsSync(path.join(opts.bookRoot, op.relPath))
     && fs.readFileSync(path.join(opts.bookRoot, op.relPath), 'utf8') === op.content)) {

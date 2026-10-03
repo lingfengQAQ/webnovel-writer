@@ -14,7 +14,7 @@ import { isLegacySeedPlan } from '../design/legacy-seed'
 export interface DesignContentIssue {
   readonly 路径: string
   readonly 分部: string
-  readonly 问题: '缺少内容' | '缺少分部' | '状态冲突' | '疑似模板占位'
+  readonly 问题: '缺少内容' | '缺少分部' | '状态冲突' | '状态无效' | '疑似模板占位'
   readonly 阶段: DesignPosition
 }
 
@@ -76,6 +76,8 @@ export const 故事骨架九部 = [
 ] as const
 
 /** 分卷布局八个核心部分(格式规格 §3.2 / D26)。 */
+export const 骨架当前必要分部 = 故事骨架九部.slice(0, 2)
+
 export const 分卷布局八部 = [
   '故事阶段分配',
   '卷目标与卷末状态',
@@ -157,9 +159,21 @@ export function scanDesign(root: string, 卷 = 1): DesignFacts {
   }
 
   const 骨架文 = readText(root, paths.故事骨架())
-  const 骨架条目 = 骨架文 === null ? [] : parseLabeledStates(骨架文)
-  const 骨架当前阶段已确认 = 骨架文 !== null && 骨架条目.length > 0 && 骨架条目.every((e) => e.state === '已确认')
-  sections(骨架文, paths.故事骨架(), 故事骨架九部, '故事骨架')
+  const 骨架分部 = parseDesignContent(骨架文 ?? '')
+  const 骨架当前阶段已确认 = 骨架当前必要分部.every(name => {
+    const hits = 骨架分部.filter(part => part.名称 === name)
+    return hits.length > 0 && hits.every(part => part.状态 === '已确认')
+  })
+  for (const name of 故事骨架九部) {
+    const hits = 骨架分部.filter(part => part.名称 === name)
+    const states = new Set(hits.map(part => part.状态))
+    const required = 骨架当前必要分部.includes(name)
+    const 问题 = hits.length === 0 ? '缺少分部'
+      : states.size > 1 ? '状态冲突'
+        : hits.some(part => !['已确认', '暂定', '留白'].includes(part.状态 ?? '')) ? '状态无效'
+          : hits.some(part => !part.有内容 && (required || part.状态 === '已确认')) ? '缺少内容' : undefined
+    if (问题) 内容问题.push({ 路径: paths.故事骨架(), 分部: name, 问题, 阶段: '故事骨架' })
+  }
 
   const 分卷文 = readText(root, paths.分卷布局())
   const allocations = parseVolumeAllocations(分卷文 ?? '').filter(item => item.卷 === 卷)

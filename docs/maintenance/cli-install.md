@@ -4,15 +4,15 @@
 
 ```powershell
 dsh --profile scriptor --from-default-profile web --dump-config
-dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor@8.0.0
-dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-retrieval@8.0.0
-dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-companion@8.0.0
+dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor@8.1.0
+dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-retrieval@8.1.0
+dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-companion@8.1.0
 dsh --profile scriptor
 ```
 
 已有 profile 不再初始化。Desktop 使用自己的 desktop profile，不套用 Web 模板；优先在桌面插件页管理。
 
-完整版 @linfengqaqtat/dsh-scriptor-full@8.0.0 仅聚合主包与检索，不能与两个单独入口混装；桌宠独立可选。
+完整版 @linfengqaqtat/dsh-scriptor-full@8.1.0 仅聚合主包与检索，不能与两个单独入口混装；桌宠独立可选。
 
 ## 旧包迁移
 

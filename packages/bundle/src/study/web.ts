@@ -8,10 +8,11 @@ import type { FileRef, StudySave } from './types'
 import { studyFileLink } from './links'
 import type { BookIndexManager } from '../indexing/manager'
 import type { IndexAction } from '@webnovel/core'
+import { WorkflowObserver, observeWorkflow, type WorkflowAgent } from './workflow'
 
-interface StudyAgent {
+interface StudyAgent extends WorkflowAgent {
   readonly id: string
-  readonly session: { readonly header: { readonly cwd?: string } }
+  readonly session: WorkflowAgent['session'] & { readonly header: { readonly cwd?: string } }
   followup(message: UserMessage): void
 }
 
@@ -20,7 +21,7 @@ export interface StudyWebRuntime {
 }
 
 export const STUDY_API_PATH = '/api/webnovel/study/'
-const METHODS = ['shelf', 'tree', 'read', 'resolve', 'search', 'chapters', 'graph', 'save', 'notify', 'retry-commit', 'index-status', 'index-control']
+const METHODS = ['shelf', 'tree', 'read', 'resolve', 'search', 'chapters', 'graph', 'workflow', 'save', 'notify', 'retry-commit', 'index-status', 'index-control']
 
 function stringOf(record: Record<string, unknown>, key: string): string {
   const value = record[key]
@@ -94,7 +95,7 @@ export function notifySaved(agent: StudyAgent, message: string): Pick<StudySave,
   }
 }
 
-export function createStudyHandler(runtime: StudyWebRuntime, indexing?: BookIndexManager) {
+export function createStudyHandler(runtime: StudyWebRuntime, indexing?: BookIndexManager, workflow = new WorkflowObserver()) {
   const delivered = new Map<string, StudyAgent>()
   return async (request: Request): Promise<Response> => {
     if (request.method !== 'POST' || request.headers.get('x-webnovel-request') !== '1') {
@@ -138,6 +139,7 @@ export function createStudyHandler(runtime: StudyWebRuntime, indexing?: BookInde
         case 'search': value = service.search(stringOf(input, 'query')); break
         case 'chapters': value = service.chapters(stringOf(input, 'space')); break
         case 'graph': value = service.graph(stringOf(input, 'space')); break
+        case 'workflow': value = workflow.read(agent, service.indexBook(stringOf(input, 'space')).bookId); break
         case 'save': {
           const saved = service.save(refOf(input), stringOf(input, 'hash'), stringOf(input, 'body'), { sessionId, agentId: agent.id, toolName: 'author-editor' }, stringOf(input, 'operationId'))
           value = { ...saved, ...(saved.changed ? notify(saved) : { notification: 'not-required' }) }
@@ -164,7 +166,9 @@ export function createStudyHandler(runtime: StudyWebRuntime, indexing?: BookInde
 export function attachStudyWeb(ctx: Context, indexing?: BookIndexManager): void {
   if (typeof ctx.inject !== 'function') return
   ctx.inject(['connection', 'agents'], scope => {
-    const handler = createStudyHandler(scope, indexing)
+    const workflow = new WorkflowObserver()
+    observeWorkflow(scope, workflow)
+    const handler = createStudyHandler(scope, indexing, workflow)
     for (const method of METHODS) {
       scope.connection.fetch.register({ path: STUDY_API_PATH + method, methods: ['POST'], requestBody: 'streaming', fetch: handler })
     }

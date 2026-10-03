@@ -47,7 +47,7 @@ API key 由宿主凭据机制保管。不要把 key 写进作品、可提交的 
 使用主包安装方式时，可单独添加嵌入提供方；完整版已包含此包：
 
 ```powershell
-dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-retrieval@8.0.0
+dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-retrieval@8.1.0
 ```
 
 首次安装默认停用。在“设置 → 模型 → 嵌入模型 → 混合检索 · 嵌入 API”中配置协议、API 根地址、模型、维度及凭据，并显式启用。支持 OpenAI 兼容和 Gemini 原生协议；维度必须与服务真实输出一致。逐项说明、状态与失败处理见 [增强索引操作指南](enhanced-index.md)。

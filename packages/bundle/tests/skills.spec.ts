@@ -4,7 +4,7 @@ import * as path from 'node:path'
 import { parse as parseYaml } from 'yaml'
 
 /**
- * 主控+节点+聚合技能（全生命周期 10 份）。
+ * 主控+节点+聚合技能（全生命周期 11 份）。
  * 目录名即 frontmatter name（Agent Skills 规范硬要求：name 必须与父目录名一致）。
  */
 const EXPECTED_SKILLS: ReadonlyArray<{ readonly name: string; readonly 中文名: string }> = [
@@ -18,6 +18,7 @@ const EXPECTED_SKILLS: ReadonlyArray<{ readonly name: string; readonly 中文名
   { name: 'novel-revision', 中文名: '改稿' },
   { name: 'novel-settle', 中文名: '定稿沉淀' },
   { name: 'novel-export', 中文名: '最小导出' },
+  { name: 'novel-analyze', 中文名: '参考小说拆解' },
 ]
 
 const BLACKLIST = ['家位', '门控', '闭环', '抓手', '世代']
@@ -49,7 +50,7 @@ function readFrontmatter(text: string): Record<string, unknown> {
 }
 
 describe('聚合 skills 体系（渐进式披露与 Subagent 协同）', () => {
-  it('交付 10 份 SKILL.md，文件名一一对应', () => {
+  it('交付 11 份 SKILL.md，文件名一一对应', () => {
     for (const s of EXPECTED_SKILLS) {
       expect(fs.existsSync(skillPath(s.name)), `${s.name}/SKILL.md 应存在`).toBe(true)
     }
@@ -63,11 +64,11 @@ describe('聚合 skills 体系（渐进式披露与 Subagent 协同）', () => {
     expect(onDisk).toEqual([...EXPECTED_SKILLS.map((s) => s.name)].sort())
   })
 
-  it('工作台总控：含状态校准第一律 + 六大铁律 + 节点路由 + 子代理交接 + 章内接续', () => {
+  it('工作台总控：含状态校准 + 主控边界 + 节点路由 + 子代理交接 + 章内接续', () => {
     const text = readSkill('novel-director')
     expect(text).toContain('novel_get_story_status')
     expect(text).toContain('状态校准第一律')
-    expect(text).toContain('六大铁律')
+    expect(text).toContain('主控六大边界')
     expect(text).toContain('严禁代写正文')
     expect(text).toContain('节点路由')
     expect(text).toContain('novel_create_book')
@@ -191,7 +192,7 @@ describe('聚合 skills 体系（渐进式披露与 Subagent 协同）', () => {
     expect(text).toContain('最小导出.mjs')
     expect(text).toContain('已定稿')
     expect(text).toContain('--校验 true')
-    expect(text).toContain('首版不支持原位覆盖')
+    expect(text).toContain('不支持原位覆盖')
     expect(text).toContain('校验.ok:true')
     expect(text).toContain('不覆盖')
     expect(text).toContain('逐字节一致')

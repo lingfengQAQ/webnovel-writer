@@ -1,0 +1,2202 @@
+{
+  "bookId": "acceptance-a",
+  "bookName": "红楼梦",
+  "maxChapter": 33,
+  "records": [
+    {
+      "id": "baoyu",
+      "label": "贾宝玉",
+      "kind": "人物",
+      "chapter": 3,
+      "revealChapter": 3,
+      "status": "在府",
+      "preview": "贾政与王夫人之子。衔玉而生，在荣国府长大。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/贾宝玉.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "daiyu",
+      "label": "林黛玉",
+      "kind": "人物",
+      "chapter": 3,
+      "revealChapter": 3,
+      "status": "居荣国府",
+      "preview": "贾敏与林如海之女，丧母后进京投奔外祖母。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/林黛玉.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "daiyu",
+      "label": "林黛玉",
+      "kind": "人物",
+      "chapter": 23,
+      "revealChapter": 23,
+      "status": "居潇湘馆",
+      "preview": "迁入大观园的潇湘馆，与宝玉共读《西厢记》。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/林黛玉.md"
+      },
+      "line": 8
+    },
+    {
+      "id": "baochai",
+      "label": "薛宝钗",
+      "kind": "人物",
+      "chapter": 4,
+      "revealChapter": 4,
+      "status": "随家入京",
+      "preview": "薛姨妈之女，随家人暂住贾府。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/薛宝钗.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "jiamu",
+      "label": "贾母",
+      "kind": "人物",
+      "chapter": 2,
+      "revealChapter": 2,
+      "status": "在府",
+      "preview": "荣国府的长辈，宝玉的祖母、黛玉的外祖母。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/贾母.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "jiazheng",
+      "label": "贾政",
+      "kind": "人物",
+      "chapter": 2,
+      "revealChapter": 2,
+      "status": "在府",
+      "preview": "宝玉与元春之父，对宝玉的功课和行止要求严格。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/贾政.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "wang",
+      "label": "王夫人",
+      "kind": "人物",
+      "chapter": 3,
+      "revealChapter": 3,
+      "status": "在府",
+      "preview": "贾政之妻，宝玉、元春之母，薛姨妈的姐姐。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/王夫人.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "feng",
+      "label": "王熙凤",
+      "kind": "人物",
+      "chapter": 3,
+      "revealChapter": 3,
+      "status": "掌家",
+      "preview": "贾琏之妻，料理荣府家务。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/王熙凤.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "jialian",
+      "label": "贾琏",
+      "kind": "人物",
+      "chapter": 2,
+      "revealChapter": 2,
+      "status": "在府",
+      "preview": "贾赦之子，王熙凤之夫。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/贾琏.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "xuepan",
+      "label": "薛蟠",
+      "kind": "人物",
+      "chapter": 4,
+      "revealChapter": 4,
+      "status": "入京",
+      "preview": "薛姨妈之子，因争夺英莲使冯渊被打死。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/薛蟠.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "xueyi",
+      "label": "薛姨妈",
+      "kind": "人物",
+      "chapter": 4,
+      "revealChapter": 4,
+      "status": "客居",
+      "preview": "薛蟠、宝钗之母，王夫人的妹妹。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/薛姨妈.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "yuanchun",
+      "label": "贾元春",
+      "kind": "人物",
+      "chapter": 2,
+      "revealChapter": 2,
+      "status": "在宫",
+      "preview": "贾政与王夫人之女，宝玉之姊。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/贾元春.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "yuanchun",
+      "label": "贾元春",
+      "kind": "人物",
+      "chapter": 16,
+      "revealChapter": 16,
+      "status": "封妃",
+      "preview": "晋封贤德妃，贾府为省亲营建园林。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/贾元春.md"
+      },
+      "line": 8
+    },
+    {
+      "id": "tanchun",
+      "label": "贾探春",
+      "kind": "人物",
+      "chapter": 3,
+      "revealChapter": 3,
+      "status": "在府",
+      "preview": "贾政与赵姨娘之女，宝玉的妹妹。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/贾探春.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "xiangling",
+      "label": "甄英莲",
+      "kind": "人物",
+      "chapter": 1,
+      "revealChapter": 1,
+      "status": "失踪",
+      "preview": "甄士隐之女，元宵节被拐。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/香菱.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "xiangling",
+      "label": "香菱",
+      "kind": "人物",
+      "chapter": 4,
+      "revealChapter": 4,
+      "status": "随薛家入京",
+      "preview": "门子认出被拐的英莲，现随薛家入京。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/香菱.md"
+      },
+      "line": 8
+    },
+    {
+      "id": "yucun",
+      "label": "贾雨村",
+      "kind": "人物",
+      "chapter": 1,
+      "revealChapter": 1,
+      "status": "求取功名",
+      "preview": "受甄士隐资助进京应试。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/贾雨村.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "yucun",
+      "label": "贾雨村",
+      "kind": "人物",
+      "chapter": 4,
+      "revealChapter": 4,
+      "status": "应天知府",
+      "preview": "审理薛蟠命案，受门子提示，徇情枉法。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/贾雨村.md"
+      },
+      "line": 8
+    },
+    {
+      "id": "keqing",
+      "label": "秦可卿",
+      "kind": "人物",
+      "chapter": 5,
+      "revealChapter": 5,
+      "status": "在宁府",
+      "preview": "贾蓉之妻，宁国府的年轻媳妇。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/秦可卿.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "keqing",
+      "label": "秦可卿",
+      "kind": "人物",
+      "chapter": 13,
+      "revealChapter": 13,
+      "status": "亡故",
+      "preview": "秦可卿病故，宁府筹办丧事。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/秦可卿.md"
+      },
+      "line": 8
+    },
+    {
+      "id": "jiarong",
+      "label": "贾蓉",
+      "kind": "人物",
+      "chapter": 2,
+      "revealChapter": 2,
+      "status": "在宁府",
+      "preview": "贾珍之子，秦可卿之夫。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/贾蓉.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "jiazhen",
+      "label": "贾珍",
+      "kind": "人物",
+      "chapter": 2,
+      "revealChapter": 2,
+      "status": "掌宁府",
+      "preview": "贾蓉之父，宁国府当家人。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/贾珍.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "xiren",
+      "label": "袭人",
+      "kind": "人物",
+      "chapter": 3,
+      "revealChapter": 3,
+      "status": "服侍宝玉",
+      "preview": "宝玉身边的丫鬟。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/人物/袭人.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "rong",
+      "label": "荣国府",
+      "kind": "组织",
+      "chapter": 2,
+      "revealChapter": 2,
+      "status": "存续",
+      "preview": "贾府荣国一支，贾母、贾政等居于此。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/组织/荣国府.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "ning",
+      "label": "宁国府",
+      "kind": "组织",
+      "chapter": 2,
+      "revealChapter": 2,
+      "status": "存续",
+      "preview": "贾府宁国一支，由贾珍掌家。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/组织/宁国府.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "xue",
+      "label": "薛家",
+      "kind": "组织",
+      "chapter": 4,
+      "revealChapter": 4,
+      "status": "入京",
+      "preview": "薛姨妈、薛蟠与宝钗所在家族。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/组织/薛家.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "garden",
+      "label": "大观园",
+      "kind": "地点",
+      "chapter": 17,
+      "revealChapter": 17,
+      "status": "建成",
+      "preview": "为元春省亲营建的园林。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/地点/大观园.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "garden",
+      "label": "大观园",
+      "kind": "地点",
+      "chapter": 23,
+      "revealChapter": 23,
+      "status": "入住",
+      "preview": "宝玉与姐妹们迁入园中居住。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/地点/大观园.md"
+      },
+      "line": 8
+    },
+    {
+      "id": "xiaoxiang",
+      "label": "潇湘馆",
+      "kind": "地点",
+      "chapter": 23,
+      "revealChapter": 23,
+      "status": "黛玉居所",
+      "preview": "位于大观园，黛玉迁居于此。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/地点/潇湘馆.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "yihong",
+      "label": "怡红院",
+      "kind": "地点",
+      "chapter": 23,
+      "revealChapter": 23,
+      "status": "宝玉居所",
+      "preview": "位于大观园，宝玉迁居于此。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/地点/怡红院.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "hengwu",
+      "label": "蘅芜苑",
+      "kind": "地点",
+      "chapter": 23,
+      "revealChapter": 23,
+      "status": "宝钗居所",
+      "preview": "位于大观园，宝钗迁居于此。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/地点/蘅芜苑.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "arrival",
+      "label": "黛玉入府",
+      "kind": "事件",
+      "chapter": 3,
+      "revealChapter": 3,
+      "status": "已发生",
+      "preview": "黛玉进荣国府，拜见贾母等人，与宝玉初次相见。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/事件/黛玉入府.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "case",
+      "label": "葫芦案",
+      "kind": "事件",
+      "chapter": 4,
+      "revealChapter": 4,
+      "status": "已结案",
+      "preview": "贾雨村审理薛蟠命案，借护官符辨认权势家族。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/事件/葫芦案.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "funeral",
+      "label": "可卿丧事",
+      "kind": "事件",
+      "chapter": 13,
+      "revealChapter": 13,
+      "status": "筹办",
+      "preview": "秦可卿病故，贾珍请王熙凤协理宁国府。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/事件/可卿丧事.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "funeral",
+      "label": "可卿丧事",
+      "kind": "事件",
+      "chapter": 16,
+      "revealChapter": 16,
+      "status": "已结束",
+      "preview": "丧事结束，协理关系不再作为当前有效关系展示。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/事件/可卿丧事.md"
+      },
+      "line": 8
+    },
+    {
+      "id": "visit",
+      "label": "元妃省亲",
+      "kind": "事件",
+      "chapter": 18,
+      "revealChapter": 18,
+      "status": "已发生",
+      "preview": "元春归家省亲，游览大观园，与家人相见。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/事件/元妃省亲.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "reading",
+      "label": "共读西厢",
+      "kind": "事件",
+      "chapter": 23,
+      "revealChapter": 23,
+      "status": "已发生",
+      "preview": "宝玉、黛玉在园中共读《西厢记》。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/事件/共读西厢.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "burial",
+      "label": "黛玉葬花",
+      "kind": "事件",
+      "chapter": 27,
+      "revealChapter": 27,
+      "status": "已发生",
+      "preview": "黛玉葬花吟诗，宝玉听见葬花吟。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/事件/黛玉葬花.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "beating",
+      "label": "宝玉挨打",
+      "kind": "事件",
+      "chapter": 33,
+      "revealChapter": 33,
+      "status": "已发生",
+      "preview": "贾政责打宝玉，王夫人与贾母赶来劝阻。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/事件/宝玉挨打.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "jade",
+      "label": "通灵宝玉",
+      "kind": "线索",
+      "chapter": 3,
+      "revealChapter": 3,
+      "status": "已埋",
+      "preview": "宝玉随身佩带的玉，刻有文字。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/线索/通灵宝玉.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "jade",
+      "label": "通灵宝玉",
+      "kind": "线索",
+      "chapter": 8,
+      "revealChapter": 8,
+      "status": "已示",
+      "preview": "宝钗察看玉上的字，金锁的文字与之对应。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/线索/通灵宝玉.md"
+      },
+      "line": 8
+    },
+    {
+      "id": "lock",
+      "label": "金锁",
+      "kind": "线索",
+      "chapter": 8,
+      "revealChapter": 8,
+      "status": "已埋",
+      "preview": "宝钗佩带金锁，莺儿提到金锁与宝玉文字相配。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/线索/金锁.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "lock",
+      "label": "金锁",
+      "kind": "线索",
+      "chapter": 28,
+      "revealChapter": 28,
+      "status": "已示",
+      "preview": "端午赐礼后，金玉之说再次成为人物间的牵挂。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/线索/金锁.md"
+      },
+      "line": 8
+    },
+    {
+      "id": "missing",
+      "label": "英莲下落",
+      "kind": "线索",
+      "chapter": 1,
+      "revealChapter": 1,
+      "status": "已埋",
+      "preview": "英莲被拐后下落不明，留待后文交代。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/线索/英莲下落.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "missing",
+      "label": "英莲下落",
+      "kind": "线索",
+      "chapter": 4,
+      "revealChapter": 4,
+      "status": "已收",
+      "preview": "门子说明英莲的身份与经历，下落已经交代。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/线索/英莲下落.md"
+      },
+      "line": 8
+    },
+    {
+      "id": "finance",
+      "label": "财计隐患",
+      "kind": "线索",
+      "chapter": 2,
+      "status": "待披露",
+      "preview": "作者备忘：贾府收支隐患将逐步显露，尚未标注披露章。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/线索/财计隐患.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "oldaccount",
+      "label": "旧账册",
+      "kind": "线索",
+      "status": "待核对",
+      "preview": "作者材料中保留的一册旧账，尚未确定进入哪一章。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/线索/旧账册.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "poetry",
+      "label": "海棠诗社",
+      "kind": "组织",
+      "chapter": 33,
+      "status": "拟成立",
+      "preview": "后续拟让探春发起结社，组织宝玉、黛玉等人作诗。",
+      "plan": true,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "卷纲/后续安排.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "society",
+      "label": "结社作诗",
+      "kind": "事件",
+      "chapter": 33,
+      "status": "计划",
+      "preview": "后续章节安排：由探春发起，在秋爽斋结社。",
+      "plan": true,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "卷纲/后续安排.md"
+      },
+      "line": 9
+    }
+  ],
+  "edges": [
+    {
+      "id": "father",
+      "from": "jiazheng",
+      "to": "baoyu",
+      "label": "父子",
+      "kind": "关系",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "贾政与宝玉为父子，贾政对其教养严格。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "father",
+      "from": "jiazheng",
+      "to": "baoyu",
+      "label": "父子",
+      "kind": "关系",
+      "chapter": 33,
+      "revealChapter": 33,
+      "plan": false,
+      "relation": true,
+      "status": "紧张",
+      "preview": "第三十三章记录：责打之后，父子关系处于紧张状态。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 8
+    },
+    {
+      "id": "mother",
+      "from": "wang",
+      "to": "baoyu",
+      "label": "母子",
+      "kind": "关系",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "母子",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 15
+    },
+    {
+      "id": "grandson",
+      "from": "jiamu",
+      "to": "baoyu",
+      "label": "祖孙",
+      "kind": "关系",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "祖孙",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 22
+    },
+    {
+      "id": "granddaughter",
+      "from": "jiamu",
+      "to": "daiyu",
+      "label": "祖孙",
+      "kind": "关系",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "祖孙",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 29
+    },
+    {
+      "id": "cousins",
+      "from": "baoyu",
+      "to": "daiyu",
+      "label": "姑表亲",
+      "kind": "关系",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "姑表亲",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 36
+    },
+    {
+      "id": "couple",
+      "from": "feng",
+      "to": "jialian",
+      "label": "夫妻",
+      "kind": "关系",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "夫妻",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 43
+    },
+    {
+      "id": "parents",
+      "from": "jiazheng",
+      "to": "wang",
+      "label": "夫妻",
+      "kind": "关系",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "夫妻",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 50
+    },
+    {
+      "id": "sister",
+      "from": "yuanchun",
+      "to": "baoyu",
+      "label": "姐弟",
+      "kind": "关系",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "姐弟",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 57
+    },
+    {
+      "id": "younger",
+      "from": "baoyu",
+      "to": "tanchun",
+      "label": "兄妹",
+      "kind": "关系",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "兄妹",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 64
+    },
+    {
+      "id": "servant",
+      "from": "xiren",
+      "to": "baoyu",
+      "label": "服侍",
+      "kind": "关系",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "服侍",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 71
+    },
+    {
+      "id": "aunt",
+      "from": "wang",
+      "to": "xueyi",
+      "label": "姐妹",
+      "kind": "关系",
+      "chapter": 4,
+      "revealChapter": 4,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "姐妹",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 78
+    },
+    {
+      "id": "xuechild",
+      "from": "xueyi",
+      "to": "baochai",
+      "label": "母女",
+      "kind": "关系",
+      "chapter": 4,
+      "revealChapter": 4,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "母女",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 85
+    },
+    {
+      "id": "xuebrother",
+      "from": "xuepan",
+      "to": "baochai",
+      "label": "兄妹",
+      "kind": "关系",
+      "chapter": 4,
+      "revealChapter": 4,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "兄妹",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 92
+    },
+    {
+      "id": "maternal",
+      "from": "baoyu",
+      "to": "baochai",
+      "label": "姨表亲",
+      "kind": "关系",
+      "chapter": 4,
+      "revealChapter": 4,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "姨表亲",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 99
+    },
+    {
+      "id": "keqingmarriage",
+      "from": "jiarong",
+      "to": "keqing",
+      "label": "夫妻",
+      "kind": "关系",
+      "chapter": 5,
+      "revealChapter": 5,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "夫妻",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 106
+    },
+    {
+      "id": "rong-jiamu",
+      "from": "jiamu",
+      "to": "rong",
+      "label": "属荣府",
+      "kind": "关系",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "属荣府",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 113
+    },
+    {
+      "id": "rong-jiazheng",
+      "from": "jiazheng",
+      "to": "rong",
+      "label": "属荣府",
+      "kind": "关系",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "属荣府",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 120
+    },
+    {
+      "id": "rong-wang",
+      "from": "wang",
+      "to": "rong",
+      "label": "属荣府",
+      "kind": "关系",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "属荣府",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 127
+    },
+    {
+      "id": "rong-feng",
+      "from": "feng",
+      "to": "rong",
+      "label": "属荣府",
+      "kind": "关系",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "属荣府",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 134
+    },
+    {
+      "id": "rong-jialian",
+      "from": "jialian",
+      "to": "rong",
+      "label": "属荣府",
+      "kind": "关系",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "属荣府",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 141
+    },
+    {
+      "id": "rong-baoyu",
+      "from": "baoyu",
+      "to": "rong",
+      "label": "属荣府",
+      "kind": "关系",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "属荣府",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 148
+    },
+    {
+      "id": "rong-tanchun",
+      "from": "tanchun",
+      "to": "rong",
+      "label": "属荣府",
+      "kind": "关系",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "属荣府",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 155
+    },
+    {
+      "id": "ning-jiarong",
+      "from": "jiarong",
+      "to": "ning",
+      "label": "属宁府",
+      "kind": "关系",
+      "chapter": 5,
+      "revealChapter": 5,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "属宁府",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 162
+    },
+    {
+      "id": "ning-jiazhen",
+      "from": "jiazhen",
+      "to": "ning",
+      "label": "属宁府",
+      "kind": "关系",
+      "chapter": 5,
+      "revealChapter": 5,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "属宁府",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 169
+    },
+    {
+      "id": "ning-keqing",
+      "from": "keqing",
+      "to": "ning",
+      "label": "属宁府",
+      "kind": "关系",
+      "chapter": 5,
+      "revealChapter": 5,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "属宁府",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 176
+    },
+    {
+      "id": "xue-xuepan",
+      "from": "xuepan",
+      "to": "xue",
+      "label": "属薛家",
+      "kind": "关系",
+      "chapter": 4,
+      "revealChapter": 4,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "属薛家",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 183
+    },
+    {
+      "id": "xue-xueyi",
+      "from": "xueyi",
+      "to": "xue",
+      "label": "属薛家",
+      "kind": "关系",
+      "chapter": 4,
+      "revealChapter": 4,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "属薛家",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 190
+    },
+    {
+      "id": "xue-baochai",
+      "from": "baochai",
+      "to": "xue",
+      "label": "属薛家",
+      "kind": "关系",
+      "chapter": 4,
+      "revealChapter": 4,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "属薛家",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 197
+    },
+    {
+      "id": "xue-xiangling",
+      "from": "xiangling",
+      "to": "xue",
+      "label": "属薛家",
+      "kind": "关系",
+      "chapter": 4,
+      "revealChapter": 4,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "属薛家",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 204
+    },
+    {
+      "id": "manage",
+      "from": "feng",
+      "to": "ning",
+      "label": "协理",
+      "kind": "关系",
+      "chapter": 13,
+      "revealChapter": 13,
+      "plan": false,
+      "relation": true,
+      "status": "临时协理",
+      "preview": "受贾珍之请协理宁府丧事。该临时关系在第十六章起不再有效。",
+      "endChapter": 16,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 211
+    },
+    {
+      "id": "guest",
+      "from": "daiyu",
+      "to": "rong",
+      "label": "客居",
+      "kind": "关系",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "入府后随贾母生活；第二十三章起以潇湘馆为居所记录。",
+      "endChapter": 23,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 219
+    },
+    {
+      "id": "reside-daiyu",
+      "from": "daiyu",
+      "to": "xiaoxiang",
+      "label": "居住",
+      "kind": "关系",
+      "chapter": 23,
+      "revealChapter": 23,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "居住",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 227
+    },
+    {
+      "id": "reside-baoyu",
+      "from": "baoyu",
+      "to": "yihong",
+      "label": "居住",
+      "kind": "关系",
+      "chapter": 23,
+      "revealChapter": 23,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "居住",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 234
+    },
+    {
+      "id": "reside-baochai",
+      "from": "baochai",
+      "to": "hengwu",
+      "label": "居住",
+      "kind": "关系",
+      "chapter": 23,
+      "revealChapter": 23,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "居住",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 241
+    },
+    {
+      "id": "garden-xiaoxiang",
+      "from": "xiaoxiang",
+      "to": "garden",
+      "label": "位于",
+      "kind": "关系",
+      "chapter": 23,
+      "revealChapter": 23,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "位于",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 248
+    },
+    {
+      "id": "garden-yihong",
+      "from": "yihong",
+      "to": "garden",
+      "label": "位于",
+      "kind": "关系",
+      "chapter": 23,
+      "revealChapter": 23,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "位于",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 255
+    },
+    {
+      "id": "garden-hengwu",
+      "from": "hengwu",
+      "to": "garden",
+      "label": "位于",
+      "kind": "关系",
+      "chapter": 23,
+      "revealChapter": 23,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "位于",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 262
+    },
+    {
+      "id": "garden-rong",
+      "from": "garden",
+      "to": "rong",
+      "label": "属园林",
+      "kind": "关系",
+      "chapter": 17,
+      "revealChapter": 17,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "属园林",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 269
+    },
+    {
+      "id": "ref-arrival-daiyu",
+      "from": "arrival",
+      "to": "daiyu",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "ref-arrival-baoyu",
+      "from": "arrival",
+      "to": "baoyu",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 8
+    },
+    {
+      "id": "ref-arrival-jiamu",
+      "from": "arrival",
+      "to": "jiamu",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 15
+    },
+    {
+      "id": "ref-arrival-rong",
+      "from": "arrival",
+      "to": "rong",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 22
+    },
+    {
+      "id": "ref-case-yucun",
+      "from": "case",
+      "to": "yucun",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 4,
+      "revealChapter": 4,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 29
+    },
+    {
+      "id": "ref-case-xuepan",
+      "from": "case",
+      "to": "xuepan",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 4,
+      "revealChapter": 4,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 36
+    },
+    {
+      "id": "ref-case-xiangling",
+      "from": "case",
+      "to": "xiangling",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 4,
+      "revealChapter": 4,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 43
+    },
+    {
+      "id": "ref-funeral-keqing",
+      "from": "funeral",
+      "to": "keqing",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 13,
+      "revealChapter": 13,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 50
+    },
+    {
+      "id": "ref-funeral-feng",
+      "from": "funeral",
+      "to": "feng",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 13,
+      "revealChapter": 13,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 57
+    },
+    {
+      "id": "ref-funeral-ning",
+      "from": "funeral",
+      "to": "ning",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 13,
+      "revealChapter": 13,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 64
+    },
+    {
+      "id": "ref-visit-yuanchun",
+      "from": "visit",
+      "to": "yuanchun",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 18,
+      "revealChapter": 18,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 71
+    },
+    {
+      "id": "ref-visit-garden",
+      "from": "visit",
+      "to": "garden",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 18,
+      "revealChapter": 18,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 78
+    },
+    {
+      "id": "ref-visit-rong",
+      "from": "visit",
+      "to": "rong",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 18,
+      "revealChapter": 18,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 85
+    },
+    {
+      "id": "ref-reading-baoyu",
+      "from": "reading",
+      "to": "baoyu",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 23,
+      "revealChapter": 23,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 92
+    },
+    {
+      "id": "ref-reading-daiyu",
+      "from": "reading",
+      "to": "daiyu",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 23,
+      "revealChapter": 23,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 99
+    },
+    {
+      "id": "ref-reading-garden",
+      "from": "reading",
+      "to": "garden",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 23,
+      "revealChapter": 23,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 106
+    },
+    {
+      "id": "ref-burial-daiyu",
+      "from": "burial",
+      "to": "daiyu",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 27,
+      "revealChapter": 27,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 113
+    },
+    {
+      "id": "ref-burial-baoyu",
+      "from": "burial",
+      "to": "baoyu",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 27,
+      "revealChapter": 27,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 120
+    },
+    {
+      "id": "ref-burial-garden",
+      "from": "burial",
+      "to": "garden",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 27,
+      "revealChapter": 27,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 127
+    },
+    {
+      "id": "ref-beating-baoyu",
+      "from": "beating",
+      "to": "baoyu",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 33,
+      "revealChapter": 33,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 134
+    },
+    {
+      "id": "ref-beating-jiazheng",
+      "from": "beating",
+      "to": "jiazheng",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 33,
+      "revealChapter": 33,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 141
+    },
+    {
+      "id": "ref-beating-wang",
+      "from": "beating",
+      "to": "wang",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 33,
+      "revealChapter": 33,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 148
+    },
+    {
+      "id": "ref-beating-jiamu",
+      "from": "beating",
+      "to": "jiamu",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 33,
+      "revealChapter": 33,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 155
+    },
+    {
+      "id": "carry-jade",
+      "from": "baoyu",
+      "to": "jade",
+      "label": "佩带",
+      "kind": "关系",
+      "chapter": 3,
+      "revealChapter": 3,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "佩带",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 276
+    },
+    {
+      "id": "carry-lock",
+      "from": "baochai",
+      "to": "lock",
+      "label": "佩带",
+      "kind": "关系",
+      "chapter": 8,
+      "revealChapter": 8,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "佩带",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 283
+    },
+    {
+      "id": "match-token",
+      "from": "jade",
+      "to": "lock",
+      "label": "文字相配",
+      "kind": "关系",
+      "chapter": 8,
+      "revealChapter": 8,
+      "plan": false,
+      "relation": true,
+      "status": "有效",
+      "preview": "文字相配",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/关系账本.md"
+      },
+      "line": 290
+    },
+    {
+      "id": "ref-missing-xiangling",
+      "from": "missing",
+      "to": "xiangling",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 1,
+      "revealChapter": 1,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 162
+    },
+    {
+      "id": "ref-missing-case",
+      "from": "missing",
+      "to": "case",
+      "label": "回收出处",
+      "kind": "引用",
+      "chapter": 4,
+      "revealChapter": 4,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 169
+    },
+    {
+      "id": "ref-finance-rong",
+      "from": "finance",
+      "to": "rong",
+      "label": "引用",
+      "kind": "引用",
+      "chapter": 2,
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 176
+    },
+    {
+      "id": "ref-oldaccount-finance",
+      "from": "oldaccount",
+      "to": "finance",
+      "label": "引用",
+      "kind": "引用",
+      "plan": false,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "账本/事件与线索.md"
+      },
+      "line": 183
+    },
+    {
+      "id": "ref-society-poetry",
+      "from": "society",
+      "to": "poetry",
+      "label": "拟结社",
+      "kind": "引用",
+      "chapter": 33,
+      "plan": true,
+      "relation": false,
+      "status": "已记录",
+      "preview": "该记录明确引用关联条目，箭头只表示引用方向。",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "卷纲/后续安排.md"
+      },
+      "line": 17
+    },
+    {
+      "id": "plan-poetry-tanchun",
+      "from": "tanchun",
+      "to": "poetry",
+      "label": "拟入社",
+      "kind": "关系",
+      "chapter": 33,
+      "plan": true,
+      "relation": true,
+      "status": "计划",
+      "preview": "拟入社",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "卷纲/后续安排.md"
+      },
+      "line": 24
+    },
+    {
+      "id": "plan-poetry-baoyu",
+      "from": "baoyu",
+      "to": "poetry",
+      "label": "拟入社",
+      "kind": "关系",
+      "chapter": 33,
+      "plan": true,
+      "relation": true,
+      "status": "计划",
+      "preview": "拟入社",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "卷纲/后续安排.md"
+      },
+      "line": 31
+    },
+    {
+      "id": "plan-poetry-daiyu",
+      "from": "daiyu",
+      "to": "poetry",
+      "label": "拟入社",
+      "kind": "关系",
+      "chapter": 33,
+      "plan": true,
+      "relation": true,
+      "status": "计划",
+      "preview": "拟入社",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "卷纲/后续安排.md"
+      },
+      "line": 38
+    },
+    {
+      "id": "plan-poetry-baochai",
+      "from": "baochai",
+      "to": "poetry",
+      "label": "拟入社",
+      "kind": "关系",
+      "chapter": 33,
+      "plan": true,
+      "relation": true,
+      "status": "计划",
+      "preview": "拟入社",
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "卷纲/后续安排.md"
+      },
+      "line": 45
+    }
+  ],
+  "events": [
+    {
+      "id": "arrival",
+      "label": "黛玉入府",
+      "kind": "事件",
+      "chapter": 3,
+      "revealChapter": 3,
+      "status": "已发生",
+      "preview": "黛玉进荣国府，拜见贾母等人，与宝玉初次相见。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/事件/黛玉入府.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "case",
+      "label": "葫芦案",
+      "kind": "事件",
+      "chapter": 4,
+      "revealChapter": 4,
+      "status": "已结案",
+      "preview": "贾雨村审理薛蟠命案，借护官符辨认权势家族。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/事件/葫芦案.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "funeral",
+      "label": "可卿丧事",
+      "kind": "事件",
+      "chapter": 13,
+      "revealChapter": 13,
+      "status": "筹办",
+      "preview": "秦可卿病故，贾珍请王熙凤协理宁国府。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/事件/可卿丧事.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "funeral",
+      "label": "可卿丧事",
+      "kind": "事件",
+      "chapter": 16,
+      "revealChapter": 16,
+      "status": "已结束",
+      "preview": "丧事结束，协理关系不再作为当前有效关系展示。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/事件/可卿丧事.md"
+      },
+      "line": 8
+    },
+    {
+      "id": "visit",
+      "label": "元妃省亲",
+      "kind": "事件",
+      "chapter": 18,
+      "revealChapter": 18,
+      "status": "已发生",
+      "preview": "元春归家省亲，游览大观园，与家人相见。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/事件/元妃省亲.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "reading",
+      "label": "共读西厢",
+      "kind": "事件",
+      "chapter": 23,
+      "revealChapter": 23,
+      "status": "已发生",
+      "preview": "宝玉、黛玉在园中共读《西厢记》。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/事件/共读西厢.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "burial",
+      "label": "黛玉葬花",
+      "kind": "事件",
+      "chapter": 27,
+      "revealChapter": 27,
+      "status": "已发生",
+      "preview": "黛玉葬花吟诗，宝玉听见葬花吟。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/事件/黛玉葬花.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "beating",
+      "label": "宝玉挨打",
+      "kind": "事件",
+      "chapter": 33,
+      "revealChapter": 33,
+      "status": "已发生",
+      "preview": "贾政责打宝玉，王夫人与贾母赶来劝阻。",
+      "plan": false,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "世界书/事件/宝玉挨打.md"
+      },
+      "line": 1
+    },
+    {
+      "id": "society",
+      "label": "结社作诗",
+      "kind": "事件",
+      "chapter": 33,
+      "status": "计划",
+      "preview": "后续章节安排：由探春发起，在秋爽斋结社。",
+      "plan": true,
+      "source": {
+        "space": "book:acceptance-a",
+        "path": "卷纲/后续安排.md"
+      },
+      "line": 9
+    }
+  ],
+  "warnings": []
+}

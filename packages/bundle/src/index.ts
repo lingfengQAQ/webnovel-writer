@@ -34,6 +34,10 @@ import { createNativeWriteBridge } from './native-write'
 import { BookIndexManager } from './indexing/manager'
 import type { SceneProvider, RerankingProvider } from '@webnovel/core'
 import { indexFailureMessage } from './indexing/notifications'
+import { ReferenceHost } from './reference/host'
+import type { FileSystem } from '@deepseek-ai/dsh-fs'
+import type { LlmRuntime } from '@deepseek-ai/dsh-llm'
+import type { SettingsForms } from '@deepseek-ai/dsh-settings'
 
 export const name = 'webnovel-bundle'
 
@@ -329,6 +333,15 @@ export function apply(ctx: Context) {
   const agentRestrictOffs = new Map<string, () => void>()
   let toolKit: { defs: NovelToolDefinition[]; askFn: AskFn | undefined } | undefined
   let nativeBridge: ReturnType<typeof createNativeWriteBridge> | undefined
+  const referenceHost = new ReferenceHost({
+    fs: agent => agentCtxGet<FileSystem>(agent, 'fs'),
+    llm: agent => agentCtxGet<LlmRuntime>(agent, 'llm'),
+    settings: agent => agentCtxGet<SettingsForms>(agent, 'settings'),
+  })
+  step(ctx, 'webnovel:reference', () => {
+    const off = typeof ctx.on === 'function' ? ctx.on('llm/adapters-updated', () => referenceHost.changed()) : undefined
+    return () => { if (typeof off === 'function') off(); referenceHost.close() }
+  })
   const indexing = new BookIndexManager({
     getProvider: () => {
       const service = typeof ctx.get === 'function' ? ctx.get('embeddings') as { current(): EmbeddingProvider | undefined } | undefined : undefined
@@ -365,6 +378,7 @@ export function apply(ctx: Context) {
     toolKit = {
       askFn,
       defs: createNovelTools({
+        referenceHost,
         workspaceRoot: (agent) => agentWorkspaceRoot(agent),
         bookRootOfBookId: (bookId, agent) => bookRootOfBookIdFor(bookId, agent),
         askFn,

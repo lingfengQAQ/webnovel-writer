@@ -8,7 +8,7 @@ import { prepareResultCardDemo, demoToolChunks } from './result-card-demo.mjs'
 import * as present from '@deepseek-ai/dsh-tool-present'
 
 export const name = 'webnovel-browser-acceptance'
-export const inject = ['agents', 'agentLoop', 'sessionPersistence', 'workspaceRegistry', 'llm', 'sessionController', 'webServer', ...(process.env.WEBNOVEL_INDEX_CHECK ? ['embeddings', 'settings', 'credentials'] : [])]
+export const inject = ['agents', 'agentLoop', 'sessionPersistence', 'workspaceRegistry', 'llm', 'sessionController', 'webServer', ...(process.env.WEBNOVEL_WORKFLOW_CHECK ? ['connection', 'userQuestions'] : []), ...(process.env.WEBNOVEL_INDEX_CHECK ? ['embeddings', 'settings', 'credentials'] : [])]
 
 export async function apply(ctx) {
   const root = process.env.WEBNOVEL_BROWSER_WORKSPACE
@@ -38,6 +38,7 @@ export async function apply(ctx) {
   // resume its runtime without reseeding files, revalidating old exports or replaying tools.
   const demo = !exists && process.env.WEBNOVEL_RESULT_DEMO ? prepareResultCardDemo(root) : []
   let demoStep = 0
+  let workflowRequest, workflowMode = '', workflowIndex = 100
   const persist = () => fs.writeFileSync(reportPath, JSON.stringify(report, null, 2))
   // Settings writes await Loader settlement in DSH 0.1.7. Do not await them from
   // this plugin's apply: that would keep the very Loader settlement they need pending.
@@ -48,6 +49,11 @@ export async function apply(ctx) {
     async listModels() { return [{ id: 'fixture', name: '本地验收' }] }
     async * stream(options) {
       report.requests++
+      if (workflowRequest && options.tools?.some(tool => tool.name === 'novel_assemble_materials')) {
+        const entry = workflowRequest; workflowRequest = undefined
+        yield* demoToolChunks(workflowIndex++, entry)
+        persist(); return
+      }
       if (demoStep < demo.length && options.tools?.some(tool => tool.name === 'novel_select_book')) {
         const index = demoStep++
         yield* demoToolChunks(index, demo[index])
@@ -126,6 +132,29 @@ export async function apply(ctx) {
   await ctx.sessionPersistence.flush()
   await secondWorkspace.attachSession(secondId)
   await ctx.sessionController.rename({ sessionId: secondId, title: 'S5 会话隔离验收' })
+  if (process.env.WEBNOVEL_WORKFLOW_CHECK) {
+    ctx.on('tools/execute', async (exec, next) => {
+      if (exec.agent === handle.agent && exec.name === 'novel_assemble_materials') {
+        if (workflowMode === 'waiting') await ctx.userQuestions.ask({ agent: exec.agent, signal: exec.signal, questions: [{ id: 'continue', question: '验收：继续读取合成书稿吗？', options: [{ label: '继续' }] }] })
+        await new Promise((resolve, reject) => {
+          if (exec.signal.aborted) { reject(exec.signal.reason); return }
+          const aborted = () => { clearTimeout(timer); reject(exec.signal.reason) }
+          const timer = setTimeout(() => { exec.signal.removeEventListener('abort', aborted); resolve() }, 3500)
+          exec.signal.addEventListener('abort', aborted, { once: true })
+        })
+      }
+      return next()
+    })
+    ctx.connection.fetch.register({ path: '/api/webnovel-workflow-check', methods: ['POST'], requestBody: 'buffered', fetch: async request => {
+      const input = await request.json()
+      if (input.action === 'cancel') { handle.agent.cancel({ kind: 'user' }); return Response.json({ ok: true }) }
+      if (handle.agent.status !== 'idle') return Response.json({ ok: false }, { status: 409 })
+      workflowMode = input.action
+      workflowRequest = ['novel_assemble_materials', { bookId: 'acceptance-a', 卷: 1, 章: 1, 章名: '来信', 模式: '预览' }]
+      handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: '验证合成书仓材料预览。' }], source: { kind: 'user' } }))
+      return Response.json({ ok: true })
+    } })
+  }
   persist()
   void indexReady.then(ready => { report.ready = ready; persist() })
   ctx.on('dispose', () => { off(); return Promise.all([handle.dispose(), second.dispose()]) })

@@ -2,7 +2,7 @@
   "name": "webnovel-writer-v8",
   "private": true,
   "type": "module",
-  "version": "8.0.0",
+  "version": "8.1.0",
   "description": "DSH Scriptor: a long-form fiction writing workspace for DeepSeek Harness",
   "packageManager": "pnpm@11.27.1",
   "scripts": {
@@ -28,7 +28,7 @@
     "@types/node": "^22.0.0",
     "eslint": "9.39.1",
     "typescript": "^5.5.0",
-    "typescript-eslint": "8.46.1",
+    "typescript-eslint": "8.71.0",
     "vitest": "4.1.11"
   },
   "license": "GPL-3.0-only"

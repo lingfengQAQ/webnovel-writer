@@ -20,6 +20,7 @@ import {
   gateFileAccess,
   gateWriteDraft,
   isInsidePath,
+  canonicalizePath,
   isMutatingFileTool,
   extractToolPath,
   resolveInsideBook,
@@ -70,8 +71,16 @@ export function attachFileGateToAgent(
       if (exec === undefined || exec.agent === undefined) return next()
       if (deps.trustedNativeWrite?.(exec) === true) return next()
       const toolCall = normalizeToolCall(exec)
-      if (toolCall === null || !isMutatingFileTool(toolCall)) return next()
+      if (toolCall === null) return next()
       const target = extractToolPath(toolCall)
+      if (target !== null) {
+        const ws = deps.workspaceRoot()
+        const absolute = ws ? canonicalizePath(path.resolve(ws, target)) : undefined
+        if (ws && absolute && inside(path.join(ws, '书房/参考书'), absolute) && /(?:^|[\\/])\.(?:analysis|webnovel)(?:[\\/]|$)/i.test(absolute)) {
+          return { kind: 'deny', reason: '受管原文与机器状态仅供参考工具读取，请使用拆书或定点证据回查' }
+        }
+      }
+      if (!isMutatingFileTool(toolCall)) return next()
       if (target === null) {
         return Promise.resolve({ kind: 'deny', reason: '文件工具缺少可解析路径,拒绝写入' } as PreToolDecisionLike as never)
       }
@@ -114,6 +123,7 @@ export function decideTargetForFile(target: string, deps: GateDeps): PreToolDeci
     const abs = parsed.abs
     // 书房分区:以 工作范围/书房 为界可写(A2b)
     if (inside(path.join(ws, '书房'), abs)) {
+      if (inside(path.join(ws, '书房/参考书'), abs)) return { kind: 'deny', reason: '参考库由拆书工具维护；修改机制请在书房编辑器保存版本' }
       if (fs.existsSync(path.join(ws, '书房/作品契约/契约.md'))) return { kind: 'deny', reason: '共享目录与书仓重叠，拒绝共享写入豁免' }
       return { kind: 'allow' }
     }

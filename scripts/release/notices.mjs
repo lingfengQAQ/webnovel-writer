@@ -1,5 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { createHash } from 'node:crypto'
 
 /** License inventory is derived from actual bundled inputs, not all dev tools. */
 export function writeNotices(packageRoot, builds) {
@@ -24,10 +26,28 @@ export function writeNotices(packageRoot, builds) {
       const license = typeof manifest.license === 'string' ? manifest.license : manifest.license?.type
       const allowed = /^(MIT|ISC|Apache-2\.0|BSD-2-Clause|BSD-3-Clause|0BSD|\(MPL-2\.0 OR Apache-2\.0\))$/
       if (!allowed.test(license ?? '')) throw new Error(`Review bundled license before release: ${key} (${license})`)
-      const files = fs.readdirSync(directory).filter(name => /^(licen[cs]e|copying|notice)([._-]|$)/i.test(name) && fs.statSync(path.join(directory, name)).isFile()).sort()
+      let licenseDirectory = directory
+      let files = fs.readdirSync(directory).filter(name => /^(licen[cs]e|copying|notice)([._-]|$)/i.test(name) && fs.statSync(path.join(directory, name)).isFile()).sort()
+      // This exact npm release omits LICENSE; preserve the checked upstream tag's text.
+      if (!files.length && key === 'saxes@6.0.0') {
+        licenseDirectory = fileURLToPath(new URL('./license-overrides/saxes-6.0.0/', import.meta.url))
+        const source = JSON.parse(fs.readFileSync(path.join(licenseDirectory, 'source.json'), 'utf8'))
+        const bytes = fs.readFileSync(path.join(licenseDirectory, 'LICENSE'))
+        if (source.package !== manifest.name || source.version !== manifest.version || createHash('sha256').update(bytes).digest('hex') !== source.sha256) throw new Error(`Upstream license snapshot mismatch: ${key}`)
+        files = ['LICENSE']
+      }
+      // Reviewed exact releases: preserve their original declaration and separately labelled SPDX terms.
+      const declarations = new Set(['@antv/g-lite@2.7.0', '@antv/algorithm@0.1.26', '@antv/event-emitter@0.1.3', '@antv/util@2.0.17'])
+      if (!files.length && declarations.has(key)) {
+        licenseDirectory = fileURLToPath(new URL(`./license-overrides/${manifest.name.replace('@', '').replace('/', '-')}-${manifest.version}/`, import.meta.url))
+        const source = JSON.parse(fs.readFileSync(path.join(licenseDirectory, 'source.json'), 'utf8'))
+        if (source.package !== manifest.name || source.version !== manifest.version || source.license !== license) throw new Error(`License declaration mismatch: ${key}`)
+        files = Object.keys(source.files)
+        for (const name of files) if (createHash('sha256').update(fs.readFileSync(path.join(licenseDirectory, name))).digest('hex') !== source.files[name]) throw new Error(`License snapshot mismatch: ${key}`)
+      }
       if (!files.length) throw new Error(`No original license file found: ${key}`)
       const repository = typeof manifest.repository === 'string' ? manifest.repository : manifest.repository?.url
-      found.set(key, { name: manifest.name, version: manifest.version, license, repository, directory, files })
+      found.set(key, { name: manifest.name, version: manifest.version, license, repository, directory, licenseDirectory, files })
     }
   }
   const entries = [...found.values()].sort((a, b) => `${a.name}@${a.version}`.localeCompare(`${b.name}@${b.version}`, 'en'))
@@ -39,9 +59,9 @@ export function writeNotices(packageRoot, builds) {
     const filename = `${entry.name.replaceAll('@', '').replaceAll('/', '__')}--${entry.version}.txt`
     expected.add(filename)
     const text = [`${entry.name}@${entry.version}`, `SPDX: ${entry.license}`, `Repository: ${entry.repository ?? 'see package metadata'}`, '',
-      ...entry.files.flatMap(name => [`--- ${name} ---`, fs.readFileSync(path.join(entry.directory, name), 'utf8'), ''])].join('\n')
-    fs.writeFileSync(path.join(licenses, filename), text)
-    rows.push(`| ${entry.name} | ${entry.version} | ${entry.license} | [Original notices](licenses/${filename}) |`)
+      ...entry.files.flatMap(name => [`--- ${name} ---`, fs.readFileSync(path.join(entry.licenseDirectory, name), 'utf8'), ''])].join('\n')
+    fs.writeFileSync(path.join(licenses, filename), text.trimEnd() + '\n')
+    rows.push(`| ${entry.name} | ${entry.version} | ${entry.license} | [${entry.files.includes('DECLARATION.txt') ? 'Declaration and license terms' : 'Original notices'}](licenses/${filename}) |`)
   }
   // Only previously generated regular notice files in this exact directory.
   for (const name of fs.readdirSync(licenses)) {

@@ -1,4 +1,4 @@
-dompurify@3.4.13
+dompurify@3.4.16
 SPDX: (MPL-2.0 OR Apache-2.0)
 Repository: git://github.com/cure53/DOMPurify.git
 
@@ -581,4 +581,3 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
 
   This Source Code Form is "Incompatible With Secondary Licenses", as
   defined by the Mozilla Public License, v. 2.0.
-

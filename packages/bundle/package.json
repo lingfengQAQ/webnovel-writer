@@ -1,6 +1,6 @@
 {
   "name": "@linfengqaqtat/dsh-scriptor",
-  "version": "8.0.0",
+  "version": "8.1.0",
   "type": "module",
   "main": "./lib/index.js",
   "exports": {
@@ -91,9 +91,9 @@
     "@webnovel/drafting": "workspace:*",
     "@webnovel/review": "workspace:*",
     "diff": "8.0.3",
-    "dompurify": "3.4.13",
+    "dompurify": "3.4.16",
     "lucide-react": "0.468.0",
-    "markdown-it": "14.2.0",
+    "markdown-it": "14.3.1",
     "react": "18.3.1",
     "react-test-renderer": "18.3.1",
     "@deepseek-ai/dsh-skill-filesystem": "0.2.0-rc.2",
@@ -107,7 +107,10 @@
     "@deepseek-ai/dsh-util-workspace-path": "0.2.0-rc.2",
     "@deepseek-ai/dsh-api-workspace-files": "0.2.0-rc.2",
     "@deepseek-ai/dsh-client-resources": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-client-connection": "0.2.0-rc.2"
+    "@deepseek-ai/dsh-client-connection": "0.2.0-rc.2",
+    "@antv/g6": "5.1.1",
+    "@types/d3-force": "3.0.10",
+    "d3-force": "3.0.0"
   },
   "files": [
     "lib/index.js",
