@@ -63,6 +63,8 @@ Release 草稿生成时，发布器核对公共 SHA、tag、四包身份、版�
 
 本地默认只预检：node scripts/release/publish-npm.mjs --assets <附件目录>。--verify-only 检查 registry；--publish 只在 Actions 中可用。
 
+手动流程需要下载未公开的 draft 附件，因此 publish 和 installation job 的 GITHUB_TOKEN 需要 contents: write（只有读取权限会报 release not found）。这与 npm token 分开：NPM_TOKEN 仍仅注入 publish 的上传步骤，installation 不携带 npm 凭据；安装验证通过后 finalize 才公开 draft。
+
 安装验收必须传入 --companion <同批桌宠.tgz>。full 只依赖写作与检索，桌宠独立安装。用户通过侧栏插件页安装，进阶命令见 [CLI 维护说明](cli-install.md)。
 
 ### 早期 preview 发行记录

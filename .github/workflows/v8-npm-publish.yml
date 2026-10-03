@@ -19,7 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: read
+      # Draft release assets require repository push access, even for downloads.
+      contents: write
       id-token: write
     env:
       RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
@@ -63,6 +64,9 @@ jobs:
     needs: publish
     runs-on: windows-latest
     timeout-minutes: 25
+    permissions:
+      # Keep the release private until registry installation has passed.
+      contents: write
     env:
       RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
     steps:
