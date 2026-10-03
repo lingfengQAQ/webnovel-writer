@@ -7,6 +7,7 @@ import { root as toolingRoot, releaseVersion } from './version.mjs'
 import { checkTree } from './check-public-tree.mjs'
 import { checkEmbeddingPackage, checkMetaPackage } from './tar.mjs'
 import { collectDependencySources } from './dependency-sources.mjs'
+import { restoreNoticeLineEndings } from './release-source.mjs'
 
 const sourceIndex = process.argv.indexOf('--source')
 const root = sourceIndex >= 0 ? path.resolve(process.argv[sourceIndex + 1]) : toolingRoot
@@ -34,6 +35,7 @@ const pack = (directory, filename) => {
   fs.copyFileSync(original, path.join(output, filename), fs.constants.COPYFILE_EXCL)
 }
 pnpm(['build'])
+restoreNoticeLineEndings(root)
 assert.equal(git(['status', '--porcelain']), '', 'Build changed tracked notices or metadata; commit them before release')
 pack('packages/bundle', info.filename)
 const main = path.join(output, info.filename)
