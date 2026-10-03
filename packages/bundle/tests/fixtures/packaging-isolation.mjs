@@ -34,11 +34,11 @@ const ctx = await boot('packaging-source-isolation', configPath, [], async host 
 })
 try {
   const skills = await ctx.skills.list({ cwd: process.cwd() })
-  assert.equal(skills.length, 10)
+  assert.equal(skills.length, 11)
   for (const skill of skills) assert.ok((await ctx.skills.get(skill.name)).content.length > 100)
   if (checkEmbedding) {
     for (const service of ['embeddings', 'sceneSegmentation', 'reranking']) assert.ok(ctx.get(service), `Full package must load ${service}`)
   }
   fs.writeFileSync(reportPath, JSON.stringify({ ok: true, sourceReadDenied: true, trustedNativeAddons: true, actualLoader: true, skills: skills.length, embeddingLoaded: checkEmbedding && !!ctx.get('embeddings') }, null, 2) + '\n')
-  console.log('Source-blocked installed Host Loader: 10 skills passed')
+  console.log('Source-blocked installed Host Loader: 11 skills passed')
 } finally { await ctx.fiber.dispose() }

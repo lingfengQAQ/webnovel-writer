@@ -15,6 +15,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/dsh-user-questions": "0.2.0-rc.2",
+    "@types/yauzl": "2.10.3",
     "@webnovel/drafting": "workspace:*",
     "@webnovel/polish": "workspace:*",
     "@webnovel/review": "workspace:*",
@@ -25,7 +26,9 @@
     "@deepseek-ai/dsh-user-questions": "0.2.0-rc.2"
   },
   "dependencies": {
-    "yaml": "^2.5.0"
+    "saxes": "6.0.0",
+    "yaml": "^2.5.0",
+    "yauzl": "3.4.0"
   },
   "license": "GPL-3.0-only",
   "engines": {

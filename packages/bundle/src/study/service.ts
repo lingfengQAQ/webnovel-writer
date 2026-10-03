@@ -212,10 +212,8 @@ export class StudyService {
   save(ref: FileRef, expectedHash: string, body: string, provenance: OperationProvenance, operationId?: string): Omit<StudySave, 'notification' | 'notificationError'> {
     if (Buffer.byteLength(body, 'utf8') > MAX_DOCUMENT_BYTES) throw new AuthorDocumentError('invalid-document', '正文超过 4 MiB，未保存')
     const source = this.source(ref.space)
-    return withBookWrite(source.root, () => {
-      const result = saveAuthorDocument(source.root, { path: ref.path, expectedHash, body, shared: ref.space === 'shared', provenance, operationId })
-      return this.saveView(ref, result)
-    }, provenance)
+    const result = saveAuthorDocument(source.root, { path: ref.path, expectedHash, body, shared: ref.space === 'shared', provenance, operationId })
+    return this.saveView(ref, result)
   }
 
   saved(ref: FileRef, hash: string, operationId: string, sessionId: string): Omit<StudySave, 'notification' | 'notificationError'> {

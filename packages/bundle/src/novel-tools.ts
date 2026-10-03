@@ -1,4 +1,6 @@
 import type { ToolExecutionToken } from '@deepseek-ai/dsh-tools'
+import { createReferenceTools, REFERENCE_TOOL_NAMES } from './reference/tools'
+import type { ReferenceHost } from './reference/host'
 /**
  * 主 Agent 专用 Tools（方案 A：core 能力结构化包装为 Tool）。
  *
@@ -111,6 +113,7 @@ export interface AgentLike {
   readonly id: string
   readonly ctx?: unknown
   readonly session?: {
+    readonly requestHeader?: Session['requestHeader']
     readonly seq?: number
     readonly eventAt?: Session['eventAt']
     readonly header?: {
@@ -149,6 +152,7 @@ export interface NovelToolDefinition {
 }
 
 export interface NovelToolsDeps {
+  readonly referenceHost?: Pick<ReferenceHost, 'runner' | 'readFile'>
   readonly nativeWrite?: NativeWrite
   /** Resolve on every query, including after network waits, to respect service reloads. */
   readonly embeddingProvider?: (agent?: AgentLike) => EmbeddingProvider | undefined
@@ -180,6 +184,7 @@ function provenanceOf(ctx: ToolExecContext | undefined, targets?: readonly strin
  * 一致性由测试保证：本表与 `createNovelTools(stub).map(t => t.name)` 逐项相等。
  */
 export const NOVEL_TOOL_NAMES: readonly string[] = [
+  ...REFERENCE_TOOL_NAMES,
   'novel_select_book',
   'novel_create_book',
   'novel_update_contract',
@@ -244,6 +249,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
   }
 
   const tools: NovelToolDefinition[] = [
+    ...createReferenceTools(deps),
     {
       name: 'novel_select_book',
       description: '核对作者在对话中指定的小说，返回书id、书名、书仓近况与该书记忆目录快照，供后续调用使用。首次明确选书和作者切书时调用。',
@@ -299,7 +305,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
     },
     {
       name: 'novel_create_book',
-      description: '新建一部长篇小说并初始化规范书仓。前置要求：与作者充分沟通并确认好作品构想七要素。',
+      description: '新建一部长篇小说并初始化规范书仓。前置要求：七个构想字段齐全、核心创意与题材目标读者明确，其余可留白；作者已确认立项。',
       parameters: {
         type: 'object',
         properties: {
@@ -489,8 +495,8 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
           properties: {
             ok: { type: 'boolean', description: '是否成功' },
             bookId: { type: 'string', description: '书id' },
-            design: { type: 'object', description: '设计面事实清单与建议（R1：建议仅供参考，不参与门禁）；「内容问题」影响就绪建议，「已确认无内容」保留全部已确认空分部的提示，合法远期留白不阻塞' },
-            chapters: { type: 'array', description: '章节事实清单列表（每章含 §8 逐行事实项与建议）' },
+            design: { type: 'object', description: '设计面事实清单与建议（建议仅供参考）；「内容问题」影响就绪建议，「已确认无内容」保留全部已确认空分部的提示，合法远期留白不阻塞' },
+            chapters: { type: 'array', description: '章节事实清单列表（每章含逐行事实项与建议）' },
             reason: { type: 'string', description: '失败原因' },
           },
           required: ['ok'],
@@ -833,7 +839,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
           章: { type: 'number', description: '章号（全书连续，如 1）' },
           章名: { type: 'string', description: '章名（如 第一章）' },
           summary: { type: 'string', description: '提交摘要（可选，如「确认细纲·初见」）' },
-          批次文件: { type: 'array', items: { type: 'string' }, description: '同批整改的受影响未定稿下游文件（提案批次整批确认，拍板 7）' },
+          批次文件: { type: 'array', items: { type: 'string' }, description: '同批整改的受影响未定稿下游文件（提案批次整批确认）' },
         },
         required: ['bookId', '卷', '章', '章名'],
       },
@@ -890,7 +896,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
         type: 'object',
         properties: {
           bookId: { type: 'string', description: '书id（必填）' },
-          正文: { type: 'string', description: '骨架完整正文（Markdown，含各部状态标注）' },
+          正文: { type: 'string', description: '骨架九部完整结构及状态标注；前两部确认当前追求与阻力，其余可暂定/留白，不强填终局；空的已确认部分仍报缺内容' },
           summary: { type: 'string', description: '提交摘要（可选）' },
           批次文件: { type: 'array', items: { type: 'string' }, description: '同批整改的受影响未定稿下游文件' },
         },
@@ -1357,7 +1363,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
     },
     {
       name: 'novel_import_draft',
-      description: '作者稿导入：把作者亲手写的整章或改过的版本落为草稿区新一稿，与 AI 稿地位相同（生成模块留痕 作者手写/作者手改）。写稿节点用 角色: 草稿；润色、改稿节点贴作者改过的版本用 角色: 待审稿（旧待审稿自动降级，父版本指向被改的稿）。要跳过润色就传 `角色: 待审稿`。',
+      description: '作者稿导入：把作者亲手写的整章或改过的版本落为草稿区新一稿，与 AI 稿地位相同（生成模块留痕 作者手写/作者手改）。未要求润色的作者稿显式传 角色: 待审稿；作者要求润色才传 角色: 草稿。润色、改稿节点贴作者改过的版本用 角色: 待审稿（旧待审稿自动降级，父版本指向被改的稿）。',
       parameters: {
         type: 'object',
         properties: {
@@ -1431,7 +1437,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
     },
     {
       name: 'novel_record_review_findings',
-      description: '把审读子 Agent 产出的发现项回写进审核记录（堵「空审通过」）。同一模块重复回写＝本轮结果整批替换；跨轮沿用按 模块名+证据位置+问题说明 认亲。全部模块回写后审核才算完成。',
+      description: '把审读子 Agent 产出的发现项回写进审核记录（堵「空审通过」）。同一模块重复回写＝本轮结果整批替换；跨轮沿用按 模块名+证据位置+问题说明 认亲。全部模块回写仅表示报告齐全；证据须适用当前稿且发现项均有效处置，才能报告审核通过。',
       parameters: {
         type: 'object',
         properties: {
@@ -1499,7 +1505,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
     },
     {
       name: 'novel_record_proposal',
-      description: '登记提案（逆流的法定容器，acquisition 不挂审批）：作者要求改某处、或审核/对账发现缺口漂移时登记，先跑影响分析脚本再补「影响分析」内容，呈作者裁决。提案文件落 草稿区/提案/，作者可读可改。',
+      description: '登记内容修改提案（登记本身不代表批准执行）：作者要求改某处、或审核/对账发现缺口漂移时登记，先跑影响分析脚本再补「影响分析」内容，呈作者裁决。提案文件落 草稿区/提案/，作者可读可改。',
       parameters: {
         type: 'object',
         properties: {
@@ -1574,7 +1580,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
     },
     {
       name: 'novel_apply_retcon',
-      description: '吃书补偿执行（emission，必过作者裁决）：把受影响定稿章按更正后正文重写、可选沉淀候选走整条更正（世界书/账本/记忆），生成补偿事件记录并单次 retcon: 提交。前置：影响分析已呈报、作者已在对话中批准。不是撤销——历史经补偿事件留痕。',
+      description: '吃书补偿执行（必过作者裁决）：把受影响定稿章按更正后正文重写、可选沉淀候选走整条更正（世界书/账本/记忆），生成补偿事件记录并单次 retcon: 提交。前置：影响分析已呈报、作者已在对话中批准。不是撤销——历史经补偿事件留痕。',
       parameters: {
         type: 'object',
         properties: {

@@ -33,28 +33,28 @@ describe('文件门禁(不变量 4/5)', () => {
     const root = mkBook()
     const d = decidePreExecute(root, write(path.join(root, '定稿/卷01/0001-初见.md')))
     expect(d.kind).toBe('deny')
-    if (d.kind === 'deny') expect(d.reason).toMatch(/不变量 4/)
+    if (d.kind === 'deny') expect(d.reason).toMatch(/定稿区只读/)
   })
 
   it('拒绝写入构想/', () => {
     const root = mkBook()
     const d = decidePreExecute(root, write(path.join(root, '构想/构想快照.md')))
     expect(d.kind).toBe('deny')
-    if (d.kind === 'deny') expect(d.reason).toMatch(/不变量 5/)
+    if (d.kind === 'deny') expect(d.reason).toMatch(/构想快照建书后只读/)
   })
 
   it('拒绝写入大纲/(真源,非文件工具)', () => {
     const root = mkBook()
     const d = decidePreExecute(root, write(path.join(root, '大纲/故事骨架.md')))
     expect(d.kind).toBe('deny')
-    if (d.kind === 'deny') expect(d.reason).toMatch(/不变量 4/)
+    if (d.kind === 'deny') expect(d.reason).toMatch(/真源区.*文件工具不得改写/)
   })
 
   it('路径逃逸拒绝', () => {
     const root = mkBook()
     const escaped = decidePreExecute(root, write(path.join(root, '..', '越界.md')))
     expect(escaped.kind).toBe('deny')
-    if (escaped.kind === 'deny') expect(escaped.reason).toMatch(/逃逸|不变量 4/)
+    if (escaped.kind === 'deny') expect(escaped.reason).toMatch(/路径逃逸书仓根/)
   })
 
   it('改写工具缺路径→拒绝', () => {

@@ -11,6 +11,8 @@ import { listChapters } from '../derive/scan'
 import { paths } from '../repo/paths'
 import { nextDraftFileName, listChapterDrafts, isNumberedDraftPath, 草稿字段序 } from '../repo/drafts'
 import type { OperationProvenance } from '../repo/transaction'
+import { referenceLocked } from '../reference/storage'
+import { prepareReferenceAuthorEdit } from '../reference/report'
 
 export class AuthorDocumentError extends Error {
   constructor(readonly code: 'invalid-path' | 'not-found' | 'read-only' | 'conflict' | 'invalid-document', message: string) {
@@ -136,6 +138,12 @@ export function retryAuthorSaveCommit(root: string, operationId: string, hash: s
 
 /** Trusted author UI writer. This is not exposed as an LLM approval parameter. */
 export function saveAuthorDocument(root: string, input: AuthorSaveInput): AuthorSaveResult {
+  const reference = input.shared && /^参考书\/(ref-[a-f0-9]{20,64})\/机制\/(m-[a-f0-9]{20,64})\.md$/.exec(input.path.replace(/\\/g, '/'))
+  if (reference) return referenceLocked(path.dirname(root), reference[1]!, () => saveAuthorDocumentInner(root, input))
+  return saveAuthorDocumentInner(root, input)
+}
+
+function saveAuthorDocumentInner(root: string, input: AuthorSaveInput): AuthorSaveResult {
   return withBookWrite(root, () => {
     const target = authorDocumentPath(root, input.path)
     const relative = path.relative(canonicalizePath(root), target).split(path.sep).join('/')
@@ -174,6 +182,10 @@ export function saveAuthorDocument(root: string, input: AuthorSaveInput): Author
     let fields = { ...parsed.data.fields }
     const isDraft = isNumberedDraftPath(posix)
     const operations: Array<{ relPath: string; content: string }> = []
+    if (input.shared) {
+      const referenceEdit = prepareReferenceAuthorEdit(root, posix, original, body)
+      if (referenceEdit) { fields = referenceEdit.fields; operations.push(...referenceEdit.operations) }
+    }
     if (!input.shared) {
       const protocol = version === null ? initialVersion('作者手改') : bumpVersion(version, '作者手改', fields['来源快照'])
       fields = applyVersionFields(fields, protocol)

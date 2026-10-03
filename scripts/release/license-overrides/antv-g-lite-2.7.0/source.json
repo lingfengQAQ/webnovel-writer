@@ -1,0 +1,12 @@
+{
+  "package": "@antv/g-lite",
+  "version": "2.7.0",
+  "license": "MIT",
+  "metadataUrl": "https://registry.npmjs.org/@antv/g-lite/2.7.0",
+  "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/MIT.txt",
+  "reason": "Exact published version declares a license but includes no separate license notice; retain the declaration and standard terms with distinct provenance.",
+  "files": {
+    "DECLARATION.txt": "64adecd06614ecc1faf1b6872a563706e25cf3dc134e97057f65d271303bc792",
+    "SPDX.txt": "3a616f2f59d852f24154a98d7e1a983bd6ee43a6c52dea4af6a54f3eb786b1be"
+  }
+}

@@ -19,7 +19,7 @@ export interface CommitMessageInput {
 
 export function formatCommitMessage(input: CommitMessageInput): string {
   if (input.prefix === 'retcon' && input.kind !== '吃书补偿') {
-    throw new Error('retcon: 前缀仅补偿通道可产生(不变量 4)')
+    throw new Error('retcon: 前缀仅补偿通道可产生')
   }
   if (input.chapterScope !== undefined && input.prefix !== 'design') {
     throw new Error('章号 Scope 仅 design: 前缀携带')

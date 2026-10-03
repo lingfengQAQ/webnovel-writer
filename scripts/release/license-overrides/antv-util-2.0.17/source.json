@@ -1,0 +1,12 @@
+{
+  "package": "@antv/util",
+  "version": "2.0.17",
+  "license": "ISC",
+  "metadataUrl": "https://registry.npmjs.org/@antv/util/2.0.17",
+  "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/ISC.txt",
+  "reason": "Exact published version declares a license but includes no separate license notice; retain the declaration and standard terms with distinct provenance.",
+  "files": {
+    "DECLARATION.txt": "d0e730005b9c8f2e008f9b31a12c7137059a2304bfa6fedd53d0a1f3e25ead17",
+    "SPDX.txt": "10afe02ca431040433165b00c83c40c401e754f3d98d599add8532bb8e0de235"
+  }
+}

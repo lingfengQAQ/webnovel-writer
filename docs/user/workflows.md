@@ -1,6 +1,6 @@
 # 日常写作与恢复
 
-当前源码的 DSH 0.2 交互见[结果卡与导出成品](result-cards.md)，其中明确了开发版与已发布 8.0.0 的版本边界。
+Scriptor 8.1.0 配套 DSH 0.2.0-rc.2，文件卡与书稿编辑见[结果卡与导出成品](result-cards.md)。参考资料处理见[参考小说分析](reference-analysis.md)，图谱与流程状态见[界面参考](ui-reference.md)。
 
 ## 继续章节
 

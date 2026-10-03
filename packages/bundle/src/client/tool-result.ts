@@ -1,6 +1,9 @@
 import type { ToolCallPhaseProps } from '@deepseek-ai/dsh-client-ui-tool/client'
+import { isStoppedError } from '../study/workflow-types'
 
 export const novelToolTitles: Readonly<Record<string, string>> = {
+  novel_reference_source: '管理参考小说', novel_reference_analyze: '渐进拆解小说',
+  novel_reference_query: '查找参考机制', novel_reference_report: '保存拆书成果',
   novel_select_book: '选择作品', novel_create_book: '创建作品', novel_update_contract: '更新作品契约',
   novel_get_story_status: '查看写作状态', novel_search_finalized: '检索定稿', novel_index_manage: '管理检索索引',
   novel_prepare_pack: '准备定稿包', novel_settle_chapter: '定稿入档', novel_new_outline_draft: '准备大纲草案',
@@ -34,7 +37,7 @@ export function novelResultModel(props: ToolCallPhaseProps): NovelResultModel {
   const raw = block.content.map(item => item.type === 'text' ? item.text : JSON.stringify(item, null, 2)).join('\n')
   const result: NovelResultModel = { ...base, raw, args: block.call?.argsRaw ?? '', state: 'unknown', label: '待核对', summary: '结果格式无法识别，请查看原始详情' }
   // Runtime failure always wins, even if a partial result contains ok:true.
-  if (block.error?.code === 'interrupted') return { ...result, state: 'stopped', label: '已中断', summary: '操作已中断；继续前请核对已产生的结果' }
+  if (isStoppedError(block.error)) return { ...result, state: 'stopped', label: '已中断', summary: '操作已中断；继续前请核对已产生的结果' }
   if (block.isError) return { ...result, state: 'error', label: '执行异常', summary: '请查看错误详情，核对已产生的结果后再决定是否重试' }
   if (block.content.length !== 1 || block.content[0]?.type !== 'text') return result
   let value: unknown
@@ -46,6 +49,10 @@ export function novelResultModel(props: ToolCallPhaseProps): NovelResultModel {
     if (typeof value[key] === 'string' || typeof value[key] === 'number') facts.push({ label, value: String(value[key]) })
   }
   let pending = false
+  if (typeof value.verifiedBatches === 'number') facts.push({ label: '已校验批次', value: String(value.verifiedBatches) })
+  if (typeof value.fullBookComplete === 'boolean') facts.push({ label: '报告范围', value: value.fullBookComplete ? '全书可读正文' : '局部拆解' })
+  if (typeof value.selectedRangeComplete === 'boolean') facts.push({ label: '选定范围', value: value.selectedRangeComplete ? '已完成' : '尚未完成' })
+  if (Array.isArray(value.issues) && value.issues.length) { pending = true; facts.push({ label: '待核对问题', value: String(value.issues.length) }) }
   for (const key of ['待处置数', '待继承处置数', '待回写模块', '未决偏离', '待核对', '疑似占位待核对', '内容问题']) {
     const item = value[key]
     const count = Array.isArray(item) ? item.length : typeof item === 'number' && Number.isFinite(item) && item >= 0 ? item : undefined

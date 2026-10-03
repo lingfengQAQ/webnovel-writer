@@ -13,6 +13,7 @@ import { checkMaterialSupplements } from './material-supplement-checks.mjs'
 import { checkMinimalExport } from './export-checks.mjs'
 import { checkSearch } from './retrieval-checks.mjs'
 import { checkSaveLoop } from './save-loop-check.mjs'
+import { checkReferences } from './reference-checks.mjs'
 
 const root = path.resolve(process.argv[2])
 const bundleUrl = pathToFileURL(path.resolve(process.argv[3])).href
@@ -137,7 +138,7 @@ try {
 
   await check('主 Agent 工具与全局隔离', async () => {
     assert.equal(main.session.header.version, host === undefined ? baseline.registry.sessionFormat : baseline.source.sessionFormat)
-    assert.equal(schemas(main).length, 26)
+    assert.equal(schemas(main).length, 30)
     assert.deepEqual(schemas(undefined), [])
     const result = await execute(main, 'novel_select_book', { bookId: 'loader-book' })
     assert.equal(result.value.ok, true, JSON.stringify(result))
@@ -171,7 +172,7 @@ try {
   await check('随包技能发现、资源、覆盖优先级与卸载重载', async () => {
     const skills = () => service('skills').list({ cwd: workspace, scope: main })
     const names = (await skills()).map(skill => skill.name).sort()
-    assert.equal(names.length, 10)
+    assert.equal(names.length, 11)
     for (const name of names) {
       const skill = await service('skills').get(name, { cwd: workspace, scope: main })
       assert.equal(skill.provider, 'webnovel-bundled')
@@ -225,7 +226,7 @@ try {
       assert.ok(!service('agents').roots().includes(unmarked.agent))
       assert.ok(service('agents').roots().includes(restoredRoot.agent))
       assert.deepEqual(schemas(unmarked.agent), [])
-      assert.equal(schemas(restoredRoot.agent).length, 26)
+      assert.equal(schemas(restoredRoot.agent).length, 30)
       assert.equal(service('approval').overrideOf(unmarked.agent.session), 'never')
       assert.notEqual(service('approval').overrideOf(restoredRoot.agent.session), 'never')
     } finally {
@@ -235,12 +236,12 @@ try {
   })
   await check('同一会话恢复后重新装机', async () => {
     const previous = await service('agents').create({ sessionId: 'loader-resume', meta: { cwd: workspace } })
-    assert.equal(schemas(previous.agent).length, 26)
+    assert.equal(schemas(previous.agent).length, 30)
     await service('sessionPersistence').flush()
     await previous.dispose()
     const resumed = await service('agents').resume({ resumeSessionId: 'loader-resume' })
     try {
-      assert.equal(schemas(resumed.agent).length, 26)
+      assert.equal(schemas(resumed.agent).length, 30)
       assert.match((await presentation(resumed.agent)).status[0].text, /【工作区总览】/)
     }
     finally { await resumed.dispose() }
@@ -250,7 +251,7 @@ try {
     const whileMissing = schemas(main)
     await toggle('user-questions', false)
     assert.deepEqual(whileMissing, [])
-    assert.equal(schemas(main).length, 26)
+    assert.equal(schemas(main).length, 30)
     assert.deepEqual(schemas(child), [])
   })
   await check('审批依赖晚到仍拒绝子 Agent', async () => {
@@ -406,6 +407,7 @@ try {
   await checkReliability({ root, book, main, ctx, service, execute, git, check, report, withTurn })
   await checkMemoryCatalog({ host, ctx, workspace, book, service, execute, check, report, withTurn })
   await checkMaterialSupplements({ root, workspace, main, execute, check, report, withTurn })
+  await checkReferences({ workspace, main, service, execute, check, host })
   await checkMinimalExport({ root, workspace, check, report })
   await checkSearch({ root, workspace, main, child, ctx, service, execute, check, toggle, host })
   await check('工作区依赖重启交回旧根', async () => {
@@ -437,7 +439,7 @@ try {
     const fresh = await service('agents').create({ sessionId: 'loader-after-tools', meta: { cwd: workspace } })
     const delegated = await fresh.agent.ctx.get('agents').create({ parentAgent: fresh.agent, sessionId: 'loader-after-tools-child', meta: { cwd: workspace, origin: 'subagent' } })
     try {
-      assert.equal(schemas(fresh.agent).length, 26)
+      assert.equal(schemas(fresh.agent).length, 30)
       assert.deepEqual(schemas(delegated.agent), [])
       assert.equal((await presentation(fresh.agent)).status.length, 1)
       assert.equal((await execute(fresh.agent, 'novel_select_book', { bookId: 'loader-book' })).value.ok, true)

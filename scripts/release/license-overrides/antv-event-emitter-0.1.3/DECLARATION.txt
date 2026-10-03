@@ -1,0 +1,27 @@
+The published package and its upstream repository omit a standalone license file.
+Original npm metadata declares MIT. This snapshot preserves that declaration; the accompanying SPDX reference is not an upstream copyright notice.
+
+{
+  "name": "@antv/event-emitter",
+  "version": "0.1.3",
+  "license": "MIT",
+  "repository": {
+    "url": "git+ssh://git@github.com/antvis/event-emitter.git",
+    "type": "git"
+  },
+  "gitHead": "f46ff7712f332ef1c8b7601eb88b5784ad4edaa1",
+  "dist": {
+    "shasum": "3e06323b9dcd55a3241ddc7c5458cfabd2095164",
+    "tarball": "https://registry.npmjs.org/@antv/event-emitter/-/event-emitter-0.1.3.tgz",
+    "fileCount": 9,
+    "integrity": "sha512-4ddpsiHN9Pd4UIlWuKVK1C4IiZIdbwQvy9i7DUSI3xNJ89FPUFt8lxDYj8GzzfdllV0NkJTRxnG+FvLk0llidg==",
+    "signatures": [
+      {
+        "sig": "MEYCIQC/4J8HF0T/m7I7QObCbhJUtUHiZd4LsqwBBjoioMVGfwIhAPpwf1iJFT032dSBdGcf9eswuwql7wfhWY5t1qdCC2hm",
+        "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA"
+      }
+    ],
+    "unpackedSize": 16818,
+    "npm-signature": "-----BEGIN PGP SIGNATURE-----\r\nVersion: OpenPGP.js v3.0.13\r\nComment: https://openpgpjs.org\r\n\r\nwsFcBAEBCAAQBQJiBN4bCRA9TVsSAnZWagAAj/MQAJqzPPMNCy2TkWiN0giQ\nre2FwTbvLBOpNUScuJlIT1tIV+hYv3zzoBxWzYgRDFAegrEMMcQpS0CH5N6L\nw7wgA8+HJlEFWaa/Zkmz4ntN4455wL3pAfVBYeiFuHY5l4WAg5E646ZqR8gW\nebDuqnUemnk+qqHU85oXV9vLXxHBtjoXanb0ABATohPfhZpEtZiugqE2ZE1E\nsLesiDBXh9hzKArzBdTC/lI8oxLau3AbEncAsxiL3qdlmO6It64cf5Tdc9ox\nsKUVVlsXScqUDDFIvWhqnCnE05aep05toqY1VBYZmpdck5UhUnSBZyXrTYs4\nVjz6iakUd4L7qv2WAv9MusayrVqt2DQxAIVK5v50NZijLuFWUhXe+6plpCO8\ncNC+FOIndwETgvrwAsLtxTCITU68WHg6tzc6D79b6BVeWhpQVYzZqwQHURSD\nvYTBdeIM7TMdKOcXOT5+VbSIWtURlgLUxBbtQvzjcOcOfuTdrKDqzlmnlOXO\ne2tsXfPgHvB3wJH98m0IE9Z8ZLaeGaZYqCnWJLj80vDlNqOknI8LxpAmy406\nXYnhuWkP9Or2sc6vWkM9vQ5357CFYXGzobnD6IHOy9GZDTWe/3T/gyp9noAy\n5GccPJrQEyA44IwMKWtCw3ht6S+p11+O12AA4tcJK4YuNft11iawg8EPwOsm\nqqpv\r\n=LT8v\r\n-----END PGP SIGNATURE-----\r\n"
+  }
+}

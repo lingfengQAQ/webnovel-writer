@@ -29,11 +29,21 @@ export interface StoryGraph {
 }
 export interface GraphFilter { readonly chapter: number; readonly reader: boolean; readonly unknown: boolean; readonly plans: boolean }
 
-/** Filter before folding, so later changes never hide the historical state of a relationship. */
-export function projectStoryGraph(graph: StoryGraph, filter: GraphFilter) {
-  const visible = (item: StoryGraphRecord) => (!item.plan || filter.plans)
+/** The same visibility rule applies to the current projection and its history. */
+export function graphRecordVisible(item: StoryGraphRecord, filter: GraphFilter): boolean {
+  return (!item.plan || filter.plans)
     && (item.chapter === undefined ? filter.unknown && !filter.reader : item.chapter <= filter.chapter)
     && (!filter.reader || item.revealChapter !== undefined && item.revealChapter <= filter.chapter)
+}
+
+export function storyGraphHistory(graph: StoryGraph, id: string, filter: GraphFilter): StoryGraphRecord[] {
+  return [...graph.records, ...graph.edges].filter(item => item.id === id && graphRecordVisible(item, filter))
+    .sort((a, b) => (a.chapter ?? -1) - (b.chapter ?? -1) || a.line - b.line)
+}
+
+/** Filter before folding, so later changes never hide the historical state of a relationship. */
+export function projectStoryGraph(graph: StoryGraph, filter: GraphFilter) {
+  const visible = (item: StoryGraphRecord) => graphRecordVisible(item, filter)
   const fold = <T extends StoryGraphRecord>(records: readonly T[]) => {
     const found = new Map<string, T>()
     for (const item of records.filter(visible).slice().sort((a, b) => (a.chapter ?? -1) - (b.chapter ?? -1) || a.line - b.line)) found.set(item.id, item)

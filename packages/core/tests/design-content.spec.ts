@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
-import { deriveDesign, scanDesign } from '../src/derive/design'
+import { deriveDesign, scanDesign, 故事骨架九部 } from '../src/derive/design'
 import { scanDesignDetail, renderBookProgress } from '../src/progress'
 import { seedMinDesign } from '../src/design/seed'
 import { LEDGER_NAMES, paths } from '../src/repo/paths'
@@ -32,6 +32,29 @@ function readyBook(): string {
 }
 
 describe('#165 内容与就绪建议同源', () => {
+  it('当前必要骨架确认，远期七部留白/暂定与生命周期子条目不妨碍开写，查询不写盘', () => {
+    const root = readyBook()
+    const text = 故事骨架九部.map((name, index) => `## ${name} 〔${index < 2 ? '已确认' : index % 2 ? '暂定' : '留白'}〕\n${index < 2 ? '主角想找回航图，船主拒绝同行。\n- 航图线索 〔已埋〕\n' : ''}`).join('\n')
+    put(root, paths.故事骨架(), text)
+    expect(deriveDesign(scanDesign(root)).建议).toBe('开写就绪')
+    const progress = renderBookProgress(scanDesignDetail(root), {}, [])
+    expect(progress).toContain('留白')
+    expect(progress).toContain('暂定')
+    expect(fs.readFileSync(path.join(root, paths.故事骨架()), 'utf8')).toBe(text)
+  })
+
+  it.each([
+    ['## 结局方向与远期锚点 〔已确认〕\n', '缺少内容'],
+    ['## 结局方向与远期锚点 〔猜测〕\n未知。', '状态无效'],
+    ['## 结局方向与远期锚点 〔留白〕\n\n## 结局方向与远期锚点 〔已确认〕\n公开真相。', '状态冲突'],
+    ['', '缺少分部'],
+  ])('远期放宽仍拒绝损坏状态与空确认：%s', (replacement, issue) => {
+    const root = readyBook(), file = path.join(root, paths.故事骨架())
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/## 结局方向与远期锚点[\s\S]*$/, replacement))
+    const result = deriveDesign(scanDesign(root))
+    expect(result.建议).toBe('故事骨架')
+    expect(result.内容问题).toContainEqual(expect.objectContaining({ 分部: '结局方向与远期锚点', 问题: issue }))
+  })
   it('占位确认态保留原标签事实，但不再建议开写就绪', () => {
     const root = emptyBook()
     const facts = scanDesign(root)

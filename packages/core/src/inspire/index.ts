@@ -22,6 +22,9 @@ export {
   searchNotes,
   灵感池相对目录,
   type InspirationNote,
+  type InspirationMetadata,
+  type InspirationReference,
+  validInspirationReference,
 } from './pool'
 export {
   destOf,

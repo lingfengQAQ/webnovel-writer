@@ -1,0 +1,47 @@
+@antv/util@2.0.17
+SPDX: ISC
+Repository: git+https://github.com/antvis/util.git
+
+--- DECLARATION.txt ---
+The published package and its upstream repository omit a standalone license file.
+Original npm metadata declares ISC. This snapshot preserves that declaration; the accompanying SPDX reference is not an upstream copyright notice.
+
+{
+  "name": "@antv/util",
+  "version": "2.0.17",
+  "license": "ISC",
+  "author": {
+    "name": "https://github.com/orgs/antvis/people"
+  },
+  "repository": {
+    "url": "git+https://github.com/antvis/util.git",
+    "type": "git"
+  },
+  "dist": {
+    "shasum": "e8ef42aca7892815b229269f3dd10c6b3c7597a9",
+    "tarball": "https://registry.npmjs.org/@antv/util/-/util-2.0.17.tgz",
+    "fileCount": 800,
+    "integrity": "sha512-o6I9hi5CIUvLGDhth0RxNSFDRwXeywmt6ExR4+RmVAzIi48ps6HUy+svxOCayvrPBN37uE6TAc2KDofRo0nK9Q==",
+    "signatures": [
+      {
+        "sig": "MEUCIBImV/JwO6bKFUYcYso107WBQ5hM4Q3Fj36OmwUmuZ2AAiEA3MnsLisI5F2aFnqVp7Bwl/vgRG4kO3DWKoxG6NcCuDU=",
+        "keyid": "SHA256:jl3bwswu80PjjokCgh0o2w5c2U4LhQAE57gj9cz1kzA"
+      }
+    ],
+    "unpackedSize": 353446,
+    "npm-signature": "-----BEGIN PGP SIGNATURE-----\r\nVersion: OpenPGP.js v3.0.13\r\nComment: https://openpgpjs.org\r\n\r\nwsFcBAEBCAAQBQJh11pkCRA9TVsSAnZWagAAmpQP/jTnMb17eYdpOWuGfS3v\nsz6FscFzw5ylCAWif5HsIca9qoucw0moslUhX/HuvgY3AZN8oNDHqCOLdm0y\nsjPYitB3CXGG+5ZMSnm2wvVPCSxHl2HVwWeVO8mI+ky7lEZaJxtb6B1AEWBF\nbWE+guZkemNhWE8DHi+A92VDV21J3J+1Lk4iLexm99hX53+w/ZbxOWK5BRef\nnGhFUCk/w+eE5jdHyAnBnX+P3+X+a3eUqUlrdFftMJjvyEwLe8SiXbyDzT3W\nmrGp+2umF5T+nLeEnPt80GOBLqTt0GcKzgXx8ywyYggSe7OLb1V02eyAlMYh\npxNzIPIhVoRcg47fTTI0wlX4AnOKcAIFA5yna3Cg0zn/z26WzKW3tdtktUJ7\niSvKcjZMrnRLnYutWRx04z7RrBhX7ZungZcFTs2NFJi3nsAKwtdeBRUJ+puS\nd0qNE7Bdwh8VFURsUva6glpot6JV+g6RPQwoLhWZv9dOmmc8IGu106W2H9W+\njp4ISGqBxUMnFCQd1Q50cK70Khs6W+VIY5YtTs7UIRVTTx4VhINSSpgjesWx\ntQiCLLULXuPO71st1hifn85A0tFPCRCtKOKPOjuy3vbypsYTksoaXSD5gsuv\nYVdIWvHlAUbMV3nl+dCbqz5zU70MYfZeXpf8gHhygYdHyqnVWkUzKKpV58p0\n09KI\r\n=1Cbz\r\n-----END PGP SIGNATURE-----\r\n"
+  }
+}
+
+
+--- SPDX.txt ---
+Standard ISC license reference from SPDX v3.27.0. Template copyright placeholders are retained verbatim; no upstream copyright holders are invented.
+
+ISC License:
+
+Copyright (c) 2004-2010 by Internet Systems Consortium, Inc. ("ISC")
+Copyright (c) 1995-2003 by Internet Software Consortium
+
+Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.

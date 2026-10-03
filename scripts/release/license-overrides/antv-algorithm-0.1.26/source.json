@@ -1,0 +1,12 @@
+{
+  "package": "@antv/algorithm",
+  "version": "0.1.26",
+  "license": "MIT",
+  "metadataUrl": "https://registry.npmjs.org/@antv/algorithm/0.1.26",
+  "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/MIT.txt",
+  "reason": "Exact published version declares a license but includes no separate license notice; retain the declaration and standard terms with distinct provenance.",
+  "files": {
+    "DECLARATION.txt": "d4d802ee8e64919ccda99b80a4e568df61a4a72006e8c2c94e87ebdb0d73e281",
+    "SPDX.txt": "3a616f2f59d852f24154a98d7e1a983bd6ee43a6c52dea4af6a54f3eb786b1be"
+  }
+}

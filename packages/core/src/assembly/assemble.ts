@@ -420,7 +420,7 @@ function computeBaseMaterials(bookRoot: string, input: AssembleInput): ComputedM
     }
   }
   if (卷纲 !== null && 卷纲段 === null) {
-    gaps.push(`卷纲未按 schema 写:四段内无小节命中「${windowName}」,请直读 大纲/卷规划/卷${String(input.卷).padStart(2, '0')}/卷纲.md`)
+    gaps.push(`卷纲中未找到对应窗口内容:四段内无小节命中「${windowName}」,请直读 大纲/卷规划/卷${String(input.卷).padStart(2, '0')}/卷纲.md`)
   }
   if (卷纲段 !== null) 暂定Parts.push(`### 卷纲·本章窗口\n\n${卷纲段}`)
   const 暂定行 = [契约Body ?? '', 卷纲Body ?? ''].join('\n').split('\n').filter((line) => line.includes('〔暂定〕') || line.includes('〔留白〕'))

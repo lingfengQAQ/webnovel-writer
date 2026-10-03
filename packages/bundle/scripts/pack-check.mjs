@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto'
 import { isBuiltin } from 'node:module'
 import { build } from 'esbuild'
 import { parse } from 'yaml'
-import { skills as skillNames, thinScripts } from './artifact-contract.mjs'
+import { skills as skillNames, referenceDocs, thinScripts } from './artifact-contract.mjs'
 import { packageFiles, checkPublishableManifest } from '../../../scripts/release/tar.mjs'
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url))
@@ -51,6 +51,9 @@ for (const skill of skillNames) {
   const text = read(`skills/${skill}/SKILL.md`)
   assert.equal(parse(text.split('---')[1]).name, skill)
 }
+const expectedPrompts = [...skillNames.map(skill => `skills/${skill}/SKILL.md`), ...referenceDocs].sort()
+assert.deepEqual([...packedFiles.keys()].filter(file => file.startsWith('skills/') && file.endsWith('.md')).sort(), expectedPrompts)
+for (const reference of referenceDocs) assert.ok(read(reference).trim(), `Empty dispatch reference: ${reference}`)
 for (const script of scripts) assert.match(read(script), /new URL\(['"]\.\.\/\.\.\/\.\.\/lib\/index\.js['"], import\.meta\.url\)/)
 for (const entry of entries) {
   const rel = entry.slice('package/'.length)

@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
+import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 
 export interface SessionListRow {
@@ -15,7 +16,8 @@ export interface SessionList {
 export type UseSessions = <T>(selector: (state: SessionList) => T) => T
 export type RenderSlot = (name: string, owner: object, options?: object) => ReactNode
 export interface NativeEntry {
-  readonly options?: { readonly key?: string }
+  readonly options?: StoredEntry['options']
+  readonly children?: StoredEntry['children']
   readonly component: ComponentType<WorkspaceProps>
   readonly store?: unknown
   readonly locale?: string
@@ -31,7 +33,7 @@ export interface WorkspaceProps {
 export interface ClientHost {
   slots: {
     inject(name: string, callback: () => (() => void) | void): unknown
-    register<P>(options: { name: string; id?: string; key?: string; label?: string; priority?: number; order?: number; children?: Record<string, { kind: string; scope: string }>; store?: unknown; locale?: string; inject?: (...args: never[]) => unknown }, component: ComponentType<P>): () => void
+    register<P>(options: { name: string; id?: string; key?: string; label?: StoredEntry['options']['label']; priority?: number; order?: number; children?: StoredEntry['children']; store?: unknown; locale?: string; inject?: (...args: never[]) => unknown }, component: ComponentType<P>): () => void
     entries(name: string): readonly NativeEntry[]
     subscribe(name: string, listener: () => void): () => void
   }

@@ -29,7 +29,7 @@ export function parseMachineJson(text: string, expectedVersion: number): ReadRes
   }
   const obj = parsed as Record<string, unknown>
   if (!Object.prototype.hasOwnProperty.call(obj, 'schemaVersion')) {
-    return { ok: false, reason: 'parse-error', detail: '缺 schemaVersion(B8)' }
+    return { ok: false, reason: 'parse-error', detail: '缺 schemaVersion' }
   }
   const ver = obj['schemaVersion']
   if (typeof ver !== 'number' || !Number.isInteger(ver)) {

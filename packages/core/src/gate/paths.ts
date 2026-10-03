@@ -20,9 +20,9 @@ export function resolveInsideBook(bookRoot: string, target: string):
   const root = canonicalizePath(bookRoot)
   const abs = canonicalizePath(path.isAbsolute(target) ? target : path.resolve(bookRoot, target))
   const rel = path.relative(root, abs)
-  if (rel === '') return { ok: false, reason: '禁止改写书仓根本身(不变量 4)' }
+  if (rel === '') return { ok: false, reason: '禁止改写书仓根本身' }
   if (rel.startsWith('..') || path.isAbsolute(rel)) {
-    return { ok: false, reason: '路径逃逸书仓根,拒绝写入(不变量 4)' }
+    return { ok: false, reason: '路径逃逸书仓根,拒绝写入' }
   }
   return { ok: true, relPath: toPosixRel(rel) }
 }
@@ -50,14 +50,14 @@ export function gateFileAccess(bookRoot: string, target: string): FileAccessDeci
   }
   if (zone === '草稿区') return { allow: true, zone, relPath: resolved.relPath }
   if (zone === '定稿') {
-    return { allow: false, reason: '定稿区只读,禁止文件工具改写(不变量 4)', zone, relPath: resolved.relPath }
+    return { allow: false, reason: '定稿区只读,禁止文件工具改写', zone, relPath: resolved.relPath }
   }
   if (zone === '构想') {
-    return { allow: false, reason: '构想快照建书后只读,禁止改写(不变量 5)', zone, relPath: resolved.relPath }
+    return { allow: false, reason: '构想快照建书后只读,禁止改写', zone, relPath: resolved.relPath }
   }
   return {
     allow: false,
-    reason: '真源区仅书仓写入器可写,文件工具不得改写(不变量 4)',
+    reason: '真源区仅书仓写入器可写,文件工具不得改写',
     zone,
     relPath: resolved.relPath,
   }
