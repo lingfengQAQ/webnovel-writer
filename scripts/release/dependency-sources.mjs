@@ -3,6 +3,17 @@ import path from 'node:path'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
+import { packageFiles } from './tar.mjs'
+
+export function verifyRegistrySources(filename, pin) {
+  const bytes = fs.readFileSync(filename)
+  assert.equal(`sha512-${createHash('sha512').update(bytes).digest('base64')}`, pin.integrity, 'Pinned registry source integrity mismatch')
+  const sources = [...packageFiles(filename)].filter(([name]) => name.startsWith('src/') && name.endsWith('.ts')).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+  assert.ok(sources.length > 0 && sources.length === pin.sourceFiles, 'Registry source file count mismatch')
+  const proof = sources.map(([name, bytes]) => `${name}\0${createHash('sha256').update(bytes).digest('hex')}\n`).join('')
+  assert.equal(createHash('sha256').update(proof).digest('hex'), pin.sourceSha256, 'Registry source content mismatch')
+  return { sourceKind: 'registry-typescript', sourceFiles: sources.length, sourceSha256: pin.sourceSha256 }
+}
 
 async function download(url) {
   assert.ok(url.startsWith('https://registry.npmjs.org/') || url.startsWith('https://codeload.github.com/') || url.startsWith('https://code.haverbeke.berlin/'), 'Unexpected source host')
@@ -22,7 +33,8 @@ export async function collectDependencySources(root, output) {
   fs.mkdirSync(directory)
   const upstream = new Map()
   const report = []
-  const pinned = JSON.parse(fs.readFileSync(path.join(root, 'scripts/release/upstream-sources.json'), 'utf8'))
+  // Release tooling may be newer than the immutable source tag.
+  const pinned = JSON.parse(fs.readFileSync(new URL('./upstream-sources.json', import.meta.url), 'utf8'))
   for (const entry of components.values()) {
     const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(entry.name)}/${encodeURIComponent(entry.version)}`, { signal: AbortSignal.timeout(30000) })
     if (!response.ok) throw new Error(`Package source metadata unavailable: ${entry.name}@${entry.version}`)
@@ -40,6 +52,13 @@ export async function collectDependencySources(root, output) {
     const github = /github\.com[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:#.*)?$/.exec(repository ?? '')
     const haverbeke = /code\.haverbeke\.berlin\/([\w.-]+)\/([\w.-]+?)(?:\.git)?$/.exec(repository ?? '')
     const override = pinned[`${entry.name}@${entry.version}`]
+    if (override?.source === 'registry-typescript') {
+      const proof = verifyRegistrySources(path.join(directory, filename), override)
+      report.push({ name: entry.name, version: entry.version, license: entry.license, repository,
+        packageArchive: filename, packageIntegrity: integrity, ...proof, upstreamCommit: null, note: override.reason })
+      console.log(`[source] ${entry.name}@${entry.version}: pinned registry TypeScript source`)
+      continue
+    }
     const commit = override?.commit ?? metadata.gitHead
     assert.match(commit ?? '', /^[a-f0-9]{40}$/, `Pin upstream source for ${entry.name}@${entry.version}`)
     let upstreamFile = null, sourceUrl = null

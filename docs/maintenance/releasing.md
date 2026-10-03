@@ -37,6 +37,10 @@ pnpm release:build
 
 `release:build` 拒绝脏源码、非公开文件和非空输出目录；构建后核对声明，pack 一次，检查主包和可选包，生成对应源码、第三方源码材料、公开版本清单与 SHA256SUMS。输出默认在 `.tmp/release/<version>/`。
 
+标签创建后只修复发行工具时，可从已审阅的新公共工具 checkout 运行 `pnpm release:build -- --source <干净的原标签目录> --out <新空目录>`，并设置 `RELEASE_TAG`。源码 HEAD 必须等于该标签，版本与 manifest.publicCommit 仍来自原源码。若前次打包已完成、仅源码附件收集失败，额外传 `--packages <原四包目录>` 复用原 tgz，重新执行实包检查；禁止用它替换已发布附件或绕过源码/安装验收。
+
+第三方源码定位来自已审阅工具中的 upstream-sources.json。默认必须提供准确上游提交；个别旧包确实只提供随 npm 分发的 TypeScript 源码时，只能按确切版本显式记录 registry 原件 integrity、源码文件数量和内容摘要。缺文件、内容或字节不符仍拒绝，清单明确 sourceKind 和无上游提交，不伪造 gitHead。
+
 对生成的同一主包、可选包和完整版执行 `pnpm release:smoke -- <main.tgz> <embedding.tgz> <full.tgz>`。它新装固定 DSH，分别创建主包和完整版的独立 Web profile，在源目录不可读的权限环境运行真实 Loader，再核对卸载/重装。首次 npm 发布前，临时本地 registry 提供完整版两个确切依赖的同批 tarball，其他公开依赖转向 npmjs；发布后的 `--registry` 验收全程使用 npmjs。需要 npm 随 Node 提供的 CLI；输出目录保留供故障调查，报告不能冒充真实模型创作验收。
 
 人工再核对浏览器入口、配置与合成首章教程。模型服务的调用费用单独记录；不以程序回归替代模型质量判断。

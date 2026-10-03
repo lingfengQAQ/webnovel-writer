@@ -43,5 +43,52 @@
     "repository": "deepseek-ai/deepseek-harness",
     "commit": "639ed015397290b3745d163aafe02ffee4aa3f84",
     "tag": "dsh-v0.2.0-rc.2"
+  },
+  "@antv/g-canvas@2.2.0": {
+    "repository": "antvis/G",
+    "commit": "aa6ac7a44d27f38b8ddbd8e7b45b29f40d443bec",
+    "manifestPath": "packages/g-canvas/package.json"
+  },
+  "@antv/g-lite@2.7.0": {
+    "repository": "antvis/G",
+    "commit": "aa6ac7a44d27f38b8ddbd8e7b45b29f40d443bec",
+    "manifestPath": "packages/g-lite/package.json"
+  },
+  "@antv/g-plugin-dragndrop@2.1.1": {
+    "repository": "antvis/G",
+    "commit": "aa6ac7a44d27f38b8ddbd8e7b45b29f40d443bec",
+    "manifestPath": "packages/g-plugin-dragndrop/package.json"
+  },
+  "@antv/g@6.3.1": {
+    "repository": "antvis/G",
+    "commit": "aa6ac7a44d27f38b8ddbd8e7b45b29f40d443bec",
+    "manifestPath": "packages/g/package.json"
+  },
+  "@antv/g6@5.1.1": {
+    "repository": "antvis/G6",
+    "commit": "5a5551cea13d021d12c90a87116e3c6092d53210",
+    "manifestPath": "packages/g6/package.json"
+  },
+  "@babel/runtime@7.29.7": {
+    "repository": "babel/babel",
+    "commit": "4fba7541180bf5f58256d8e358b544e3831ad090",
+    "manifestPath": "packages/babel-runtime/package.json"
+  },
+  "html2canvas@1.4.1": {
+    "repository": "niklasvh/html2canvas",
+    "commit": "7c3269bdbeb2097fd9882a3cbda3433d9a4d2476",
+    "manifestPath": "package.json"
+  },
+  "xmlchars@2.2.0": {
+    "repository": "lddubeau/xmlchars",
+    "commit": "1b54de0e417a1744a505f101b28314466b380bb0",
+    "manifestPath": "package.json"
+  },
+  "@antv/util@2.0.17": {
+    "source": "registry-typescript",
+    "integrity": "sha512-o6I9hi5CIUvLGDhth0RxNSFDRwXeywmt6ExR4+RmVAzIi48ps6HUy+svxOCayvrPBN37uE6TAc2KDofRo0nK9Q==",
+    "sourceFiles": 114,
+    "sourceSha256": "b90289d40e1004144c77bd7e866ff37bb1e1f8348dd7bb14896439237fa0f320",
+    "reason": "Published package includes original src/*.ts implementation; no gitHead or matching upstream release tag is available. Retain exact registry source bytes without inventing an upstream commit."
   }
 }
