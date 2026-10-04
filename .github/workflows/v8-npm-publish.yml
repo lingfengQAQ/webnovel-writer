@@ -8,6 +8,12 @@ on:
         description: Existing Scriptor release tag whose original assets should be published
         required: true
         type: string
+      phase:
+        description: Submit original packages, or only resume registry verification (no uploads)
+        required: true
+        default: publish
+        type: choice
+        options: [publish, verify]
 permissions:
   contents: read
 concurrency:
@@ -18,6 +24,8 @@ jobs:
     if: github.repository == 'lingfengQAQ/webnovel-writer' && (github.event_name == 'workflow_dispatch' || (startsWith(github.event.release.tag_name, 'scriptor-v') && !github.event.release.prerelease))
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      ready: ${{ steps.registry.outputs.ready }}
     permissions:
       # Draft release assets require repository push access, even for downloads.
       contents: write
@@ -49,19 +57,26 @@ jobs:
           node-version: '24.15.0'
           registry-url: https://registry.npmjs.org/
       - name: Install pinned npm
+        if: github.event_name != 'workflow_dispatch' || inputs.phase != 'verify'
         run: npm install --global npm@12.0.1
       - name: Download the original release packages and checksums
         working-directory: source
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release download "$RELEASE_TAG" --dir .tmp/npm-release --pattern '*.tgz' --pattern 'SHA256SUMS' --pattern 'release-manifest.json'
-      - name: Validate and publish original assets using npm token
+      - name: Validate and submit original assets using npm token
+        if: github.event_name != 'workflow_dispatch' || inputs.phase != 'verify'
         working-directory: source
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: node ../publisher/scripts/release/publish-npm.mjs --assets .tmp/npm-release --publish
+        run: node ../publisher/scripts/release/publish-npm.mjs --assets .tmp/npm-release --publish --submit-only
+      - name: Check registry readiness without waiting for external processing
+        id: registry
+        working-directory: source
+        run: node ../publisher/scripts/release/publish-npm.mjs --assets .tmp/npm-release --check-visibility
   installation:
     needs: publish
+    if: needs.publish.outputs.ready == 'true'
     runs-on: windows-latest
     timeout-minutes: 25
     permissions:

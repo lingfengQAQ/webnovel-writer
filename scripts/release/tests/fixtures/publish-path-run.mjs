@@ -13,7 +13,7 @@ import { once } from 'node:events'
 
 const assets = path.resolve(process.argv[2])
 const work = path.resolve(process.argv[3])
-const mode = process.argv[4] ?? '--publish'
+const mode = process.argv.length > 4 ? process.argv.slice(4) : ['--publish']
 // The caller decides whether an earlier run's registry state is kept, so a retry
 // sees the versions an earlier publish created.
 if (process.env.SCRIPTOR_KEEP_STATE !== '1' && fs.existsSync(work)) fs.rmSync(work, { recursive: true, force: true })
@@ -36,6 +36,7 @@ const registry = createServer((request, response) => {
   }
   const entry = readState()[name]
   if (!entry) { response.writeHead(404); response.end(); return }
+  if (process.env.SCRIPTOR_PENDING_REGISTRY === name) { response.writeHead(404); response.end(); return }
   if (process.env.SCRIPTOR_FAIL_REGISTRY_AFTER_UPLOAD === name) { response.writeHead(500); response.end(); return }
   const now = new Date().toISOString()
   response.writeHead(200, { 'content-type': 'application/json' })
@@ -74,7 +75,7 @@ registry.listen(0, '127.0.0.1', async () => {
       delete environment.ACTIONS_ID_TOKEN_REQUEST_URL
       delete environment.ACTIONS_ID_TOKEN_REQUEST_TOKEN
     }
-    const child = spawn(process.execPath, [publisher, '--assets', assets, ...mode.split(' ')], {
+    const child = spawn(process.execPath, [publisher, '--assets', assets, ...mode], {
       env: environment,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
