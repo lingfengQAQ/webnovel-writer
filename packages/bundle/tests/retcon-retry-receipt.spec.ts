@@ -93,10 +93,21 @@ function snapshot(root: string): Record<string, string> {
   walk('')
   return files
 }
+function copySeed(source: string, target: string): void {
+  // Node 22.19 Windows cpSync can crash on this Chinese-path Git fixture.
+  // Keep ordinary independent files without its native recursive-copy path.
+  fs.mkdirSync(target)
+  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+    const from = path.join(source, entry.name), to = path.join(target, entry.name)
+    if (entry.isDirectory()) copySeed(from, to)
+    else if (entry.isFile()) fs.copyFileSync(from, to, fs.constants.COPYFILE_EXCL)
+    else throw new Error('Receipt seed must contain only regular files and directories')
+  }
+}
 async function fixture(candidate: boolean | 'all' = false, name = key.章名) {
   const ws = fs.mkdtempSync(path.join(scratch, 'case-'))
   const root = path.join(ws, '复查书')
-  fs.cpSync(seedRoot, root, { recursive: true, force: false, errorOnExist: true })
+  copySeed(seedRoot, root)
   put(root, paths.定稿章(1, 1, name), serializeDocument({ 角色: '定稿', 版本: 1, ...key, 章名: name }, '原正文。'))
   put(root, paths.章摘要(1, 1, name), '# 章摘要\n原摘要。\n')
   put(root, world, serializeDocument({ 名称: '铜铃', 性质: '事实', 版本: 1 }, '原事实。'))
