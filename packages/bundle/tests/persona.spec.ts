@@ -4,7 +4,8 @@ import { personaText, registerPersona, attachPersonaToAgent, PERSONA_BLACKLIST }
 describe('persona 轻适配内容（只做 dsh 原生身份的小说场景适配）', () => {
   it('覆盖身份/主技能指向/状态校准/创作分工/真源纪律', () => {
     expect(personaText).toContain('Webnovel Writer 写作工作台')
-    expect(personaText).toContain('工作台总控') // 指向主技能 novel-director
+    expect(personaText).toContain('工作台总控')
+    expect(personaText).toContain('skill 工具，参数为 {"name":"novel-director"}')
     expect(personaText).toContain('novel_get_story_status') // 状态校准第一律
     expect(personaText).toContain('子代理') // 创作分工
     expect(personaText).toContain('建议稿') // 规划提案

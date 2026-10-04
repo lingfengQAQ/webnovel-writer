@@ -5,17 +5,49 @@ import {
 } from '@webnovel/core'
 import type { AgentLike, NovelToolDefinition, ToolExecContext } from '../novel-tools'
 import type { ReferenceHost } from './host'
+import { assertObjectJsonSchema, assertSupportedJsonSchema, validateJsonSchemaValue, type JsonSchemaNode } from '@deepseek-ai/dsh-tools'
 
 export const REFERENCE_TOOL_NAMES = ['novel_reference_source', 'novel_reference_analyze', 'novel_reference_query', 'novel_reference_report'] as const
 interface Deps { workspaceRoot(agent?: AgentLike): string | undefined; referenceHost?: Pick<ReferenceHost, 'readFile' | 'runner'> }
 const string = { type: 'string' } as const
 const source = { sourceId: string }
-const tags = { type: 'array', items: string }
-const ranges = { oneOf: [{ const: 'all' }, { type: 'array', items: { type: 'object', additionalProperties: false, properties: { unitId: string, start: { type: 'integer' }, end: { type: 'integer' } }, required: ['unitId', 'start', 'end'] } }] }
-const metadata = { type: 'object', additionalProperties: false, properties: { title: string, author: string, translator: string, edition: string, acquiredFrom: string, allowedUses: string, basis: string, basisKind: { enum: ['user-declaration', 'checkable-license'] } }, required: ['title', 'author', 'edition', 'acquiredFrom', 'allowedUses', 'basis', 'basisKind'] }
-const reference = { type: 'object', additionalProperties: false, properties: { 参考书: string, 原文版本: string, 机制: string, 机制版本: { type: 'integer' } }, required: ['参考书', '原文版本', '机制', '机制版本'] }
-const encoding = { enum: ['utf-8', 'utf-16le', 'utf-16be', 'gb18030', 'big5'] }
-function variant(action: string, properties: Record<string, unknown>, required: string[] = Object.keys(properties)) { return { type: 'object', additionalProperties: false, properties: { action: { const: action }, ...properties }, required: ['action', ...required] } }
+const tags: JsonSchemaNode = { type: 'array', items: string }
+const ranges: JsonSchemaNode = { oneOf: [{ type: 'string', const: 'all' }, { type: 'array', items: { type: 'object', additionalProperties: false, properties: { unitId: string, start: { type: 'integer' }, end: { type: 'integer' } }, required: ['unitId', 'start', 'end'] } }] }
+const metadata: JsonSchemaNode = { type: 'object', additionalProperties: false, properties: { title: string, author: string, translator: string, edition: string, acquiredFrom: string, allowedUses: string, basis: string, basisKind: { type: 'string', enum: ['user-declaration', 'checkable-license'] } }, required: ['title', 'author', 'edition', 'acquiredFrom', 'allowedUses', 'basis', 'basisKind'] }
+const reference: JsonSchemaNode = { type: 'object', additionalProperties: false, properties: { 参考书: string, 原文版本: string, 机制: string, 机制版本: { type: 'integer' } }, required: ['参考书', '原文版本', '机制', '机制版本'] }
+const encoding: JsonSchemaNode = { type: 'string', enum: ['utf-8', 'utf-16le', 'utf-16be', 'gb18030', 'big5'] }
+function variant(action: string, properties: Record<string, JsonSchemaNode>, required: string[] = Object.keys(properties)) {
+  const fields: Record<string, JsonSchemaNode> = { action: { type: 'string', const: action }, ...properties }
+  return { type: 'object', additionalProperties: false, properties: fields, required: ['action', ...required] } satisfies JsonSchemaNode
+}
+
+/** Providers require an object root; DSH's subset forbids type beside oneOf.
+ * Publish the flat argument object, retaining per-action constraints before IO. */
+function actionTool(definition: Omit<NovelToolDefinition, 'parameters'> & { parameters: { oneOf: ReturnType<typeof variant>[] } }): NovelToolDefinition {
+  const branches = definition.parameters.oneOf
+  assertSupportedJsonSchema(definition.parameters)
+  const properties: Record<string, JsonSchemaNode> = Object.fromEntries(branches.flatMap(branch => Object.entries(branch.properties)))
+  properties.action = { type: 'string', enum: branches.map(branch => branch.properties.action!.const!) }
+  for (const [key, schema] of Object.entries(properties)) {
+    if (key === 'action') continue
+    const applicable = branches.filter(branch => Object.hasOwn(branch.properties, key))
+    const required = applicable.filter(branch => branch.required.includes(key))
+    const actions = (items: typeof branches) => items.map(branch => branch.properties.action!.const).join('、')
+    properties[key] = { ...schema, description: `${schema.description ?? ''}用于 ${actions(applicable)}。${required.length ? `必填操作：${actions(required)}。` : '可选。'}` }
+  }
+  const parameters: Record<string, unknown> = {
+    type: 'object', additionalProperties: false, properties,
+    required: branches[0]!.required.filter(key => branches.every(branch => branch.required.includes(key))),
+  }
+  assertObjectJsonSchema(parameters)
+  return { ...definition, parameters, execute: (args, exec) => {
+    const branch = branches.find(branch => branch.properties.action!.const === args?.action)
+    if (!branch) return { ok: false, code: 'invalid-action', reason: '未知参考资料操作' }
+    const violations = validateJsonSchemaValue(branch, args)
+    if (violations.length) return { ok: false, code: 'invalid-args', reason: `参考资料参数不完整或格式错误：${violations.join('；')}` }
+    return definition.execute(args, exec)
+  } }
+}
 const output: NovelToolDefinition['output'] = { schema: { type: 'object', properties: { ok: { type: 'boolean' }, reason: string }, required: ['ok'] }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }] }
 
 export function createReferenceTools(deps: Deps): NovelToolDefinition[] {
@@ -98,5 +130,5 @@ export function createReferenceTools(deps: Deps): NovelToolDefinition[] {
         if (args.action === 'save-idea') return saveReferenceIdea(workspace, { body: String(args.body), operationId: String(args.operationId), references: args.references as InspirationReference[], tags: args.tags as string[] | undefined, type: args.type as string | undefined })
         throw new ReferenceError('invalid-action', '未知报告操作')
       }) },
-  ]
+  ].map(actionTool)
 }

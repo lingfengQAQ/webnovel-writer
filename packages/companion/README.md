@@ -4,7 +4,7 @@
 
 ## 安装
 
-配套 DSH 0.2.0-rc.2。在 DSH 侧栏“插件 → 添加插件”输入 `@linfengqaqtat/dsh-scriptor-companion@8.1.0`，核对预览后安装，按提示启用或重启。
+配套 DSH 0.2.0-rc.2。在 DSH 侧栏“插件 → 添加插件”输入 `@linfengqaqtat/dsh-scriptor-companion@8.1.1`，核对预览后安装，按提示启用或重启。
 
 安装包携带全部运行素材，无需 Dola 网络连接、Python、FFmpeg 或额外模型配置。桌宠仍在 DSH 窗口内显示，不是 Windows 全局悬浮窗。旧 @linfengqaqtat/dsh-whale-companion 先撤销安装入口，不要与新包同时启用；详见 [安装与迁移](https://github.com/lingfengQAQ/webnovel-writer/blob/v8/docs/user/install.md)。
 

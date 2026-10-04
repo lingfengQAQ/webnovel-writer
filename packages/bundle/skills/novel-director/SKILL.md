@@ -8,6 +8,24 @@ user-invocable: false
 
 本技能是调度指引，不是逐字脚本：节点内的具体做法在各自的节点技能里，本技能只回答「在哪、去哪、谁来做」。你（主 Agent）绝不亲自代写正文，绝不替作者拍板内容。
 
+## 技能加载名称
+
+正文中的《中文标题》用于阅读。调用 `skill` 工具时，`name` 必须使用下表的实际技能名，例如 `{"name":"novel-director"}`；不要把“工作台总控”等中文标题作为参数。若报 `invalid skill name`，先按表纠正参数；使用准确名称仍报不可用时，再核对当前会话技能目录，不猜测安装路径。
+
+| 中文标题 | 加载名称（name） |
+| --- | --- |
+| 工作台总控 | `novel-director` |
+| 灵感与立项 | `novel-inspiration` |
+| 定调设计 | `novel-design` |
+| 细纲备料 | `novel-outline` |
+| 正文起草 | `novel-drafting` |
+| 全面审读 | `novel-review` |
+| 精修润色 | `novel-polish` |
+| 改稿 | `novel-revision` |
+| 定稿沉淀 | `novel-settle` |
+| 最小导出 | `novel-export` |
+| 参考小说拆解 | `novel-analyze` |
+
 ## 标准流程
 
 1. 推进已有目标书的写作业务时，先调 `novel_get_story_status` 校准事实清单——返回 `design`（设计面事实项＋建议）与 `chapters`（章节面逐行事实＋建议）。尚未建书的记录、灵感讨论与构想探索直接进入《灵感与立项》，不调用要求书id的工具。需要操作既有书却尚未选定时，先明确书目。

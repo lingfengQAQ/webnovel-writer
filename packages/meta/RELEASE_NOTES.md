@@ -1,7 +1,7 @@
-# 完整版 8.1.0
+# 完整版 8.1.1
 
-- 主插件：`@linfengqaqtat/dsh-scriptor@8.1.0`。
-- 嵌入提供方：`@linfengqaqtat/dsh-scriptor-retrieval@8.1.0`。
+- 主插件：`@linfengqaqtat/dsh-scriptor@8.1.1`。
+- 嵌入提供方：`@linfengqaqtat/dsh-scriptor-retrieval@8.1.1`。
 - 固定宿主：DSH `0.2.0-rc.2`，Node 24.15.0 或 22.19.0 起的 Node 22，pnpm 11.27.1。
 - 新增开放式构思、TXT/EPUB 参考小说渐进分析、故事图谱和当前会话流程状态；统一提示词边界并修复原生会话菜单。
 - 嵌入、场景和重排默认关闭。组合包与分别安装主包/提供方二选一，不能重复启用。

@@ -3,8 +3,52 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+async function checkSchemaGreeting({ workspace, main, service, host }) {
+  const { LlmAdapter, createUserMessage } = await import(host ? pathToFileURL(host.entry('@deepseek-ai/dsh-llm')).href : '@deepseek-ai/dsh-llm')
+  const { assertObjectJsonSchema, jsonSchemaToTs } = await import(host ? pathToFileURL(host.entry('@deepseek-ai/dsh-tools')).href : '@deepseek-ai/dsh-tools')
+  let requests = 0
+  class SchemaAdapter extends LlmAdapter {
+    async *stream(options) {
+      requests++
+      assert.ok(JSON.stringify(options.messages).includes('你好'))
+      const tools = options.tools.filter(tool => tool.name.startsWith('novel_'))
+      const references = tools.filter(tool => tool.name.startsWith('novel_reference_'))
+      assert.deepEqual(references.map(tool => tool.name).sort(), ['novel_reference_analyze', 'novel_reference_query', 'novel_reference_report', 'novel_reference_source'])
+      for (const tool of tools) assert.equal(tool.parameters.type, 'object', tool.name)
+      for (const tool of references) {
+        assertObjectJsonSchema(tool.parameters)
+        assert.notEqual(jsonSchemaToTs(tool.parameters), 'unknown', tool.name)
+      }
+      yield { type: 'block-start', index: 0, blockType: 'text' }
+      yield { type: 'text-delta', index: 0, text: '你好，工具参数校验通过。' }
+      yield { type: 'block-end', index: 0, block: { type: 'text', text: '你好，工具参数校验通过。' } }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    }
+  }
+  const offAdapter = service('llm').registerAdapter(['reference-schema-fixture'], new SchemaAdapter())
+  const handle = await service('agents').create({ sessionId: 'reference-schema-greeting', meta: { cwd: workspace }, agentOptions: { provider: 'reference-schema-fixture', model: 'fixture' } })
+  try {
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { off(); reject(new Error('schema greeting did not finish')) }, 10000)
+      const off = handle.agent.ctx.on('agent/status', ({ agent, status }) => {
+        if (agent !== handle.agent || status !== 'idle') return
+        clearTimeout(timer); off(); resolve()
+      })
+      handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: '你好' }], source: { kind: 'user' } }))
+    })
+    const events = handle.agent.session.snapshotEvents()
+    assert.equal(events.filter(event => event.type === 'turn/end').at(-1).data.reason.kind, 'completed')
+    assert.equal(requests, 1)
+    assert.ok(!events.some(event => event.type === 'tool/call'))
+  } finally {
+    await handle.dispose()
+    if (typeof offAdapter === 'function') offAdapter()
+  }
+}
+
 export async function checkReferences({ workspace, main, service, execute, check, host }) {
   await check('参考小说真实文件服务、配置模型与私有原文边界', async () => {
+    await checkSchemaGreeting({ workspace, main, service, host })
     const { LlmAdapter } = await import(host ? pathToFileURL(host.entry('@deepseek-ai/dsh-llm')).href : '@deepseek-ai/dsh-llm')
     let calls = 0
     class Adapter extends LlmAdapter {

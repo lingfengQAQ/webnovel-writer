@@ -1,6 +1,6 @@
 {
   "name": "@linfengqaqtat/dsh-scriptor-companion",
-  "version": "8.1.0",
+  "version": "8.1.1",
   "description": "鲸鱼娘桌宠：DSH 窗口内的写作陪伴",
   "type": "module",
   "main": "./lib/index.js",
