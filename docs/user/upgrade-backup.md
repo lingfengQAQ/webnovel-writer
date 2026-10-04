@@ -1,12 +1,12 @@
 # 备份、升级与卸载
 
-## 升级到 8.1.0
+## 升级到 8.1.1
 
-8.1.0 新增参考小说分析、故事图谱和写作流程状态，继续配套 DSH 0.2.0-rc.2。从 8.0.0 升级无需更换宿主；更新所用插件到同一版本，已有作品按原文件读取，不自动重写设计与正文。参考库作为书房的一部分纳入备份。
+8.1.1 修复参考工具参数导致官方 DeepSeek 拒绝整轮对话，以及中文技能标题被误用为加载名称的问题，继续配套 DSH 0.2.0-rc.2。从 8.0.0 或 8.1.0 升级无需更换宿主；更新所用插件到同一版本并重启，已有作品按原文件读取，不自动重写设计与正文。参考库作为书房的一部分纳入备份。
 
 ## 旧包名迁移（8.0.0 起）
 
-8.0.0 起将旧 webnovel-embedding-provider 更名为 @linfengqaqtat/dsh-scriptor-retrieval，旧 @linfengqaqtat/dsh-whale-companion 更名为 @linfengqaqtat/dsh-scriptor-companion。所有新版安装包为 8.1.0，使用 DSH 0.2.0-rc.2。
+8.0.0 起将旧 webnovel-embedding-provider 更名为 @linfengqaqtat/dsh-scriptor-retrieval，旧 @linfengqaqtat/dsh-whale-companion 更名为 @linfengqaqtat/dsh-scriptor-companion。所有新版安装包为 8.1.1，使用 DSH 0.2.0-rc.2。
 
 先备份作品、profile 配置及凭据引用，停止会话。在 DSH 侧栏“插件”中卸载旧入口，按提示重启，再安装新入口；不要同时启用新旧包。自定义模块 name 覆盖需按 [维护者迁移说明](../maintenance/cli-install.md) 更新，稳定条目 id 和 config 保留。完整版与写作/检索单装二选一。
 
@@ -28,13 +28,13 @@
 4. 检查书房入口、技能是否各一份，核对实际书仓状态；先用合成副本试写。
 
 ```powershell
-dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor@8.1.0
+dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor@8.1.1
 dsh --profile scriptor --dump-config
 ```
 
 上面展示命令写法，更新时换成实际目标版本。
 
-完整版安装对应使用 `@linfengqaqtat/dsh-scriptor-full@8.1.0`。不要在保留完整版时另外安装主包；单装转 full 按 [切换步骤](install.md#从单装切换为完整版) 操作，切回单装时先停机并移除 full，再安装所需单包。
+完整版安装对应使用 `@linfengqaqtat/dsh-scriptor-full@8.1.1`。不要在保留完整版时另外安装主包；单装转 full 按 [切换步骤](install.md#从单装切换为完整版) 操作，切回单装时先停机并移除 full，再安装所需单包。
 
 ## 回退
 

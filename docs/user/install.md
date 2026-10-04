@@ -1,4 +1,4 @@
-# 安装 Scriptor 8.1.0
+# 安装 Scriptor 8.1.1
 
 本版配套 **DSH 0.2.0-rc.2**。从 [DSH 官方页面](https://github.com/deepseek-ai/deepseek-harness) 安装对应桌面端，再通过 DSH 自带的插件管理页面安装。桌面端自带运行时，无需为了安装插件另装 Node.js 或 pnpm。
 
@@ -12,10 +12,10 @@
 
 | 插件 | 输入框内容 | 用途 |
 | --- | --- | --- |
-| 写作工作台 | `@linfengqaqtat/dsh-scriptor@8.1.0` | 书房、设计、写章、审读、定稿与导出 |
-| 检索增强（可选） | `@linfengqaqtat/dsh-scriptor-retrieval@8.1.0` | 嵌入、场景识别、重排，分别配置和启用 |
-| 鲸鱼娘（可选） | `@linfengqaqtat/dsh-scriptor-companion@8.1.0` | 窗口内陪伴及会话状态反馈 |
-| 完整版（二选一） | `@linfengqaqtat/dsh-scriptor-full@8.1.0` | 一次安装写作与检索，不含桌宠 |
+| 写作工作台 | `@linfengqaqtat/dsh-scriptor@8.1.1` | 书房、设计、写章、审读、定稿与导出 |
+| 检索增强（可选） | `@linfengqaqtat/dsh-scriptor-retrieval@8.1.1` | 嵌入、场景识别、重排，分别配置和启用 |
+| 鲸鱼娘（可选） | `@linfengqaqtat/dsh-scriptor-companion@8.1.1` | 窗口内陪伴及会话状态反馈 |
+| 完整版（二选一） | `@linfengqaqtat/dsh-scriptor-full@8.1.1` | 一次安装写作与检索，不含桌宠 |
 
 **完整版与分别安装写作/检索二选一。** 不要重复安装这两种入口。后续正式版本发布到 npm 的 latest；教程使用精确版本，便于核对配套宿主。
 
@@ -25,7 +25,7 @@
 
 按插件管理器提示启用、应用变更或重启。需要重启时，从应用菜单完全退出再打开；Windows 标题栏关闭按钮可能只是隐藏到托盘。
 
-- **写作工作台**：已安装列表出现正确包名和 8.1.0，启用后可打开书房。
+- **写作工作台**：已安装列表出现正确包名和 8.1.1，启用后可打开书房。
 - **检索增强**：可找到嵌入、场景识别和重排配置；默认关闭，无需为基础写作先填这些项目。
 - **鲸鱼娘**：出现角色；隐藏后可从对应设置恢复。
 
@@ -46,6 +46,6 @@
 3. 用上表的新包名安装，再核对原有配置和启用状态。若自定义 profile 覆盖中仍写了旧模块名称，按维护文档更新模块引用；不要改条目 id 或凭据引用。
 4. 确认主包、检索各只有一个有效入口后再继续写作。书稿不会因改包名自动搬迁。
 
-0.1.0-preview.7 / 旧提供方 0.0.9 对应 DSH 0.1.7-rc.2；8.1.0 对应 DSH 0.2.0-rc.2。旧版资料保留在相应 Release，不能交叉套用宿主。
+0.1.0-preview.7 / 旧提供方 0.0.9 对应 DSH 0.1.7-rc.2；8.1.1 对应 DSH 0.2.0-rc.2。旧版资料保留在相应 Release，不能交叉套用宿主。
 
-[下载本版及校验和](https://github.com/lingfengQAQ/webnovel-writer/releases/tag/scriptor-v8.1.0) · [配置教程](configuration.md) · [故障排查](troubleshooting.md) · [维护者命令行安装](../maintenance/cli-install.md)
+[下载本版及校验和](https://github.com/lingfengQAQ/webnovel-writer/releases/tag/scriptor-v8.1.1) · [配置教程](configuration.md) · [故障排查](troubleshooting.md) · [维护者命令行安装](../maintenance/cli-install.md)

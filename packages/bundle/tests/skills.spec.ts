@@ -82,6 +82,18 @@ describe('聚合 skills 体系（渐进式披露与 Subagent 协同）', () => {
     expect(text).toContain('不自动开下一章')
   })
 
+  it('中文路由标题对应可加载的 frontmatter name，不能用中文标题调用 skill', () => {
+    const director = readSkill('novel-director')
+    const routes = [...director.matchAll(/^\| ([^|]+) \| `(novel-[a-z-]+)` \|$/gm)]
+    expect(routes).toHaveLength(EXPECTED_SKILLS.length)
+    for (const [, title, name] of routes) {
+      expect(EXPECTED_SKILLS).toContainEqual({ name, 中文名: title })
+      expect(SKILL_NAME_RE.test(name!)).toBe(true)
+      expect(readFrontmatter(readSkill(name!)).name).toBe(name)
+    }
+    expect(director).toContain('{"name":"novel-director"}')
+  })
+
   it('灵感与立项：含三步法 + 七要素 + 建书门槛', () => {
     const text = readSkill('novel-inspiration')
     expect(text).toContain('随手记')
