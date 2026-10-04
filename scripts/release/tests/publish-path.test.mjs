@@ -212,3 +212,23 @@ test('token publishing passes credentials to npm and rejects missing token or pr
   assert.throws(() => runPublisher({ assets, fixture, environment: { SCRIPTOR_STRIP_OIDC: '1' } }), /id-token: write for npm provenance/)
   assert.deepEqual(readInvocations(fixture).filter(item => !item.dryRun), [])
 }))
+
+test('submission and delayed visibility are separate; verification cannot re-upload', () => withFixture(({ base, assets, fixture, packages }) => {
+  const pending = packages.at(-1).name
+  const environment = { SCRIPTOR_PENDING_REGISTRY: pending }
+  const submitted = runPublisher({ assets, fixture, mode: '--publish --submit-only', environment })
+  assert.equal(submitted.invocations.filter(item => !item.dryRun).length, 4)
+  const outputs = path.join(base, 'github-output')
+  const summary = path.join(base, 'github-summary')
+  const checked = runPublisher({ assets, fixture, mode: '--check-visibility', keepState: true,
+    environment: { ...environment, GITHUB_OUTPUT: outputs, GITHUB_STEP_SUMMARY: summary, SCRIPTOR_STRIP_NPM_TOKEN: '1' } })
+  assert.deepEqual(checked.invocations, [], 'visibility checks must never invoke npm')
+  assert.match(fs.readFileSync(outputs, 'utf8'), /ready=false/)
+  assert.match(fs.readFileSync(summary, 'utf8'), /not complete/)
+  assert.match(fs.readFileSync(summary, 'utf8'), /phase=verify/)
+  fs.writeFileSync(outputs, '')
+  const ready = runPublisher({ assets, fixture, mode: '--check-visibility', keepState: true,
+    environment: { GITHUB_OUTPUT: outputs, SCRIPTOR_STRIP_NPM_TOKEN: '1' } })
+  assert.deepEqual(ready.invocations, [])
+  assert.equal(fs.readFileSync(outputs, 'utf8'), 'ready=true\n')
+}))

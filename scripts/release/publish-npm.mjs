@@ -107,6 +107,18 @@ async function metadataFor(name) {
   return response.json()
 }
 
+/** A missing version is still processing, while wrong bytes and HTTP errors fail. */
+export async function registryReadiness(packages, lookup = metadataFor) {
+  const pending = []
+  for (const pkg of packages) {
+    const metadata = await lookup(pkg.name)
+    if (registryStatus(pkg, metadata) !== 'identical' || metadata['dist-tags']?.latest !== pkg.version) {
+      pending.push(`${pkg.name}@${pkg.version}`)
+    }
+  }
+  return { ready: pending.length === 0, pending }
+}
+
 async function verifyRegistry(packages) {
   for (const pkg of packages) {
     let verified = false
@@ -126,11 +138,21 @@ async function verifyRegistry(packages) {
 async function main() {
   const args = process.argv.slice(2)
   const directoryIndex = args.indexOf('--assets')
-  assert.ok(directoryIndex >= 0 && args[directoryIndex + 1], 'Usage: node scripts/release/publish-npm.mjs --assets <directory> [--publish|--verify-only]')
-  assert.ok(!(args.includes('--publish') && args.includes('--verify-only')), 'Choose one mode')
+  assert.ok(directoryIndex >= 0 && args[directoryIndex + 1], 'Usage: node scripts/release/publish-npm.mjs --assets <directory> [--publish [--submit-only]|--verify-only|--check-visibility]')
+  assert.ok(['--publish', '--verify-only', '--check-visibility'].filter(mode => args.includes(mode)).length <= 1, 'Choose one mode')
+  assert.ok(!args.includes('--submit-only') || args.includes('--publish'), '--submit-only requires --publish')
   const directory = path.resolve(args[directoryIndex + 1])
   const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }).trim()
   const packages = validateReleaseAssets(directory, process.env.RELEASE_TAG, commit)
+  if (args.includes('--check-visibility')) {
+    const result = await registryReadiness(packages)
+    console.log(JSON.stringify(result))
+    if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `ready=${result.ready}\n`)
+    if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, result.ready
+      ? 'Registry bytes and latest tags are ready; installation verification follows.\n'
+      : `## Release pending registry processing\n\nUploads were submitted, but the release is **not complete**. The draft remains private.\n\n${result.pending.map(name => `- ${name}`).join('\n')}\n\nAfter the registry exposes these versions, run this workflow with **phase=verify** and the same release tag. That phase cannot upload packages.\n`)
+    return
+  }
   if (args.includes('--verify-only')) return verifyRegistry(packages)
   const npm = [process.env.NPM_CLI_ENTRY, path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js'), path.resolve(path.dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js')].filter(Boolean).find(file => fs.existsSync(file))
   assert.ok(npm, 'npm-cli.js was not found; set NPM_CLI_ENTRY')
@@ -153,6 +175,7 @@ async function main() {
     if (state === 'identical') console.log(`[npm] already published with identical bytes: ${pkg.name}@${pkg.version}`)
     else runNpm(['publish', pkg.filename, '--ignore-scripts', '--access', 'public', '--tag', 'latest', '--provenance', `--registry=${registry}`])
   }
+  if (args.includes('--submit-only')) return console.log('[npm] uploads submitted; registry visibility and installation must still pass before release completion')
   await verifyRegistry(packages)
 }
 

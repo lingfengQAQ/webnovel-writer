@@ -20,10 +20,23 @@ const receipts = '草稿区/.archive-receipts'
 const approve: AskFn = async request => ({ answers: [{ id: request.questions[0]!.id, selected: [APPROVE_LABEL] }] })
 type Result = { ok: boolean; reason?: string; 补偿事件?: string; dests?: string[] }
 const toolModule = path.join(scratch, 'tools.cjs')
-beforeAll(() => {
+const seedRoot = path.join(scratch, 'seed', '复查书')
+let seedBookId: string
+beforeAll(async () => {
   buildSync({ entryPoints: [fileURLToPath(new URL('../src/novel-tools.ts', import.meta.url))], outfile: toolModule, bundle: true, platform: 'node', format: 'cjs',
     define: { 'import.meta.url': JSON.stringify(import.meta.url) },
   })
+  // Book creation has its own suite. Build one real, pristine Git repository here;
+  // every receipt scenario gets a full independent copy, including its Git history.
+  fs.mkdirSync(path.dirname(seedRoot), { recursive: true })
+  const created = await toolsFor(seedRoot).find(tool => tool.name === 'novel_create_book')!.execute({ bookName: '复查书', concept: {
+    状态: '已确认', 核心创意: 'x', 题材与目标读者: 'x', 主角核心欲望: 'x', 主要冲突: 'x', 核心看点: 'x', 差异化方向: 'x', 明确不要什么: 'x',
+  } }, {}) as { ok: boolean; bookId: string }
+  expect(created.ok).toBe(true)
+  seedBookId = created.bookId
+  git(seedRoot, 'config', 'user.name', 'Receipt test')
+  git(seedRoot, 'config', 'user.email', 'receipt@example.com')
+  git(seedRoot, 'config', 'commit.gpgsign', 'false')
 })
 
 function inProcess(root: string, args: Record<string, unknown>, mode = 'normal') {
@@ -83,13 +96,7 @@ function snapshot(root: string): Record<string, string> {
 async function fixture(candidate: boolean | 'all' = false, name = key.章名) {
   const ws = fs.mkdtempSync(path.join(scratch, 'case-'))
   const root = path.join(ws, '复查书')
-  const created = await toolsFor(root).find(tool => tool.name === 'novel_create_book')!.execute({ bookName: '复查书', concept: {
-    状态: '已确认', 核心创意: 'x', 题材与目标读者: 'x', 主角核心欲望: 'x', 主要冲突: 'x', 核心看点: 'x', 差异化方向: 'x', 明确不要什么: 'x',
-  } }, {}) as { ok: boolean; bookId: string }
-  expect(created.ok).toBe(true)
-  git(root, 'config', 'user.name', 'Receipt test')
-  git(root, 'config', 'user.email', 'receipt@example.com')
-  git(root, 'config', 'commit.gpgsign', 'false')
+  fs.cpSync(seedRoot, root, { recursive: true, force: false, errorOnExist: true })
   put(root, paths.定稿章(1, 1, name), serializeDocument({ 角色: '定稿', 版本: 1, ...key, 章名: name }, '原正文。'))
   put(root, paths.章摘要(1, 1, name), '# 章摘要\n原摘要。\n')
   put(root, world, serializeDocument({ 名称: '铜铃', 性质: '事实', 版本: 1 }, '原事实。'))
@@ -100,7 +107,7 @@ async function fixture(candidate: boolean | 'all' = false, name = key.章名) {
   }
   git(root, 'add', '.')
   git(root, 'commit', '-m', 'ch: fixture')
-  const args: Record<string, unknown> = { bookId: created.bookId, ...key, 章名: name, 更正后正文: '更正正文。', 更正后章摘要: '更正摘要。', 摘要: '修正铜铃',
+  const args: Record<string, unknown> = { bookId: seedBookId, ...key, 章名: name, 更正后正文: '更正正文。', 更正后章摘要: '更正摘要。', 摘要: '修正铜铃',
     ...(candidate ? { 事实变更: '# 事实变更\n## 设定\n### 铜铃\n更正后的事实。\n' } : {}),
     ...(candidate === 'all' ? {
       时间线变更: '# 时间线变更\n## 听见铜铃\n事件：更正事件\n更正后的经过。\n',

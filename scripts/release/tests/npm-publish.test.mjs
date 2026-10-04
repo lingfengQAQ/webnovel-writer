@@ -7,7 +7,7 @@ import zlib from 'node:zlib'
 import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { validateReleaseAssets, registryStatus } from '../publish-npm.mjs'
+import { validateReleaseAssets, registryStatus, registryReadiness } from '../publish-npm.mjs'
 import { checkPublishableManifest, checkMetaPackage } from '../tar.mjs'
 import { root } from '../version.mjs'
 
@@ -15,6 +15,16 @@ const hash = bytes => createHash('sha256').update(bytes).digest('hex')
 const version = '8.0.0'
 const commit = 'a'.repeat(40)
 const publishConfig = { access: 'public', tag: 'latest', registry: 'https://registry.npmjs.org/' }
+
+test('registry processing stays pending; wrong bytes and lookup failures still fail', async () => {
+  const pkg = { name: 'example', version: '8.1.1', integrity: 'sha512-original' }
+  const metadata = { 'dist-tags': { latest: pkg.version }, versions: { [pkg.version]: { dist: { integrity: pkg.integrity } } } }
+  assert.deepEqual(await registryReadiness([pkg], async () => undefined), { ready: false, pending: ['example@8.1.1'] })
+  assert.deepEqual(await registryReadiness([pkg], async () => ({ ...metadata, 'dist-tags': { latest: '8.1.0' } })), { ready: false, pending: ['example@8.1.1'] })
+  assert.deepEqual(await registryReadiness([pkg], async () => metadata), { ready: true, pending: [] })
+  await assert.rejects(registryReadiness([{ ...pkg, integrity: 'sha512-different' }], async () => metadata), /different bytes/)
+  await assert.rejects(registryReadiness([pkg], async () => { throw new Error('Registry lookup failed (403)') }), /403/)
+})
 function archive(files) {
   const rows = Object.entries(files).map(([name, text]) => {
     const body = Buffer.from(typeof text === 'object' ? JSON.stringify(text) : text)

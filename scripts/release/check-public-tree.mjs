@@ -29,7 +29,7 @@ export function checkMarkdownLinks(root, file, text) {
 }
 
 export function checkTree(root, history = true) {
-  const git = args => execFileSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true, maxBuffer: 16 * 1024 * 1024 })
+  const git = (args, options = {}) => execFileSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true, maxBuffer: 16 * 1024 * 1024, ...options })
   const files = [...new Set(git(['ls-files', '--cached', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean))]
   for (const file of files) {
     checkPublicPath(file)
@@ -41,22 +41,65 @@ export function checkTree(root, history = true) {
   let commits = 0
   if (history) {
     const revisions = git(['rev-list', 'HEAD']).trim().split('\n').filter(Boolean)
-    const checked = new Set()
+    const blobs = new Map()
     for (const revision of revisions) {
       commits++
       for (const line of git(['ls-tree', '-rz', revision]).split('\0').filter(Boolean)) {
-        const [meta, file] = line.split('\t')
+        const separator = line.indexOf('\t')
+        assert.ok(separator >= 0, 'Malformed Git tree entry')
+        const meta = line.slice(0, separator)
+        const file = line.slice(separator + 1)
         const [mode, kind, oid] = meta.split(' ')
         checkPublicPath(file)
         assert.ok(kind === 'blob' && ['100644', '100755'].includes(mode), `Non-regular history entry: ${file}`)
-        if (!checked.has(oid)) {
-          checkPublicText(file, git(['cat-file', 'blob', oid]))
-          checked.add(oid)
-        }
+        if (!blobs.has(oid)) blobs.set(oid, file)
       }
     }
+    checkHistoryBlobs(git, blobs)
   }
   return { ok: true, files: files.length, commits }
+}
+
+// Keep the full reachable-history policy while avoiding one Windows process per blob.
+// Size-bounded batches also retain the former per-object 16 MiB read limit.
+function checkHistoryBlobs(git, blobs) {
+  if (!blobs.size) return
+  const oids = [...blobs.keys()]
+  const sizes = git(['cat-file', '--batch-check'], { input: oids.join('\n') + '\n' }).trim().split('\n')
+  assert.equal(sizes.length, oids.length, 'Incomplete Git object metadata')
+  const entries = sizes.map((line, index) => {
+    const [oid, kind, rawSize] = line.split(' ')
+    const size = Number(rawSize)
+    assert.equal(oid, oids[index], 'Unexpected Git object order')
+    assert.equal(kind, 'blob', 'History object is not a blob')
+    assert.ok(Number.isSafeInteger(size) && size >= 0 && size <= 16 * 1024 * 1024, 'History blob exceeds scan limit')
+    return { oid, size }
+  })
+  const scan = batch => {
+    const expectedBytes = batch.reduce((sum, item) => sum + item.size + item.oid.length + 40, 0)
+    const output = git(['cat-file', '--batch'], {
+      input: Buffer.from(batch.map(item => item.oid).join('\n') + '\n'), encoding: null, maxBuffer: expectedBytes,
+    })
+    let offset = 0
+    for (const { oid, size } of batch) {
+      const endHeader = output.indexOf(10, offset)
+      assert.ok(endHeader >= offset, 'Missing Git object header')
+      assert.equal(output.subarray(offset, endHeader).toString('ascii'), `${oid} blob ${size}`, 'Unexpected Git object header')
+      const endBody = endHeader + 1 + size
+      assert.ok(endBody < output.length && output[endBody] === 10, 'Truncated Git object body')
+      checkPublicText(blobs.get(oid), output.subarray(endHeader + 1, endBody))
+      offset = endBody + 1
+    }
+    assert.equal(offset, output.length, 'Unexpected trailing Git object bytes')
+  }
+  let batch = [], bytes = 0
+  for (const entry of entries) {
+    if (batch.length && bytes + entry.size > 8 * 1024 * 1024) {
+      scan(batch); batch = []; bytes = 0
+    }
+    batch.push(entry); bytes += entry.size
+  }
+  if (batch.length) scan(batch)
 }
 
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {

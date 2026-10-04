@@ -10,14 +10,10 @@ concurrency:
   group: v8-ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
-  quality:
-    name: v8-quality-${{ matrix.node }}
-    runs-on: windows-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        node: ['22.19.0', '24.15.0']
+  policy:
+    name: v8-policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -28,7 +24,7 @@ jobs:
           version: 11.27.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version: '24.15.0'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:public
@@ -36,13 +32,50 @@ jobs:
       - run: pnpm audit --audit-level=high
       - run: pnpm lint
       - run: pnpm test:release
-      - run: pnpm test
+  quality:
+    name: v8-quality-${{ matrix.node }}-${{ matrix.shard }}
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.19.0', '24.15.0']
+        shard: [1, 2]
+    env:
+      WEBNOVEL_LOADER_REPORT: ${{ github.workspace }}/.tmp/ci/loader.json
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.27.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run every test once per Node version across two shards
+        run: pnpm test --shard=${{ matrix.shard }}/2 --reporter=default --reporter=json --reporter=./scripts/release/ci-reporter.mjs --outputFile=.tmp/ci/results.json
       - run: pnpm build
+        if: matrix.shard == 1
       - run: pnpm --filter @linfengqaqtat/dsh-scriptor typecheck
+        if: matrix.shard == 1
       - run: pnpm --filter @linfengqaqtat/dsh-scriptor dump-config-check
+        if: matrix.shard == 1
       - run: pnpm --filter @linfengqaqtat/dsh-scriptor pack-check
+        if: matrix.shard == 1
       - name: Generated notices are current
+        if: matrix.shard == 1
         run: git diff --exit-code
+      - name: Preserve timings and worker failure diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ci-${{ matrix.node }}-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
+          path: .tmp/ci/
+          include-hidden-files: true
+          retention-days: 14
   portability:
     name: v8-linux-observation
     runs-on: ubuntu-latest
@@ -65,10 +98,11 @@ jobs:
   required:
     name: v8-required
     runs-on: ubuntu-latest
-    needs: [quality]
+    needs: [policy, quality]
     if: always()
     steps:
       - name: All Windows checks passed
         env:
           RESULT: ${{ needs.quality.result }}
-        run: test "$RESULT" = success
+          POLICY: ${{ needs.policy.result }}
+        run: test "$RESULT" = success && test "$POLICY" = success

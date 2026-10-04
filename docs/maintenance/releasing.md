@@ -21,7 +21,7 @@ tag、CHANGELOG、包版本和附件必须对应。不得替换已发布同版�
 
 1. 发布 PR 更新版本、锁文件、CHANGELOG、支持矩阵和必要教程。
 2. CI 全绿、讨论解决，公共内容扫描和依赖许可证核对通过后合入 v8。
-3. 在干净公共 checkout 执行完整测试、构建和实际 tarball 校验。根测试之外，发行还跑 `pnpm -r --workspace-concurrency=1 test`。
+3. 在干净公共 checkout 执行完整测试、构建和实际 tarball 校验。根测试覆盖所有包的测试，发行只跑一次完整测试；工作流回归检查覆盖清单，避免遗漏或重复执行。
 4. 确认没有尚未说明的格式迁移、数据恢复或真实模型限制。
 
 ## 生成与验收
@@ -31,7 +31,6 @@ pnpm install --frozen-lockfile
 pnpm lint
 pnpm test
 pnpm test:release
-pnpm -r --workspace-concurrency=1 test
 pnpm release:build
 ```
 
@@ -62,6 +61,18 @@ Release 草稿生成时，发布器核对公共 SHA、tag、四包身份、版�
 正式 Release 设 prerelease=false、latest=true。发布使用 v8-npm-publish.yml，由仓库 NPM_TOKEN secret 在发布步骤中注入 NODE_AUTH_TOKEN；setup-node 为 npmjs 配置认证。token 须允许四包直接发布，并满足包的 2FA 要求，不能使用仅暂存权限的 token。id-token: write 仅用于 provenance 来源证明。验证 npm latest 与 SHA512 后，再跑空白 profile 的 registry 安装、卸载与重装验收。token 缺失、过期或无权限时保留发行草稿和产物，不能宣布发布完成。
 
 本地默认只预检：node scripts/release/publish-npm.mjs --assets <附件目录>。--verify-only 检查 registry；--publish 只在 Actions 中可用。
+
+发布工作流的 `phase=publish` 提交原件，随后检查 registry 可见性。npm 接收上传后可能继续处理近一小时；版本或 latest 尚未就绪时，摘要明确显示 **Release pending registry processing**，安装与公开草稿步骤均跳过。工作流这一阶段成功不代表版本已完成发布。
+
+确认版本已可见后，以同一标签运行 `phase=verify`：
+
+```text
+gh workflow run v8-npm-publish.yml --ref v8 -f release_tag=scriptor-v8.1.1 -f phase=verify
+```
+
+verify 阶段不运行 npm publish、不携带 npm token，只核对原件、registry 与安装。四包的版本、latest 和 SHA512 都通过后才进入独立安装验收，最后公开草稿。哈希不符、HTTP 错误或安装失败仍使流程失败；不通过重复上传或提前公开处理等待状态。新 Release 展示标题统一为 `DSH Scriptor v<version>`，Git 标签仍为 `scriptor-v<version>`。
+
+CI 的分片、诊断与历史失败分析见 [CI 维护说明](ci.md)。
 
 手动流程需要下载未公开的 draft 附件，因此 publish 和 installation job 的 GITHUB_TOKEN 需要 contents: write（只有读取权限会报 release not found）。这与 npm token 分开：NPM_TOKEN 仍仅注入 publish 的上传步骤，installation 不携带 npm 凭据；安装验证通过后 finalize 才公开 draft。
 
