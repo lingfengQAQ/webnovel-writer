@@ -28,6 +28,7 @@ import { canonicalizePath, isFullyQualifiedPath, isInsidePath } from '@webnovel/
 import { attachPersonaToAgent, type AgentCtxLike } from './persona'
 import { createNovelTools, type NovelToolDefinition, type ToolExecContext, type AgentLike } from './novel-tools'
 import type { AskFn, EmbeddingProvider } from '@webnovel/core'
+import { EditorRequestHub } from './study/editor-requests'
 import { attachStudyWeb, notifySaved } from './study/web'
 import { StudyService } from './study/service'
 import { createNativeWriteBridge } from './native-write'
@@ -363,7 +364,8 @@ export function apply(ctx: Context) {
     },
   })
   step(ctx, 'webnovel:indexing', () => () => indexing.close())
-  attachStudyWeb(ctx, indexing)
+  const editorRequests = new EditorRequestHub()
+  attachStudyWeb(ctx, indexing, editorRequests)
 
   /** 就绪时建一次工具集（裁决通道取自宿主 userQuestions；缺则 askFn undefined，
    *  沉淀 fail-closed——裁决 14）。依赖出现由 inject 反应式驱动。 */
@@ -385,6 +387,7 @@ export function apply(ctx: Context) {
         nativeWrite: bridge?.write,
         // 测试/走查专用工具(seed 占位设计)只在显式开启时注册,作者环境看不到
         testTools: process.env['WEBNOVEL_TEST_TOOLS'] === '1',
+        editorRequests,
         embeddingProvider: agent => agent === undefined ? undefined : agentCtxGet<{ current(): EmbeddingProvider | undefined }>(agent, 'embeddings')?.current(),
         rerankingProvider: agent => agent === undefined ? undefined : agentCtxGet<{ current(): RerankingProvider | undefined }>(agent, 'reranking')?.current(),
         indexManage: (bookId, action, agent, chapter) => {

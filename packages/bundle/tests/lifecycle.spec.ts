@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { apply, currentWorkspaceRoot, registerWorkspaceRoot, resetWorkspaceRoot } from '../src/index'
+import { NOVEL_TOOL_NAMES } from '../src/novel-tools'
 
 /** 临时工作范围:一本带契约的书。 */
 function makeWorkspace(): string {
@@ -151,6 +152,8 @@ describe('B6 依赖反应性(inject 持续契约,非 apply 时刻快照)', () =>
     decl!.run({ logger: { info: () => {}, warn: () => {} } })
     expect(registered.length).toBeGreaterThan(0)
     expect(registered).toContain('novel_create_book')
+    expect(registered).toContain('novel_editor_suggest')
+    expect(registered).toHaveLength(NOVEL_TOOL_NAMES.length)
   })
 
   it('无 inject 表面的宿主:退回 ctx.get 快照路径,仍加载不抛', () => {

@@ -13,7 +13,8 @@
 - 从 8.0.0 起仅发布正式 SemVer，兼容修复递增 patch，功能更新递增 minor；每份公开安装包版本唯一。
 - 兼容修复递增 patch；0.x 的新增能力/不兼容变化递增 minor，并说明迁移影响。
 - 1.x 后按 SemVer 承诺：破坏兼容递增 major，兼容功能 minor，修复 patch。
-- 纯文档修改不必发包。内部 workspace 包不独立发版；可选提供方按自己的变更递增并列出兼容组合。
+- 纯文档修改不必发包。内部 workspace 包不独立发版。当前发行器要求主包、full、检索、桌宠四包同版；每次发布逐组件注明实际变化，无功能变化的组件标为兼容发行。安装仍可选，用户无需为主包升级新增不使用的组件；推荐组合是经过本批验证的同版本。
+- 若未来改为组件独立发版，须同时修改 version/build/publish、manifest、full 的精确依赖、同版本原件复用和兼容安装矩阵；不能只改版本号或文案。本次 8.2.0 保留现有四包同版机制。
 
 tag、CHANGELOG、包版本和附件必须对应。不得替换已发布同版本的字节；有错误就发布新版本。源码/打包位级可复现未作保证，验收和上传必须使用同一份生成的 tgz。
 
@@ -67,7 +68,7 @@ Release 草稿生成时，发布器核对公共 SHA、tag、四包身份、版�
 确认版本已可见后，以同一标签运行 `phase=verify`：
 
 ```text
-gh workflow run v8-npm-publish.yml --ref v8 -f release_tag=scriptor-v8.1.1 -f phase=verify
+gh workflow run v8-npm-publish.yml --ref v8 -f release_tag=scriptor-v8.2.0 -f phase=verify
 ```
 
 verify 阶段不运行 npm publish、不携带 npm token，只核对原件、registry 与安装。四包的版本、latest 和 SHA512 都通过后才进入独立安装验收，最后公开草稿。哈希不符、HTTP 错误或安装失败仍使流程失败；不通过重复上传或提前公开处理等待状态。新 Release 展示标题统一为 `DSH Scriptor v<version>`，Git 标签仍为 `scriptor-v<version>`。

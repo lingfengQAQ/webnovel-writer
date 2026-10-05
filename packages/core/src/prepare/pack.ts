@@ -10,7 +10,7 @@ import { writeBatchAtomic, type FileOp } from '../repo/atomic'
 import { parseDocument, serializeDocument } from '../repo/frontmatter'
 import { chapterNo, paths } from '../repo/paths'
 import { MACHINE_SCHEMA_VERSION, serializeMachineJson } from '../repo/schema'
-import { countPendingReviewDrafts, findPendingReviewDraft, splitCandidateFacts } from '../repo/drafts'
+import { countPendingReviewDrafts, countProseText, findPendingReviewDraft, splitCandidateFacts } from '../repo/drafts'
 import { applyVersionFields, extractVersionFields, initialVersion } from '../provenance'
 import { parseOutline } from '../outline/parse'
 import { reconcileLedger } from '../ledger'
@@ -132,13 +132,12 @@ export function computePack(bookRoot: string, key: ChapterKey, 沉淀候选?: �
   const outlineVersion = extractVersionFields(outlineDoc?.ok ? outlineDoc.data.fields : {}).版本
   const outlineRefs = outlineDoc?.ok ? parseOutline(confirmedOutlineText!).来源引用 : []
   const rawBody = splitCandidateFacts(pending.body).prose.replace(/\r\n/g, '\n').replace(/\n+$/, '')
-  const characterCount = [...rawBody].length
-  const hanCount = (rawBody.match(/[㐀-鿿]/g) ?? []).length
+  const { 字符数, 汉字数 } = countProseText(pending.body)
   const finalizedFields = applyVersionFields({
     身份: { 卷: key.卷, 章: key.章, 章名: key.章名 },
     状态: '已定稿',
     章号: key.章,
-    字数统计: { 字符数: characterCount, 汉字数: hanCount },
+    字数统计: { 字符数, 汉字数 },
     来源细纲版本: outlineVersion === null ? confirmedOutlineRel : `${confirmedOutlineRel}@${outlineVersion}`,
     事实条目引用清单: [],
     来源引用: outlineRefs,

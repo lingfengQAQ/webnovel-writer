@@ -11,6 +11,7 @@ import { writeFileAtomic, type FileOp } from '../repo/atomic'
 import { parseDocument, serializeDocument } from '../repo/frontmatter'
 import { paths } from '../repo/paths'
 import { bookWriter } from '../repo/atomic'
+import { parseChapterLength } from './chapter-length'
 
 export type ContractPartState = '已确认' | '暂定' | '留白'
 
@@ -99,7 +100,10 @@ export function prepareContract(bookRoot: string, parts: ContractParts = {}, ext
       mergedParts[name] = parts[name]
     }
   }
-  return { relPath: paths.契约(), content: contractTemplate(mergedParts, mergedFields) }
+  const content = contractTemplate(mergedParts, mergedFields)
+  const length = parseChapterLength(content)
+  if (length.状态 === '配置错误') throw new Error(length.原因)
+  return { relPath: paths.契约(), content }
 }
 
 function writeContractLocked(bookRoot: string, parts: ContractParts = {}, extraFields: Record<string, unknown> = {}): void {

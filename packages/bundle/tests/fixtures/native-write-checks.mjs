@@ -44,6 +44,7 @@ export async function checkNativeWrites({ root, book, main, ctx, service, execut
         ['novel_confirm_worldbook_entry', '世界书/人物档案/原生主角.md', { 模块: '人物档案', 名称: '原生主角', 类型: '人物', 性质: '计划', 状态: '已确认', 来源: '作者对谈', 正文: '# 新人物正文\n' }, '# 旧人物正文\n'],
       ]
       for (const [, relative, , content] of cases) put(relative, content)
+      put('世界书/模块声明.md', '# 模块声明\n\n作者保留说明。\n')
       git('add', '--', ...cases.map(([, relative]) => relative))
       git('commit', '--quiet', '-m', 'design: native guard fixtures')
       for (const [name, relative, args] of cases) {
@@ -55,6 +56,7 @@ export async function checkNativeWrites({ root, book, main, ctx, service, execut
         assert.match(unread.reason, /has not been read/)
         assert.equal(text(relative), before)
         assert.equal(head(), beforeHead)
+        if (name === 'novel_confirm_worldbook_entry') assert.equal(text('世界书/模块声明.md'), '# 模块声明\n\n作者保留说明。\n')
         await read(relative)
         const written = await call(name, args)
         assert.equal(written.ok, true, `${name}: ${JSON.stringify(written)}`)
@@ -64,6 +66,12 @@ export async function checkNativeWrites({ root, book, main, ctx, service, execut
         assert.notEqual(head(), beforeHead)
         assert.match(git('log', '-1', '--format=%s'), /^design:/)
         assert.ok(git('-c', 'core.quotepath=false', 'show', '--name-only', '--format=', 'HEAD').includes(relative))
+        if (name === 'novel_confirm_worldbook_entry') {
+          assert.match(text('世界书/模块声明.md'), /作者保留说明。/)
+          assert.match(text('世界书/模块声明.md'), /- 人物档案/)
+          assert.match(text('世界书/模块声明.md'), /- 世界规则/)
+          assert.ok(git('-c', 'core.quotepath=false', 'show', '--name-only', '--format=', 'HEAD').includes('世界书/模块声明.md'))
+        }
       }
       assert.match(text(contractPath), /作者保留的文风约定/)
       assert.match(text(contractPath), /书id: loader-book/)

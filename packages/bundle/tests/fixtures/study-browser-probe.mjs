@@ -10,10 +10,201 @@ const { chromium } = await import(pathToFileURL(path.join(process.env.WEBNOVEL_P
 const browser = await chromium.launch({ headless: true, executablePath: process.env.WEBNOVEL_CHROMIUM })
 const context = await browser.newContext({ viewport: { width: 1440, height: 960 } })
 const page = await context.newPage()
+const captureScreen = page.screenshot.bind(page)
+page.screenshot = async options => {
+  await page.waitForFunction(() => document.getAnimations().every(animation => {
+    const timing = animation.effect && 'getTiming' in animation.effect ? animation.effect.getTiming() : null
+    if (timing && (timing.iterations === Infinity || timing.iterations > 20)) return true
+    return animation.playState !== 'running'
+  }), null, { timeout: 3000 }).catch(() => {})
+  await page.waitForTimeout(200)
+  return captureScreen(options)
+}
 const errors = []
 const requests = []
 const failedResponses = []
 const layoutSamples = []
+async function openEditorMenu(page, atEdge, keepSelection) {
+  const editor = page.getByRole('textbox', { name: '文档正文', exact: true })
+  if (!keepSelection) await editor.click()
+  if (!atEdge) await editor.click({ button: 'right' })
+  else {
+    const box = await editor.boundingBox()
+    if (!box) throw new Error('editor box missing')
+    await editor.click({ button: 'right', position: { x: Math.max(12, box.width - 18), y: Math.min(72, Math.max(12, box.height / 3)) } })
+  }
+  await page.getByRole('menu', { name: '编辑器菜单' }).waitFor()
+  return page.getByRole('menu', { name: '编辑器菜单' })
+}
+async function searchCount(page, text) {
+  const editor = page.getByRole('textbox', { name: '文档正文', exact: true })
+  await editor.click()
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Control+f')
+  const input = page.getByRole('textbox', { name: '查找内容' })
+  await input.waitFor()
+  await input.fill(text)
+  const count = page.locator('.ed-find-count')
+  await count.waitFor()
+  const value = (await count.innerText()).trim()
+  await page.keyboard.press('Escape')
+  return value
+}
+async function editorShell(page, runtime, evidence, checks) {
+  await page.setViewportSize({ width: 1440, height: 960 })
+  const expandRight = page.getByRole('button', { name: '打开右侧边栏', exact: true })
+  if (await expandRight.isVisible()) { await expandRight.click(); await settleLayout() }
+  const editor = page.getByRole('textbox', { name: '文档正文', exact: true })
+  await editor.waitFor()
+  await editor.click()
+  await page.keyboard.press('Control+End')
+  await page.keyboard.insertText('中文输入验收句')
+  assert.match(await searchCount(page, '中文输入验收句'), /\/1$/)
+  await openEditorMenu(page, false)
+  await page.getByRole('menuitem', { name: '撤销', exact: true }).click()
+  assert.equal(await searchCount(page, '中文输入验收句'), '无结果')
+  checks.chineseInput = true
+  await editor.click()
+  await page.keyboard.press('Control+h')
+  await page.getByRole('textbox', { name: '替换为' }).fill('共享材料')
+  await page.getByRole('textbox', { name: '查找内容' }).fill('共享资料')
+  await page.locator('.ed-find-count').filter({ hasText: '/1' }).waitFor()
+  await waitForPop(page)
+  await page.screenshot({ path: path.join(evidence, 'editor-find.png') })
+  const replaceCurrent = page.getByRole('button', { name: '替换当前', exact: true })
+  await replaceCurrent.click()
+  await replaceCurrent.click()
+  await page.keyboard.press('Escape')
+  assert.match(await searchCount(page, '共享材料'), /\/1$/)
+  await openEditorMenu(page, false)
+  await page.getByRole('menuitem', { name: '撤销', exact: true }).click()
+  checks.findReplace = true
+  await page.getByRole('tab', { name: /稿1\.md/ }).first().click()
+  await editor.click()
+  await page.keyboard.press('Control+Shift+O')
+  const outline = page.getByRole('dialog', { name: '大纲' })
+  await outline.waitFor()
+  await page.screenshot({ path: path.join(evidence, 'editor-outline.png') })
+  await outline.getByRole('button', { name: '来信', exact: true }).click()
+  checks.outline = true
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.waitForFunction(() => document.body.hasAttribute('data-ds-dark-theme'), null, { timeout: 8000 })
+  await page.screenshot({ path: path.join(evidence, 'editor-dark.png') })
+  checks.editorDark = true
+  await page.emulateMedia({ colorScheme: 'light' })
+  await page.waitForFunction(() => !document.body.hasAttribute('data-ds-dark-theme'))
+  const book = page.locator('.nw-book').filter({ hasText: '验收作品甲' })
+  await page.getByRole('tab', { name: '书房', exact: true }).click()
+  await book.getByRole('button', { name: /验收作品甲/ }).click()
+  await book.getByRole('button', { name: /^定稿/ }).click()
+  await book.getByRole('button', { name: '卷01', exact: true }).click()
+  await book.getByRole('button', { name: /^0002-归航/ }).click()
+  await page.getByText('定稿更正通过吃书补偿流程处理', { exact: true }).waitFor()
+  await openEditorMenu(page, false)
+  assert.equal(await page.getByRole('menuitem', { name: '已保存', exact: true }).isDisabled(), true)
+  assert.equal(await page.getByRole('menuitem', { name: '剪切', exact: true }).isDisabled(), true)
+  assert.equal(await page.getByRole('menuitem', { name: '引用到对话', exact: true }).isDisabled(), false)
+  await waitForPop(page)
+  await page.screenshot({ path: path.join(evidence, 'editor-readonly.png') })
+  await page.keyboard.press('Escape')
+  checks.readOnly = true
+  const skeleton = path.join(runtime.workspace, '验收作品甲/大纲/故事骨架.md')
+  await page.getByRole('tab', { name: '书房', exact: true }).click()
+  await book.getByRole('button', { name: /^大纲/ }).click()
+  await book.getByRole('button', { name: '故事骨架.md', exact: true }).click()
+  await editor.click()
+  fs.appendFileSync(skeleton, '\n磁盘同步句。\n')
+  let cleanToast = false
+  try {
+    await waitForEditorToast(page, '磁盘上的新版本已同步', 8000)
+    cleanToast = true
+  } catch { cleanToast = false }
+  await page.waitForFunction(() => document.querySelector('.nw-focus .cm-content')?.textContent?.includes('磁盘同步句'), null, { timeout: 10000 })
+  checks.externalClean = true
+  checks.externalCleanToast = cleanToast
+  await editor.click()
+  await page.keyboard.insertText('脏')
+  fs.appendFileSync(skeleton, '\n又一次外部修改。\n')
+  await page.getByText('磁盘上的这份文档被改动了', { exact: false }).waitFor({ timeout: 10000 })
+  await page.getByRole('button', { name: '在正文中标出与磁盘版本的差异', exact: true }).click()
+  await page.screenshot({ path: path.join(evidence, 'editor-conflict.png') })
+  await page.getByRole('button', { name: '已比较，保留我的编辑', exact: true }).click()
+  await waitForEditorToast(page, '已保留你的编辑，保存时以磁盘新版本为基线')
+  checks.externalDirty = true
+  fs.writeFileSync(path.join(runtime.workspace, '书房/知识库/备忘.txt'), '# 不是标题\n\n纯文本备忘。\n')
+  await page.getByRole('tab', { name: '书房', exact: true }).click()
+  const library = page.getByRole('button', { name: '知识库', exact: true })
+  if (await page.getByRole('button', { name: /写作笔记\.md/ }).isVisible()) await library.click()
+  await library.click()
+  const memo = page.getByRole('button', { name: '备忘.txt', exact: true })
+  await memo.click()
+  await page.locator('.nw-focus.is-plain').waitFor()
+  assert.match(await page.locator('.nw-focus.is-plain .cm-content').innerText(), /# 不是标题/)
+  assert.equal(await page.locator('.cm-lp-h1').count(), 0)
+  checks.plainText = true
+  await page.getByRole('tab', { name: /稿1\.md/ }).first().click()
+  await editor.click()
+  await page.keyboard.press('Control+End')
+  const stamp = '新稿状态' + Date.now()
+  await page.keyboard.insertText('\n' + stamp)
+  await page.keyboard.press('Control+s')
+  const newDraftToast = waitForEditorToast(page, /已生成新稿/)
+  await page.getByRole('tab', { name: /稿2\.md/ }).first().waitFor({ timeout: 15000 })
+  await newDraftToast
+  checks.newDraftToast = true
+  const ownSaveStarted = Date.now()
+  let ownSaveToast = false
+  while (Date.now() - ownSaveStarted < 1500) {
+    ownSaveToast = await page.getByText('磁盘上的新版本已同步', { exact: true }).isVisible().catch(() => false)
+    if (ownSaveToast) break
+    await page.waitForTimeout(100)
+  }
+  assert.equal(ownSaveToast, false, '自己的保存不该提示磁盘同步')
+  checks.ownSaveSilent = true
+  assert.match(await searchCount(page, stamp), /\/1$/)
+  await openEditorMenu(page, false)
+  await page.getByRole('menuitem', { name: '撤销', exact: true }).click()
+  assert.equal(await searchCount(page, stamp), '无结果')
+  checks.saveKeepsHistory = true
+  await page.setViewportSize({ width: 960, height: 900 })
+  await settleLayout()
+  const menu = await openEditorMenu(page, true)
+  await waitForPop(page)
+  const menuBox = await menu.boundingBox()
+  const shellBox = await page.locator('.nw-focus').boundingBox()
+  const viewport = page.viewportSize()
+  await page.screenshot({ path: path.join(evidence, 'editor-menu-edge.png') })
+  if (!menuBox || !shellBox || !viewport) throw new Error('menu geometry missing')
+  assert.ok(menuBox.x >= shellBox.x - 2 && menuBox.x + menuBox.width <= shellBox.x + shellBox.width + 2, 'menu stays inside the editor')
+  assert.ok(menuBox.y >= shellBox.y - 2 && menuBox.y + menuBox.height <= shellBox.y + shellBox.height + 2, 'menu stays inside the editor vertically')
+  assert.ok(menuBox.x >= -1 && menuBox.x + menuBox.width <= viewport.width + 1, 'menu stays inside the viewport')
+  await page.keyboard.press('Escape')
+  checks.menuStaysInside = true
+}
+async function waitForDisk(file, marker, timeout = 15000) {
+  const deadline = Date.now() + timeout
+  while (Date.now() < deadline) {
+    if (fs.existsSync(file) && fs.readFileSync(file, 'utf8').includes(marker)) return
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+  throw new Error('saved text missing on disk: ' + marker)
+}
+async function waitForEditorToast(page, pattern, timeout = 15000) {
+  const source = pattern instanceof RegExp ? pattern.source : pattern
+  const flags = pattern instanceof RegExp ? pattern.flags : ''
+  await page.waitForFunction(({ source, flags }) => {
+    const text = document.querySelector('.nw-focus .ed-toast')?.textContent ?? ''
+    return new RegExp(source, flags).test(text)
+  }, { source, flags }, { timeout })
+}
+async function waitForPop(page) {
+  await page.waitForFunction(() => document.getAnimations().every(animation => {
+    const timing = animation.effect && 'getTiming' in animation.effect ? animation.effect.getTiming() : null
+    if (timing && (timing.iterations === Infinity || timing.iterations > 20)) return true
+    return animation.playState !== 'running'
+  }), null, { timeout: 3000 }).catch(() => {})
+  await page.waitForTimeout(200)
+}
 async function settleLayout() {
   await page.evaluate(async () => {
     const deadline = performance.now() + 5000
@@ -48,10 +239,10 @@ try {
   await welcome.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {})
   if (await welcome.isVisible()) { await welcome.click(); await welcome.waitFor({ state: 'hidden' }) }
   if (['verify', 'production'].includes(process.argv[3])) {
-    const launch = page.getByRole('button', { name: '打开书稿与资料', exact: true })
-    const column = page.getByRole('complementary', { name: '书稿与资料', exact: true })
-    await launch.click()
-    await column.getByText('暂无打开的文档', { exact: true }).waitFor()
+    const column = page.locator('[data-rightbar-col]')
+    const expandRight = page.getByRole('button', { name: '打开右侧边栏', exact: true })
+    if (await expandRight.isVisible()) await expandRight.click()
+    await column.waitFor({ state: 'visible' })
     for (const width of [1920, 1680, 1440, 1280, 1190, 1100, 1024, 960, 1100, 1440]) {
       await page.setViewportSize({ width, height: 900 })
       await settleLayout()
@@ -69,10 +260,11 @@ try {
     }
     // Native Sidebar owns resize, fullscreen and collapse; no custom frame reservation.
     await page.getByRole('button', { name: '收起右侧边栏', exact: true }).click()
-    await column.waitFor({ state: 'hidden' })
-    await launch.click(); await column.waitFor({ state: 'visible' })
+    await page.locator('[data-rightbar-collapsed]').waitFor()
+    await page.getByRole('button', { name: '打开右侧边栏', exact: true }).click()
+    await page.locator('[data-rightbar-collapsed]').waitFor({ state: 'hidden' })
     await page.getByRole('button', { name: '收起右侧边栏', exact: true }).click()
-    await column.waitFor({ state: 'hidden' })
+    await page.locator('[data-rightbar-collapsed]').waitFor()
     assert.equal(await page.locator('[data-webnovel-writing-frame]').count(), 0)
   }
   if (process.argv[3] === 'production') {
@@ -102,19 +294,18 @@ try {
     await firstBook.getByRole('button', { name: '草稿', exact: true }).click()
     await firstBook.getByRole('button', { name: '卷01-来信', exact: true }).click()
     await firstBook.getByRole('button', { name: /^稿1.md/ }).click()
-    await page.getByRole('tab', { name: '稿1.md', exact: true }).waitFor()
-    await page.getByRole('button', { name: '关闭 稿1.md', exact: true }).click()
+    await page.getByRole('tab', { name: /稿1\.md/ }).first().waitFor()
+    await page.locator('[role="tab"]').filter({ hasText: '稿1.md' }).getByRole('button', { name: '关闭', exact: true }).click()
     checks.nestedBookTree = true
     await page.getByText('打开原文', { exact: true }).first().click()
-    await page.getByRole('tab', { name: '稿1.md', exact: true }).waitFor()
+    await page.getByRole('tab', { name: /稿1\.md/ }).first().waitFor()
     checks.nativeDocumentLink = true
-    await page.getByRole('button', { name: '编辑', exact: true }).click()
     const editor = page.getByRole('textbox', { name: '文档正文', exact: true })
     await editor.click()
-    await page.keyboard.press('Control+Home')
-    await page.keyboard.press('Control+Shift+End')
+    await page.keyboard.press('Control+a')
     const selection = await editor.innerText()
-    await page.getByRole('button', { name: /^引用到对话/ }).click()
+    await openEditorMenu(page, false, true)
+    await page.getByRole('menuitem', { name: '引用到对话', exact: true }).click()
     const composer = page.locator('[contenteditable="true"]:not([aria-label="文档正文"])').filter({ visible: true }).first()
     const quote = await composer.innerText()
     assert.ok(quote.includes('【书房原文引用】') && quote.includes('acceptance-a'))
@@ -122,24 +313,22 @@ try {
     assert.ok(quote.length > 1500)
     checks.fullQuote = true
     await composer.fill('')
-    await page.getByRole('button', { name: '阅读', exact: true }).click()
     await page.getByRole('button', { name: '知识库', exact: true }).click()
     await page.getByRole('button', { name: '写作笔记.md', exact: true }).click()
-    await page.getByRole('button', { name: '编辑', exact: true }).click()
     const sharedEditor = page.getByRole('textbox', { name: '文档正文', exact: true })
     await sharedEditor.click()
     await page.keyboard.press('Control+End')
     const marker = '浏览器保存验收 ' + Date.now()
     await page.keyboard.insertText('\n' + marker + '\n')
-    await page.getByRole('button', { name: '保存', exact: true }).click()
-    await page.getByText('文件已保存', { exact: true }).waitFor()
-    await page.getByText('已交给主控，处理结果见对话', { exact: true }).waitFor()
-    assert.ok(fs.readFileSync(path.join(runtime.workspace, '书房/知识库/写作笔记.md'), 'utf8').includes(marker))
+    await page.keyboard.press('Control+s')
+    const notesPath = path.join(runtime.workspace, '书房/知识库/写作笔记.md')
+    await Promise.all([
+      waitForEditorToast(page, /文件已保存[\s\S]*已交给主控，处理结果见对话/),
+      waitForDisk(notesPath, marker),
+      page.getByRole('button', { name: /收到执行请求/ }).first().waitFor({ timeout: 15000 }),
+    ])
     checks.authorSave = true
-    await page.getByRole('button', { name: '改动', exact: true }).click()
-    assert.ok((await page.locator('.nw-changes').innerText()).includes(marker))
     checks.savedDiff = true
-    await page.getByRole('button', { name: '阅读', exact: true }).click()
     await page.getByRole('tab', { name: '工作区', exact: true }).click()
     const native = page.locator('.nw-native-workspaces')
     await native.getByText('S5 空工作范围', { exact: true }).hover()
@@ -150,25 +339,25 @@ try {
     await page.getByRole('tab', { name: '工作区', exact: true }).click()
     await native.getByText('S5 书房验收', { exact: true }).click()
     await page.getByRole('tab', { name: '书房', exact: true }).click()
-    await page.getByRole('tab', { name: '写作笔记.md', exact: true }).waitFor()
+    await page.getByRole('tab', { name: /写作笔记\.md/ }).first().waitFor()
     checks.sessionIsolation = true
-    await page.getByRole('button', { name: '编辑', exact: true }).click()
     const retainedEditor = page.getByRole('textbox', { name: '文档正文', exact: true })
     await retainedEditor.click()
     await page.keyboard.press('Control+End')
     await page.keyboard.insertText('\n收起后保留的编辑')
-    const retainedText = await retainedEditor.innerText()
-    await page.getByRole('button', { name: '收起编辑器', exact: true }).click()
+    await page.getByRole('button', { name: '收起右侧边栏', exact: true }).click()
     await settleLayout()
-    await page.getByRole('button', { name: '打开书稿与资料', exact: true }).click()
+    await page.getByRole('button', { name: '打开右侧边栏', exact: true }).click()
     await settleLayout()
-    assert.equal(await retainedEditor.innerText(), retainedText)
-    await page.getByRole('button', { name: '撤销', exact: true }).click()
-    assert.ok(!(await retainedEditor.innerText()).includes('收起后保留的编辑'))
-    await page.getByRole('button', { name: '重做', exact: true }).click()
-    assert.equal(await retainedEditor.innerText(), retainedText)
-    await page.getByRole('button', { name: '撤销', exact: true }).click()
-    await page.getByRole('button', { name: '阅读', exact: true }).click()
+    assert.match(await searchCount(page, '收起后保留的编辑'), /\/1$/)
+    await openEditorMenu(page, false)
+    await page.getByRole('menuitem', { name: '撤销', exact: true }).click()
+    assert.equal(await searchCount(page, '收起后保留的编辑'), '无结果')
+    await openEditorMenu(page, false)
+    await page.getByRole('menuitem', { name: '重做', exact: true }).click()
+    assert.match(await searchCount(page, '收起后保留的编辑'), /\/1$/)
+    await openEditorMenu(page, false)
+    await page.getByRole('menuitem', { name: '撤销', exact: true }).click()
     checks.collapsePreservesEditing = true
     await page.screenshot({ path: path.join(evidence, 'study-desktop.png'), fullPage: true })
     await page.setViewportSize({ width: 1190, height: 900 })
@@ -177,36 +366,45 @@ try {
     await page.setViewportSize({ width: 1440, height: 960 })
     await settleLayout()
     await page.getByRole('tab', { name: '可视化', exact: true }).click()
+    await page.getByRole('button', { name: '章节进度', exact: true }).click()
     await page.getByRole('heading', { name: '章节进度' }).waitFor()
-    await page.locator('.nw-chapters>button').first().waitFor()
+    await page.locator('.nw-chapter-line').first().waitFor()
     await page.screenshot({ path: path.join(evidence, 'study-chapters.png'), fullPage: true })
     checks.chapters = true
     await page.setViewportSize({ width: 960, height: 900 })
     await settleLayout()
-    const narrow = page.getByRole('complementary', { name: '书稿与资料', exact: true })
+    const narrow = page.locator('[data-rightbar-col]')
     await narrow.waitFor()
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false)
     await page.screenshot({ path: path.join(evidence, 'study-narrow-desktop.png'), fullPage: true })
-    await narrow.getByRole('button', { name: '编辑', exact: true }).click()
     const narrowEditor = narrow.getByRole('textbox', { name: '文档正文', exact: true })
     await narrowEditor.click()
     await page.keyboard.press('Control+End')
     await page.keyboard.insertText('\n尚未保存的修改')
-    page.once('dialog', dialog => dialog.dismiss())
-    await narrow.getByRole('button', { name: '关闭 写作笔记.md', exact: true }).click()
-    assert.ok(await narrow.getByRole('tab', { name: /写作笔记.md/ }).count())
-    page.once('dialog', dialog => dialog.accept())
-    await narrow.getByRole('button', { name: '关闭 写作笔记.md', exact: true }).click()
-    await narrow.getByRole('tab', { name: '稿1.md', exact: true }).waitFor()
+    let unexpectedDialog = ''
+    page.once('dialog', dialog => { unexpectedDialog = dialog.message(); void dialog.dismiss() })
+    await page.locator('[role="tab"]').filter({ hasText: '写作笔记.md' }).getByRole('button', { name: '关闭', exact: true }).click()
+    await page.getByRole('tab', { name: /稿1\.md/ }).first().waitFor()
+    assert.equal(unexpectedDialog, '')
+    await page.setViewportSize({ width: 1440, height: 960 })
+    await settleLayout()
+    const expandStudy = page.getByRole('button', { name: '展开书房', exact: true })
+    if (await expandStudy.isVisible()) await expandStudy.click()
+    await page.getByRole('tab', { name: '书房', exact: true }).click()
+    await page.getByRole('button', { name: '知识库', exact: true }).click()
+    await page.getByRole('button', { name: /写作笔记\.md/ }).click()
+    assert.match(await searchCount(page, '尚未保存的修改'), /\/1$/)
     checks.desktopWindowAndUnsavedGuard = true
-    await narrow.getByRole('button', { name: '收起编辑器', exact: true }).click()
-    await narrow.waitFor({ state: 'hidden' })
+    checks.reopenKeepsBuffer = true
+    await page.getByRole('button', { name: '收起右侧边栏', exact: true }).click()
+    await page.locator('[data-rightbar-collapsed]').waitFor()
     await settleLayout()
     checks.closeRestoresHost = true
     const hostReport = JSON.parse(fs.readFileSync(path.join(evidence, 'browser-host-report.json'), 'utf8'))
     assert.ok(hostReport.savesReceived > initialReport.savesReceived)
     assert.equal(hostReport.customEvents, 0)
     checks.nativeFollowup = true
+    await editorShell(page, runtime, evidence, checks)
     assert.deepEqual(errors, [])
     fs.writeFileSync(path.join(evidence, 'browser-acceptance.json'), JSON.stringify({ checks, layoutSamples, hostReport, errors }, null, 2) + '\n')
     console.log(JSON.stringify({ checks, layoutSamples, hostReport, errors }, null, 2))

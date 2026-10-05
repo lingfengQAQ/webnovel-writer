@@ -7,11 +7,15 @@ import { installWorkspaceStudyTabs } from './workspace-slots'
 import { VisualView } from './visualization'
 import visualizationStyles from './visualization.css'
 import workflowArtworkStyles from './workflow-artwork.css'
-import { type EditorActions, type EditorMemory } from './editor'
+import { type EditorActions, EditorMemory } from './editor'
+import editorStyles from './editor/editor.css'
+import layoutSwapStyles from './layout-swap.css'
+import { SwapHandle } from './layout-swap-handle'
 import { useSession } from './hooks'
 import { mainSessionOf } from './host'
 import { installNativeDocuments, openWritingDocument } from './native-documents'
-import { createEditorStore } from './store'
+import { createEditorStore, fileKey } from './store'
+import { bindEditorRequests, createEditorRequests } from './editor/requests'
 import { documentQuote } from './quote'
 import { parseStudyLink, studyFileLink } from '../study/links'
 import styles from './styles.css'
@@ -26,7 +30,13 @@ export function apply(host: ClientHost) {
   installNovelToolCards(host)
   const store = createEditorStore(id => openWritingDocument(host, store, id))
   const openIndex = installIndexSidebar(host)
-  const memory: EditorMemory = new Map()
+  const memory = new EditorMemory()
+  const requests = createEditorRequests({
+    call: callStudy,
+    memory,
+    hasBuffer: (sessionId, key) => !!store.get(sessionId).buffers[key],
+  })
+  bindEditorRequests(requests)
   const actions: EditorActions = {
     close: id => {
       store.cancelOpen(id)
@@ -44,17 +54,17 @@ export function apply(host: ClientHost) {
         if (remote) void remote.openWorkspacePath({ path: target }).catch(error => store.update(id, { error: error instanceof Error ? error.message : '文档链接无法打开' }))
       } catch { store.update(id, { error: '文档链接格式不正确' }) }
     },
-    quote: id => {
+    quote: (id, selection) => {
       if (mainSessionOf(host) !== id) return
       const state = store.get(id)
       const buffer = state.current ? state.buffers[state.current] : undefined
       const scope = host.sessions.scope(id)
-      if (!buffer || !scope || !state.selection.trim()) return
+      if (!buffer || !scope || !selection.text.trim()) return
       const input = host.conversation.input.for(scope)
       const previous = input.state.getSnapshot().draft
-      input.setDraft(previous + (previous && !previous.endsWith('\n\n') ? '\n\n' : '') + documentQuote(buffer.document, buffer.text, state.selection)
+      input.setDraft(previous + (previous && !previous.endsWith('\n\n') ? '\n\n' : '') + documentQuote(buffer.document, buffer.text, selection.text, selection.line)
         + '\n[在书房打开原文](<' + studyFileLink(buffer.document.absolutePath) + '>)\n')
-      store.update(id, { selection: '', notice: '引用已放入当前对话输入框，等待你发送' })
+      store.update(id, { selection: '', notice: '已放进对话输入框，等你发送' })
       window.getSelection()?.removeAllRanges()
       if (window.innerWidth < 1024) actions.close(id)
     },
@@ -62,18 +72,30 @@ export function apply(host: ClientHost) {
   host.effect(() => {
     const style = document.createElement('style')
     style.dataset.webnovel = ''
-    style.textContent = styles + '\n' + indexStyles + '\n' + visualizationStyles + '\n' + workflowArtworkStyles + '\n' + resultStyles
+    style.textContent = styles + '\n' + indexStyles + '\n' + visualizationStyles + '\n' + workflowArtworkStyles + '\n' + resultStyles + '\n' + editorStyles + '\n' + layoutSwapStyles
     document.head.append(style)
+    const offMove = store.onMove((id, previous, next) => {
+      memory.move(id, previous, next)
+      requests.retarget(id, fileKey(previous.ref), fileKey(next.ref))
+    })
+    const offDiscard = store.onDiscard((id, key) => {
+      memory.delete(id + ':' + key)
+      requests.discard(id, key)
+    })
     const preventLoss = (event: BeforeUnloadEvent) => { if (store.hasUnsaved()) { event.preventDefault(); event.returnValue = '' } }
     window.addEventListener('beforeunload', preventLoss)
-    return () => { window.removeEventListener('beforeunload', preventLoss); store.dispose(); memory.clear(); style.remove() }
+    return () => {
+      offMove(); offDiscard(); window.removeEventListener('beforeunload', preventLoss)
+      requests.dispose(); bindEditorRequests(undefined); store.dispose(); memory.clear(); style.remove()
+    }
   }, 'webnovel: client lifetime')
+  host.slots.inject('shell.overlay', () => host.slots.register({ name: 'shell.overlay', id: 'webnovel-layout-swap' }, SwapHandle))
   host.slots.inject('conversation.input.right', () => host.slots.register({ name: 'conversation.input.right', id: 'webnovel-open', order: 50 }, () => {
     const id = useSession(host)
     return <button type="button" className="webnovel nw-launch" disabled={!id} title="打开书稿与资料" aria-label="打开书稿与资料" onClick={() => { if (id) openWritingDocument(host, store, id) }}><BookOpen size={17} /><span>书稿</span></button>
   }))
   host.slots.inject('conversation.view', () => host.slots.register({ name: 'conversation.view', id: 'webnovel-visual', label: '可视化', order: 30, inject: () => ({ host, store, openIndex }) }, VisualView))
-  installNativeDocuments(host, store, actions, memory)
+  installNativeDocuments(host, store, actions, memory, requests)
   host.effect(() => {
     const openLink = (link: NonNullable<ReturnType<typeof parseStudyLink>>) => {
       if (mainSessionOf(host) !== link.sessionId) host.uiWorkspace.openSession(link.sessionId)

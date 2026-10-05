@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { designCommitResult, repeatedDesignNoChange } from '../src/design-commit-result'
+import { EDITOR_REQUEST_SOURCE } from '../src/message-sources'
 import type { ToolExecContext } from '../src/novel-tools'
 
 const name = 'novel_update_contract'
@@ -43,7 +44,7 @@ describe('#167 相同设计空操作的轮次保护', () => {
   })
 
   it('新轮次、用户新指令或新的书房保存通知不继承上一操作的停止判定', () => {
-    for (const boundary of [event('turn/end'), event('turn/start'), event('user/message', { source: { kind: 'user' } }), event('user/message', { source: { kind: 'plugin:webnovel' } })]) {
+    for (const boundary of [event('turn/end'), event('turn/start'), event('user/message', { source: { kind: 'user' } }), event('user/message', { source: { kind: 'plugin:webnovel' } }), event('user/message', { source: { kind: EDITOR_REQUEST_SOURCE, requestId: 'polish1' } })]) {
       expect(repeatedDesignNoChange(args, context([...trace(), boundary]))).toBe(false)
     }
     expect(repeatedDesignNoChange(args, { name, agent: { id: 'other' } })).toBe(false)

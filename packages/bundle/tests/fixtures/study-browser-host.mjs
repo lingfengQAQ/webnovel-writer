@@ -7,6 +7,79 @@ import { seedGraphFixture } from './graph-data.mjs'
 import { prepareResultCardDemo, demoToolChunks } from './result-card-demo.mjs'
 import * as present from '@deepseek-ai/dsh-tool-present'
 
+const EDITOR_BRANCH_BY_LABEL = {
+  润色: 'replace',
+  扩写: 'replace',
+  按要求改: 'replace',
+  审读: 'comments',
+  续写: 'insert',
+  精简: 'none',
+}
+
+function messageText(message) {
+  const content = message?.content
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  return content.map(block => typeof block?.text === 'string' ? block.text : '').join('\n')
+}
+
+function editorOriginal(text) {
+  const lines = text.split('\n')
+  const start = lines.indexOf('原文：')
+  if (start < 0) return ''
+  const quoted = []
+  for (const line of lines.slice(start + 1)) {
+    if (!line.startsWith('> ')) break
+    quoted.push(line.slice(2))
+  }
+  return quoted.join('\n')
+}
+
+function editorScriptArgs(branch, requestId, text) {
+  if (branch === 'replace') {
+    const original = editorOriginal(text)
+    return { requestId, kind: 'replace', text: (original || '原文') + '（验收改写）', note: '验收替换。' }
+  }
+  if (branch === 'insert') return { requestId, kind: 'insert', text: '验收续写。', note: '验收续写。' }
+  if (branch === 'comments') {
+    const quote = editorOriginal(text).split('\n').find(line => line.length > 0)
+    if (!quote) return undefined
+    return { requestId, kind: 'comments', comments: [{ quote, note: '验收批注。' }], note: '验收审读。' }
+  }
+  return undefined
+}
+
+/**
+ * Acceptance adapter script for messages that start with 【书房编辑器.
+ * Heading intent selects the branch; a 【脚本:replace|comments|insert|none】 marker overrides it.
+ * 润色 / 扩写 / 按要求改 → replace, 审读 → comments, 续写 → insert, 精简 and anything else → no tool call.
+ */
+export function editorAcceptancePlan(messages) {
+  if (!Array.isArray(messages)) return { action: 'ignore' }
+  let text
+  let index = -1
+  for (let position = 0; position < messages.length; position++) {
+    const message = messages[position]
+    if (message?.role !== 'user') continue
+    const body = messageText(message)
+    if (!body.startsWith('【书房编辑器')) continue
+    text = body
+    index = position
+  }
+  if (text === undefined) return { action: 'ignore' }
+  const requestId = text.match(/^【书房编辑器 · [^】]+】#([a-z0-9]{6,16})/)?.[1]
+    ?? text.match(/requestId=([a-z0-9]{6,16})/)?.[1]
+  const marker = text.match(/【脚本:(replace|comments|insert|none)】/)
+  const heading = text.match(/^【书房编辑器 · ([^】]+)】/)
+  const branch = marker?.[1] ?? EDITOR_BRANCH_BY_LABEL[heading?.[1]] ?? 'none'
+  const handled = messages.slice(index + 1).some(message => JSON.stringify(message).includes('novel_editor_suggest'))
+  if (handled) return { action: 'finish', handled: true, requestId, branch }
+  if (!requestId || branch === 'none') return { action: 'finish', handled: false, requestId, branch: 'none', reason: requestId ? undefined : 'missing-id' }
+  const args = editorScriptArgs(branch, requestId, text)
+  if (!args) return { action: 'finish', handled: false, requestId, branch, reason: 'missing-quote' }
+  return { action: 'tool', handled: false, requestId, branch, args }
+}
+
 export const name = 'webnovel-browser-acceptance'
 export const inject = ['agents', 'agentLoop', 'sessionPersistence', 'workspaceRegistry', 'llm', 'sessionController', 'webServer', ...(process.env.WEBNOVEL_WORKFLOW_CHECK ? ['connection', 'userQuestions'] : []), ...(process.env.WEBNOVEL_INDEX_CHECK ? ['embeddings', 'settings', 'credentials'] : [])]
 
@@ -74,6 +147,34 @@ export async function apply(ctx) {
       const messages = JSON.stringify(options.messages)
       if (messages.includes('作者通过书房编辑器保存了文档')) report.savesReceived++
       if (messages.includes('后台检索索引需要处理')) report.indexErrorsReceived++
+      const editorPlan = editorAcceptancePlan(options.messages)
+      if (editorPlan.action !== 'ignore') {
+        // Stage D browser probe: keep this turn running so a second ask observes busy=true.
+        if (messages.includes('【脚本:hold】')) await new Promise(resolve => setTimeout(resolve, 4500))
+        if (!editorPlan.handled) {
+          report.editorScripts = [...(report.editorScripts ?? []), { requestId: editorPlan.requestId, branch: editorPlan.branch, action: editorPlan.action }]
+          persist()
+        }
+        const toolReady = options.tools?.some(tool => tool.name === 'novel_editor_suggest')
+        if (editorPlan.action === 'tool' && toolReady) {
+          yield* demoToolChunks(workflowIndex++, ['novel_editor_suggest', editorPlan.args])
+          persist()
+          return
+        }
+        if (editorPlan.action === 'tool') { report.editorToolMissing = true; persist() }
+        const text = editorPlan.handled
+          ? '结果已交回编辑器，等待作者决定。'
+          : editorPlan.action === 'finish'
+            ? '这次只在对话里说明，不把修改交回编辑器。'
+            : '编辑器工具不可用，无法交回结果。'
+        yield { type: 'block-start', index: 0, blockType: 'text' }
+        yield { type: 'text-delta', index: 0, text }
+        yield { type: 'block-end', index: 0, block: { type: 'text', text } }
+        yield { type: 'usage', usage: { inputTokens: 0, outputTokens: 0 } }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+        persist()
+        return
+      }
       const document = new URL(`http://127.0.0.1:${ctx.webServer.port}/`)
       document.searchParams.set('webnovel', JSON.stringify({ sessionId, ref: { space: 'book:acceptance-a', path: '草稿区/草稿/卷01-来信/稿1.md' } }))
       const text = process.env.WEBNOVEL_RESULT_DEMO

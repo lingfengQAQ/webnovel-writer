@@ -55,25 +55,18 @@ Shared DSH/React peers are provided by the host and are not included in this bun
 | d3-quadtree | 3.0.1 | ISC | [Original notices](licenses/d3-quadtree--3.0.1.txt) |
 | d3-timer | 3.0.1 | ISC | [Original notices](licenses/d3-timer--3.0.1.txt) |
 | diff | 8.0.3 | BSD-3-Clause | [Original notices](licenses/diff--8.0.3.txt) |
-| dompurify | 3.4.16 | (MPL-2.0 OR Apache-2.0) | [Original notices](licenses/dompurify--3.4.16.txt) |
-| entities | 4.5.0 | BSD-2-Clause | [Original notices](licenses/entities--4.5.0.txt) |
 | eventemitter3 | 5.0.4 | MIT | [Original notices](licenses/eventemitter3--5.0.4.txt) |
 | fecha | 4.2.3 | MIT | [Original notices](licenses/fecha--4.2.3.txt) |
 | gl-matrix | 3.4.4 | MIT | [Original notices](licenses/gl-matrix--3.4.4.txt) |
 | html2canvas | 1.4.1 | MIT | [Original notices](licenses/html2canvas--1.4.1.txt) |
 | is-arrayish | 0.3.4 | MIT | [Original notices](licenses/is-arrayish--0.3.4.txt) |
-| linkify-it | 5.0.2 | MIT | [Original notices](licenses/linkify-it--5.0.2.txt) |
 | lucide-react | 0.468.0 | ISC | [Original notices](licenses/lucide-react--0.468.0.txt) |
-| markdown-it | 14.3.1 | MIT | [Original notices](licenses/markdown-it--14.3.1.txt) |
-| mdurl | 2.1.0 | MIT | [Original notices](licenses/mdurl--2.1.0.txt) |
 | pend | 1.2.0 | MIT | [Original notices](licenses/pend--1.2.0.txt) |
-| punycode.js | 2.3.1 | MIT | [Original notices](licenses/punycode.js--2.3.1.txt) |
 | saxes | 6.0.0 | ISC | [Original notices](licenses/saxes--6.0.0.txt) |
 | simple-swizzle | 0.2.4 | MIT | [Original notices](licenses/simple-swizzle--0.2.4.txt) |
 | style-mod | 4.1.3 | MIT | [Original notices](licenses/style-mod--4.1.3.txt) |
 | svg-path-parser | 1.1.0 | MIT | [Original notices](licenses/svg-path-parser--1.1.0.txt) |
 | tslib | 2.8.1 | 0BSD | [Original notices](licenses/tslib--2.8.1.txt) |
-| uc.micro | 2.1.0 | MIT | [Original notices](licenses/uc.micro--2.1.0.txt) |
 | w3c-keyname | 2.2.8 | MIT | [Original notices](licenses/w3c-keyname--2.2.8.txt) |
 | xmlchars | 2.2.0 | MIT | [Original notices](licenses/xmlchars--2.2.0.txt) |
 | yaml | 2.9.0 | ISC | [Original notices](licenses/yaml--2.9.0.txt) |

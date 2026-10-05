@@ -1,4 +1,4 @@
-import { AUTHOR_SAVE_SOURCE } from './message-sources'
+import { AUTHOR_SAVE_SOURCE, EDITOR_REQUEST_SOURCE } from './message-sources'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionSeq } from '@deepseek-ai/dsh-session'
 import type { commitConfirmed } from '@webnovel/core'
@@ -58,7 +58,8 @@ export function repeatedDesignNoChange(args: Record<string, unknown>, exec?: Too
     if (!event) continue
     if (event.type === 'turn/start' || event.type === 'turn/end') break
     if (event.type === 'user/message' && (event.data.source.kind === 'user'
-      || event.data.source.kind === AUTHOR_SAVE_SOURCE)) break
+      || event.data.source.kind === AUTHOR_SAVE_SOURCE
+      || event.data.source.kind === EDITOR_REQUEST_SOURCE)) break
     if (event.type === 'tool/result') {
       const block = event.data.message
       const state = block.isError ? undefined : recordedState(block.content)

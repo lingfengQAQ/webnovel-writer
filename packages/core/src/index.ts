@@ -44,6 +44,7 @@ export {
   CANDIDATE_HEADING,
   composeBody,
   countPendingReviewDrafts,
+  countProseText,
   demoteOtherPendingDrafts,
   findPendingReviewDraft,
   listChapterDrafts,
@@ -51,6 +52,7 @@ export {
   splitCandidateFacts,
   草稿字段序,
   type DraftFile,
+  type ProseTextCounts,
 } from './repo/drafts'
 
 export { scanWorkspaceBooks, uniqueBookRoot, hasBooks, type WorkspaceBook } from './book/identity'

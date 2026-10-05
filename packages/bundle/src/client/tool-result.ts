@@ -13,6 +13,7 @@ export const novelToolTitles: Readonly<Record<string, string>> = {
   novel_import_draft: '导入草稿', novel_record_review_findings: '记录审读结果', novel_record_proposal: '记录提案',
   novel_resolve_proposal: '处置提案', novel_apply_retcon: '应用吃书补偿', novel_record_memory: '记录本书记忆',
   novel_note_pending: '记录待补事项', novel_get_book_progress: '查看作品进度',
+  novel_editor_suggest: '交回编辑建议',
 }
 
 export interface NovelResultModel {
@@ -75,5 +76,89 @@ export function novelResultModel(props: ToolCallPhaseProps): NovelResultModel {
   }
   return { ...result, facts, ...(text(value.渲染) ? { report: value.渲染 as string } : {}), state: pending ? 'attention' : 'success', label: pending ? '有待处理项' : value.commitState === 'unchanged' ? '无变化' : '操作成功',
     summary: text(value.reason) ?? text(value.message) ?? (pending ? '本次操作已返回，仍有事项需要核对' : '本次操作已完成，可展开查看结果'),
+  }
+}
+
+export type EditorDecisionLabel = 'accepted' | 'rejected' | 'reopened' | 'cancelled' | 'expired'
+export type EditorIntentLabel = 'polish' | 'expand' | 'condense' | 'review' | 'continue' | 'custom'
+
+export interface EditorSuggestionOverlay {
+  decision?: EditorDecisionLabel
+  intent?: EditorIntentLabel
+}
+
+const DECISION_LABEL: Record<EditorDecisionLabel, string> = {
+  accepted: '已采纳', rejected: '已拒绝', reopened: '已撤销采纳', cancelled: '已取消', expired: '已过期',
+}
+const AUTHOR_SUCCESS = '已送到编辑器，由作者决定是否采用'
+const DECISION_SUMMARY: Record<EditorDecisionLabel, string> = {
+  accepted: '作者已采纳这条建议', rejected: '作者已拒绝这条建议', reopened: '作者已撤销采纳',
+  cancelled: '作者已取消这条请求', expired: '这条请求已过期',
+}
+/** Author-facing lines for the four model-facing failure reasons. Anything else stays generic. */
+const AUTHOR_FAILURE: Readonly<Record<string, string>> = {
+  '未知请求编号；只有书房编辑器发来的请求才能用此工具回复。': '未知编号',
+  '作者已取消此请求，停止处理，不要改写文件。': '作者已取消',
+  '该请求已经回复过；作者需要新版本时会重新发起。': '已交回过',
+  '此请求已结束且没有交回结果；作者需要新版本时会重新发起，不要改写文件。': '请求已结束未交回',
+}
+const AUTHOR_FAILURE_GENERIC = '这次没有交回编辑建议'
+const INTENT_LABEL: Record<EditorIntentLabel, string> = {
+  polish: '润色', expand: '扩写', condense: '精简', review: '审读', continue: '续写', custom: '按要求改',
+}
+const KIND_LABEL: Record<string, string> = { replace: '替换建议', insert: '续写', comments: '审读批注', none: '无需改动' }
+
+function parsed(raw: string): Record<string, unknown> | undefined {
+  if (!raw.trim()) return undefined
+  try {
+    const value: unknown = JSON.parse(raw)
+    return object(value) ? value : undefined
+  } catch { return undefined }
+}
+
+export function editorRequestId(props: ToolCallPhaseProps): string | undefined {
+  if (props.phase === 'preparing') return undefined
+  const args = parsed(props.phase === 'start' ? props.block.argsRaw : props.block.call?.argsRaw ?? '')
+  const fromArgs = text(args?.requestId)
+  if (fromArgs) return fromArgs
+  if (props.phase !== 'result') return undefined
+  const raw = props.block.content.map(item => item.type === 'text' ? item.text : '').join('\n')
+  return text(parsed(raw)?.requestId)
+}
+
+/** Frozen tool output, plus the author's decision only while this page still has it. A refresh passes no overlay. */
+export function editorSuggestionModel(props: ToolCallPhaseProps, overlay?: EditorSuggestionOverlay): NovelResultModel {
+  const base = { facts: [] as { label: string; value: string }[], raw: '', args: '' }
+  const requestId = editorRequestId(props)
+  const argsRaw = props.phase === 'preparing' ? '' : props.phase === 'start' ? props.block.argsRaw : props.block.call?.argsRaw ?? ''
+  const args = parsed(argsRaw)
+  const facts: { label: string; value: string }[] = []
+  if (requestId) facts.push({ label: '编号', value: '#' + requestId })
+  const kind = text(args?.kind)
+  const kindLabel = kind ? KIND_LABEL[kind] : undefined
+  if (kindLabel) facts.push({ label: '类型', value: kindLabel })
+  const intentLabel = overlay?.intent ? INTENT_LABEL[overlay.intent] : undefined
+  if (intentLabel) facts.push({ label: '意图', value: intentLabel })
+  const note = text(args?.note)
+  if (note) facts.push({ label: '说明', value: note })
+  const decisionLabel = overlay?.decision ? DECISION_LABEL[overlay.decision] : undefined
+  if (decisionLabel) facts.push({ label: '作者决定', value: decisionLabel })
+  if (props.phase === 'preparing') return { ...base, state: 'preparing', label: '准备中', summary: '正在准备调用参数' }
+  if (props.phase === 'start') return { ...base, facts, args: argsRaw, state: 'running', label: '进行中', summary: '等待把建议交回编辑器' }
+  const block = props.block
+  const raw = block.content.map(item => item.type === 'text' ? item.text : JSON.stringify(item, null, 2)).join('\n')
+  const result: NovelResultModel = { ...base, facts, raw, args: argsRaw, state: 'unknown', label: '待核对', summary: '结果格式无法识别，请查看原始详情' }
+  if (isStoppedError(block.error)) return { ...result, state: 'stopped', label: '已中断', summary: '操作已中断；继续前请核对已产生的结果' }
+  if (block.isError) return { ...result, state: 'error', label: '执行异常', summary: '请查看错误详情，核对已产生的结果后再决定是否重试' }
+  if (block.content.length !== 1 || block.content[0]?.type !== 'text') return result
+  const value = parsed(raw)
+  if (!value || typeof value.ok !== 'boolean') return result
+  if (!value.ok) {
+    const reason = text(value.reason)
+    return { ...result, state: 'error', label: '未完成', summary: (reason && AUTHOR_FAILURE[reason]) ?? AUTHOR_FAILURE_GENERIC }
+  }
+  return {
+    ...result, state: 'success', label: '已交回',
+    summary: (overlay?.decision && DECISION_SUMMARY[overlay.decision]) || AUTHOR_SUCCESS,
   }
 }

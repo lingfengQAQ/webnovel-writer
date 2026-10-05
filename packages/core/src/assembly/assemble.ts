@@ -20,6 +20,7 @@ import { bookWriter } from '../repo/atomic'
 import { appendSupplements, type SupplementPreview } from './supplements'
 import { readMaterialFile } from './source'
 import { canonicalizePath } from '../gate/canonical'
+import { parseChapterLength, renderChapterLength } from '../design/chapter-length'
 
 /** F4:时序未定条目的来源与不确定性标注行。 */
 function withTimingNote(text: string, entry: LedgerEntry): string {
@@ -465,8 +466,8 @@ function computeBaseMaterials(bookRoot: string, input: AssembleInput): ComputedM
 
   const built: Record<材料包段名, Built> = {
     本章任务与确认细纲: {
-      body: outlineBody === '' ? '（空）' : outlineBody,
-      来源: [confirmedRel],
+      body: [outlineBody === '' ? '（空）' : outlineBody, renderChapterLength(parseChapterLength(契约))].join('\n\n'),
+      来源: [confirmedRel, ...(契约 === null ? [] : [paths.契约()])],
       版本: versionOf(confirmedText),
       选用原因: '确认细纲为写稿任务真源',
       完整性: outlineBody === '' ? '残缺' : '完整',

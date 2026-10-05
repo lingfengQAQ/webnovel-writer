@@ -12,6 +12,7 @@ import { draftHashOf, reviewInputFingerprintOf, reviewRecordHashOf } from '../ev
 import { chapterNo } from '../repo/paths'
 import { materialReviewIdentity } from '../assembly/read'
 import { isDraftMarkdownFile } from '../repo/drafts'
+import { chapterLengthIdentity, readChapterLength } from '../design/chapter-length'
 
 export interface ChapterKey {
   readonly 卷: number
@@ -142,7 +143,7 @@ export function scanChapter(root: string, key: ChapterKey): ChapterFacts {
   const materials = materialReviewIdentity(root, key, 材料清单)
   if (materials.问题.length > 0) 材料包状态 = '已过期'
   const 当前审读指纹 = 唯一待审稿 && 唯一待审稿正文 !== null
-    ? reviewInputFingerprintOf({ 正文: 唯一待审稿正文, 细纲: 确认文 ?? '', 材料清单: materials.标识, 方案: 审核?.方案 })
+    ? reviewInputFingerprintOf({ 正文: 唯一待审稿正文, 细纲: 确认文 ?? '', 材料清单: materials.标识, 方案: 审核?.方案, 章节篇幅: chapterLengthIdentity(readChapterLength(root)) })
     : null
   const 审核证据过期 = 审核 !== null && 唯一待审稿
     ? (() => {

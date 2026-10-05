@@ -183,6 +183,9 @@ describe('dsh 运行时对齐:主 Agent scoped 工具面', () => {
     const text = JSON.stringify(rejected)
     expect(text).toContain('UNKNOWN_TOOL')
     expect((rejected as { isError?: boolean }).isError).toBe(true)
+    const rejectedEditor = await execTool(tools, sub.agent, 'novel_editor_suggest', { requestId: 'abcdef', kind: 'none' })
+    expect(JSON.stringify(rejectedEditor)).toContain('UNKNOWN_TOOL')
+    expect((rejectedEditor as { isError?: boolean }).isError).toBe(true)
 
     // 主 Agent 同名调用走真实执行(非 UNKNOWN_TOOL)
     const mainResult = await execTool(tools, main.agent, 'novel_select_book', { bookId: 'test-book' })

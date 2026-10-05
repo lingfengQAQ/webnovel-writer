@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { ToolCallPhaseProps } from '@deepseek-ai/dsh-client-ui-tool/client'
-import { novelResultModel, novelToolTitles } from '../src/client/tool-result'
+import { editorSuggestionModel, novelResultModel, novelToolTitles } from '../src/client/tool-result'
 import { NOVEL_TOOL_NAMES } from '../src/novel-tools'
+import {
+  EDITOR_CANCELLED_REASON, EDITOR_DELIVERED_MESSAGE, EDITOR_DUPLICATE_REASON, EDITOR_UNANSWERED_REASON, EDITOR_UNKNOWN_REASON,
+} from '../src/study/editor-requests'
 
 const settled = (value: unknown): Extract<ToolCallPhaseProps, { phase: 'result' }> => ({ phase: 'result', block: {
   kind: 'tool-result', seq: 3, time: 3, callTime: 2, callId: 'one', call: { name: 'novel_record_review_findings', argsRaw: '{}' },
@@ -42,6 +45,54 @@ describe('小说结果卡的证据边界', () => {
     expect(novelResultModel(input).facts).toContainEqual({ label: '书 ID', value: '甲' })
     expect(JSON.stringify(input)).toBe(original)
     expect(novelResultModel(settled({ ok: true, bookId: '乙' })).facts).not.toContainEqual({ label: '书 ID', value: '甲' })
+  })
+  it('编辑建议摘要面向作者，原始结果仍保留给模型的原文', () => {
+    const frozen = settled({ ok: true, requestId: 'polish1', delivered: true, message: EDITOR_DELIVERED_MESSAGE })
+    frozen.block.call = { name: 'novel_editor_suggest', argsRaw: JSON.stringify({ requestId: 'polish1', kind: 'replace', note: '更顺一点' }) }
+    const live = editorSuggestionModel(frozen, { decision: 'accepted', intent: 'polish' })
+    expect(live.state).toBe('success')
+    expect(live.summary).toBe('作者已采纳这条建议')
+    expect(live.summary).not.toContain('不要')
+    expect(live.raw).toContain(EDITOR_DELIVERED_MESSAGE)
+    expect(live.facts).toContainEqual({ label: '编号', value: '#polish1' })
+    expect(live.facts).toContainEqual({ label: '类型', value: '替换建议' })
+    expect(live.facts).toContainEqual({ label: '意图', value: '润色' })
+    expect(live.facts).toContainEqual({ label: '说明', value: '更顺一点' })
+    expect(live.facts).toContainEqual({ label: '作者决定', value: '已采纳' })
+    const cold = editorSuggestionModel(frozen)
+    expect(cold.facts.find(fact => fact.label === '作者决定')).toBeUndefined()
+    expect(cold.facts.find(fact => fact.label === '意图')).toBeUndefined()
+    expect(cold.facts).toContainEqual({ label: '编号', value: '#polish1' })
+    expect(cold.summary).toBe('已送到编辑器，由作者决定是否采用')
+    expect(cold.raw).toBe(live.raw)
+    for (const [decision, summary, label] of [
+      ['rejected', '作者已拒绝这条建议', '已拒绝'],
+      ['reopened', '作者已撤销采纳', '已撤销采纳'],
+      ['expired', '这条请求已过期', '已过期'],
+    ] as const) {
+      const model = editorSuggestionModel(frozen, { decision })
+      expect(model.summary).toBe(summary)
+      expect(model.facts).toContainEqual({ label: '作者决定', value: label })
+    }
+    const reasons = [
+      [EDITOR_UNKNOWN_REASON, '未知编号'],
+      [EDITOR_CANCELLED_REASON, '作者已取消'],
+      [EDITOR_DUPLICATE_REASON, '已交回过'],
+      [EDITOR_UNANSWERED_REASON, '请求已结束未交回'],
+    ] as const
+    for (const [reason, summary] of reasons) {
+      const failed = settled({ ok: false, requestId: 'gone1', reason })
+      failed.block.call = { name: 'novel_editor_suggest', argsRaw: JSON.stringify({ requestId: 'gone1', kind: 'replace' }) }
+      const model = editorSuggestionModel(failed, { decision: 'cancelled' })
+      expect(model.state).toBe('error')
+      expect(model.summary).toBe(summary)
+      expect(model.summary).not.toContain('不要')
+      expect(model.raw).toContain(reason)
+      expect(model.facts).toContainEqual({ label: '作者决定', value: '已取消' })
+    }
+    const generic = settled({ ok: false, requestId: 'gone1', reason: '替换文本不能为空；无需修改时请改用 none。' })
+    generic.block.call = { name: 'novel_editor_suggest', argsRaw: JSON.stringify({ requestId: 'gone1', kind: 'replace' }) }
+    expect(editorSuggestionModel(generic).summary).toBe('这次没有交回编辑建议')
   })
   it('准备态不展示参数，运行态不预告成功', () => {
     const block = { phase: 'preparing' as const, callId: 'p', name: 'novel_settle_chapter', turn: 1, step: 1, time: 1, subCalls: [] }
