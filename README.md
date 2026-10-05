@@ -105,7 +105,7 @@ Scriptor 将长篇小说的生产拆分为**作品设计**与**章节闭环**两
 - [故障排查](docs/user/troubleshooting.md)
 - [模型费用、数据流与隐私](docs/user/privacy.md)
 - [从源码构建](docs/development.md) · [书仓格式与修改边界](docs/book-format.md)
-- [贡献与 PR规范](CONTRIBUTING.md) · [发行规范](docs/maintenance/releasing.md) · [更新记录](CHANGELOG.md)
+- [贡献与 PR 规范](CONTRIBUTING.md) · [发行规范](docs/maintenance/releasing.md) · [更新记录](CHANGELOG.md)
 
 ## 反馈与许可证
 
