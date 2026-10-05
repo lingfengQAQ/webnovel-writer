@@ -24,6 +24,7 @@ import type { ReferenceHost } from './reference/host'
  * - novel_record_memory: 作者层记忆写入（书房，一事一文件＋索引同步；不进书仓 git）
  * - novel_record_proposal / novel_resolve_proposal: 提案登记（acquisition）与裁决回写（S4）
  * - novel_apply_retcon: 吃书补偿执行（emission，必过作者裁决；retcon: 提交＋补偿事件留痕，S4）
+ * - novel_editor_suggest: 回复书房编辑器请求，只把结果交回编辑器，不写文件
  *
  * 提交点纪律（拍板 1/7）：提交由写入器服务（受信代码）执行，模型不碰 git；
  * 裁决点仍只有定稿入档与吃书补偿，设计侧确认走 design:（幂等可重放）。
@@ -35,6 +36,7 @@ import * as nodePath from 'node:path'
 import type { ToolOutputDefinition } from '@deepseek-ai/dsh-tools'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { DESIGN_COMMIT_FIELDS, NATIVE_DESIGN_TOOLS, designCommitResult, type DesignCommitResult } from './design-commit-result'
+import { acceptEditorSuggestion, type EditorRequestHub } from './study/editor-requests'
 import {
   activeChapterLine,
   applyVersionFields,
@@ -74,6 +76,7 @@ import {
   writeCandidate,
   prepareContract,
   prepareEntry,
+  ensureModulesDeclared,
   preparePlanTimeline,
   prepareRecentWindow,
   prepareVolumeOutline,
@@ -164,6 +167,8 @@ export interface NovelToolsDeps {
   readonly askFn?: AskFn
   /** 注册测试/走查专用工具（NOVEL_TEST_TOOL_NAMES）；作者环境不开，默认 false。 */
   readonly testTools?: boolean
+  /** 书房编辑器请求。缺席时 novel_editor_suggest 拒绝交回，不读写书仓。 */
+  readonly editorRequests?: EditorRequestHub
 }
 
 function provenanceOf(ctx: ToolExecContext | undefined, targets?: readonly string[]): OperationProvenance | undefined {
@@ -211,6 +216,7 @@ export const NOVEL_TOOL_NAMES: readonly string[] = [
   'novel_record_memory',
   'novel_note_pending',
   'novel_get_book_progress',
+  'novel_editor_suggest',
 ]
 
 /**
@@ -372,7 +378,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
             description: '契约分部名称',
           },
           state: { type: 'string', enum: ['已确认', '暂定', '留白'], description: '分部确认状态' },
-          content: { type: 'string', description: '该分部的详细设定文本' },
+          content: { type: 'string', description: '该分部的详细设定文本。阅读体验与情绪承诺可含三级标题「章节篇幅」，其下只写三项列表：目标汉字数、下限汉字数、上限汉字数；正整数且下限≤目标≤上限。' },
           summary: { type: 'string', description: '提交摘要（可选，如「契约·核心看点」；缺省用分部名）' },
         },
         required: ['bookId', 'partName', 'state', 'content'],
@@ -1071,7 +1077,8 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
             正文: args['正文'] === undefined ? undefined : String(args['正文']),
           })
           await writeNative(book.bookRoot, op, sessionContext)
-          return finishDesignCommit(book.bookRoot, [`世界书/${模块}/${名称}.md`], args, `世界书条目·${名称}`, null, sessionContext)
+          ensureModulesDeclared(book.bookRoot, [模块])
+          return finishDesignCommit(book.bookRoot, [op.relPath, '世界书/模块声明.md'], args, `世界书条目·${名称}`, null, sessionContext)
         } catch (err) {
           return { ok: false, reason: `写入世界书条目失败: ${err instanceof Error ? err.message : String(err)}` }
         }
@@ -1929,6 +1936,47 @@ ${摘要现文}`,
           return { ok: false, reason: `进度卡查询失败: ${err instanceof Error ? err.message : String(err)}` }
         }
       },
+    },
+    {
+      name: 'novel_editor_suggest',
+      description: '把书房编辑器请求的结果交回编辑器，由作者决定是否采用。只用于回复以「【书房编辑器」开头的请求；必须调用本工具交回，不要直接改写文件，也不要把这次请求当作推进章节的授权。润色、扩写、精简、按要求改用 replace；续写用 insert；审读用 comments；没有可交回的修改时用 none。润色不得新增行动者、立场、动作或事实。审读只标出问题，comments 的每条 quote 必须逐字摘自请求原文。本工具不读写书仓。',
+      parameters: {
+        type: 'object',
+        properties: {
+          requestId: { type: 'string', description: '书房编辑器请求中的编号' },
+          kind: { type: 'string', enum: ['replace', 'insert', 'comments', 'none'], description: 'replace 替换原文，insert 在插入点续写，comments 只标问题，none 表示无需修改' },
+          text: { type: 'string', description: 'replace 或 insert 的正文' },
+          comments: {
+            type: 'array',
+            description: '审读批注，1 到 12 条；每条 quote 必须逐字摘自请求原文',
+            items: {
+              type: 'object',
+              properties: {
+                quote: { type: 'string', description: '逐字摘自请求原文的引文' },
+                note: { type: 'string', description: '这条引文的问题说明，不超过 300 字' },
+              },
+              required: ['quote', 'note'],
+            },
+          },
+          note: { type: 'string', description: '给作者的一句话说明，不超过 200 字' },
+        },
+        required: ['requestId', 'kind'],
+      },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            ok: { type: 'boolean', description: '是否已交回编辑器' },
+            requestId: { type: 'string' },
+            delivered: { type: 'boolean', description: '成功时为 true，表示结果已送到编辑器' },
+            message: { type: 'string' },
+            reason: { type: 'string', description: '未能交回的原因' },
+          },
+          required: ['ok'],
+        },
+        render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }],
+      },
+      execute: (args, sessionContext) => acceptEditorSuggestion(deps.editorRequests, sessionContext?.agent, args),
     },
   ]
 

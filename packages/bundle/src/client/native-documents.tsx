@@ -8,6 +8,7 @@ import { mainSessionOf, type ClientHost } from './host'
 import { useEditor } from './hooks'
 import { fileKey, type EditorStore } from './store'
 import { EditorPanel, type EditorActions, type EditorMemory } from './editor'
+import type { EditorRequests } from './editor/requests'
 import type { StudyDocument } from '../study/types'
 
 const BODY_SLOT = 'sidebar.right.tab.document'
@@ -39,9 +40,9 @@ export function openWritingDocument(host: ClientHost, store: EditorStore, sessio
   }
 }
 
-function BookDocument({ nativeProps, Native, host: _host, store, actions, memory, plainText }: {
+function BookDocument({ nativeProps, Native, host: _host, store, actions, memory, requests, plainText }: {
   nativeProps: DocumentPreviewProps; Native: ComponentType<DocumentPreviewProps>; host: ClientHost
-  store: EditorStore; actions: EditorActions; memory: EditorMemory; plainText: boolean
+  store: EditorStore; actions: EditorActions; memory: EditorMemory; requests: EditorRequests; plainText: boolean
 }) {
   const address = parseFileAddress(nativeProps.resourceAddress)
   const sessionId = address?.scope === 'session' ? address.sessionId : ''
@@ -84,11 +85,11 @@ function BookDocument({ nativeProps, Native, host: _host, store, actions, memory
     }
   }, [document?.absolutePath, sessionId, nativeProps.resourceAddress, tab.actions])
   if (!selectedKey || !state.buffers[selectedKey]) return <Native {...nativeProps} />
-  return <EditorPanel {...{ sessionId, store, actions, memory, plainText }} documentKey={selectedKey} embedded />
+  return <EditorPanel {...{ sessionId, store, actions, memory, requests, plainText }} documentKey={selectedKey} embedded />
 }
 
 /** Extend the native document body; native file identity, tabs, icons and refresh remain the owner. */
-export function installNativeDocuments(host: ClientHost, store: EditorStore, actions: EditorActions, memory: EditorMemory): void {
+export function installNativeDocuments(host: ClientHost, store: EditorStore, actions: EditorActions, memory: EditorMemory, requests: EditorRequests): void {
   host.slots.inject('sidebar.right.pane.tab.title', () => {
     const key = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview'
     const original = host.slots.entries('sidebar.right.pane.tab.title').find(entry => entry.options?.key === key)
@@ -128,7 +129,7 @@ export function installNativeDocuments(host: ClientHost, store: EditorStore, act
         ...(original.locale ? { locale: original.locale } : {}),
         ...(original.inject ? { inject: original.inject } : {}),
         ...(original.store ? { store: original.store } : {}),
-      }, (props: DocumentPreviewProps) => <BookDocument nativeProps={props} plainText={key.endsWith('/text')} {...{ Native, host, store, actions, memory }} />))
+      }, (props: DocumentPreviewProps) => <BookDocument nativeProps={props} plainText={key.endsWith('/text')} {...{ Native, host, store, actions, memory, requests }} />))
     }
     return () => { for (const off of offs.reverse()) off() }
   })

@@ -55,6 +55,26 @@ describe('定调契约', () => {
 })
 
 describe('世界书最小模块', () => {
+  it('声明按完整列表项去重、保留作者内容，读取错误拒绝覆盖', () => {
+    const root = mkRoot()
+    fs.mkdirSync(path.join(root, '世界书'))
+    const target = path.join(root, '世界书/模块声明.md')
+    fs.writeFileSync(target, '# 模块声明\n\n地方风俗说明\n- 人物档案扩展\n')
+    ensureModulesDeclared(root, ['地方风俗', '地方风俗'])
+    const text = fs.readFileSync(target, 'utf8')
+    expect(text).toContain('地方风俗说明')
+    expect(text.split('\n').filter(line => line === '- 地方风俗')).toHaveLength(1)
+    expect(text.split('\n')).toContain('- 人物档案')
+    ensureModulesDeclared(root, ['地方风俗'])
+    expect(fs.readFileSync(target, 'utf8')).toBe(text)
+    expect(() => ensureModulesDeclared(root, ['../非法'])).toThrow()
+    expect(fs.readFileSync(target, 'utf8')).toBe(text)
+    fs.unlinkSync(target)
+    fs.mkdirSync(target)
+    expect(() => ensureModulesDeclared(root)).toThrow()
+    expect(fs.statSync(target).isDirectory()).toBe(true)
+  })
+
   it('缺模块或缺已确认条目不足;两模块各一条已确认后足够', () => {
     const root = mkRoot()
     expect(checkWorldbookMinComplete(root).ok).toBe(false)

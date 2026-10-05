@@ -4,7 +4,8 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { createNovelTools, NOVEL_TEST_TOOL_NAMES, NOVEL_TOOL_NAMES } from '../src/novel-tools'
-import { createBook, scanDesign } from '@webnovel/core'
+import { EDITOR_CANCELLED_REASON, EDITOR_DUPLICATE_REASON, EDITOR_UNKNOWN_REASON, EditorRequestHub, type EditorIntent, type EditorRequestSnapshot } from '../src/study/editor-requests'
+import { createBook, scanDesign, writeContract, 契约六部 } from '@webnovel/core'
 import { nativeWriteStub } from './fixtures/native-write-stub'
 
 const roots: string[] = []
@@ -16,6 +17,62 @@ function mkRoot(): string {
 afterAll(() => { for (const r of roots) { try { fs.rmSync(r, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }) } catch { /* Windows 句柄延迟释放，%TEMP% 残留无害 */ } } })
 
 describe('主 Agent 专用 Tools (方案 A)', () => {
+  it('契约篇幅非法时不调用原生写入，合法子项随原契约工具保存', async () => {
+    const ws = mkRoot()
+    const root = path.join(ws, '篇幅约定')
+    let writes = 0
+    const tools = createNovelTools({ workspaceRoot: () => ws, bookRootOfBookId: () => root,
+      nativeWrite: async (...args) => { writes++; await nativeWriteStub(...args) } })
+    const created = await tools.find(t => t.name === 'novel_create_book')!.execute({ bookName: '篇幅约定', concept: { 状态: '已确认', 核心创意: '小铺经营', 题材与目标读者: '仙侠' } }) as { ok: boolean; bookId: string }
+    expect(created.ok).toBe(true)
+    const contract = path.join(root, '作品契约/契约.md')
+    const before = fs.readFileSync(contract, 'utf8')
+    const initialWrites = writes
+    const tool = tools.find(t => t.name === 'novel_update_contract')!
+    const args = { bookId: created.bookId, partName: '阅读体验与情绪承诺', state: '已确认', content: '### 章节篇幅\n- 目标汉字数: 2000\n- 下限汉字数: 1600\n- 上限汉字数: 2400' }
+    expect(await tool.execute({ ...args, content: args.content.replace('1600', '2600') })).toMatchObject({ ok: false, reason: expect.stringContaining('下限') })
+    expect(writes).toBe(initialWrites)
+    expect(fs.readFileSync(contract, 'utf8')).toBe(before)
+    expect(await tool.execute(args)).toMatchObject({ ok: true, commitState: 'committed' })
+    expect(writes).toBe(initialWrites + 1)
+    expect(fs.readFileSync(contract, 'utf8')).toContain(args.content)
+  })
+
+  it.each(['# 模块声明\n', null])('旧书声明 %s：确认后登记、状态闭环、同次提交且重跑幂等', async (initial) => {
+    const ws = mkRoot()
+    const bookRoot = path.join(ws, '旧书')
+    const tools = createNovelTools({ nativeWrite: nativeWriteStub, workspaceRoot: () => ws, bookRootOfBookId: () => bookRoot })
+    const call = async (name: string, args: Record<string, unknown>) => tools.find(t => t.name === name)!.execute(args) as Promise<any>
+    const created = await call('novel_create_book', { bookName: '旧书', concept: { 状态: '已确认', 核心创意: '寻找失踪家人', 题材与目标读者: '悬疑' } })
+    expect(created.ok).toBe(true)
+    writeContract(bookRoot, Object.fromEntries(契约六部.map(name => [name, { state: '已确认' as const, body: '围绕裴笑寻找妹妹展开悬疑故事。' }])))
+    const declaration = path.join(bookRoot, '世界书/模块声明.md')
+    if (initial === null) fs.unlinkSync(declaration)
+    else fs.writeFileSync(declaration, initial)
+    expect(spawnSync('git', ['add', '--', '世界书/模块声明.md'], { cwd: bookRoot, windowsHide: true }).status).toBe(0)
+    expect(spawnSync('git', ['commit', '-m', 'test: legacy declaration'], { cwd: bookRoot, windowsHide: true }).status).toBe(0)
+    const args = { bookId: created.bookId, 模块: '人物档案', 名称: '裴笑', 类型: '人物', 性质: '计划', 状态: '已确认', 来源: '作者确认', 正文: '裴笑寻找失踪的妹妹。' }
+    const failing = createNovelTools({ nativeWrite: async () => { throw new Error('FS_STALE_VERSION') }, workspaceRoot: () => ws, bookRootOfBookId: () => bookRoot })
+    expect(await failing.find(t => t.name === 'novel_confirm_worldbook_entry')!.execute(args)).toMatchObject({ ok: false })
+    expect(fs.existsSync(declaration) ? fs.readFileSync(declaration, 'utf8') : null).toBe(initial)
+    expect(await call('novel_confirm_worldbook_entry', args)).toMatchObject({ ok: true })
+    const committed = spawnSync('git', ['-c', 'core.quotepath=false', 'show', '--pretty=', '--name-only', 'HEAD'], { cwd: bookRoot, encoding: 'utf8', windowsHide: true }).stdout
+    expect(committed).toContain('世界书/模块声明.md')
+    expect(committed).toContain('世界书/人物档案/裴笑.md')
+    expect((await call('novel_get_story_status', { bookId: created.bookId })).design.事实项).toContainEqual({ 名称: '世界书最小模块足够', 事实: false })
+    expect(await call('novel_confirm_worldbook_entry', { ...args, 模块: '世界规则', 名称: '灵力', 类型: '规则', 正文: '灵力只能通过睡眠恢复。' })).toMatchObject({ ok: true })
+    expect((await call('novel_get_story_status', { bookId: created.bookId })).design.事实项).toContainEqual({ 名称: '世界书最小模块足够', 事实: true })
+    expect((await call('novel_get_story_status', { bookId: created.bookId })).design.建议).toBe('故事骨架')
+    fs.appendFileSync(declaration, '\n作者说明：保留地方风俗。\n')
+    const custom = { ...args, 模块: '地方风俗', 名称: '祭典' }
+    expect(await call('novel_confirm_worldbook_entry', custom)).toMatchObject({ ok: true })
+    const text = fs.readFileSync(declaration, 'utf8')
+    expect(text).toContain('作者说明：保留地方风俗。')
+    expect(text).toContain('- 地方风俗')
+    expect(await call('novel_confirm_worldbook_entry', custom)).toMatchObject({ ok: true, commitState: 'unchanged' })
+    expect(fs.readFileSync(declaration, 'utf8')).toBe(text)
+  })
+
   it('#167 契约无改动是完成态，提交失败才允许补试，重跑不制造提交', async () => {
     const ws = mkRoot()
     const bookRoot = path.join(ws, '循环回归')
@@ -227,5 +284,75 @@ describe('主 Agent 专用 Tools (方案 A)', () => {
     const seedReplay = (await seedTool.execute({ bookId: createRes.bookId })) as { ok: boolean }
     expect(seedReplay.ok).toBe(true)
     expect(Number(count())).toBe(Number(beforeSeed) + 1)
+  })
+})
+
+describe('novel_editor_suggest', () => {
+  function setup(intent: EditorIntent, text = '林舟在渡口停下。', requestId = 'polish1') {
+    const hub = new EditorRequestHub()
+    const agent = { id: 'main' }
+    const snapshot: EditorRequestSnapshot = {
+      requestId, intent, dirty: false, hash: 'abc', ref: { space: 'book:fog', path: '草稿区/草稿/稿1.md' },
+      document: { owner: '雾港', path: '草稿区/草稿/稿1.md', space: 'book:fog', version: 1, absolutePath: 'D:/雾港/稿1.md' },
+      selection: { text, line: 2, before: '前', after: '后' },
+    }
+    hub.open(agent, snapshot)
+    const tool = createNovelTools({
+      workspaceRoot: () => { throw new Error('不应读取书仓') },
+      bookRootOfBookId: () => { throw new Error('不应读取书仓') },
+      editorRequests: hub,
+    }).find(item => item.name === 'novel_editor_suggest')!
+    const run = (args: Record<string, unknown>) => tool.execute({ requestId, ...args }, { agent })
+    return { hub, agent, tool, run }
+  }
+
+  it('按意图限制回复类型，批注引文必须逐字出现，超长与空文本被拒绝', async () => {
+    const polish = setup('polish')
+    expect(polish.tool.description).toContain('不要直接改写文件')
+    expect(polish.tool.description).toContain('不得新增行动者、立场、动作或事实')
+    expect(polish.tool.description).toContain('逐字摘自请求原文')
+    expect(polish.tool.description).not.toContain('10-04')
+    expect(await polish.run({ kind: 'insert', text: '续写。' })).toMatchObject({ ok: false, reason: '该意图只能回复 replace 或 none。' })
+    expect(await polish.run({ kind: 'comments', comments: [{ quote: '林舟在渡口停下。', note: '问题' }] })).toMatchObject({ ok: false, reason: '该意图只能回复 replace 或 none。' })
+    const replaced = await polish.run({ kind: 'replace', text: '林舟在渡口站定。', note: '更稳。' }) as { ok: boolean; message: string }
+    expect(replaced).toMatchObject({ ok: true, delivered: true })
+    expect(JSON.stringify(polish.tool.output.render({}, replaced))).toContain('已送到编辑器')
+
+    const same = setup('polish', '林舟在渡口停下。', 'same001')
+    expect(await same.run({ kind: 'replace', text: '林舟在渡口停下。' })).toMatchObject({ ok: true })
+    expect(same.hub.view(same.agent, ['same001']).items[0]?.reply).toMatchObject({ kind: 'none', note: '与原文相同，无需改动。' })
+    expect(await setup('polish', '有字', 'empty1').run({ kind: 'replace', text: '' })).toMatchObject({ ok: false, reason: expect.stringContaining('不能为空') })
+
+    const original = '短'
+    const limit = Math.min(original.length * 4 + 2000, 20000)
+    expect(await setup('polish', original, 'long001').run({ kind: 'replace', text: '长'.repeat(limit) })).toMatchObject({ ok: true })
+    expect(await setup('polish', original, 'long002').run({ kind: 'replace', text: '长'.repeat(limit + 1) })).toMatchObject({ ok: false, reason: expect.stringContaining('替换文本过长') })
+    const capped = '原'.repeat(6000)
+    expect(await setup('polish', capped, 'cap0002').run({ kind: 'replace', text: '改'.repeat(20001) })).toMatchObject({ ok: false, reason: expect.stringContaining('20000') })
+
+    const review = setup('review', '林舟在渡口停下。潮声很近。', 'rev001')
+    expect(await review.run({ kind: 'replace', text: '改写整段。' })).toMatchObject({ ok: false, reason: '审读只能回复 comments 或 none。' })
+    expect(await review.run({ kind: 'comments', comments: [{ quote: '潮声很近。', note: '声音太满' }] })).toMatchObject({ ok: true })
+    expect(await setup('review', '林舟在渡口停下。', 'rev002').run({ kind: 'comments', comments: [{ quote: '潮声很远。', note: '没有这句' }] })).toMatchObject({ ok: false, reason: expect.stringContaining('逐字出现') })
+    expect(await setup('review', '林舟在渡口停下。', 'rev003').run({ kind: 'comments', comments: [] })).toMatchObject({ ok: false, reason: '审读批注需要 1 到 12 条。' })
+    expect(await setup('review', '林舟在渡口停下。', 'rev004').run({ kind: 'comments', comments: Array.from({ length: 13 }, () => ({ quote: '林舟', note: '多' })) })).toMatchObject({ ok: false, reason: '审读批注需要 1 到 12 条。' })
+    expect(await setup('review', '林舟在渡口停下。', 'rev005').run({ kind: 'comments', comments: [{ quote: '林舟', note: '啊'.repeat(301) }] })).toMatchObject({ ok: false, reason: expect.stringContaining('300') })
+    expect(await setup('polish', '林舟在渡口停下。', 'note001').run({ kind: 'none', note: '啊'.repeat(201) })).toMatchObject({ ok: false, reason: expect.stringContaining('200') })
+
+    const continued = setup('continue', '', 'cont001')
+    expect(await continued.run({ kind: 'replace', text: '改前文。' })).toMatchObject({ ok: false, reason: '续写只能回复 insert 或 none。' })
+    expect(await continued.run({ kind: 'insert', text: '他继续往前走。' })).toMatchObject({ ok: true })
+    expect(await setup('continue', '', 'cont002').run({ kind: 'none' })).toMatchObject({ ok: true })
+    expect(NOVEL_TOOL_NAMES).toContain('novel_editor_suggest')
+  })
+
+  it('取消、重复和未知编号返回明确原因', async () => {
+    const { hub, agent, run } = setup('polish')
+    expect(await run({ requestId: 'missing', kind: 'none' })).toMatchObject({ ok: false, reason: EDITOR_UNKNOWN_REASON })
+    hub.cancel(agent, ['polish1'])
+    expect(await run({ kind: 'replace', text: '改过。' })).toMatchObject({ ok: false, reason: EDITOR_CANCELLED_REASON })
+    const second = setup('polish', '林舟在渡口停下。', 'again01')
+    expect(await second.run({ kind: 'replace', text: '改过。' })).toMatchObject({ ok: true })
+    expect(await second.run({ kind: 'none' })).toMatchObject({ ok: false, reason: EDITOR_DUPLICATE_REASON })
   })
 })

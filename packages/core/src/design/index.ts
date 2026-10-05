@@ -8,6 +8,7 @@ export {
   type ContractParts,
 } from './contract'
 export { seedMinDesign, type SeedMinDesignInput } from './seed'
+export * from './chapter-length'
 export { updateSkeleton, updateVolumeLayout, prepareSkeleton, prepareVolumeLayout, prepareDesignDoc, type DesignWriteResult } from './skeleton'
 export {
   checkVolumeReady,

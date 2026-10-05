@@ -14,4 +14,4 @@ export {
   文本规范检查,
   文本规范检查名,
 } from './checks'
-export { computeReview, ingestFindings, planReview, recordAuthorFinding, runReview, type ReviewKey, type RunReviewResult } from './run'
+export { computeReview, ingestFindings, planReview, recordAuthorFinding, runReview, type ReviewKey, type RunReviewResult, type ReviewProseStats } from './run'

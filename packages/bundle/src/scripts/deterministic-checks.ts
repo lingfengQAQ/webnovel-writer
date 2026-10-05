@@ -56,7 +56,7 @@ export function runChecksCli(argv: readonly string[]): number {
   }
   try {
     const result = computeReview(args.book, { 卷: args.卷, 章: args.章, 章名: args.章名 })
-    if (!result.ok || result.record === null) {
+    if (!result.ok || result.record === null || result.正文统计 === undefined) {
       console.error(`确定性检查未运行：${result.reason ?? '未知原因'}`)
       return 1
     }
@@ -74,11 +74,12 @@ export function runChecksCli(argv: readonly string[]): number {
       发现项: record.问题.filter((f) => f.模块名 === 模块名),
     }))
     if (args.审读材料) {
-      console.log(JSON.stringify({ ok: true, 审读指纹: record.审读指纹, 材料段: result.材料段, 回写载荷: 回写 }, null, 2))
+      console.log(JSON.stringify({ ok: true, 审读指纹: record.审读指纹, 正文统计: result.正文统计, 篇幅核对: result.篇幅核对, 材料段: result.材料段, 回写载荷: 回写 }, null, 2))
       return 0
     }
     console.log(`确定性检查完成：${counts}`)
     console.log(`模块回写齐全：${record.完成 ? 'true' : 'false'}`)
+    console.log(JSON.stringify({ 正文统计: result.正文统计, 篇幅核对: result.篇幅核对 }, null, 2))
     console.log('回写载荷(经 novel_record_review_findings 逐模块回写):')
     console.log(JSON.stringify(回写, null, 2))
     return 0

@@ -96,6 +96,7 @@ export function reviewInputFingerprintOf(input: {
   readonly 细纲: string
   readonly 材料清单?: string | null
   readonly 方案?: unknown
+  readonly 章节篇幅?: string
 }): string {
   const payload = {
     version: 'review-input-v1',
@@ -103,6 +104,7 @@ export function reviewInputFingerprintOf(input: {
     细纲: input.细纲,
     材料清单: input.材料清单 ?? null,
     方案: input.方案 ?? null,
+    ...(input.章节篇幅 === undefined ? {} : { 章节篇幅: input.章节篇幅 }),
   }
   return createHash('sha256').update(stableJson(payload), 'utf-8').digest('hex')
 }

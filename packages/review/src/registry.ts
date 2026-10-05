@@ -2,7 +2,7 @@
  * 检查项库注册协议(插件规格 §9)。
  */
 
-import type { ChapterKey, Finding } from '@webnovel/core'
+import type { ChapterKey, Finding, ChapterLengthCheck } from '@webnovel/core'
 
 export interface CheckInput {
   readonly bookRoot: string
@@ -13,6 +13,7 @@ export interface CheckInput {
   readonly 材料版本: string
   /** Actual registered package text, including source-labelled supplements. */
   readonly 材料段?: Readonly<Record<string, string>>
+  readonly 篇幅核对?: ChapterLengthCheck
 }
 
 export interface CheckModule {

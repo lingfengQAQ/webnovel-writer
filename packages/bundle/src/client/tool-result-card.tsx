@@ -1,11 +1,16 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { BookOpen, ChevronDown, ChevronRight } from 'lucide-react'
 import type { ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import type { ClientHost } from './host'
-import { novelResultModel, novelToolTitles } from './tool-result'
+import { editorLiveOverlay, subscribeEditorOverlay } from './editor/requests'
+import { editorRequestId, editorSuggestionModel, novelResultModel, novelToolTitles } from './tool-result'
 
 export function NovelToolCard(props: ToolCallViewProps) {
-  const model = novelResultModel(props)
+  const requestId = props.toolName === 'novel_editor_suggest' ? editorRequestId(props) : undefined
+  const [revision, setRevision] = useState(0)
+  useEffect(() => props.toolName === 'novel_editor_suggest' ? subscribeEditorOverlay(() => setRevision(value => value + 1)) : undefined, [props.toolName])
+  const overlay = requestId && revision >= 0 ? editorLiveOverlay(requestId) : undefined
+  const model = props.toolName === 'novel_editor_suggest' ? editorSuggestionModel(props, overlay) : novelResultModel(props)
   const disclosure = props.useDisclosure()
   const available = props.phase !== 'preparing'
   return <section className="nw-result" data-state={model.state} aria-label={novelToolTitles[props.toolName]}>

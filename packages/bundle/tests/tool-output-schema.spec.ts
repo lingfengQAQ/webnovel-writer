@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { computeReview } from '@webnovel/review'
 import { createNovelTools } from '../src/novel-tools'
+import { EditorRequestHub } from '../src/study/editor-requests'
 import { nativeWriteStub } from './fixtures/native-write-stub'
 
 const OUTLINE_LINES = ['# 章细纲', '', '## 定位段', '', '### 来源窗口项及拆并关系', '探章，单章承接', '', '### 章节功能', '', '- 〔硬〕开场点名主角', '', '### 视角与焦点', '主角视角', '', '### 时空锚定', '城门，清晨', '', '### 起止边界', '抵达到发现', '', '### 故事线与承诺分配', '推进主线', '', '### 信息边界', '只披露所见', '', '### 情绪与节奏目标', '紧张留钩', '', '### 前置条件核对结果', '已核对，无留白', '', '## 细纲段', '', '### 单元 1', '', '- 目标: 开场', '- 人物: 主角', '- 时空: 城门', '- 行动/冲突: 盘问', '- 信息披露: 线索', '- 状态变化: 平静到警觉', '']
@@ -15,7 +16,8 @@ describe('工具 output.schema 与真实返回形状一致(dsh 校验器)', () =
   it('全部工具 schema 在 dsh 支持子集内，实际返回值符合 schema', async () => {
     const repoRoot = path.resolve(__dirname, '..', '..', '..')
     const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'probe-'))
-    const tools = createNovelTools({ nativeWrite: nativeWriteStub, workspaceRoot: () => ws, bookRootOfBookId: () => path.join(ws, '探书'), testTools: true })
+    const editorRequests = new EditorRequestHub()
+    const tools = createNovelTools({ nativeWrite: nativeWriteStub, workspaceRoot: () => ws, bookRootOfBookId: () => path.join(ws, '探书'), testTools: true, editorRequests })
     const sc = { agent: { id: 'a', session: { append: () => {} } } }
     const call = (n: string, a: Record<string, unknown>) => tools.find((t) => t.name === n)!.execute(a, sc as never)
     const shapes: Record<string, string[]> = {}
@@ -65,6 +67,13 @@ describe('工具 output.schema 与真实返回形状一致(dsh 校验器)', () =
     fs.writeFileSync(path.join(draftDir, '稿1.md'), '---\n角色: 待审稿\n---\n\n主角走进城门。\n')
     const fingerprint = computeReview(bookRoot, reviewKey).record!.审读指纹
     rec('novel_record_review_findings', await call('novel_record_review_findings', { bookId, ...reviewKey, 模块名: '章节结构审读', 发现项: [], 审读指纹: fingerprint }))
+    editorRequests.open(sc.agent, {
+      requestId: 'schema1', intent: 'polish', dirty: false, hash: 'abc', ref: { space: 'book:probe', path: '草稿区/草稿/稿1.md' },
+      document: { owner: '探书', path: '草稿区/草稿/稿1.md', space: 'book:probe', version: 1, absolutePath: path.join(ws, '探书', '稿1.md') },
+      selection: { text: '原文句子。', line: 1, before: '', after: '' },
+    })
+    rec('novel_editor_suggest', await call('novel_editor_suggest', { requestId: 'schema1', kind: 'replace', text: '改过的句子。', note: '更顺。' }))
+    rec('novel_editor_suggest', await call('novel_editor_suggest', { requestId: 'missing1', kind: 'none' }))
     // Use the installed bundle dependency, never an old copy left in the pnpm store.
     // Node avoids Vite's handling of percent-encoded Windows paths here.
     const bundleRequire = createRequire(path.join(repoRoot, 'packages/bundle/package.json'))

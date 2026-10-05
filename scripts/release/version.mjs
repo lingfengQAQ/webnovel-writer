@@ -20,15 +20,18 @@ export function releaseVersion(directory = root, tag) {
   if (tag) assert.equal(tag, expectedTag, 'Release tag must match the package version')
   const changelog = fs.readFileSync(path.join(directory, 'CHANGELOG.md'), 'utf8')
   assert.ok(changelog.includes(`## [${bundle.version}]`), 'Missing versioned changelog entry')
-  for (const file of ['README.md', 'packages/bundle/README.md', 'packages/meta/README.md', 'packages/meta/RELEASE_NOTES.md', 'docs/user/install.md', 'docs/user/upgrade-backup.md']) {
+  const documents = ['README.md', 'packages/bundle/README.md', 'packages/meta/README.md', 'packages/meta/RELEASE_NOTES.md',
+    'packages/embedding-provider/README.md', 'packages/companion/README.md',
+    ...fs.readdirSync(path.join(directory, 'docs/user')).filter(file => file.endsWith('.md')).map(file => `docs/user/${file}`)]
+  for (const file of documents) {
     const text = fs.readFileSync(path.join(directory, file), 'utf8')
-    for (const match of text.matchAll(/linfengqaqtat-dsh-scriptor-([\d][\w.-]*)\.tgz/g)) {
+    for (const match of text.matchAll(/linfengqaqtat-dsh-scriptor-(?:(?:full|retrieval|companion)-)?([\d][\w.-]*)\.tgz/g)) {
       assert.equal(match[1], bundle.version, `Stale installation example in ${file}`)
     }
     for (const match of text.matchAll(/releases\/tag\/scriptor-v([\d][\w.-]*)/g)) {
       assert.equal(match[1], bundle.version, `Stale download link in ${file}`)
     }
-    for (const match of text.matchAll(/dsh-scriptor(?:-full)?@(\d+[\w.-]*)/g)) {
+    for (const match of text.matchAll(/dsh-scriptor(?:-(?:full|retrieval|companion))?@(\d+[\w.-]*)/g)) {
       assert.equal(match[1], bundle.version, `Stale registry installation example in ${file}`)
     }
   }

@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import { syncBuiltinESMExports } from 'node:module'
 import * as path from 'node:path'
 import * as os from 'node:os'
-import { seedMinDesign, serializeDocument, writeCandidate, confirmOutline, draftHashOf, reviewInputFingerprintOf, loadMaterialPackage } from '@webnovel/core'
+import { seedMinDesign, serializeDocument, writeCandidate, confirmOutline, draftHashOf, reviewInputFingerprintOf, loadMaterialPackage, countProseText } from '@webnovel/core'
 import { computeReview, ingestFindings, listChecks, registerCheck, registerDefaultChecks, resetChecks, runReview, type CheckInput } from '../src/index'
 import { removeSync } from '../../core/src/repo/remove'
 
@@ -76,6 +76,11 @@ describe('R21 脚本只算不写(computeReview 与 ingestFindings 分工)', () =
     expect(result.ok).toBe(true)
     expect(checked).toBeDefined()
     expect(result.record!.审稿哈希).toBe(draftHashOf(checked!.待审稿))
+    expect(result.正文统计).toMatchObject({
+      ...countProseText(checked!.待审稿),
+      审稿哈希: result.record!.审稿哈希,
+      审读指纹: result.record!.审读指纹,
+    })
     expect(result.record!.审读指纹).toBe(reviewInputFingerprintOf({
       正文: checked!.待审稿, 细纲: checked!.细纲,
       材料清单: loadMaterialPackage(root, key).审读材料标识, 方案: result.record!.方案,

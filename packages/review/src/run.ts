@@ -7,6 +7,10 @@ import * as path from 'node:path'
 import {
   MACHINE_SCHEMA_VERSION,
   countPendingReviewDrafts,
+  countProseText,
+  chapterLengthIdentity,
+  checkChapterLength,
+  readChapterLength,
   emptyReviewRecord,
   findPendingReviewDraft,
   loadReviewRecord,
@@ -25,6 +29,9 @@ import {
   type ReviewPlan,
   type ReviewRecord,
   type ReviewDisposition,
+  type ProseTextCounts,
+  type ChapterLengthPolicy,
+  type ChapterLengthCheck,
 } from '@webnovel/core'
 import { 作者意见模块名, findingId, registerDefaultChecks } from './checks'
 import { getCheck, listChecks } from './registry'
@@ -41,6 +48,16 @@ export interface RunReviewResult {
   readonly reason?: string
   readonly record: ReviewRecord | null
   readonly 材料段?: Readonly<Record<string, string>>
+  readonly 正文统计?: ReviewProseStats
+  readonly 篇幅核对?: ChapterLengthCheck
+}
+
+export interface ReviewProseStats extends ProseTextCounts {
+  readonly 稿件: string
+  readonly 版本: number | null
+  readonly 审稿哈希: string
+  readonly 审读指纹: string
+  readonly 统计口径: string
 }
 
 function readText(root: string, rel: string): string | null {
@@ -55,17 +72,19 @@ function reviewId(key: ReviewKey): string {
   return `审-${String(key.卷).padStart(2, '0')}-${String(key.章).padStart(4, '0')}`
 }
 
-function reviewInput(bookRoot: string, key: ReviewKey, plan: ReviewPlan | undefined): { pending: DraftFile; outline: string; bodyHash: string; fingerprint: string; materials: LoadedMaterialPackage } | null {
+function reviewInput(bookRoot: string, key: ReviewKey, plan: ReviewPlan | undefined): { pending: DraftFile; outline: string; bodyHash: string; fingerprint: string; materials: LoadedMaterialPackage; length: ChapterLengthPolicy } | null {
   const pending = findPendingReviewDraft(bookRoot, key)
   if (pending === null) return null
   const outline = readText(bookRoot, paths.确认细纲(key.卷, key.章, key.章名)) ?? ''
   const materials = loadMaterialPackage(bookRoot, key)
+  const length = readChapterLength(bookRoot)
   return {
     pending,
     outline,
     bodyHash: draftHashOf(pending.body),
-    fingerprint: reviewInputFingerprintOf({ 正文: pending.body, 细纲: outline, 材料清单: materials.审读材料标识, 方案: plan }),
+    fingerprint: reviewInputFingerprintOf({ 正文: pending.body, 细纲: outline, 材料清单: materials.审读材料标识, 方案: plan, 章节篇幅: chapterLengthIdentity(length) }),
     materials,
+    length,
   }
 }
 
@@ -140,6 +159,8 @@ export function computeReview(bookRoot: string, key: ReviewKey): RunReviewResult
   const 审核编号 = reviewId(key)
   // 检查与指纹消费同一份读入快照，读取间作者改动不能把旧结果绑定到新输入。
   const pending = inputIdentity.pending
+  const counts = countProseText(pending.body)
+  const 篇幅核对 = checkChapterLength(inputIdentity.length, counts.汉字数)
   const 材料版本 = pending.版本
   const input = {
     bookRoot,
@@ -149,6 +170,7 @@ export function computeReview(bookRoot: string, key: ReviewKey): RunReviewResult
     审核编号,
     材料版本: 材料版本 === null ? pending.relPath : `${pending.relPath}@${材料版本}`,
     材料段: inputIdentity.materials.段,
+    篇幅核对,
   }
 
   // Keep removed/legacy module keys as audit history, but never reuse their
@@ -211,7 +233,15 @@ export function computeReview(bookRoot: string, key: ReviewKey): RunReviewResult
     审读指纹,
     待继承处置: remainingDispositions(existing, stale, new Set([...deterministicNames, ...skips.keys()])),
   }
-  return { ok: true, record, 材料段: inputIdentity.materials.段 }
+  const 正文统计: ReviewProseStats = {
+    稿件: pending.relPath,
+    版本: pending.版本,
+    审稿哈希,
+    审读指纹,
+    统计口径: '正文含章标题，不含 frontmatter 和草稿候选事实。换行统一为 LF、去首尾空白；字符数按 Unicode 码点计，含标点、Markdown 标记和内部空白；非空白字符数仅剔除空白；汉字数仅计 Unicode Han 字符。',
+    ...counts,
+  }
+  return { ok: true, record, 材料段: inputIdentity.materials.段, 正文统计, 篇幅核对 }
 }
 
 /**

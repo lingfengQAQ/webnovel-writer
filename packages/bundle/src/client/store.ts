@@ -2,7 +2,7 @@ import type { FileRef, StudyDocument, StudySave } from '../study/types'
 import { callStudy, StudyApiError } from './api'
 
 export const fileKey = (ref: FileRef): string => JSON.stringify([ref.space, ref.path])
-interface SaveAttempt { readonly operationId: string; readonly hash: string; readonly body: string; readonly ref: FileRef }
+interface SaveAttempt { readonly operationId: string; readonly hash: string; readonly body: string; readonly ref: FileRef; readonly accepted?: readonly string[] }
 export interface BufferState {
   mode?: 'read' | 'edit' | 'changes'
   document: StudyDocument
@@ -13,6 +13,8 @@ export interface BufferState {
   saved?: StudySave
   disk?: StudyDocument
   attempt?: SaveAttempt
+  /** Accepted suggestion ids submitted with the save. Notify retries send this same list. */
+  accepted?: readonly string[]
 }
 export interface SessionEditor {
   readonly buffers: Readonly<Record<string, BufferState>>
@@ -31,6 +33,7 @@ export function createEditorStore(reveal?: (sessionId: string) => void) {
   const openSequence = new Map<string, number>()
   const readSequence = new Map<string, number>()
   const moved = new Set<(id: string, previous: StudyDocument, next: StudyDocument) => void>()
+  const discarded = new Set<(id: string, key: string) => void>()
   const refreshTimers = new Map<string, ReturnType<typeof setTimeout>>()
   let live = true
   const get = (id: string): SessionEditor => {
@@ -68,6 +71,7 @@ export function createEditorStore(reveal?: (sessionId: string) => void) {
   return {
     get, update, updateBuffer, receive, reload,
     onMove(listener: (id: string, previous: StudyDocument, next: StudyDocument) => void) { moved.add(listener); return () => { moved.delete(listener) } },
+    onDiscard(listener: (id: string, key: string) => void) { discarded.add(listener); return () => { discarded.delete(listener) } },
     refresh(id: string) { update(id, { refresh: get(id).refresh + 1 }); return Promise.all(Object.keys(get(id).buffers).map(key => reload(id, key))) },
     invalidate(id: string) {
       if (!live || refreshTimers.has(id)) return
@@ -100,10 +104,13 @@ export function createEditorStore(reveal?: (sessionId: string) => void) {
         if (live && openSequence.get(id) === sequence) update(id, { error: failure(error).error })
       }
     },
-    async save(id: string, key: string) {
+    async save(id: string, key: string, accepted: readonly string[] = []) {
       const buffer = get(id).buffers[key]
       if (!buffer || buffer.saving || buffer.document.readOnly || !buffer.attempt && buffer.text === buffer.document.body) return
-      const attempt = buffer.attempt ?? { operationId: crypto.randomUUID(), hash: buffer.document.hash, body: buffer.text, ref: buffer.document.ref }
+      const attempt = buffer.attempt ?? {
+        operationId: crypto.randomUUID(), hash: buffer.document.hash, body: buffer.text, ref: buffer.document.ref,
+        ...(accepted.length ? { accepted: [...accepted] } : {}),
+      }
       updateBuffer(id, key, { saving: true, error: undefined, errorCode: undefined, attempt })
       try {
         const saved = await callStudy<StudySave>(id, 'save', attempt)
@@ -119,7 +126,11 @@ export function createEditorStore(reveal?: (sessionId: string) => void) {
         }
         const buffers = { ...state.buffers }
         delete buffers[key]
-        buffers[nextKey] = { document: saved.document, text: latest.text === attempt.body ? saved.document.body : latest.text, saved, ...(latest.mode ? { mode: latest.mode } : {}) }
+        buffers[nextKey] = {
+          document: saved.document, text: latest.text === attempt.body ? saved.document.body : latest.text, saved,
+          ...(attempt.accepted?.length ? { accepted: attempt.accepted } : {}),
+          ...(latest.mode ? { mode: latest.mode } : {}),
+        }
         update(id, { buffers, current: state.current === key ? nextKey : state.current, refresh: state.refresh + 1, selection: '', notice: saved.changed ? '文档已保存' : '文档没有变化' })
         if (nextKey !== key) for (const listener of moved) listener(id, buffer.document, saved.document)
       } catch (error) {
@@ -138,7 +149,6 @@ export function createEditorStore(reveal?: (sessionId: string) => void) {
     useDisk(id: string, key: string, keepEdits: boolean) {
       const buffer = get(id).buffers[key]
       if (!buffer?.disk || buffer.saving) return
-      if (!keepEdits && buffer.text !== buffer.document.body && !window.confirm('放弃当前未保存修改，载入磁盘版本？')) return
       updateBuffer(id, key, { document: buffer.disk, text: keepEdits ? buffer.text : buffer.disk.body, disk: undefined, attempt: undefined, error: undefined, errorCode: undefined })
     },
     async retry(id: string, key: string, kind: 'notify' | 'retry-commit') {
@@ -148,6 +158,7 @@ export function createEditorStore(reveal?: (sessionId: string) => void) {
       try {
         const result = await callStudy<{ notification?: StudySave['notification']; notificationError?: string; ok?: boolean; reason?: string }>(id, kind, {
           ref: buffer.document.ref, hash: buffer.document.hash, operationId: buffer.saved.operationId,
+          ...(kind === 'notify' && buffer.accepted?.length ? { accepted: buffer.accepted } : {}),
         })
         const latest = get(id).buffers[key]
         if (!live || !latest?.saved) return
@@ -166,9 +177,10 @@ export function createEditorStore(reveal?: (sessionId: string) => void) {
       delete buffers[key]
       const current = state.current === key ? Object.keys(buffers).at(-1) : state.current
       update(id, { buffers, current, selection: '' })
+      for (const listener of discarded) listener(id, key)
       return true
     },
-    dispose() { live = false; for (const timer of refreshTimers.values()) clearTimeout(timer); refreshTimers.clear(); listeners.clear(); moved.clear(); sessions.clear(); openSequence.clear(); readSequence.clear() },
+    dispose() { live = false; for (const timer of refreshTimers.values()) clearTimeout(timer); refreshTimers.clear(); listeners.clear(); moved.clear(); discarded.clear(); sessions.clear(); openSequence.clear(); readSequence.clear() },
   }
 }
 export type EditorStore = ReturnType<typeof createEditorStore>

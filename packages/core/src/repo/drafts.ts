@@ -140,6 +140,23 @@ export function splitCandidateFacts(body: string): { prose: string; facts: strin
   return { prose, facts }
 }
 
+/** Deterministic counts shared by review and finalization. */
+export interface ProseTextCounts {
+  readonly 字符数: number
+  readonly 非空白字符数: number
+  readonly 汉字数: number
+}
+
+/** Input is a parsed document body. Keep chapter headings; exclude candidate facts. */
+export function countProseText(body: string): ProseTextCounts {
+  const prose = splitCandidateFacts(body).prose
+  return {
+    字符数: Array.from(prose).length,
+    非空白字符数: Array.from(prose.replace(/\s/gu, '')).length,
+    汉字数: (prose.match(/\p{Script=Han}/gu) ?? []).length,
+  }
+}
+
 /** 正文与候选事实拼回一份草稿 body。 */
 export function composeBody(prose: string, facts: readonly string[]): string {
   const p = prose.replace(/\r\n/g, '\n').replace(/\n+$/, '')

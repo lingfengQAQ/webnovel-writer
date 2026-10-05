@@ -21,6 +21,24 @@ export function runTextNorm(input: CheckInput): Finding[] {
   const body = input.待审稿.replace(/\r\n/g, '\n')
   const out = []
   let n = 1
+  const length = input.篇幅核对
+  if (length && (length.结果 === '偏短' || length.结果 === '偏长' || length.结果 === '配置错误')) {
+    const policy = length.约定
+    const configError = policy.状态 === '配置错误'
+    const detail = '范围' in policy
+      ? `正文篇幅${length.结果}：实测 ${length.实测汉字数} 汉字，契约目标 ${policy.范围.目标汉字数}，范围 ${policy.范围.下限汉字数}–${policy.范围.上限汉字数}，${length.结果 === '偏短' ? '少于下限' : '超过上限'} ${length.差额} 汉字`
+      : `作品契约章节篇幅配置错误：${configError ? policy.原因 : '无法解析'}`
+    out.push(makeFinding({
+      审核编号: input.审核编号, 模块名: 文本规范检查名,
+      发现项编号: findingId(input.审核编号, '文本', n++),
+      严重程度: '低', 是否建议阻断: false,
+      证据位置: configError ? policy.来源 : '正文汉字数（不含 frontmatter 和草稿候选事实）',
+      所依据材料及版本: `${input.材料版本}；${policy.来源}${policy.来源哈希 ? `@${policy.来源哈希}` : ''}`,
+      问题说明: detail, 影响范围: configError ? '作品契约' : '正文', 不确定性说明: '',
+      修改建议: configError ? '核对作品契约的章节篇幅三项数值，经原契约更新工具修正。' : '结合本章任务检查是否需要精简、补足因果或调整细纲；篇幅合理可由作者保留，不自动裁剪或凑字。',
+      建议返回节点: configError ? '作品定调' : '改稿', 建议复审模块: 文本规范检查名, 材料完整性: configError ? '残缺' : '完整',
+    }))
+  }
   if (body.trim() === '') {
     out.push(makeFinding({
       审核编号: input.审核编号,
@@ -159,7 +177,7 @@ export function runCanonCheck(input: CheckInput): Finding[] {
 
 export const 文本规范检查: CheckModule = {
   名称: 文本规范检查名,
-  审什么: '套话、连续空格、空稿',
+  审什么: '套话、连续空格、空稿、契约章节篇幅',
   依赖材料: ['待审稿'],
   执行形态: '确定性代码',
   适用范围: '章',

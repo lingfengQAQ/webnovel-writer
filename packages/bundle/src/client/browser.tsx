@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { BookOpen, ChevronRight, Database, FileText, Folder, FolderOpen, RefreshCw, Search } from 'lucide-react'
+import { BookOpen, ChevronRight, Database, File, FileCode, FileText, FileType, Folder, FolderOpen, RefreshCw, Search } from 'lucide-react'
 import type { FileRef, StudyShelf, TreeEntry } from '../study/types'
 import type { ClientHost, WorkspaceProps } from './host'
 import type { EditorStore } from './store'
@@ -10,14 +10,25 @@ import type { OpenIndex } from './indexing'
 
 export interface StudyUI { readonly host: ClientHost; readonly store: EditorStore; readonly openIndex?: OpenIndex }
 
+const depthStyle = (depth: number) => ({ '--nw-depth': depth }) as React.CSSProperties
+const CODE_EXTENSIONS = new Set(['json', 'yaml', 'yml', 'toml', 'js', 'mjs', 'ts', 'py', 'css', 'html'])
+
+function FileIcon({ name }: { name: string }) {
+  const extension = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : ''
+  if (extension === 'md' || extension === 'markdown') return <FileText size={15} />
+  if (extension === 'txt') return <FileType size={15} />
+  if (CODE_EXTENSIONS.has(extension)) return <FileCode size={15} />
+  return <File size={15} />
+}
+
 function Tree({ sessionId, refValue, store, host, absolutePath, depth = 0 }: { sessionId: string; refValue: FileRef; store: EditorStore; host: ClientHost; absolutePath?: string; depth?: number }) {
   useDirectoryWatch(host, sessionId, absolutePath, store)
   const state = useEditor(store, sessionId)
   const { value, error, loading } = useStudy<readonly TreeEntry[]>(sessionId, 'tree', { ref: refValue }, state.refresh)
-  if (loading && !value) return <p className="nw-empty">读取中…</p>
-  if (error) return <p className="nw-error" role="alert">{error}</p>
-  if (!value?.length) return <p className="nw-empty">空目录</p>
-  return <ul className="nw-tree" aria-label={refValue.path || '文件目录'}>{value.map(entry => <TreeRow key={fileKey(entry.ref)} {...{ sessionId, entry, store, host, depth }} />)}</ul>
+  if (loading && !value) return <div className="nw-tree-skeleton" style={depthStyle(depth)} role="status" aria-label="读取中…"><span /><span /></div>
+  if (error) return <p className="nw-error nw-tree-note" style={depthStyle(depth)} role="alert">{error}</p>
+  if (!value?.length) return <p className="nw-empty nw-tree-note" style={depthStyle(depth)}>空目录</p>
+  return <ul className="nw-tree" style={depthStyle(depth)} aria-label={refValue.path || '文件目录'}>{value.map(entry => <TreeRow key={fileKey(entry.ref)} {...{ sessionId, entry, store, host, depth }} />)}</ul>
 }
 
 function TreeRow({ sessionId, entry, store, host, depth }: { sessionId: string; entry: TreeEntry; store: EditorStore; host: ClientHost; depth: number }) {
@@ -27,10 +38,10 @@ function TreeRow({ sessionId, entry, store, host, depth }: { sessionId: string; 
   const buffer = state.buffers[key]
   const dirty = !!buffer && buffer.text !== buffer.document.body
   return <li>
-    <button type="button" className={`nw-tree-row ${entry.draft ? 'nw-draft' : ''} ${state.current === key ? 'is-selected' : ''}`} style={{ paddingLeft: 8 + depth * 13 }}
+    <button type="button" className={`nw-tree-row ${entry.draft ? 'nw-draft' : ''} ${state.current === key ? 'is-selected' : ''}`}
       aria-expanded={entry.directory ? expanded : undefined} disabled={!!entry.error} title={entry.error ?? entry.ref.path}
       onClick={() => entry.directory ? setExpanded(!expanded) : void store.open(sessionId, entry.ref)}>
-      {entry.directory ? <><ChevronRight size={12} className={expanded ? 'nw-rotate' : ''} />{expanded ? <FolderOpen size={15} /> : <Folder size={15} />}</> : <><span className="nw-tree-spacer" /><FileText size={15} /></>}
+      {entry.directory ? <><ChevronRight size={12} className={`nw-chevron ${expanded ? 'nw-rotate' : ''}`} />{expanded ? <FolderOpen size={15} className="nw-folder" /> : <Folder size={15} className="nw-folder" />}</> : <><span className="nw-tree-spacer" /><FileIcon name={entry.name} /></>}
       <span className="nw-file-name">{entry.name}</span>{dirty ? <span className="nw-dirty" title="未保存修改">●</span> : null}
       {entry.badge ? <span className="nw-badge">{entry.badge}</span> : entry.name === '草稿区' ? <span className="nw-badge">工作中</span> : null}
     </button>
@@ -43,7 +54,7 @@ function Book({ sessionId, book, store, host, initial }: { sessionId: string; bo
   const [expanded, setExpanded] = useState(initial)
   return <section className="nw-book">
     <button type="button" className="nw-book-row" aria-expanded={expanded} disabled={!!book.error} onClick={() => setExpanded(!expanded)}>
-      <ChevronRight size={13} className={expanded ? 'nw-rotate' : ''} /><span className="nw-book-icon"><BookOpen size={21} /></span>
+      <ChevronRight size={13} className={`nw-chevron ${expanded ? 'nw-rotate' : ''}`} /><span className="nw-book-icon"><BookOpen size={21} /></span>
       <span className="nw-book-description"><strong>{book.name}</strong><small>{book.error ?? book.progress}</small></span>
     </button>
     {expanded && !book.error ? <Tree sessionId={sessionId} refValue={{ space: book.id, path: '' }} store={store} host={host} absolutePath={book.absolutePath} /> : null}
@@ -65,10 +76,10 @@ function StudyBrowser({ sessionId, store, host, openIndex }: { sessionId: string
     {watchError ? <p className="nw-empty" role="status">{watchError}</p> : null}
     {state.error || shelf.error ? <p className="nw-error" role="alert">{state.error ?? shelf.error}</p> : null}
     <div className="nw-shelf-scroll">
-      {shelf.loading ? <p className="nw-empty">正在读取书房…</p> : null}
+      {shelf.loading && !shelf.value ? <p className="nw-empty">正在读取书房…</p> : null}
       {query.trim() ? <>
         {found.error ? <p className="nw-error" role="alert">{found.error}</p> : null}
-        {found.loading || search !== query.trim() ? <p className="nw-empty">搜索中…</p> : null}
+        {found.loading && !found.value || search !== query.trim() ? <p className="nw-empty">搜索中…</p> : null}
         {found.value?.entries.map(entry => <button type="button" className="nw-search-result" key={fileKey(entry.ref)} onClick={() => void store.open(sessionId, entry.ref)}>
           <FileText size={16} /><span><strong>{entry.name}</strong><small>{entry.ref.space === 'shared' ? '共享资料' : shelf.value?.books.find(book => book.id === entry.ref.space)?.name} / {entry.ref.path}</small></span>
         </button>)}

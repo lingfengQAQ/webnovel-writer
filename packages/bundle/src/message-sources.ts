@@ -3,11 +3,13 @@ import type { ContextFormed, MessageSource } from '@deepseek-ai/dsh-llm'
 // Match the producer names emitted by DSH's native V3-to-V4 reader.
 export const MEMORY_CATALOG_SOURCE = 'plugin:webnovel-memory-catalog'
 export const AUTHOR_SAVE_SOURCE = 'plugin:webnovel'
+export const EDITOR_REQUEST_SOURCE = 'plugin:webnovel-editor'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
     'plugin:webnovel-memory-catalog': { kind: typeof MEMORY_CATALOG_SOURCE } & ContextFormed
     'plugin:webnovel': { kind: typeof AUTHOR_SAVE_SOURCE }
+    'plugin:webnovel-editor': { kind: typeof EDITOR_REQUEST_SOURCE; requestId: string }
   }
 }
 

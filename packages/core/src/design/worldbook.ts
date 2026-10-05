@@ -27,16 +27,18 @@ function ensureModulesDeclaredLocked(bookRoot: string, extra: readonly string[] 
   let existing = ''
   try {
     existing = fs.readFileSync(abs, 'utf-8')
-  } catch {
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
     existing = '# 模块声明\n'
   }
-  const names = [...世界书最小模块, ...extra]
+  const names = [...new Set([...世界书最小模块, ...extra])]
+  for (const name of names) assertSegment(name, '模块名')
   const lines = existing.replace(/\r\n/g, '\n').split('\n')
   for (const name of names) {
-    if (!existing.includes(name)) lines.push(`- ${name}`)
+    if (!lines.some(line => line.trim() === `- ${name}`)) lines.push(`- ${name}`)
   }
   const body = `${lines.join('\n').replace(/\n+$/, '')}\n`
-  writeFileAtomic(bookRoot, '世界书/模块声明.md', body)
+  if (body !== existing) writeFileAtomic(bookRoot, '世界书/模块声明.md', body)
 }
 
 export const ensureModulesDeclared = bookWriter(ensureModulesDeclaredLocked)
