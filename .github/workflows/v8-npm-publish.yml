@@ -73,7 +73,7 @@ jobs:
       - name: Check registry readiness without waiting for external processing
         id: registry
         working-directory: source
-        run: node ../publisher/scripts/release/publish-npm.mjs --assets .tmp/npm-release --check-visibility
+        run: node ../publisher/scripts/release/publish-npm.mjs --assets .tmp/npm-release --check-visibility --exclude-companion
   installation:
     needs: publish
     if: needs.publish.outputs.ready == 'true'
@@ -106,14 +106,13 @@ jobs:
       - name: Verify registry bytes and install in clean profiles
         working-directory: source
         run: |
-          node ../publisher/scripts/release/publish-npm.mjs --assets .tmp/npm-release --verify-only
+          node ../publisher/scripts/release/publish-npm.mjs --assets .tmp/npm-release --verify-only --exclude-companion
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $manifest = Get-Content .tmp/npm-release/release-manifest.json -Raw | ConvertFrom-Json
           $main = Join-Path .tmp/npm-release $manifest.filename
           $embedding = Join-Path .tmp/npm-release ($manifest.optionalPackages | Where-Object name -eq '@linfengqaqtat/dsh-scriptor-retrieval').tarball
           $meta = Join-Path .tmp/npm-release ($manifest.optionalPackages | Where-Object name -eq '@linfengqaqtat/dsh-scriptor-full').tarball
-          $companion = Join-Path .tmp/npm-release ($manifest.optionalPackages | Where-Object name -eq '@linfengqaqtat/dsh-scriptor-companion').tarball
-          node scripts/release/install-smoke.mjs $main $embedding $meta --registry --companion $companion
+          node scripts/release/install-smoke.mjs $main $embedding $meta --registry
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   finalize:
     if: github.event_name == 'workflow_dispatch'
@@ -127,4 +126,14 @@ jobs:
       RELEASE_TAG: ${{ inputs.release_tag }}
     steps:
       - name: Publish verified draft as Latest
-        run: gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest
+        run: |
+          gh release view "$RELEASE_TAG" --json body --jq .body > release-notes.md
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('release-notes.md')
+          text = p.read_text()
+          marker = '<!-- companion-independent -->'
+          if marker not in text:
+              p.write_text(text + '\n\n' + marker + '\n> 桌宠包独立于本次主发布：本流程不等待其 npm 处理，也不声明其 registry 安装验证已完成。主包、检索和完整版已通过 registry 原件与安装验证；桌宠可以稍后自行更新，或使用本页已校验的独立安装包。\n')
+          PY
+          gh release edit "$RELEASE_TAG" --notes-file release-notes.md --draft=false --prerelease=false --latest

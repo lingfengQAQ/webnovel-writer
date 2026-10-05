@@ -119,6 +119,11 @@ export async function registryReadiness(packages, lookup = metadataFor) {
   return { ready: pending.length === 0, pending }
 }
 
+/** Companion assets are still validated, but its registry processing need not delay writing. */
+export function packagesToVerify(packages, excludeCompanion = false) {
+  return excludeCompanion ? packages.filter(pkg => pkg.name !== companionName) : packages
+}
+
 async function verifyRegistry(packages) {
   for (const pkg of packages) {
     let verified = false
@@ -141,19 +146,23 @@ async function main() {
   assert.ok(directoryIndex >= 0 && args[directoryIndex + 1], 'Usage: node scripts/release/publish-npm.mjs --assets <directory> [--publish [--submit-only]|--verify-only|--check-visibility]')
   assert.ok(['--publish', '--verify-only', '--check-visibility'].filter(mode => args.includes(mode)).length <= 1, 'Choose one mode')
   assert.ok(!args.includes('--submit-only') || args.includes('--publish'), '--submit-only requires --publish')
+  const excludeCompanion = args.includes('--exclude-companion')
+  assert.ok(!excludeCompanion || args.includes('--verify-only') || args.includes('--check-visibility'), '--exclude-companion is only allowed for registry verification')
   const directory = path.resolve(args[directoryIndex + 1])
   const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }).trim()
   const packages = validateReleaseAssets(directory, process.env.RELEASE_TAG, commit)
+  const verification = packagesToVerify(packages, excludeCompanion)
   if (args.includes('--check-visibility')) {
-    const result = await registryReadiness(packages)
+    const readiness = await registryReadiness(verification)
+    const result = { ...readiness, ...(excludeCompanion ? { excluded: packages.filter(pkg => pkg.name === companionName).map(pkg => `${pkg.name}@${pkg.version}`) } : {}) }
     console.log(JSON.stringify(result))
     if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `ready=${result.ready}\n`)
     if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, result.ready
-      ? 'Registry bytes and latest tags are ready; installation verification follows.\n'
+      ? `Required registry bytes and latest tags are ready; installation verification follows.${excludeCompanion ? ' Companion registry processing is independent and was not polled.' : ''}\n`
       : `## Release pending registry processing\n\nUploads were submitted, but the release is **not complete**. The draft remains private.\n\n${result.pending.map(name => `- ${name}`).join('\n')}\n\nAfter the registry exposes these versions, run this workflow with **phase=verify** and the same release tag. That phase cannot upload packages.\n`)
     return
   }
-  if (args.includes('--verify-only')) return verifyRegistry(packages)
+  if (args.includes('--verify-only')) return verifyRegistry(verification)
   const npm = [process.env.NPM_CLI_ENTRY, path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js'), path.resolve(path.dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js')].filter(Boolean).find(file => fs.existsSync(file))
   assert.ok(npm, 'npm-cli.js was not found; set NPM_CLI_ENTRY')
   const runNpm = rest => execFileSync(process.execPath, [npm, ...rest], { stdio: 'inherit', windowsHide: true })

@@ -63,7 +63,7 @@ Release 草稿生成时，发布器核对公共 SHA、tag、四包身份、版�
 
 本地默认只预检：node scripts/release/publish-npm.mjs --assets <附件目录>。--verify-only 检查 registry；--publish 只在 Actions 中可用。
 
-发布工作流的 `phase=publish` 提交原件，随后检查 registry 可见性。npm 接收上传后可能继续处理近一小时；版本或 latest 尚未就绪时，摘要明确显示 **Release pending registry processing**，安装与公开草稿步骤均跳过。工作流这一阶段成功不代表版本已完成发布。
+发布工作流的 `phase=publish` 提交四包原件，随后检查主包、检索和完整版的 registry 可见性。npm 接收上传后可能继续处理近一小时；必需三包的版本或 latest 尚未就绪时，摘要显示 **Release pending registry processing**，安装与公开草稿步骤跳过。桌宠独立处理，不轮询它来阻塞主发布；发布说明必须明确未等待桌宠 registry 安装验证。上传完成不等于必需三包已完成发行验证。
 
 确认版本已可见后，以同一标签运行 `phase=verify`：
 
@@ -71,7 +71,7 @@ Release 草稿生成时，发布器核对公共 SHA、tag、四包身份、版�
 gh workflow run v8-npm-publish.yml --ref v8 -f release_tag=scriptor-v8.2.0 -f phase=verify
 ```
 
-verify 阶段不运行 npm publish、不携带 npm token，只核对原件、registry 与安装。四包的版本、latest 和 SHA512 都通过后才进入独立安装验收，最后公开草稿。哈希不符、HTTP 错误或安装失败仍使流程失败；不通过重复上传或提前公开处理等待状态。新 Release 展示标题统一为 `DSH Scriptor v<version>`，Git 标签仍为 `scriptor-v<version>`。
+verify 阶段不运行 npm publish、不携带 npm token。四包附件及 manifest 仍完整校验；registry 核对通过 `--exclude-companion` 只检查主包、检索、完整版的版本、latest 与 SHA512，再对这三包做独立 registry 安装验收，成功才公开草稿。任何必需包缺失、哈希不符、HTTP 错误或安装失败仍使流程失败。该排除选项不能用于上传模式，已提交的桌宠不重传。新 Release 标题为 `DSH Scriptor v<version>`，标签仍为 `scriptor-v<version>`。
 
 CI 的分片、诊断与历史失败分析见 [CI 维护说明](ci.md)。
 
