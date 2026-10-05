@@ -5,13 +5,39 @@ import os from 'node:os'
 import path from 'node:path'
 import zlib from 'node:zlib'
 import { createHash } from 'node:crypto'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { once } from 'node:events'
-import { validateReleaseAssets, registryStatus, registryReadiness } from '../publish-npm.mjs'
+import { validateReleaseAssets, registryStatus, registryReadiness, packagesToVerify } from '../publish-npm.mjs'
 import { checkPublishableManifest, checkMetaPackage } from '../tar.mjs'
 import { root } from '../version.mjs'
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex')
+
+test('optional companion is never polled; writing packages still gate readiness and integrity', async () => {
+  const names = ['', '-retrieval', '-full', '-companion'].map(suffix => '@linfengqaqtat/dsh-scriptor' + suffix)
+  const packages = names.map(name => ({ name, version: '8.2.0', integrity: 'sha512-original' }))
+  assert.equal(packagesToVerify(packages).length, 4)
+  const required = packagesToVerify(packages, true)
+  assert.deepEqual(required.map(pkg => pkg.name), names.slice(0, 3))
+  const lookedUp = []
+  const metadata = { 'dist-tags': { latest: '8.2.0' }, versions: { '8.2.0': { dist: { integrity: 'sha512-original' } } } }
+  const ready = await registryReadiness(required, async name => { assert.notEqual(name, names[3]); lookedUp.push(name); return metadata })
+  assert.equal(ready.ready, true)
+  assert.deepEqual(lookedUp, names.slice(0, 3))
+  for (const missing of names.slice(0, 3)) {
+    const result = await registryReadiness(required, async name => name === missing ? undefined : metadata)
+    assert.deepEqual(result, { ready: false, pending: [missing + '@8.2.0'] })
+  }
+  await assert.rejects(registryReadiness(required, async () => ({ versions: { '8.2.0': { dist: { integrity: 'wrong' } } } })), /different bytes/)
+})
+
+test('companion exclusion cannot relax upload or dry-run validation', () => {
+  for (const mode of [[], ['--publish']]) {
+    const run = spawnSync(process.execPath, [path.join(root, 'scripts/release/publish-npm.mjs'), '--assets', root, ...mode, '--exclude-companion'], { encoding: 'utf8', windowsHide: true })
+    assert.notEqual(run.status, 0)
+    assert.match(run.stderr, /only allowed for registry verification/)
+  }
+})
 const version = '8.0.0'
 const commit = 'a'.repeat(40)
 const publishConfig = { access: 'public', tag: 'latest', registry: 'https://registry.npmjs.org/' }
