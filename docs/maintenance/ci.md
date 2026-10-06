@@ -7,6 +7,10 @@
 - `v8-required` 必须同时等待 policy 和全部 Windows 分片成功。Linux 运行时观察任务继续保留。
 - 标签发行运行一次完整根测试，再打包并验收同一批安装包。根测试覆盖所有包，不能再次串行跑相同的包测试。`ci-workflows.test.mjs` 使用真实 Vitest 文件发现与分片器核对完整性。
 
+## 依赖公告修补（2026-10-06）
+
+Pages 发布前的 audit 命中 `source-map-js` 的高危公告 [GHSA-68fv-2mgg-jv7q](https://github.com/advisories/GHSA-68fv-2mgg-jv7q)。该依赖来自 Vitest → Vite → PostCSS。工作区为 `<1.2.2` 增加精确 `1.2.2` 覆盖并更新锁文件，避免继续解析到有漏洞的版本；未降低 audit 门槛，也未更改产品包版本。修补后重新执行冻结安装、构建与测试。
+
 ## 历史失败复盘（2026-10-04）
 
 审查范围为当时可获取的 56 次 v8 CI、14 次 Release、7 次 npm 工作流，并检查失败后重跑成功的早期 attempt。
