@@ -1,0 +1,59 @@
+name: v8 Pages
+on:
+  push:
+    branches: [v8]
+    paths:
+      - 'docs/user/**'
+      - 'site/**'
+      - 'packages/bundle/package.json'
+      - 'dsh-baseline.json'
+      - '.github/workflows/v8-pages.yml'
+  pull_request:
+    branches: [v8]
+    paths:
+      - 'docs/user/**'
+      - 'site/**'
+      - 'packages/bundle/package.json'
+      - 'dsh-baseline.json'
+      - '.github/workflows/v8-pages.yml'
+permissions:
+  contents: read
+concurrency:
+  group: v8-pages-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    name: pages-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.27.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24.15.0'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node site/build.mjs --strict
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        with:
+          path: .tmp/pages
+  deploy:
+    name: pages-deploy
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5

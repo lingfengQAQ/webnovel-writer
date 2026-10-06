@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const rootFiles = new Set(['.gitattributes', '.gitignore', '.npmrc', '.node-version', 'LICENSE', 'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'SECURITY.md', 'CODE_OF_CONDUCT.md', 'dsh-baseline.json', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'tsconfig.base.json', 'vitest.config.ts', 'eslint.config.mjs'])
 export function checkPublicPath(file) {
   assert.ok(!file.includes('\\') && !file.includes(':') && !file.startsWith('/') && !file.split('/').includes('..'), `Unsafe public path: ${file}`)
-  assert.ok(rootFiles.has(file) || /^(packages|scripts\/release|docs\/(user|maintenance)|examples|\.github)\//.test(file)
+  assert.ok(rootFiles.has(file) || /^(packages|scripts\/release|docs\/(user|maintenance)|examples|site|\.github)\//.test(file)
     || /^docs\/(development|book-format)\.md$/.test(file) || /^scripts\/(benchmark-(derive|impact|search)|strip-types-loader)\.mjs$/.test(file), `File outside public allowlist: ${file}`)
   assert.ok(!/(^|\/)(\.trellis|\.credentials[^/]*|session[^/]*\.jsonl|node_modules|\.env(?:\..*)?|\.webnovel)(\/|$)/.test(file), `Private content path: ${file}`)
   assert.notEqual(file, 'packages/bundle/dsh-local.yml', 'Local instance config is private')

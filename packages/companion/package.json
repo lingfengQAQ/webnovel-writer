@@ -1,6 +1,7 @@
 {
   "name": "@linfengqaqtat/dsh-scriptor-companion",
   "version": "8.2.0",
+  "homepage": "https://lingfengqaq.github.io/webnovel-writer/",
   "description": "鲸鱼娘桌宠：DSH 窗口内的写作陪伴",
   "type": "module",
   "main": "./lib/index.js",

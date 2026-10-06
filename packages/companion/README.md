@@ -1,5 +1,7 @@
 # 鲸鱼娘桌宠
 
+[产品主页](https://lingfengqaq.github.io/webnovel-writer/) · [安装教程](https://lingfengqaq.github.io/webnovel-writer/docs/install.html)
+
 独立 DSH 插件，在窗口内陪你写作。可单独安装，也可与 DSH Scriptor 小说插件一起使用。
 
 8.2.0 为同批兼容发行，桌宠功能没有新增变化。桌宠独立可选，不包含在 full 中；未使用桌宠的用户无需因主包升级而安装它。
