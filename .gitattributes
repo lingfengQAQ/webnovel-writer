@@ -11,6 +11,8 @@
 *.sh text eol=lf
 *.txt text eol=lf
 *.css text eol=lf
+*.srt text eol=lf
+*.vtt text eol=lf
 LICENSE text eol=lf
 .gitattributes text eol=lf
 .gitignore text eol=lf

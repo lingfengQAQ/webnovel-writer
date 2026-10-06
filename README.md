@@ -1,8 +1,10 @@
 # DSH Scriptor · Webnovel Writer v8
 
+**[🌐 产品主页](https://lingfengqaq.github.io/webnovel-writer/) · [📖 新手教程](https://lingfengqaq.github.io/webnovel-writer/docs/beginner.html) · [下载正式版](https://github.com/lingfengQAQ/webnovel-writer/releases/latest)**
+
 > Scriptor 8.2.0 正式版配套 **DSH 0.2.0-rc.2**，三个功能插件与完整版均为 8.2.0。旧版升级先备份，参阅安装与升级说明。
 
-基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的长篇小说写作工作台。把构想、设定、大纲、写章、审读、修改、定稿、记忆与导出放进一个能够暂停和继续的工作流程，作品以本地文件保存。
+基于 [DeepSeek Harness](https://www.deepseek.com/harness/) 的长篇小说写作工作台。把构想、设定、大纲、写章、审读、修改、定稿、记忆与导出放进一个能够暂停和继续的工作流程，作品以本地文件保存。
 
 **正式版：8.2.0。** Windows 首发；重要作品使用前请备份。模型服务由你配置，调用可能产生费用。
 
@@ -82,7 +84,7 @@ Scriptor 将长篇小说的生产拆分为**作品设计**与**章节闭环**两
 2. 输入 `@linfengqaqtat/dsh-scriptor@8.2.0`，核对预览并安装，按提示应用变更。
 3. 配置聊天模型与凭据，选择作品工作区，按 [第一本书与第一章](docs/user/first-book.md) 开始。
 
-逐步说明见 [安装教程](docs/user/install.md) 和 [新手图文教程](docs/user/beginner.md)。正式版发布到 npm latest，教程使用精确版本便于核对宿主。
+逐步说明见 [安装教程](docs/user/install.md) 和 [新手教程](docs/user/beginner.md)。正式版发布到 npm latest，教程使用精确版本便于核对宿主。
 
 | 可选插件 | 安装标识 | 用途 |
 | --- | --- | --- |
@@ -96,7 +98,7 @@ Scriptor 将长篇小说的生产拆分为**作品设计**与**章节闭环**两
 
 ## 文档
 
-- [新手图文教程：从安装到第一章](docs/user/beginner.md)
+- [新手教程：从安装到第一章](docs/user/beginner.md)
 - [新编辑器：选区改写、批注、采纳与保存](docs/user/editor.md)
 - [界面与按钮参考](docs/user/ui-reference.md) · [增强索引操作指南](docs/user/enhanced-index.md)
 - [参考小说分析](docs/user/reference-analysis.md)
@@ -106,6 +108,14 @@ Scriptor 将长篇小说的生产拆分为**作品设计**与**章节闭环**两
 - [模型费用、数据流与隐私](docs/user/privacy.md)
 - [从源码构建](docs/development.md) · [书仓格式与修改边界](docs/book-format.md)
 - [贡献与 PR 规范](CONTRIBUTING.md) · [发行规范](docs/maintenance/releasing.md) · [更新记录](CHANGELOG.md)
+
+## 赞助与交流
+
+欢迎在 [Discussions](https://github.com/lingfengQAQ/webnovel-writer/discussions) 交流使用体验。不便公开的交流或合作事宜，可以发邮件到 [ksdflisjdf@gmail.com](mailto:ksdflisjdf@gmail.com)。
+
+### 赞助商与广告合作
+
+欢迎支持项目的持续维护，也欢迎洽谈 README 赞助商展示与广告合作。有意合作请通过上述邮箱介绍品牌或产品、希望展示的内容及合作周期，具体形式另行沟通。合作展示会明确标注为赞助或广告。
 
 ## 反馈与许可证
 

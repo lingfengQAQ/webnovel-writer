@@ -1,5 +1,7 @@
 # Webnovel 嵌入 API 提供方
 
+[产品主页](https://lingfengqaq.github.io/webnovel-writer/) · [检索配置教程](https://lingfengqaq.github.io/webnovel-writer/docs/enhanced-index.html)
+
 > Scriptor 8.2.0 正式版配套 **DSH 0.2.0-rc.2**，三个功能插件与完整版均为 8.2.0。旧版升级先备份，参阅安装与升级说明。
 
 当前版本 8.2.0，GPL-3.0-only。本版适配 DSH 0.2.0-rc.2 的原生 profile 配置表单，保留嵌入、场景识别和重排的独立开关、凭据隔离与请求取消。

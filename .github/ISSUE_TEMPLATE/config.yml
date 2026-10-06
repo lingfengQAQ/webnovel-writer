@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: 产品主页与使用文档
+    url: https://lingfengqaq.github.io/webnovel-writer/
+    about: 安装、模型配置和写作教程请先查看产品站点。
   - name: 使用交流
     url: https://github.com/lingfengQAQ/webnovel-writer/discussions
     about: 使用问题和创作交流请到 Discussions。

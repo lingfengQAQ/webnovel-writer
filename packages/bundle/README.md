@@ -1,5 +1,7 @@
 # Webnovel Writer · 网文写作工作台
 
+[产品主页](https://lingfengqaq.github.io/webnovel-writer/) · [新手教程](https://lingfengqaq.github.io/webnovel-writer/docs/beginner.html)
+
 > Scriptor 8.2.0 正式版配套 **DSH 0.2.0-rc.2**，三个功能插件与完整版均为 8.2.0。旧版升级先备份，参阅安装与升级说明。
 
 DSH 插件 `@linfengqaqtat/dsh-scriptor`，包含工作台、11 个写作技能和七个脚本入口。
