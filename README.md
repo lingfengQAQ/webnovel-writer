@@ -30,6 +30,38 @@
 
 ## 赞助与支持
 
+<a href="https://www.aiyoyoo.com/register?aff=3BGQET3SVUJS" target="_blank"><img src="docs/assets/sponsors/crazytoken-banner.png" alt="CrazyToken · 全模型服务，直省 95%" width="728"/></a>
+
+#### Webnovel Writer × CrazyToken | 接入全球顶级大模型，为你的长篇连载创意保驾护航
+
+❤️ 感谢 **[CrazyToken](https://www.aiyoyoo.com/register?aff=3BGQET3SVUJS)** 对 Webnovel Writer 的赞助支持！
+
+全模型 0.5 折起 | 满血稳定 | 极速出稿
+
+- 💰 **【击穿底价】最低 0.05x 倍率，直省 95% 创作成本**
+
+  全模型低至 0.05x 倍率，仅为官方定价的 5%；token 级账单透明可查，无隐形消费，百万字长篇成本可忽略，日更万字无压力。
+
+- 🧠 **【全模型支持】支持全球主流模型**
+
+  支持 Claude、GPT、Gemini、Kimi、GLM、DeepSeek、Qwen、Grok 等全系主流模型，大纲构思、正文续写、爽点打磨、润色改稿，针对不同环节选择最合适的模型。
+
+- ✨ **【满血输出】官方原生通道，拒绝掺水降智**
+
+  官方原生接入，不掺水、不混模、不压缩长上下文。
+
+- ⚡ **【极速出稿】秒级首字响应，高并发不限流**
+
+  企业级高并发专线，极速体验，支持多书同时创作、章节批量生成，高峰期不排队、不限流，写作节奏不中断。
+
+- 🎁 **【作者专属福利】注册即送 $20 额度，零门槛接入， 1对1远程配置服务**
+
+  通过 [**专属链接** ](https://www.aiyoyoo.com/register?aff=3BGQET3SVUJS)注册即送 $20 体验额度，充值额外加赠，长期连载更划算；提供独家1对1远程配置服务，全程真人协助，开箱即用。
+
+<a href="https://www.packyapi.ai/register?aff=pJpV" target="_blank"><img src="docs/assets/sponsors/packycode-banner.png" alt="PackyCode · 稳定高效的 API 中转服务，一句话接入主流大模型" width="728"/></a>
+
+感谢 [PackyCode](https://www.packyapi.ai/register?aff=pJpV) 赞助支持 Webnovel Writer！PackyCode 是一家稳定、高效的 API 中转服务商，一句话接入主流大模型。统一域名、统一密钥、智能容灾切换，97% 可用性。人民币 1:1 充值，无汇率无手续费坑，新用户首充立享折扣 + $1 免费体验额度，多分组折扣低至 2 折起，提供专属 Codex/Claude Code 高速通道。[点此链接注册](https://www.packyapi.ai/register?aff=pJpV)，立即开始使用！
+
 <a href="https://www.infistar.cc/register?aff=YBE8GGRE&ref_source=link" target="_blank"><img src="docs/assets/sponsors/infistar-banner.png" alt="Infistar.cc 无限星河 · 一站式全球大模型 API 服务平台" width="728"/></a>
 
 **Webnovel Writer × Infistar.cc 无限星河｜全模型 API · 助力长篇网文持续创作**
@@ -40,10 +72,6 @@
 - 🧠 **兼容 Claude Code 与主流模型**：支持 Claude、ChatGPT、Gemini、Kimi、GLM、DeepSeek 等模型，可灵活配置长篇写作、审查和辅助模型。
 - 📚 **助力记忆与知识库检索**：支持 Embedding、Rerank 等兼容 OpenAI 格式的接口，帮助角色设定、时间线、伏笔和章节内容持续沉淀，减少长篇创作中的遗忘与前后矛盾。
 - 🎁 **Webnovel Writer 用户专属福利**：通过 [专属推广链接](https://www.infistar.cc/register?aff=YBE8GGRE&ref_source=link) 注册并完成首次调用，即可领取 [5美元等值测试额度 / 首充专属优惠]，快速体验更稳定、更连贯的 AI 长篇创作流程！
-
-<a href="https://www.packyapi.ai/register?aff=pJpV" target="_blank"><img src="docs/assets/sponsors/packycode-banner.png" alt="PackyCode · 稳定高效的 API 中转服务，一句话接入主流大模型" width="728"/></a>
-
-感谢 [PackyCode](https://www.packyapi.ai/register?aff=pJpV) 赞助支持 Webnovel Writer！PackyCode 是一家稳定、高效的 API 中转服务商，一句话接入主流大模型。统一域名、统一密钥、智能容灾切换，97% 可用性。人民币 1:1 充值，无汇率无手续费坑，新用户首充立享折扣 + $1 免费体验额度，多分组折扣低至 2 折起，提供专属 Codex/Claude Code 高速通道。[点此链接注册](https://www.packyapi.ai/register?aff=pJpV)，立即开始使用！
 
 Webnovel Writer 用业余时间维护。如果它帮你省下了梳理设定、对齐伏笔的功夫，欢迎来信交流想法、反馈使用体验，或表达对项目的支持：
 
