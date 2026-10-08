@@ -52,6 +52,7 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" pla
 | Step 6 需要爽点 | 区段 | `${SKILL_ROOT}/../../references/shared/cool-points-guide.md` |
 | Step 6/7 需要冲突 | 区段 | `${SKILL_ROOT}/references/outlining/conflict-design.md` |
 | Step 6/7 特定节奏 | 区段 | `${SKILL_ROOT}/references/outlining/genre-volume-pacing.md` |
+| Step 7 always | 全文 | `${SKILL_ROOT}/../../templates/output/大纲-卷详细大纲.md` |
 | Step 7 追读力分析 | 区段 | `${SKILL_ROOT}/../../references/reading-power-taxonomy.md` |
 | Step 7 章纲细化 + 节点规范 | 区段 | `${SKILL_ROOT}/references/outlining/chapter-planning.md` |
 
@@ -139,9 +140,11 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" mem
 
 批次规则：默认 `10章/批`；复杂题材或多线并进降到 `8章/批`；简单升级流放宽到 `12章/批`；不建议单批超过 `12章`。
 
-按需读取 `${SKILL_ROOT}/../../references/reading-power-taxonomy.md` 与 `${SKILL_ROOT}/references/outlining/chapter-planning.md`。
+加载模板 `${SKILL_ROOT}/../../templates/output/大纲-卷详细大纲.md`，按需读取 `${SKILL_ROOT}/../../references/reading-power-taxonomy.md` 与 `${SKILL_ROOT}/references/outlining/chapter-planning.md`。
 
-每章必须包含：目标、阻力、代价、时间锚点、章内时间跨度、与上章时间差、倒计时状态、爽点、Strand、反派层级、视角/主角、关键实体、本章变化、章末未闭合问题、钩子，以及结构化节点 `CBN`、`CPNs`、`CEN`、`必须覆盖节点`、`本章禁区`。
+每章必须包含：目标、阻力、代价、时间锚点、章内时间跨度、与上章时间差、倒计时状态、爽点、Strand、反派层级、视角/主角、关键实体、本章变化、章末未闭合问题、钩子，以及结构化节点 `CBN`、`CPNs`、`CEN`、`必须覆盖节点`、`本章禁区`。字段名与顺序以模板为准，不得改名或重排——下游 `write` / `review` 与项目自定义检查按字段名定位。
+
+项目自定义字段：若项目已有额外必填栏（人物弧线落点、动机依据、信息状态等），统一追加在 `本章变化` 之后、`章末未闭合问题` 之前，全卷位置保持一致。生成新卷时，若同项目已存在上一卷详细大纲，必须先读取其任意一章，沿用它已有的自定义字段，不得丢失。
 
 #### 结构化节点
 
@@ -151,6 +154,9 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" mem
 
 - 每章固定 1 个 `CBN`、`2-4 个 CPN`、固定 1 个 `CEN`；`CPNs` 按时间顺序排列。
 - 相邻章节 `CEN -> 下一章 CBN` 必须逻辑承接（首章和末章除外）。
+- **相邻章不得重复同一场戏**：上一章 `目标` / `代价` / `本章变化` 里已经完成的事件，不得再作为下一章的 `CPN` 出现。写 `目标` 时尤其注意——`目标` 是自然语言，容易把下一章的节点顺带描述进去，写手照 `目标` 写就会把下一章的戏提前用掉。
+- **本章的 `目标` 必须在本章 `CPNs` 里有对应节点**。目标里提到而节点表里没有的事件，写手只能从结果倒推，是 OOC 与动机断裂的主要来源。
+- **客观等待期必须体现在时间字段里**：若某事需要等待（工期、路程、约定日期）才能完成，等待期内的章节不得执行需要等待完成后才能做的事。
 - `必须覆盖节点`最多 4 个，建议 `CBN + CEN + 1~2 个核心 CPN`；可选节点只作建议，不作 fail 主依据。
 - `本章禁区`不超过 5 条，只写本章绝对不能发生的硬禁区，不写风格类建议。
 - 向后兼容：旧项目章纲缺失上述字段时，下游流程正常执行，仅跳过结构化检查。
@@ -168,6 +174,14 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" mem
 ### Step 9：验证、保存并更新状态
 
 必须通过：节拍表 / 时间线表 / 详细大纲均存在且非空；每章时间字段齐全；时间线单调递增；倒计时推进正确；新设定已回写；`BLOCKER=0`；有节点时相邻章节 `CEN -> CBN` 无明显逻辑冲突且每章`必须覆盖节点`不超过 4 个。
+
+跨章状态接续检查（有节点时必须执行，逐对相邻章）：
+
+- 上一章 `目标` / `代价` / `本章变化` 里已完成的事件，未被下一章的 `CPN` 重复执行。
+- 每章 `目标` 中出现的事件，在本章 `CPNs` 里能找到对应节点。
+- 存在客观等待期时，等待期内的章节没有执行需要等待完成后才能做的事。
+
+任一项不通过时，修正章纲后重跑本步，不得带着重叠进入写作。
 
 验证全部通过后，生成显式结构化写回文件 `大纲/第{volume_id}卷-总纲写回.json`（只写规划中显式列出的伏笔 / 开放环，禁止从卷纲自由文本推断）：
 
