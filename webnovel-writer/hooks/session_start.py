@@ -29,8 +29,13 @@ def main() -> int:
     if _truthy(os.environ.get(DISABLE_ENV)):
         return 0
 
-    plugin_root = Path(os.environ.get("CLAUDE_PLUGIN_ROOT") or Path(__file__).resolve().parents[1])
-    workspace_root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    # OpenCode compat: check OPENCODE_PLUGIN_ROOT / OPENCODE_PROJECT_DIR as fallback
+    plugin_root = Path(
+        os.environ.get("CLAUDE_PLUGIN_ROOT")
+        or os.environ.get("OPENCODE_PLUGIN_ROOT")
+        or Path(__file__).resolve().parents[1]
+    )
+    workspace_root = os.environ.get("CLAUDE_PROJECT_DIR") or os.environ.get("OPENCODE_PROJECT_DIR") or os.getcwd()
     webnovel = plugin_root / "scripts" / "webnovel.py"
     if not webnovel.is_file():
         return 0
