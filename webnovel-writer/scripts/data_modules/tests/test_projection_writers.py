@@ -646,6 +646,9 @@ def test_memory_projection_closes_open_loop_without_reopening_on_replay(tmp_path
     assert retired[0].payload["urgency"] == 100.0
     assert retired[0].payload["planted_chapter"] == 5
     assert retired[0].payload["expected_payoff"] == "三年后兑现"
+    assert retired[0].payload["status"] == "resolved"
+    assert retired[0].payload["resolved_chapter"] == 28
+    assert retired[0].source_chapter == 5
 
     writer.apply(
         _commit_payload(
@@ -664,7 +667,7 @@ def test_memory_projection_closes_open_loop_without_reopening_on_replay(tmp_path
     assert store.query(category="open_loop", status="active") == []
 
 
-def test_memory_projection_same_commit_create_then_close_retires_loop(tmp_path):
+def test_memory_projection_same_commit_close_wins_and_spares_other_loops(tmp_path):
     cfg = DataModulesConfig.from_project_root(tmp_path)
     cfg.ensure_dirs()
     writer = MemoryProjectionWriter(tmp_path)
@@ -672,14 +675,18 @@ def test_memory_projection_same_commit_create_then_close_retires_loop(tmp_path):
         _commit_payload(
             chapter=8,
             accepted_events=[
-                _loop_event("open_loop_created", "黑棺来历"),
                 _loop_event("open_loop_closed", "黑棺来历"),
+                _loop_event("open_loop_created", "黑棺来历"),
+                _loop_event("open_loop_created", "神秘戒指"),
             ],
         )
     )
     store = ScratchpadManager(cfg)
-    assert store.query(category="open_loop", status="active") == []
-    assert len(store.query(category="open_loop", subject="黑棺来历", status="outdated")) == 1
+    assert [item.subject for item in store.query(category="open_loop", status="active")] == ["神秘戒指"]
+    retired = store.query(category="open_loop", subject="黑棺来历", status="outdated")
+    assert len(retired) == 1
+    assert retired[0].payload["status"] == "resolved"
+    assert retired[0].payload["resolved_chapter"] == 8
 
 
 def test_memory_projection_orphan_close_adds_no_active_loop(tmp_path):
