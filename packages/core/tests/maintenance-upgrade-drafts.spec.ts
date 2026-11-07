@@ -131,6 +131,7 @@ describe('paused chapter upgrade with local drafts', { timeout: 90000 }, () => {
   it('failed commit preserves local backups and resumes without rewriting; post-failure edits block', () => {
     init(false); const preview = plan(), head = git('rev-parse', 'HEAD')
     put('.git/hooks/pre-commit', '#!/bin/sh\nexit 1\n')
+    if (process.platform !== 'win32') fs.chmodSync(path.join(root!, '.git/hooks/pre-commit'), 0o755)
     expect(apply(preview.fingerprint!)).toMatchObject({ ok: false, state: 'written-pending-commit' })
     const current = read(draft), receipt = read(upgradeReceiptPath(preview.fingerprint!))
     expect(git('rev-parse', 'HEAD')).toBe(head)

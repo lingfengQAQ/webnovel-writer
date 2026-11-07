@@ -195,7 +195,7 @@ export const DOCUMENT_CONTRACTS: Readonly<Record<DocumentUnitId, DocumentContrac
   }),
   I27: contract('I27', {
     title: '连写批次声明', storage: 'protocol', encoding: 'json', implementation: 'declared-only', validation: 'not-implemented',
-    producers: [], consumers: [], fieldDefinitionSources: [ref('docs/story-repo-spec.md', '批次.json')],
+    producers: [], consumers: [], fieldDefinitionSources: [ref('docs/book-format.md', '批次.json')],
   }),
   I28: contract('I28', {
     title: '提案与裁决', storage: 'draft', encoding: 'markdown',

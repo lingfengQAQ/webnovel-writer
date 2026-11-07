@@ -12,6 +12,7 @@ import * as os from 'node:os'
 import { seedMinDesign, serializeDocument, writeCandidate, confirmOutline } from '../src/index'
 import { applyRevision, ingestAuthorRevision, replayLines } from '../src/revise'
 import { parseDocument } from '../src/repo/frontmatter'
+import { removeSync } from '../src/repo/remove'
 import { registerDefaultChecks, resetChecks, runReview, recordAuthorFinding, computeReview, ingestFindings } from '@webnovel/review'
 
 const roots: string[] = []
@@ -193,7 +194,9 @@ describe('M1:ingestAuthorRevision 原样落盘', () => {
   it('无待审稿 → 拒绝', () => {
     const root = mkBook()
     readyBook(root, BASE)
-    fs.rmSync(path.join(root, '草稿区/草稿/卷01-开篇任务'), { recursive: true, force: true })
+    const directory = path.join(root, '草稿区/草稿/卷01-开篇任务')
+    removeSync(directory)
+    expect(fs.existsSync(directory)).toBe(false)
     const r = ingestAuthorRevision(root, key, BASE)
     expect(r.ok).toBe(false)
   })

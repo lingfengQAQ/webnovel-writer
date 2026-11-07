@@ -134,7 +134,8 @@ describe('memory index filenames roundtrip through actual writers and catalogs',
   })
 
   it('does not add a suffix-based length restriction to existing authored filenames', () => {
-    const name = '甲'.repeat(100)
+    // Keep 100 characters while respecting POSIX's 255-byte filename limit.
+    const name = '甲'.repeat(60) + 'a'.repeat(40)
     const directory = path.join(root, '本书记忆')
     fs.mkdirSync(directory)
     fs.writeFileSync(path.join(directory, `${name}.md`), serializeDocument({ 类: '决策', 名称: name }, '已有作者原文。'), 'utf8')
