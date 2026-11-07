@@ -290,7 +290,8 @@ describe('F5:审稿哈希绑定', () => {
     // 作者导入完全不同的新稿
     const draftDir = nodePath.join(root, '草稿区/草稿/卷01-开篇任务')
     fs.writeFileSync(nodePath.join(draftDir, '稿2.md'), serializeDocument({ 角色: '待审稿', 选定: true, 生成模块: '作者手改' }, '完全重写的另一版正文,内容天差地别。'), 'utf-8')
-    fs.rmSync(nodePath.join(draftDir, '稿1.md'), { force: true })
+    fs.unlinkSync(nodePath.join(draftDir, '稿1.md'))
+    expect(fs.existsSync(nodePath.join(draftDir, '稿1.md'))).toBe(false)
     const scan = scanChapter(root, key)
     // 审核完成事实因哈希失配不再成立;叠加标记提示过期
     expect(scan.审核完成).toBe(false)
@@ -303,7 +304,8 @@ describe('F5:审稿哈希绑定', () => {
     setup(root, '沈青梧接印,查看城防。')
     const draftDir = nodePath.join(root, '草稿区/草稿/卷01-开篇任务')
     fs.writeFileSync(nodePath.join(draftDir, '稿2.md'), serializeDocument({ 角色: '待审稿', 选定: true }, '重写稿。'), 'utf-8')
-    fs.rmSync(nodePath.join(draftDir, '稿1.md'), { force: true })
+    fs.unlinkSync(nodePath.join(draftDir, '稿1.md'))
+    expect(fs.existsSync(nodePath.join(draftDir, '稿1.md'))).toBe(false)
     const facts = deriveFacts(root)
     expect(facts.建议.环节).toBe('审核')
   })

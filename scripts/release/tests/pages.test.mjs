@@ -259,7 +259,7 @@ test('site build renders every guide and keeps links inside the artifact', () =>
     const install = fs.readFileSync(path.join(out, 'docs/install.html'), 'utf8')
     assert.match(install, /href="beginner\.html"/)
     assert.match(install, /href="https:\/\/github\.com\/lingfengQAQ\/webnovel-writer\/blob\/v8\/docs\/maintenance\/cli-install\.md"/)
-    assert.match(install, /id="为什么要固定-dsh-版本"/)
+    assert.match(install, /id="dsh兼容范围与已验证版本"/)
     assert.match(install, /id="从单装切换为完整版"/)
     assert.doesNotMatch(install, /href="(?!https?:)[^"#]+\.md(#|")/, 'no raw .md links remain')
     // Every relative href/src in every page resolves inside the artifact.

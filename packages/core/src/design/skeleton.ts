@@ -10,6 +10,7 @@ import { writeFileAtomic, type FileOp } from '../repo/atomic'
 import { applyVersionFields, bumpVersion, initialVersion } from '../provenance'
 import { paths } from '../repo/paths'
 import { bookWriter } from '../repo/atomic'
+import { volumeAllocationConflict } from '../derive/design'
 
 function readTextOrNull(bookRoot: string, rel: string): string | null {
   try {
@@ -40,10 +41,11 @@ export function prepareDesignDoc(bookRoot: string, rel: string, body: string, �
     && serializeDocument({}, previous.body) === serializeDocument({}, body)) {
     return { relPath: rel, content: prevText!, result: { relPath: rel, 版本: prevVersion, 首次写入: false } }
   }
+  const { 来源快照: _unchangedSource, ...revision } = bumpVersion(prevVersion, 生成模块)
   const fields =
     prevText === null
       ? applyVersionFields(base, initialVersion(生成模块, null))
-      : applyVersionFields({ ...previous!.fields, ...base }, bumpVersion(prevVersion, 生成模块, null))
+      : { ...previous!.fields, ...base, ...revision }
   return { relPath: rel, content: serializeDocument(fields, body), result: { relPath: rel, 版本: Number(fields['版本']), 首次写入 } }
 }
 
@@ -52,6 +54,8 @@ export function prepareSkeleton(bookRoot: string, body: string) {
 }
 
 export function prepareVolumeLayout(bookRoot: string, body: string) {
+  const conflict = volumeAllocationConflict(body)
+  if (conflict) throw new Error(`${paths.分卷布局()}：${conflict}`)
   return prepareDesignDoc(bookRoot, paths.分卷布局(), body, '分卷更新')
 }
 

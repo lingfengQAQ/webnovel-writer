@@ -85,30 +85,46 @@ export function checkedIndexFile(root: string, relative: string): string {
 
 const checkedFile = checkedIndexFile
 
+/** Reads the raw persisted `auto` boolean if present in `.webnovel/finalized-search-state.json`, or `undefined` when omitted/absent. */
+export function readPersistedIndexAuto(root: string): boolean | undefined {
+  return readIndexDocument(root)?.auto
+}
+
 /** Kept outside the disposable SQLite cache so rebuilding it preserves user controls. */
 export function readIndexState(root: string): IndexSyncState {
+  const raw = readIndexDocument(root)
+  return raw ? { ...raw, auto: raw.auto ?? false } : emptyIndexState()
+}
+
+/** Both migration and normal state reads validate the same raw document. */
+function readIndexDocument(root: string): (Omit<IndexSyncState, 'auto'> & { readonly auto?: boolean }) | undefined {
   try {
     const filename = checkedFile(root, INDEX_STATE_PATH)
     if (fs.statSync(filename).size > 256 * 1024) throw new Error('oversize state')
-    const value = JSON.parse(fs.readFileSync(filename, 'utf8')) as IndexSyncState
-    if (!value || value.schema !== 1 || typeof value.auto !== 'boolean' || typeof value.paused !== 'boolean'
-      || !phases.includes(value.phase) || !Array.isArray(value.errors) || value.errors.length > 20
+    const raw = JSON.parse(fs.readFileSync(filename, 'utf8')) as Omit<IndexSyncState, 'auto'> & { readonly auto?: unknown }
+    if (!raw || raw.schema !== 1 || (raw.auto !== undefined && typeof raw.auto !== 'boolean') || typeof raw.paused !== 'boolean'
+      || !phases.includes(raw.phase) || !Array.isArray(raw.errors) || raw.errors.length > 20
       || ['generation', 'chapters', 'completedChapters', 'chunks', 'completedChunks', 'generated', 'reused', 'failed', 'attempt', 'maxRetries', 'updatedAt']
-        .some(key => !Number.isSafeInteger(value[key as keyof IndexSyncState]) || Number(value[key as keyof IndexSyncState]) < 0)) throw new Error('invalid state')
-    return value
+        .some(key => !Number.isSafeInteger(raw[key as keyof typeof raw]) || Number(raw[key as keyof typeof raw]) < 0)) throw new Error('invalid state')
+    return { ...raw, ...(typeof raw.auto === 'boolean' ? { auto: raw.auto } : { auto: undefined }) }
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return emptyIndexState()
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
     if (error instanceof SearchError) throw error
     throw new SearchError('index-state-error', '后台索引状态无法读取；保留原文件，请检查状态文件或权限')
   }
 }
 
 /** Caller holds the short book lock. Never writes source files or changes Git. */
-export function writeIndexState(root: string, value: IndexSyncState): void {
+export function writeIndexState(root: string, value: IndexSyncState, options?: { readonly omitAuto?: boolean }): void {
   const filename = checkedFile(root, INDEX_STATE_PATH)
+  const omitAuto = options?.omitAuto ?? (fs.existsSync(filename) && readPersistedIndexAuto(root) === undefined)
+  const payload = omitAuto ? (() => {
+    const { auto: _auto, ...rest } = value
+    return rest
+  })() : value
   const temp = `${filename}.${randomUUID()}.tmp`
   try {
-    fs.writeFileSync(temp, JSON.stringify(value) + '\n', { flag: 'wx', mode: 0o600 })
+    fs.writeFileSync(temp, JSON.stringify(payload) + '\n', { flag: 'wx', mode: 0o600 })
     checkedFile(root, INDEX_STATE_PATH)
     renameSync(temp, filename)
   } finally { try { fs.unlinkSync(temp) } catch { /* Renamed or not created. */ } }
@@ -124,14 +140,23 @@ export function invalidateIndexCache(root: string): void {
     lastError: undefined, notice: undefined, updatedAt: Date.now() })
 }
 
-export function changeIndexState(root: string, change: (state: IndexSyncState) => IndexSyncState): Promise<IndexSyncState> {
+export function changeIndexState(
+  root: string,
+  change: (state: IndexSyncState) => IndexSyncState,
+  options?: { readonly omitAuto?: boolean },
+): Promise<IndexSyncState> {
   try { if (!fs.statSync(root).isDirectory()) throw new Error('missing root') }
   catch { return Promise.reject(new SearchError('source-error', '书仓目录不存在或不可读取')) }
   return withBookLockAsync(root, async () => {
     const value = change(readIndexState(root))
-    writeIndexState(root, value)
+    writeIndexState(root, value, options)
     return value
   })
+}
+
+export async function stripPersistedIndexAuto(root: string): Promise<void> {
+  if (readPersistedIndexAuto(root) === undefined) return
+  await changeIndexState(root, state => state, { omitAuto: true })
 }
 
 function dead(pid: unknown): boolean {

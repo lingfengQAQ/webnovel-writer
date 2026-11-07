@@ -10,6 +10,7 @@ export async function checkAuxiliary({ book, bookId, main, service, execute, che
   const { LlmAdapter } = await load('@deepseek-ai/dsh-llm')
   const { credentialRef } = await load('@deepseek-ai/dsh-credentials')
   let sceneCalls = 0
+  const sceneInputs = []
   class SceneAdapter extends LlmAdapter {
     providerInfo(provider) { return { id: provider, name: '场景验收' } }
     async listModels() { return [{ id: 'scene-fixture', name: '场景验收模型' }] }
@@ -19,6 +20,7 @@ export async function checkAuxiliary({ book, bookId, main, service, execute, che
       assert.equal(options.purpose, undefined)
       assert.equal(options.sessionId, undefined)
       const paragraphs = JSON.parse(options.messages[0].content[0].text)
+      sceneInputs.push(paragraphs)
       const text = JSON.stringify({ ends: [paragraphs.length] })
       yield { type: 'block-start', index: 0, blockType: 'text' }
       yield { type: 'text-delta', index: 0, text }
@@ -53,7 +55,9 @@ export async function checkAuxiliary({ book, bookId, main, service, execute, che
       assert.ok(service('sceneSegmentation').current() === service('sceneSegmentation').current(), 'scene provider must remain stable without config changes')
       checkpoint('generate scenes')
       await manage('update')
+      checkpoint('generate scenes: update returned; waiting for ready')
       const state = await ready()
+      checkpoint('generate scenes: ready')
       assert.equal(state.scenes.completed, 2)
       assert.equal(state.scenes.fallback, 0)
       assert.equal(sceneCalls, 2)
@@ -62,14 +66,16 @@ export async function checkAuxiliary({ book, bookId, main, service, execute, che
       assert.ok(!cached.includes('林舟'))
       checkpoint('rebuild with cached scenes')
       await manage('rebuild')
+      checkpoint('rebuild with cached scenes: rebuild returned; waiting for ready')
       await ready()
+      checkpoint('rebuild with cached scenes: ready')
       assert.equal(sceneCalls, 2)
       assert.equal(fs.readFileSync(cachePath, 'utf8'), cached)
       checkpoint('rescan chapter scenes')
       const reset = await execute(main, 'novel_index_manage', { bookId, action: 'rescan-scenes', chapter: 1 })
       assert.equal(reset.value.ok, true, JSON.stringify(reset))
       await ready()
-      assert.equal(sceneCalls, 3)
+      assert.equal(sceneCalls, 3, JSON.stringify(sceneInputs))
       checkpoint('enable reranking')
       await service('credentials').set(credentialRef('WEBNOVEL_RERANK_FIXTURE'), 'rerank-fixture-key')
       await settings.update('webnovel-reranking', { enabled: true, endpoint: 'http://127.0.0.1:' + api.address().port + '/rerank',

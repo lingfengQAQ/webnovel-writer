@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { Pause, Play, RefreshCw, RotateCcw } from 'lucide-react'
+import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { Button, DisclosureRow, Input, StateDot, type StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { IndexAction } from '@webnovel/core'
 import type { IndexView } from '../indexing/manager'
 import type { StudyShelf } from '../study/types'
@@ -8,6 +8,11 @@ import { mainSessionOf } from './host'
 import { callStudy } from './api'
 import { useStudy } from './hooks'
 import { createIndexSelection, isNewerIndexView, type IndexSelection } from './index-state'
+import { IconActivity, IconPause, IconPlay, IconRebuild, IconRefresh, IconWarning, IconSettings } from './icons'
+import { SelectMenu } from './select-menu'
+import { HintTooltip } from './tooltip'
+import { openPluginSettings } from './plugin-nav'
+import { preferencesFor } from './preferences'
 
 const TAB_ID = '@webnovel/bundle/index'
 const TAB_KIND = 'webnovel-index'
@@ -15,9 +20,19 @@ const labels: Record<IndexView['phase'], string> = {
   disabled: '自动更新已关闭', unconfigured: '等待配置嵌入模型', queued: '等待后台处理', scanning: '正在校准定稿',
   scenes: '正在识别场景', embedding: '正在生成向量', retrying: '等待自动重试', paused: '已暂停', ready: '索引已同步', failed: '索引需要处理',
 }
+const dots: Record<IndexView['phase'], StateDotState> = {
+  disabled: 'idle', unconfigured: 'warning', queued: 'ongoing', scanning: 'ongoing', scenes: 'ongoing', embedding: 'ongoing',
+  retrying: 'warning', paused: 'idle', ready: 'done', failed: 'error',
+}
 export type OpenIndex = (sessionId: string, space?: string) => void
 
-function IndexPanel({ sessionId, selection }: { sessionId: string; selection: IndexSelection }) {
+function IndexDetails({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const toggle = useCallback(() => setOpen(value => !value), [])
+  return <DisclosureRow className="nw-index-details" icon={icon} title={title} open={open} expandable expandOnRowClick onToggle={toggle}>{children}</DisclosureRow>
+}
+
+function IndexPanel({ sessionId, selection, host }: { sessionId: string; selection: IndexSelection; host: ClientHost }) {
   const chosen = useSyncExternalStore(selection.subscribe, () => selection.get(sessionId))
   const shelf = useStudy<StudyShelf>(sessionId, 'shelf')
   const books = shelf.value?.books.filter(book => !book.error) ?? []
@@ -93,19 +108,18 @@ function IndexPanel({ sessionId, selection }: { sessionId: string; selection: In
   const working = !!value && ['queued', 'scanning', 'scenes', 'embedding', 'retrying'].includes(value.phase)
   const remaining = value?.retryAt ? Math.max(0, Math.ceil((value.retryAt - Date.now()) / 1000)) : 0
   return <div className="webnovel nw-index">
-    <label className="nw-index-book"><span>作品</span><select aria-label="选择索引作品" value={space ?? ''} onChange={event => selection.choose(sessionId, event.target.value)}>
-      {books.map(book => <option key={book.id} value={book.id}>{book.name}</option>)}
-    </select></label>
+    <div className="nw-index-book"><span className="nw-index-book-label">作品</span><SelectMenu className="nw-index-book-select" label="选择索引作品" value={space ?? ''}
+      options={books.map(book => ({ value: book.id, label: book.name }))} onChange={id => selection.choose(sessionId, id)} />
+      <HintTooltip tip="打开检索设置" side="bottom"><button type="button" className="nw-icon" aria-label="打开检索设置" onClick={() => openPluginSettings(host, { kind: 'bundle', group: 'retrieval' })}><IconSettings size={16} /></button></HintTooltip></div>
     {shelf.error || error ? <p className="nw-error" role="alert">{shelf.error ?? error}</p> : null}
     {!space && !shelf.loading ? <p className="nw-empty">当前工作范围没有可用作品</p> : null}
     {space && !value ? <p className="nw-empty">正在读取索引状态…</p> : null}
     {value ? <>
-      <div className={`nw-index-status is-${value.phase}`} role="status"><span className="nw-index-dot" /><strong>{labels[value.phase]}</strong></div>
-      {!value.providerConfigured ? <p className="nw-index-help">请先在“设置 → 模型 → 嵌入模型”填写服务、模型、维度和凭据。</p> : null}
-      <label className="nw-index-auto"><input type="checkbox" checked={value.auto} disabled={busy} onChange={event => { void run(event.target.checked ? 'enable' : 'disable') }} />提交后自动更新</label>
-      <p className="nw-index-help">包含终端和其他编辑器的 Git 提交。后台更新不影响正文提交；关闭此页面后仍会继续。</p>
+      <div className={`nw-index-status is-${value.phase}`} role="status"><StateDot state={dots[value.phase]} /><strong>{labels[value.phase]}</strong></div>
+      {!value.providerConfigured ? <div className="nw-index-help"><p>尚未配置嵌入模型。</p><Button variant="outline" size="sm" onClick={() => openPluginSettings(host, { kind: 'row', rowId: 'webnovel-embeddings' })}>去配置嵌入模型</Button></div> : null}
+      <p className="nw-index-help">提交后自动更新{value.auto ? '已开启' : '已关闭'}，可在插件偏好中调整。后台更新不影响正文提交；关闭此页面后仍会继续。</p>
       <section className="nw-index-progress" aria-label="索引进度">
-        <div><strong>{value.completedChunks} / {value.chunks}</strong><span>片段已落库</span></div>
+        <div className="nw-index-progress-head"><strong>{value.completedChunks} / {value.chunks}</strong><span className="nw-index-progress-label">片段已落库</span></div>
         <progress aria-label="索引片段进度" value={value.completedChunks} max={Math.max(1, value.chunks)} />
         <p>{value.completedChapters} / {value.chapters} 章已完成</p>
         <dl><div><dt>本次生成</dt><dd>{value.generated}</dd></div><div><dt>复用</dt><dd>{value.reused}</dd></div><div><dt>待处理</dt><dd>{Math.max(0, value.chunks - value.completedChunks)}</dd></div></dl>
@@ -119,23 +133,23 @@ function IndexPanel({ sessionId, selection }: { sessionId: string; selection: In
         {value.notice ? <small>{value.notice.delivered ? '诊断已交给所属主会话' : value.notice.deliveryError ?? '诊断已保留，等待所属主会话接收'}</small> : null}
       </div> : null}
       <div className="nw-index-actions">
-        <button type="button" disabled={busy || working} onClick={() => { void run(value.phase === 'failed' || value.phase === 'unconfigured' ? 'retry' : 'update') }}><RefreshCw size={14} />{value.phase === 'failed' || value.phase === 'unconfigured' ? '立即重试' : '立即更新'}</button>
-        <button type="button" disabled={busy || !working && !value.paused} onClick={() => { void run(value.paused ? 'resume' : 'pause') }}>{value.paused ? <Play size={14} /> : <Pause size={14} />}{value.paused ? '继续' : '暂停'}</button>
-        <button type="button" disabled={busy || working} onClick={() => { void run('rebuild') }}><RotateCcw size={14} />重建向量</button>
+        <Button variant="outline" size="sm" icon={<IconRefresh size={14} />} disabled={busy || working} onClick={() => { void run(value.phase === 'failed' || value.phase === 'unconfigured' ? 'retry' : 'update') }}>{value.phase === 'failed' || value.phase === 'unconfigured' ? '立即重试' : '立即更新'}</Button>
+        <Button variant="outline" size="sm" icon={value.paused ? <IconPlay size={14} /> : <IconPause size={14} />} disabled={busy || !working && !value.paused} onClick={() => { void run(value.paused ? 'resume' : 'pause') }}>{value.paused ? '继续' : '暂停'}</Button>
+        <Button variant="outline" size="sm" icon={<IconRebuild size={14} />} disabled={busy || working} onClick={() => { void run('rebuild') }}>重建向量</Button>
       </div>
-      {value.sceneConfigured ? <div className="nw-index-actions"><label>重新识别章号 <input aria-label="重新识别章号" type="number" min={1} step={1} value={sceneChapter} placeholder="留空为全书" disabled={busy || working} onChange={event => setSceneChapter(event.target.value)} /></label>
-        <button type="button" disabled={busy || working} onClick={() => { void run('rescan-scenes') }}>重新识别场景</button></div> : null}
+      {value.sceneConfigured ? <div className="nw-index-actions"><label className="nw-index-scene">重新识别章号 <Input className="nw-index-scene-input" aria-label="重新识别章号" type="number" min={1} step={1} value={sceneChapter} placeholder="留空为全书" disabled={busy || working} onChange={event => setSceneChapter(event.target.value)} /></label>
+        <Button variant="outline" size="sm" disabled={busy || working} onClick={() => { void run('rescan-scenes') }}>重新识别场景</Button></div> : null}
       {pending ? <section className="nw-index-confirm" role="group" aria-label="确认索引操作">
         <p>{pending.action === 'rebuild'
           ? '重新生成《' + value.bookName + '》的全部定稿向量？场景边界将保留。'
           : '重新识别《' + value.bookName + '》' + (pending.chapter ? '第 ' + pending.chapter + ' 章' : '全书') + '的场景？将重新调用场景模型，并更新受影响的向量。'}</p>
-        <div className="nw-index-actions"><button type="button" disabled={busy} onClick={() => setConfirmation(undefined)}>取消</button>
-          <button type="button" disabled={busy || working} onClick={() => { if (pending.key === active.current) void run(pending.action, true, pending.chapter) }}>确认执行</button></div>
+        <div className="nw-index-actions"><Button variant="outline" size="sm" disabled={busy} onClick={() => setConfirmation(undefined)}>取消</Button>
+          <Button variant="primary" size="sm" disabled={busy || working} onClick={() => { if (pending.key === active.current) void run(pending.action, true, pending.chapter) }}>确认执行</Button></div>
       </section> : null}
-      {value.provider ? <dl className="nw-index-model"><div><dt>嵌入模型</dt><dd>{value.provider.model}</dd></div><div><dt>向量维度</dt><dd>{value.provider.dimensions}</dd></div></dl> : null}
+      {value.provider ? <dl className="nw-index-model"><div className="nw-index-model-row"><dt>嵌入模型</dt><dd>{value.provider.model}</dd></div><div className="nw-index-model-row"><dt>向量维度</dt><dd>{value.provider.dimensions}</dd></div></dl> : null}
       {value.head || value.indexedHead ? <div className="nw-index-version"><span>目标提交 {value.head?.slice(0, 8) ?? '未提交'}</span><span>已同步 {value.indexedHead?.slice(0, 8) ?? '尚未完成'}</span></div> : null}
-      {value.issues?.length ? <details className="nw-index-details"><summary>异常来源（{value.issues.length}）</summary><ul>{value.issues.map(issue => <li key={issue.path}>{issue.path}：{issue.message}</li>)}</ul></details> : null}
-      {value.errors.length ? <details className="nw-index-details"><summary>最近诊断（{value.errors.length}）</summary><ul>{[...value.errors].reverse().map((entry, index) => <li key={index}><time>{new Date(entry.at).toLocaleTimeString()}</time> · 尝试 {entry.attempt}<br />{entry.error.message}</li>)}</ul></details> : null}
+      {value.issues?.length ? <IndexDetails icon={<IconWarning size={14} />} title={'异常来源（' + value.issues.length + '）'}><ul className="nw-index-details-list">{value.issues.map(issue => <li key={issue.path}>{issue.path}：{issue.message}</li>)}</ul></IndexDetails> : null}
+      {value.errors.length ? <IndexDetails icon={<IconActivity size={14} />} title={'最近诊断（' + value.errors.length + '）'}><ul className="nw-index-details-list">{[...value.errors].reverse().map((entry, index) => <li key={index}><time>{new Date(entry.at).toLocaleTimeString()}</time> · 尝试 {entry.attempt}<br />{entry.error.message}</li>)}</ul></IndexDetails> : null}
     </> : null}
   </div>
 }
@@ -143,10 +157,21 @@ function IndexPanel({ sessionId, selection }: { sessionId: string; selection: In
 export function installIndexSidebar(host: ClientHost): OpenIndex {
   const selection = createIndexSelection()
   host.effect(() => () => selection.dispose(), 'webnovel: index view selection')
-  host.effect(() => host.sidebarRightTabs.register({ id: TAB_ID, kind: TAB_KIND, title: () => '检索索引',
-    guide: [{ id: TAB_ID, order: 51, title: () => '检索索引', description: () => '查看当前书的后台索引进度、重试和错误。' }] }), 'webnovel: index progress tab')
+  host.effect(() => {
+    const store = preferencesFor(host)
+    let previous: boolean | undefined, off = () => {}
+    const sync = () => {
+      const enabled = store.getSnapshot().value.showIndexGuideCard
+      if (previous === enabled) return
+      off(); previous = enabled
+      off = host.sidebarRightTabs.register({ id: TAB_ID, kind: TAB_KIND, title: () => '检索索引',
+        ...(enabled ? { guide: [{ id: TAB_ID, order: 51, title: () => '检索索引', description: () => '查看当前书的后台索引进度、重试和错误。' }] } : {}) })
+    }
+    const unsubscribe = store.subscribe(sync); sync()
+    return () => { unsubscribe(); off() }
+  }, 'webnovel: index progress tab')
   host.slots.inject('sidebar.right.pane.tab', () => host.slots.register({ name: 'sidebar.right.pane.tab', key: TAB_ID,
-    inject: (sessionId: string) => ({ sessionId, selection }) }, IndexPanel))
+    inject: (sessionId: string) => ({ sessionId, selection, host }) }, IndexPanel))
   return (sessionId, space) => {
     if (mainSessionOf(host) !== sessionId) return
     if (space) selection.choose(sessionId, space)

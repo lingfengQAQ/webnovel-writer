@@ -2,6 +2,7 @@ import type { ComponentType, ReactNode } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type { SessionInput } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 export interface SessionListRow {
   readonly cwd?: string
@@ -45,7 +46,7 @@ export interface ClientHost {
   }
   /** DSH 0.1.7 navigation service: select a session and show its conversation. */
   uiWorkspace: { openSession(target: string): void }
-  conversation: { input: { for(scope: object): { state: { getSnapshot(): { draft: string } }; setDraft(text: string): void } } }
+  conversation: { input: { for(scope: object): Pick<SessionInput, 'state' | 'setDraft' | 'insertReference' | 'focus'> } }
   effect(callback: () => (() => void), label?: string): unknown
   inject(names: readonly string[], callback: (context: ClientHost) => unknown): unknown
   get(name: string): unknown

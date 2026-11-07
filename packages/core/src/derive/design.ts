@@ -271,7 +271,15 @@ export function parseVolumeAllocations(分卷文: string): readonly VolumeAlloca
   const sections: Section[] = []
   const preambleRows: AllocationRow[] = []
   let current: Section | null = null
-  for (const line of 分卷文.split('\n')) {
+  let fence: { mark: string; length: number } | undefined
+  const visible = 分卷文.replace(/<!--[\s\S]*?(?:-->|$)/g, comment => comment.replace(/[^\r\n]/g, ''))
+  for (const line of visible.split('\n')) {
+    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line)
+    if (fence) {
+      if (marker && marker[1]![0] === fence.mark && marker[1]!.length >= fence.length && !marker[2]!.trim()) fence = undefined
+      continue
+    }
+    if (marker) { fence = { mark: marker[1]![0]!, length: marker[1]!.length }; continue }
     const section = sectionRe.exec(line.trim())
     if (section !== null) {
       const state = section[2]?.trim()
@@ -291,9 +299,9 @@ export function parseVolumeAllocations(分卷文: string): readonly VolumeAlloca
     if (current === null) preambleRows.push(entry)
     else current.rows.push(entry)
   }
-  const formal = sections.find((s) => s.name === '故事阶段分配')
-  const counted: readonly AllocationRow[] = formal !== undefined
-    ? formal.rows
+  const formal = sections.filter((s) => s.name === '故事阶段分配')
+  const counted: readonly AllocationRow[] = formal.length > 0
+    ? formal.flatMap(section => section.rows)
     : [...preambleRows, ...sections.flatMap((s) => s.rows)].filter((r) => r.行级状态 !== null)
   const byVol = new Map<number, AllocationRow[]>()
   for (const r of counted) {
@@ -304,7 +312,7 @@ export function parseVolumeAllocations(分卷文: string): readonly VolumeAlloca
   const out: VolumeAllocation[] = []
   for (const [卷, rows] of [...byVol.entries()].sort((a, b) => a[0] - b[0])) {
     const states = new Set(rows.map((r) => r.行级状态 ?? r.小节状态))
-    const levelConflict = formal !== undefined && rows.some(row => row.行级状态 !== null && row.小节状态 !== null && row.行级状态 !== row.小节状态)
+    const levelConflict = formal.length > 0 && rows.some(row => row.行级状态 !== null && row.小节状态 !== null && row.行级状态 !== row.小节状态)
     if (states.size > 1 || levelConflict) {
       for (const r of rows) out.push({ 卷, 名称: r.名称, 行级状态: r.行级状态, 小节状态: r.小节状态, 有效状态: null, 冲突: true })
     } else {
@@ -312,6 +320,14 @@ export function parseVolumeAllocations(分卷文: string): readonly VolumeAlloca
     }
   }
   return out
+}
+
+/** Share the same actionable conflict explanation between preparation and inspection. */
+export function volumeAllocationConflict(text: string): string | undefined {
+  const rows = parseVolumeAllocations(text).filter(row => row.冲突)
+  if (!rows.length) return undefined
+  const details = [...new Set(rows.map(row => `卷${pad(row.卷)}（卷行：${row.行级状态 ?? '未标注'}；小节：${row.小节状态 ?? '未标注'}）`))]
+  return `分卷布局存在冲突的状态标注：${details.join('、')}。请核对小节、卷行及同卷重复项；各卷状态不同时，小节可不标状态，由卷行分别声明`
 }
 
 /** `- 名称 〔状态〕` 或 `## 名称 〔状态〕`。 */

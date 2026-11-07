@@ -31,18 +31,41 @@ export async function checkNativeWrites({ root, book, main, ctx, service, execut
   const contractPath = '作品契约/契约.md'
   const skeletonPath = '大纲/故事骨架.md'
   const outline = '# 卷纲\n\n## 叙事结构\n开篇\n\n## 弧线\n成长\n\n## 线索推进\n伏笔\n\n## 卷末兑现\n兑现\n'
+  const metadata = {
+    版本: 2, 父版本: 1, 状态: '已确认', 生成模块: '作者手改', 扩展字段: '原样保留',
+    来源: '作者对谈', 来源引用: ['作品契约/契约.md@1'],
+    来源快照: { 契约: '作品契约/契约.md@1', 注记: ['保留原证据'] },
+    作者扩展: { 空值: null, 空文本: '', 空列表: [] },
+  }
+  const volumeCases = [
+    ['novel_confirm_volume_outline', '大纲/卷规划/卷01/卷纲.md', { 卷: 1, 目标: '卷纲', 正文: outline }, '# 旧卷纲\n', '卷纲确认'],
+    ['novel_confirm_volume_outline', '大纲/卷规划/卷01/计划时间线.md', { 卷: 1, 目标: '计划时间线', 正文: '# 计划时间线\n\n## 窗口覆盖\n\n- 三日后重返旧宅\n\n## 窗口外锚点\n\n- 卷末查明真相\n' }, '# 旧计划时间线\n', '计划时间线确认'],
+  ]
+  const versionedCases = [
+    ['novel_update_skeleton', skeletonPath, { 正文: '# 新故事骨架\n' }, '# 旧骨架', '骨架更新'],
+    ['novel_update_volume_layout', '大纲/分卷布局.md', { 正文: '# 新分卷布局\n' }, '# 旧布局', '分卷更新'],
+    ...volumeCases,
+  ]
+  const worldbookPath = '世界书/人物档案/原生主角.md'
+  const worldbookIdentity = { 模块: '人物档案', 名称: '原生主角' }
+  const worldbookArgs = { ...worldbookIdentity, 正文: '# 新人物正文\n\n计划寻找旧宅。\n' }
+  const worldbookMetadata = { ...metadata, 名称: '原生主角', 类型: '人物', 性质: '计划', 别名: ['旧称', '小名'] }
+  const worldbookTail = '### 事实@第0001章\r\n来源：定稿/卷01/0001-初遇.md\r\n\r\n主角已经抵达渡口。  \r\n\r\n```md\r\n### 事实@第0999章\r\n```\r\n\r\n'
+  const factTail = value => {
+    const index = value.indexOf('### 事实@第0001章')
+    assert.ok(index >= 0, 'worldbook fixture retains its first fact heading')
+    return value.slice(index)
+  }
+  const worldbookCase = ['novel_confirm_worldbook_entry', worldbookPath, worldbookArgs]
   try {
     await check('七类设计文件复用原生观察与 design 提交', async () => {
       const cases = [
         ['novel_update_contract', contractPath, contract, core.contractTemplate({
           '叙事方式与文风基调': { state: '已确认', body: '作者保留的文风约定' },
         }, { 书id: bookId, 扩展字段: '原样保留' })],
-        ['novel_update_skeleton', skeletonPath, { 正文: '# 新故事骨架\n' }, core.serializeDocument({ 版本: 2, 父版本: 1, 状态: '已确认', 扩展字段: '原样保留' }, '# 旧骨架')],
-        ['novel_update_volume_layout', '大纲/分卷布局.md', { 正文: '# 新分卷布局\n' }, core.serializeDocument({ 版本: 2, 父版本: 1, 状态: '已确认', 扩展字段: '原样保留' }, '# 旧布局')],
-        ['novel_confirm_volume_outline', '大纲/卷规划/卷01/卷纲.md', { 卷: 1, 目标: '卷纲', 正文: outline }, '# 旧卷纲\n'],
-        ['novel_confirm_volume_outline', '大纲/卷规划/卷01/计划时间线.md', { 卷: 1, 目标: '计划时间线', 正文: '# 新计划时间线\n' }, '# 旧计划时间线\n'],
+        ...versionedCases.map(([name, relative, args, body]) => [name, relative, args, core.serializeDocument(metadata, body)]),
         ['novel_roll_window', '大纲/卷规划/卷01/近期窗口.md', { 卷: 1, action: '追加', 名称: '新窗口任务' }, '# 近期窗口\n\n- 旧任务 〔可进入〕\n'],
-        ['novel_confirm_worldbook_entry', '世界书/人物档案/原生主角.md', { 模块: '人物档案', 名称: '原生主角', 类型: '人物', 性质: '计划', 状态: '已确认', 来源: '作者对谈', 正文: '# 新人物正文\n' }, '# 旧人物正文\n'],
+        [...worldbookCase, `${core.serializeDocument(worldbookMetadata, '# 旧人物正文\n').replace(/\n/g, '\r\n')}\r\n${worldbookTail}`],
       ]
       for (const [, relative, , content] of cases) put(relative, content)
       put('世界书/模块声明.md', '# 模块声明\n\n作者保留说明。\n')
@@ -77,12 +100,44 @@ export async function checkNativeWrites({ root, book, main, ctx, service, execut
       assert.match(text(contractPath), /作者保留的文风约定/)
       assert.match(text(contractPath), /书id: loader-book/)
       assert.match(text(contractPath), /扩展字段: 原样保留/)
-      for (const relative of [skeletonPath, '大纲/分卷布局.md']) {
-        assert.equal(core.parseDocument(text(relative)).data.fields.版本, 3)
-        assert.equal(core.parseDocument(text(relative)).data.fields.父版本, 2)
-        assert.match(text(relative), /扩展字段: 原样保留/)
+      for (const [name, relative, args, , generator] of versionedCases) {
+        const saved = text(relative)
+        assert.deepEqual(core.parseDocument(saved).data.fields, { ...metadata, 版本: 3, 父版本: 2, 生成模块: generator })
+        assert.equal(core.parseDocument(saved).data.body, args.正文)
+        const beforeHead = head()
+        const count = writes.length
+        const replay = await call(name, args)
+        assert.equal(replay.ok, true, JSON.stringify(replay))
+        assert.equal(replay.commitState, 'unchanged')
+        assert.equal(writes.length, count + 1, relative)
+        assert.equal(writes.at(-1).result.isError, false, relative)
+        assert.equal(text(relative), saved)
+        assert.equal(head(), beforeHead)
       }
-      report.nativeWriteGuards = { targets: cases.length, unreadRejected: cases.length, observedCommitted: cases.length }
+      const worldbookSaved = text(worldbookPath)
+      assert.deepEqual(core.parseDocument(worldbookSaved).data.fields, worldbookMetadata)
+      assert.equal(factTail(worldbookSaved), worldbookTail)
+      assert.ok(core.parseDocument(worldbookSaved).data.body.startsWith(worldbookArgs.正文))
+      const aliasUpdate = await call('novel_confirm_worldbook_entry', { ...worldbookIdentity, 别名: '新别名' })
+      assert.equal(aliasUpdate.ok, true, JSON.stringify(aliasUpdate))
+      const withAlias = text(worldbookPath)
+      assert.deepEqual(core.parseDocument(withAlias).data.fields, { ...worldbookMetadata, 别名: '新别名' })
+      assert.equal(core.parseDocument(withAlias).data.body, core.parseDocument(worldbookSaved).data.body)
+      assert.equal(factTail(withAlias), worldbookTail)
+      const worldbookHead = head()
+      const worldbookWrites = writes.length
+      const worldbookReplay = await call('novel_confirm_worldbook_entry', worldbookIdentity)
+      assert.equal(worldbookReplay.ok, true, JSON.stringify(worldbookReplay))
+      assert.equal(worldbookReplay.commitState, 'unchanged')
+      assert.equal(writes.length, worldbookWrites + 1)
+      assert.equal(writes.at(-1).result.isError, false)
+      assert.equal(text(worldbookPath), withAlias)
+      assert.equal(head(), worldbookHead)
+      report.nativeWriteGuards = {
+        targets: cases.length, unreadRejected: cases.length, observedCommitted: cases.length,
+        versionedMetadataPreserved: versionedCases.length, unchangedNativeWrites: versionedCases.length,
+        worldbookHistoryPreserved: true, worldbookAliasOnlyUpdate: true, worldbookUnchangedNativeWrite: true,
+      }
       const audits = fs.readdirSync(path.join(book, '.webnovel/operations'))
         .map(file => JSON.parse(fs.readFileSync(path.join(book, '.webnovel/operations', file), 'utf8')))
       for (const [, relative] of cases) {
@@ -130,6 +185,56 @@ export async function checkNativeWrites({ root, book, main, ctx, service, execut
         assert.doesNotMatch(text(contractPath), /竞争写入不得落盘/)
         assert.equal(head(), beforeRace)
       } finally { offRace() }
+
+      for (const [name, relative, volumeArgs] of [...volumeCases, worldbookCase]) {
+        await read(relative)
+        const priorText = text(relative)
+        const previous = core.parseDocument(priorText).data
+        const externalFields = { ...previous.fields, 外部注记: '作者刚保存的设计批注' }
+        const externalText = relative === worldbookPath
+          ? `${core.serializeDocument(externalFields, worldbookArgs.正文)}\n${factTail(priorText)}`
+          : core.serializeDocument(externalFields, previous.body)
+        put(relative, externalText)
+        const beforeHead = head()
+        const count = writes.length
+        // Even an unchanged body must pass native CAS after external metadata edits.
+        const stale = await call(name, volumeArgs)
+        assert.equal(stale.ok, false, JSON.stringify(stale))
+        assert.match(stale.reason, /re-read the file/)
+        assert.equal(writes.length, count + 1, relative)
+        assert.equal(writes.at(-1).result.isError, true, relative)
+        assert.equal(text(relative), externalText)
+        assert.equal(head(), beforeHead)
+        await read(relative)
+        assert.equal((await call(name, volumeArgs)).ok, true)
+        assert.equal(text(relative), externalText)
+        assert.equal(core.parseDocument(text(relative)).data.fields.版本, previous.fields.版本)
+        if (relative === worldbookPath) assert.equal(factTail(text(relative)), factTail(priorText))
+
+        const beforeRace = head()
+        const racedText = `${externalText}\n作者在准备完成后追加的卷规划文字\n`
+        let raced = false
+        const offRace = ctx.on('tools/pre-execute', async (exec, next) => {
+          if (!raced && exec.agent === main && exec.name === 'write' && exec.parent !== undefined
+            && path.resolve(exec.arguments.file_path) === path.resolve(book, relative)) {
+            raced = true
+            put(relative, racedText)
+          }
+          return next()
+        })
+        try {
+          const conflict = await call(name, { ...volumeArgs, 正文: `${volumeArgs.正文}\n竞争写入不得落盘\n` })
+          assert.equal(raced, true, relative)
+          assert.equal(conflict.ok, false, JSON.stringify(conflict))
+          assert.match(conflict.reason, /re-read the file/)
+          assert.equal(writes.length, count + 3, relative)
+          assert.equal(writes.at(-1).result.isError, true, relative)
+          assert.equal(text(relative), racedText)
+          assert.equal(head(), beforeRace)
+        } finally { offRace() }
+      }
+      report.volumeNativeConflicts = { targets: volumeCases.length, staleNoOpRejected: volumeCases.length, preparedRaceRejected: volumeCases.length }
+      report.worldbookNativeConflicts = { staleNoOpRejected: true, preparedRaceRejected: true }
     })
 
     await check('读观察按会话隔离且普通嵌套调用不能绕过门禁', async () => {
@@ -154,7 +259,8 @@ export async function checkNativeWrites({ root, book, main, ctx, service, execut
           render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
         },
         execute: async (_args, exec) => {
-          const result = await service('tools').execute({
+          const { nativeToolRuntime } = await import(pathToFileURL(path.join(root, 'lib/webnovel.mjs')).href)
+          const result = await nativeToolRuntime(ctx).execute({
             agent: main, name: 'write', arguments: { file_path: path.join(book, contractPath), content: '普通嵌套不得写入' },
             callId: 'untrusted-nested-write', rootCallId: exec.rootCallId, parent: exec.token, signal: exec.signal,
           })
@@ -171,31 +277,58 @@ export async function checkNativeWrites({ root, book, main, ctx, service, execut
     })
 
     await check('原生写入后提交失败可原样重跑且不重复升版', async () => {
-      const args = { 正文: '# 提交重试后的骨架\n' }
-      await read(skeletonPath)
-      const beforeHead = head()
-      const version = core.parseDocument(text(skeletonPath)).data.fields.版本
-      const gitLock = path.join(book, '.git/index.lock')
-      fs.writeFileSync(gitLock, 'fixture lock', { flag: 'wx' })
-      try {
-        const failed = await call('novel_update_skeleton', args)
-        assert.equal(failed.ok, false, JSON.stringify(failed))
-        assert.match(failed.reason, /已落盘但未提交/)
-        assert.equal(head(), beforeHead)
-      } finally { fs.unlinkSync(gitLock) }
-      const saved = text(skeletonPath)
-      assert.equal(core.parseDocument(saved).data.fields.版本, version + 1)
-      assert.equal((await call('novel_update_skeleton', args)).ok, true)
-      assert.equal(text(skeletonPath), saved)
-      const committed = head()
-      assert.notEqual(committed, beforeHead)
-      const replay = await call('novel_update_skeleton', args)
-      assert.equal(replay.ok, true, JSON.stringify(replay))
-      assert.equal(replay.commitState, 'unchanged')
-      assert.equal(replay.retryable, false)
-      assert.match(replay.message, /无需补提交/)
-      assert.equal(text(skeletonPath), saved)
-      assert.equal(head(), committed)
+      const cases = [
+        ['novel_update_skeleton', skeletonPath, { 正文: '# 提交重试后的骨架\n' }],
+        ...volumeCases.map(([name, relative, args]) => [name, relative, { ...args, 正文: `${args.正文}\n提交重试后保留的正文。\n` }]),
+        ['novel_confirm_worldbook_entry', worldbookPath, { ...worldbookArgs, 别名: '重试别名', 正文: '# 提交重试后的人物计划\n\n继续寻找旧宅。\n' }],
+      ]
+      for (const [name, relative, args] of cases) {
+        await read(relative)
+        const beforeHead = head()
+        const before = text(relative)
+        const fields = core.parseDocument(before).data.fields
+        const version = fields.版本
+        const count = writes.length
+        const gitLock = path.join(book, '.git/index.lock')
+        fs.writeFileSync(gitLock, 'fixture lock', { flag: 'wx' })
+        try {
+          const failed = await call(name, args)
+          assert.equal(failed.ok, false, JSON.stringify(failed))
+          assert.equal(failed.commitState, 'failed')
+          assert.equal(failed.retryable, true)
+          assert.match(failed.reason, /已落盘但未提交/)
+          assert.equal(writes.length, count + 1, relative)
+          assert.equal(writes.at(-1).result.isError, false, relative)
+          assert.equal(head(), beforeHead)
+        } finally { fs.unlinkSync(gitLock) }
+        const saved = text(relative)
+        if (relative === worldbookPath) {
+          assert.deepEqual(core.parseDocument(saved).data.fields, { ...fields, 别名: args.别名 })
+          assert.ok(core.parseDocument(saved).data.body.startsWith(args.正文))
+          assert.equal(factTail(saved), factTail(before))
+        } else {
+          assert.deepEqual(core.parseDocument(saved).data.fields, { ...fields, 版本: version + 1, 父版本: version })
+          assert.equal(core.parseDocument(saved).data.body, args.正文)
+        }
+        const retried = await call(name, args)
+        assert.equal(retried.ok, true, JSON.stringify(retried))
+        assert.equal(retried.commitState, 'committed')
+        assert.equal(writes.length, count + 2, relative)
+        assert.equal(writes.at(-1).result.isError, false, relative)
+        assert.equal(text(relative), saved)
+        const committed = head()
+        assert.notEqual(committed, beforeHead)
+        const replay = await call(name, args)
+        assert.equal(replay.ok, true, JSON.stringify(replay))
+        assert.equal(replay.commitState, 'unchanged')
+        assert.equal(replay.retryable, false)
+        assert.match(replay.message, /无需补提交/)
+        assert.equal(writes.length, count + 3, relative)
+        assert.equal(writes.at(-1).result.isError, false, relative)
+        assert.equal(text(relative), saved)
+        assert.equal(head(), committed)
+      }
+      report.nativeWriteRetries = { targets: cases.length, exactRetryPreserved: cases.length, unchangedNativeWrites: cases.length }
     })
 
     await check('多文件改稿保留事务且不拆成原生单文件写入', async () => {

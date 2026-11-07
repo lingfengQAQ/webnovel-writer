@@ -13,6 +13,13 @@ const indexCheck = process.argv.includes('--index')
 const packageArg = process.argv.indexOf('--package')
 if (packageArg >= 0 && !process.argv[packageArg + 1]) throw new Error('--package requires an installed package directory')
 const testedPackage = packageArg >= 0 ? path.resolve(process.argv[packageArg + 1]) : packageRoot
+const retrievalArg = process.argv.indexOf('--retrieval-package')
+if (retrievalArg >= 0 && !process.argv[retrievalArg + 1]) throw new Error('--retrieval-package requires an installed package directory')
+const testedRetrieval = retrievalArg >= 0 ? path.resolve(process.argv[retrievalArg + 1]) : path.resolve(packageRoot, '../embedding-provider')
+const fullArg = process.argv.indexOf('--full-package')
+if (fullArg >= 0 && !process.argv[fullArg + 1]) throw new Error('--full-package requires an installed meta package directory')
+const testedFull = fullArg >= 0 ? path.resolve(process.argv[fullArg + 1]) : undefined
+if (testedFull && !indexCheck) throw new Error('--full-package requires --index')
 if (JSON.parse(fs.readFileSync(path.join(testedPackage, 'package.json'), 'utf8')).name !== '@linfengqaqtat/dsh-scriptor') throw new Error('Expected the installed Scriptor package')
 if (!fs.existsSync(cli) || !Number.isInteger(port) || port < 1024) throw new Error('Supply the installed DSH CLI entry and an available port')
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'webnovel-browser-'))
@@ -27,13 +34,17 @@ const linkPackage = (name, target) => {
   fs.symlinkSync(target, link, process.platform === 'win32' ? 'junction' : 'dir')
 }
 linkPackage('@linfengqaqtat/dsh-scriptor', testedPackage)
-if (indexCheck) linkPackage('@linfengqaqtat/dsh-scriptor-retrieval', path.resolve(packageRoot, '../embedding-provider'))
-fs.writeFileSync(path.join(profile, 'package.json'), JSON.stringify({ name: 'webnovel-acceptance-profile', private: true, type: 'module', dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@linfengqaqtat/dsh-scriptor', ...(indexCheck ? ['@linfengqaqtat/dsh-scriptor-retrieval'] : [])], patchReload: 'live' } } }, null, 2))
+if (indexCheck) linkPackage('@linfengqaqtat/dsh-scriptor-retrieval', testedRetrieval)
+if (testedFull) linkPackage('@linfengqaqtat/dsh-scriptor-full', testedFull)
+const extraBundles = testedFull ? ['@linfengqaqtat/dsh-scriptor-full'] : ['@linfengqaqtat/dsh-scriptor', ...(indexCheck ? ['@linfengqaqtat/dsh-scriptor-retrieval'] : [])]
+fs.writeFileSync(path.join(profile, 'package.json'), JSON.stringify({ name: 'webnovel-acceptance-profile', private: true, type: 'module',
+  dependencies: testedFull ? { '@linfengqaqtat/dsh-scriptor-full': 'file:' + testedFull } : { '@linfengqaqtat/dsh-scriptor': 'file:' + testedPackage, ...(indexCheck ? { '@linfengqaqtat/dsh-scriptor-retrieval': 'file:' + testedRetrieval } : {}) },
+  dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', ...extraBundles], patchReload: 'live' } } }, null, 2))
 // Keep the Host-only fixture outside the source package so Client discovery uses the installed artifact.
 const fixture = path.join(root, 'browser-fixture')
 fs.mkdirSync(fixture)
 fs.writeFileSync(path.join(fixture, 'package.json'), JSON.stringify({ name: 'scriptor-browser-fixture', type: 'module' }))
-for (const name of ['study-browser-host.mjs', 'index-browser-extension.mjs', 'graph-data.mjs', 'result-card-demo.mjs']) {
+for (const name of ['study-browser-host.mjs', 'index-browser-extension.mjs', 'graph-data.mjs', 'result-card-demo.mjs', 'maintenance-card-demo.mjs']) {
   fs.copyFileSync(path.join(packageRoot, 'tests/fixtures', name), path.join(fixture, name))
 }
 const hostRequire = createRequire(cli)
@@ -55,5 +66,5 @@ const child = spawn(process.execPath, [cli, '--profile', 'web', '--host', '127.0
   detached: true, windowsHide: true, stdio: ['ignore', stdout, stderr],
 })
 child.unref(); fs.closeSync(stdout); fs.closeSync(stderr)
-fs.writeFileSync(path.join(evidence, 'browser-runtime.json'), JSON.stringify({ root, workspace, port, processId: child.pid, testedPackage }, null, 2) + '\n')
+fs.writeFileSync(path.join(evidence, 'browser-runtime.json'), JSON.stringify({ root, workspace, port, processId: child.pid, testedPackage, ...(indexCheck ? { testedRetrieval } : {}), ...(testedFull ? { testedFull } : {}) }, null, 2) + '\n')
 console.log(JSON.stringify({ processId: child.pid, port, root }))

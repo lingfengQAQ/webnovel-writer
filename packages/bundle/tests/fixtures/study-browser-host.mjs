@@ -5,6 +5,7 @@ import { LlmAdapter, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { attachIndexFixture } from './index-browser-extension.mjs'
 import { seedGraphFixture } from './graph-data.mjs'
 import { prepareResultCardDemo, demoToolChunks } from './result-card-demo.mjs'
+import { createMaintenanceCardDemo } from './maintenance-card-demo.mjs'
 import * as present from '@deepseek-ai/dsh-tool-present'
 
 const EDITOR_BRANCH_BY_LABEL = {
@@ -81,7 +82,7 @@ export function editorAcceptancePlan(messages) {
 }
 
 export const name = 'webnovel-browser-acceptance'
-export const inject = ['agents', 'agentLoop', 'agentPresets', 'sessionPersistence', 'workspaceRegistry', 'llm', 'sessionController', 'webServer', ...(process.env.WEBNOVEL_WORKFLOW_CHECK ? ['connection', 'userQuestions'] : []), ...(process.env.WEBNOVEL_INDEX_CHECK ? ['embeddings', 'settings', 'credentials'] : [])]
+export const inject = ['agents', 'agentLoop', 'agentPresets', 'sessionPersistence', 'workspaceRegistry', 'llm', 'sessionController', 'webServer', ...(process.env.WEBNOVEL_WORKFLOW_CHECK ? ['connection', 'userQuestions'] : process.env.WEBNOVEL_MAINTENANCE_DEMO ? ['userQuestions'] : []), ...(process.env.WEBNOVEL_INDEX_CHECK ? ['embeddings', 'settings', 'credentials'] : [])]
 
 export async function apply(ctx) {
   const root = process.env.WEBNOVEL_BROWSER_WORKSPACE
@@ -104,12 +105,19 @@ export async function apply(ctx) {
     put(`${book}/定稿/卷01/0002-归航.md`, '---\n身份:\n  卷: 1\n  章: 2\n  章名: 归航\n角色: 已定稿\n版本: 1\n---\n# 归航\n\n已定稿的原文，只读验证。\n')
   }
   if (!exists) seedGraphFixture(path.join(root, '验收作品甲'))
+  if (!exists && process.env.WEBNOVEL_GRAPH_CHECK) {
+    const file = path.join(root, '验收作品甲/世界书/人物档案/林舟.md')
+    const raw = fs.readFileSync(file, 'utf8') + '\n### 事实@第0004章\n来源：定稿/卷01/0004-学艺.md\n林舟是沈青的师父。\n### 事实@第0005章\n来源：定稿/卷01/0005-回忆.md\n林舟是沈青的师父。\n'
+    fs.writeFileSync(file, '\uFEFF' + raw.replaceAll('\n', '\r\n'))
+  }
   put('书房/知识库/写作笔记.md', '# 写作笔记\n\n共享资料的原始内容。\n')
   put('书房/作者记忆/偏好.md', '# 作者偏好\n\n保留作者自己的句子。\n')
   const report = { requests: 0, savesReceived: 0, indexErrorsReceived: 0, complete: 0, customEvents: 0, resumed: exists }
   // Restored cards describe an earlier export. The book may have changed since;
   // resume its runtime without reseeding files, revalidating old exports or replaying tools.
-  const demo = !exists && process.env.WEBNOVEL_RESULT_DEMO ? prepareResultCardDemo(root) : []
+  const maintenanceDemo = !exists && process.env.WEBNOVEL_MAINTENANCE_DEMO ? createMaintenanceCardDemo(root) : undefined
+  if (maintenanceDemo) report.maintenanceUpgrade = maintenanceDemo.report
+  const demo = !exists && process.env.WEBNOVEL_RESULT_DEMO && !maintenanceDemo ? prepareResultCardDemo(root) : []
   let demoStep = 0
   let workflowRequest, workflowMode = '', workflowIndex = 100
   const persist = () => fs.writeFileSync(reportPath, JSON.stringify(report, null, 2))
@@ -119,9 +127,14 @@ export async function apply(ctx) {
     .then(() => true).catch(error => { report.fixtureError = String(error); persist(); return false })
   class AcceptanceAdapter extends LlmAdapter {
     providerInfo(provider) { return { id: provider, name: '本地验收提供方' } }
-    async listModels() { return [{ id: 'fixture', name: '本地验收' }] }
+    async listModels(provider) { return [{ provider, id: 'fixture', name: '本地验收' }] }
     async * stream(options) {
       report.requests++
+      const maintenanceRequest = maintenanceDemo && options.messages.some(message => message.role === 'user' && messageText(message).includes('展示书仓维护状态'))
+      if (maintenanceRequest && options.tools?.some(tool => tool.name === 'novel_preview_book_upgrade')) {
+        const entry = maintenanceDemo.next(options.messages)
+        if (entry) { yield* demoToolChunks(workflowIndex++, entry); persist(); return }
+      }
       if (workflowRequest && options.tools?.some(tool => tool.name === 'novel_assemble_materials')) {
         const entry = workflowRequest; workflowRequest = undefined
         yield* demoToolChunks(workflowIndex++, entry)
@@ -143,6 +156,18 @@ export async function apply(ctx) {
         yield { type: 'finish', reason: { kind: 'stop' } }
         persist()
         return
+      }
+      if (options.system?.includes('你为小说已入档沉淀建立辅助关系索引')) {
+        const input = JSON.parse(options.messages[0].content[0].text)
+        const from = input.entities.find(entity => entity.label === '林舟'), to = input.entities.find(entity => entity.label === '沈青')
+        const quote = '林舟是沈青的师父。'
+        const text = JSON.stringify({ relations: from && to && input.text.includes(quote) ? [{ from: from.id, to: to.id, relation: '师徒', qualifier: 'asserted', quote }] : [] })
+        report.graphRequests = (report.graphRequests ?? 0) + 1
+        yield { type: 'block-start', index: 0, blockType: 'text' }
+        yield { type: 'text-delta', index: 0, text }
+        yield { type: 'block-end', index: 0, block: { type: 'text', text } }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+        persist(); return
       }
       const messages = JSON.stringify(options.messages)
       if (messages.includes('作者通过书房编辑器保存了文档')) report.savesReceived++
@@ -177,7 +202,9 @@ export async function apply(ctx) {
       }
       const document = new URL(`http://127.0.0.1:${ctx.webServer.port}/`)
       document.searchParams.set('webnovel', JSON.stringify({ sessionId, ref: { space: 'book:acceptance-a', path: '草稿区/草稿/卷01-来信/稿1.md' } }))
-      const text = process.env.WEBNOVEL_RESULT_DEMO
+      const text = maintenanceRequest
+        ? '书仓维护演示已完成：预览、提交失败和续办均来自实际工具。每次检查的合成文件哈希与提交次数已核对。'
+        : process.env.WEBNOVEL_RESULT_DEMO
         ? '演示草稿、已校验的定稿合集与来源清单已准备好。'
         : '浏览器验收会话。\n\n[打开原文](<' + document + '>)\n\n保存通知已进入本次原生对话。'
       yield { type: 'block-start', index: 0, blockType: 'text' }
@@ -197,6 +224,12 @@ export async function apply(ctx) {
   report.tools = ctx.get('tools').schemas(handle.agent).map(tool => tool.name).filter(name => name.startsWith('novel_')).sort()
   report.skills = (await ctx.get('skills').list({ cwd: root, scope: handle.agent }))
     .filter(skill => skill.provider === 'webnovel-bundled').map(skill => skill.name).sort()
+  const offMaintenance = maintenanceDemo ? ctx.on('user-questions/request', async request => {
+    if (request.agent !== handle.agent || !request.questions.every(question => ['书仓升级', '书仓升级续办'].includes(question.id))) throw new Error('Unexpected author question in isolated maintenance demo')
+    maintenanceDemo.report.authorQuestions++
+    persist()
+    return { answers: request.questions.map(question => ({ id: question.id, selected: ['批准'] })) }
+  }) : undefined
   if (process.env.WEBNOVEL_RESULT_DEMO) handle.agent.ctx.plugin(present, { maxFiles: 8 })
   const off = ctx.on('agent/status', ({ agent, status }) => {
     if (agent !== handle.agent || status !== 'idle') return
@@ -204,8 +237,8 @@ export async function apply(ctx) {
     report.customEvents = Array.from({ length: agent.session.seq }, (_, index) => agent.session.eventAt(index)).filter(event => event.type.startsWith('novel/')).length
     persist()
   })
-  if (!exists) await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { done(); reject(new Error('Acceptance session did not finish')) }, process.env.WEBNOVEL_RESULT_DEMO ? 30000 : 10000)
+  if (!exists && !maintenanceDemo) await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { done(); reject(new Error('Acceptance session did not finish')) }, maintenanceDemo ? 90000 : process.env.WEBNOVEL_RESULT_DEMO ? 30000 : 10000)
     const done = ctx.on('agent/status', ({ agent, status }) => {
       if (agent !== handle.agent || status !== 'idle') return
       clearTimeout(timer); done(); resolve()
@@ -214,7 +247,7 @@ export async function apply(ctx) {
   })
   await ctx.sessionPersistence.flush()
   await workspace.attachSession(sessionId)
-  await ctx.sessionController.rename({ sessionId, title: process.env.WEBNOVEL_RESULT_DEMO ? '写作交互演示 · DSH 0.2' : process.env.WEBNOVEL_INDEX_CHECK ? 'S6 后台索引验收' : 'S5 书房验收' })
+  await ctx.sessionController.rename({ sessionId, title: process.env.WEBNOVEL_MAINTENANCE_DEMO ? '书仓维护演示' : process.env.WEBNOVEL_RESULT_DEMO ? '写作交互演示 · DSH 0.2' : process.env.WEBNOVEL_INDEX_CHECK ? 'S6 后台索引验收' : 'S5 书房验收' })
   const secondRoot = path.join(root, '另一工作范围')
   fs.mkdirSync(secondRoot, { recursive: true })
   const secondWorkspace = await ctx.workspaceRegistry.create(secondRoot, 'S5 空工作范围')
@@ -262,5 +295,10 @@ export async function apply(ctx) {
   }
   persist()
   void indexReady.then(ready => { report.ready = ready; persist() })
-  ctx.on('dispose', () => { off(); return Promise.all([handle.dispose(), second.dispose()]) })
+  // Author questions await Loader settlement. Run this demo after this fixture's
+  // apply has returned, rather than waiting for its own pending installation.
+  if (maintenanceDemo) setTimeout(() => {
+    handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: '展示书仓维护状态，验证全部真实结果卡。' }], source: { kind: 'user' } }))
+  }, 0)
+  ctx.on('dispose', () => { off(); offMaintenance?.(); return Promise.all([handle.dispose(), second.dispose()]) })
 }

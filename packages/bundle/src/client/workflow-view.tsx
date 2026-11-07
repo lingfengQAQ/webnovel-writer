@@ -1,6 +1,9 @@
-import React, { useEffect, useState } from 'react'
-import { Activity, ExternalLink, LocateFixed, X } from 'lucide-react'
+import React, { useEffect, useRef, useState } from 'react'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { workflowStages, runLabels, type WorkflowView as WorkflowData } from '../study/workflow-types'
+import { IconActivity, IconClose, IconLocate, IconOpen } from './icons'
+import { SelectMenu } from './select-menu'
+import { HintTooltip } from './tooltip'
 import type { ChapterView } from '../study/types'
 import { callStudy } from './api'
 import { useStudy } from './hooks'
@@ -25,15 +28,18 @@ function useWorkflow(sessionId: string, space: string) {
   }, [sessionId, space])
   return { value, error }
 }
-interface Props { sessionId: string; space: string; store: EditorStore; refresh: number }
+interface Props { sessionId: string; space: string; store: EditorStore; refresh: number; compact?: boolean; onFactsChange?(at: number): void }
 export function WritingWorkflow(props: Props) {
   // Remount the entire projection on identity changes; never show another book's old selection.
   return <WorkflowContent key={props.sessionId + ':' + props.space} {...props} />
 }
-function WorkflowContent({ sessionId, space, store, refresh }: Props) {
+function WorkflowContent({ sessionId, space, store, refresh, compact, onFactsChange }: Props) {
+  const [expanded, setExpanded] = useState(!compact)
   const live = useWorkflow(sessionId, space)
   // A tool result invalidates the facts; only the chapter API can confirm completion.
-  const settledAt = (live.value?.calls ?? []).reduce((latest, call) => call.stage === 'confirm' ? Math.max(latest, call.ended ?? 0) : latest, 0)
+  const settledAt = (live.value?.calls ?? []).reduce((latest, call) => call.stage ? Math.max(latest, call.ended ?? 0) : latest, 0)
+  const notifiedFacts = useRef(0)
+  useEffect(() => { if (settledAt && notifiedFacts.current !== settledAt) { notifiedFacts.current = settledAt; onFactsChange?.(settledAt) } }, [settledAt, onFactsChange])
   const chapters = useStudy<ChapterView>(sessionId, 'chapters', { space }, refresh + settledAt)
   const [picked, setPicked] = useState<WorkflowNodeId>(), [focus, setFocus] = useState<{ id: string }>(), [chapter, setChapter] = useState(0)
   const display = workflowDisplay(live.value, chapter, Boolean(live.error))
@@ -47,15 +53,18 @@ function WorkflowContent({ sessionId, space, store, refresh }: Props) {
     : display.current ? (currentStage?.label ?? '处理中') + ' · ' + runLabels[display.current.state]
     : chapter ? '本章暂无执行中的操作' : live.value.waiting ? '本会话 · 待确认' : live.value.active ? '本会话处理中' : '当前没有执行中的操作'
   return <>
-    <div className="nw-flow-summary" role="status"><Activity size={20} /><div><strong>{title}</strong><span>{chapter ? '第 ' + chapter + ' 章' : display.current?.chapter ? '第 ' + display.current.chapter + ' 章' : '跟随本会话的工具调用'}</span></div>
-      {display.currentNode ? <button type="button" onClick={() => { setPicked(display.currentNode); setFocus({ id: display.currentNode! }) }}><LocateFixed size={15} />回到当前</button> : null}</div>
+    <div className="nw-flow-summary" role="status"><IconActivity size={20} className="nw-flow-icon" /><div className="nw-flow-text"><strong>{title}</strong><span className="nw-flow-detail">{chapter ? '第 ' + chapter + ' 章' : display.current?.chapter ? '第 ' + display.current.chapter + ' 章' : '跟随本会话的工具调用'}</span></div>
+      {display.currentNode ? <Button variant="ghost" size="sm" icon={<IconLocate size={14} />} onClick={() => { setExpanded(true); setPicked(display.currentNode); setFocus({ id: display.currentNode! }) }}>回到当前</Button> : null}</div>
     <div className="nw-flow-toolbar">
-      <select aria-label="选择流程章节" value={chapter} onChange={e => setChapter(Number(e.target.value))}><option value={0}>全部章节</option>{chapterOptions.map(n => <option key={n} value={n}>第 {n} 章</option>)}</select>
+      <SelectMenu label="选择流程章节" value={String(chapter)} onChange={value => setChapter(Number(value))}
+        options={[{ value: '0', label: '全部章节' }, ...chapterOptions.map(n => ({ value: String(n), label: '第 ' + n + ' 章' }))]} />
       <span className="nw-viz-note">{chapters.value?.chapters.filter(isFinalized).length ?? 0} 章已定稿</span>
+      {compact ? <Button variant="ghost" size="sm" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? '收起完整流程' : '展开完整流程'}</Button> : null}
     </div>
-    <div className={'nw-explorer nw-flow-explorer ' + (selected ? 'has-detail' : '')}>
+    {compact && !expanded ? <div className="nw-stage-list" aria-label="本章可核对步骤">{display.nodes.filter(node => ['outline', 'materials', 'draft', 'review', 'revision', 'package', 'approval', 'settled'].includes(node.id)).map(node => <button type="button" className="nw-stage-item" key={node.id} onClick={() => { setExpanded(true); setPicked(node.id) }}><span className="nw-stage-name">{workflowNodes.find(item => item.id === node.id)?.label}</span><span className="nw-viz-note">{node.label || '无执行记录'}</span></button>)}</div> : null}
+    {expanded ? <div className={'nw-explorer nw-flow-explorer ' + (selected ? 'has-detail' : '')}>
       <ArchifyWorkflow activities={display.nodes} selected={picked} focus={focus} onSelect={setPicked} finalized={finalized} />
-      {selected ? <aside className="nw-inspector"><button type="button" className="nw-icon" aria-label="关闭详情" onClick={() => setPicked(undefined)}><X size={16} /></button>
+      {selected ? <aside className="nw-inspector"><HintTooltip tip="关闭详情" side="left"><button type="button" className="nw-icon nw-inspector-close" aria-label="关闭详情" onClick={() => setPicked(undefined)}><IconClose size={16} /></button></HintTooltip>
         <small>{chapter ? '第 ' + chapter + ' 章' : '全部章节'}</small><h3>{selected.label}</h3><p>{selected.note}</p>
         {picked === 'wait' && chapter ? <p>{finalized ? '本章已有定稿记录。' : '本章尚无已定稿事实。'}</p> : null}
         <h4>最近操作</h4>
@@ -64,9 +73,9 @@ function WorkflowContent({ sessionId, space, store, refresh }: Props) {
           <p>{workflowStages.find(s => s.id === call.stage)?.label ?? '其他'} · {novelToolTitles[call.name] ?? call.name}</p>
           <p>{call.summary}</p><small>{new Date(call.started).toLocaleTimeString('zh-CN')}{call.ended !== undefined ? ' · ' + Math.max(0, Math.round((call.ended - call.started) / 1000)) + ' 秒' : ''}</small>
         </li>)}</ol>}
-        {chapters.value?.chapters.filter(c => c.source && c.chapter > 0 && (!chapter || c.chapter === chapter)).slice(-3).map(c => <button type="button" className="nw-source-button" key={c.volume + '-' + c.chapter} onClick={() => { if (c.source) void store.open(sessionId, c.source) }}><ExternalLink size={14} />第 {c.chapter} 章 · 打开原文</button>)}
+        {chapters.value?.chapters.filter(c => c.source && c.chapter > 0 && (!chapter || c.chapter === chapter)).slice(-3).map(c => <button type="button" className="nw-source-button" key={c.volume + '-' + c.chapter} onClick={() => { if (c.source) void store.open(sessionId, c.source) }}><IconOpen size={14} />第 {c.chapter} 章 · 打开原文</button>)}
       </aside> : null}
-    </div>
+    </div> : null}
     <p className="nw-viz-note">节点标记表示操作状态，不代表整个环节已完成。</p>
     {live.error ? <p className="nw-viz-note" role="alert">{live.error}。</p> : null}
     {display.calls.some(c => !c.stage) || (!chapter && live.value?.otherActive) ? <p className="nw-viz-note">部分操作无法确定工序，可在对话中查看详情。</p> : null}

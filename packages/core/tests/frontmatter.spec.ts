@@ -16,6 +16,13 @@ describe('frontmatter 解析(B3/B4/B5)', () => {
     expect(r.ok).toBe(true)
     if (r.ok) expect(Object.keys(r.data.fields)).toEqual([])
   })
+  it('识别紧邻 frontmatter 的 UTF-8 BOM，但不裁剪普通正文', () => {
+    expect(parseDocument('\uFEFF---\r\n版本: 2\r\n---\r\n  原正文\r\n'))
+      .toEqual({ ok: true, data: { fields: { 版本: 2 }, body: '  原正文\n' } })
+    const prose = '\uFEFF# 只有正文\n'
+    expect(parseDocument(prose)).toEqual({ ok: true, data: { fields: {}, body: prose } })
+    expect(parseDocument('\uFEFF---\n版本: [坏数据\n---\n正文')).toMatchObject({ ok: false, reason: 'parse-error' })
+  })
   it('B5:未闭合→parse-error 带明细,不静默', () => {
     const r = parseDocument('---\n状态: 候选\n')
     expect(r.ok).toBe(false)

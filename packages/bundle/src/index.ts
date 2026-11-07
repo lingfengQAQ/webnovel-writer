@@ -18,6 +18,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { ToolExecutionToken, ToolRuntime } from '@deepseek-ai/dsh-tools'
+import z from '@deepseek-ai/schemastery'
 import { attachFileGateToAgent } from './gates'
 import { attachDraftLengthFeedbackToAgent } from './draft-length-feedback'
 import { attachWorkerPolicyToAgent } from './worker-policy'
@@ -32,7 +33,8 @@ import type { AskFn, EmbeddingProvider } from '@webnovel/core'
 import { EditorRequestHub } from './study/editor-requests'
 import { attachStudyWeb, notifySaved } from './study/web'
 import { StudyService } from './study/service'
-import { createNativeWriteBridge } from './native-write'
+import { createNativeWriteBridge, nativeToolRuntime } from './native-write'
+export { nativeToolRuntime } from './native-write'
 import { BookIndexManager } from './indexing/manager'
 import type { SceneProvider, RerankingProvider } from '@webnovel/core'
 import { indexFailureMessage } from './indexing/notifications'
@@ -40,9 +42,42 @@ import { ReferenceHost } from './reference/host'
 import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import type { LlmRuntime } from '@deepseek-ai/dsh-llm'
 import type { SettingsForms } from '@deepseek-ai/dsh-settings'
+import { createIndexAutoPreference } from './preferences-host'
+import {
+  DEFAULT_WEBNOVEL_PREFERENCES,
+  GRAPH_PERSPECTIVES,
+  VISUAL_MODES,
+  WEBNOVEL_SETTINGS_NAMESPACE,
+  hasExplicitAutoIndex,
+  normalizeWebnovelPreferences,
+  validateWebnovelPreferences,
+  type WebnovelPreferencesInput,
+} from './preferences'
 
 export const name = 'webnovel-bundle'
 export { NOVEL_TOOL_NAMES, NOVEL_CONDITIONAL_TOOL_NAMES, NOVEL_PRODUCTION_TOOL_NAMES } from './tool-catalog'
+export {
+  WEBNOVEL_SETTINGS_NAMESPACE,
+  DEFAULT_WEBNOVEL_PREFERENCES,
+  normalizeWebnovelPreferences,
+  hasExplicitAutoIndex,
+  type WebnovelPreferences,
+  type WebnovelPreferencesInput,
+  type VisualMode,
+  type GraphPerspective,
+} from './preferences'
+
+export const PreferenceSchema: z<WebnovelPreferencesInput> = z.object({
+  autoIndexOnCommit: z.boolean().description('检索 · 提交后自动更新定稿索引'),
+  showVisualTab: z.boolean().default(DEFAULT_WEBNOVEL_PREFERENCES.showVisualTab).description('可视化 · 对话区标签'),
+  showLayoutSwap: z.boolean().default(DEFAULT_WEBNOVEL_PREFERENCES.showLayoutSwap).description('工作台 · 布局互换按钮'),
+  showIndexGuideCard: z.boolean().default(DEFAULT_WEBNOVEL_PREFERENCES.showIndexGuideCard).description('检索索引 · 引导页卡片'),
+  defaultVisualMode: z.union([...VISUAL_MODES]).default(DEFAULT_WEBNOVEL_PREFERENCES.defaultVisualMode).description('可视化 · 默认子视图'),
+  defaultGraphPerspective: z.union([...GRAPH_PERSPECTIVES]).default(DEFAULT_WEBNOVEL_PREFERENCES.defaultGraphPerspective).description('人物关系 · 默认视角'),
+  defaultGraphShowUnknown: z.boolean().default(DEFAULT_WEBNOVEL_PREFERENCES.defaultGraphShowUnknown).description('人物关系 · 显示时间未标注'),
+  defaultGraphShowPlans: z.boolean().default(DEFAULT_WEBNOVEL_PREFERENCES.defaultGraphShowPlans).description('人物关系 · 包括计划'),
+})
+export const Config = PreferenceSchema.volatile()
 
 /**
  * 保留已有 Host 导出的兼容性；技能脚本从独立 lib/cli.js 加载相同实现。
@@ -318,7 +353,7 @@ function toExecContext(exec: DshToolExec): ToolExecContext {
   }
 }
 
-export function apply(ctx: Context) {
+export function apply(ctx: Context, entry?: ReturnType<typeof Config> | WebnovelPreferencesInput) {
   ctx.logger.info('工作台插件已加载（webnovel bundle）')
   // 预设在隔离上下文里重启，事件到不了宿主；由宿主服务上的 refresh 重算已有会话。
   let refreshInstalledAgents = async (): Promise<void> => {}
@@ -344,12 +379,26 @@ export function apply(ctx: Context) {
     const off = typeof ctx.on === 'function' ? ctx.on('llm/adapters-updated', () => referenceHost.changed()) : undefined
     return () => { if (typeof off === 'function') off(); referenceHost.close() }
   })
+  const readRawPreferences = (): unknown => {
+    if (entry && typeof (entry as { get?: unknown }).get === 'function') {
+      try {
+        const current = (entry as { get(): unknown }).get()
+        if (hasExplicitAutoIndex(current)) return current
+      } catch { /* fall through */ }
+    } else if (hasExplicitAutoIndex(entry)) {
+      return entry
+    }
+    return undefined
+  }
+  const autoPreference = createIndexAutoPreference(() => ctxGet<SettingsForms>(ctx, 'settings'), readRawPreferences)
   const indexing = new BookIndexManager({
     getProvider: () => {
       const service = typeof ctx.get === 'function' ? ctx.get('embeddings') as { current(): EmbeddingProvider | undefined } | undefined : undefined
       return service?.current()
     },
     getSceneProvider: () => (typeof ctx.get === 'function' ? ctx.get('sceneSegmentation') as { current(): SceneProvider | undefined } | undefined : undefined)?.current(),
+    getGraphProvider: () => (typeof ctx.get === 'function' ? ctx.get('graphExtraction') as { current(): import('@webnovel/core').GraphModelProvider | undefined } | undefined : undefined)?.current(),
+    autoPreference,
     workspaces: () => {
       const registry = typeof ctx.get === 'function' ? ctx.get('workspaceRegistry') as { list(): readonly { path?: string }[] } | undefined : undefined
       return [...(typeof registry?.list === 'function' ? registry.list() : []).flatMap(workspace => workspace.path ? [workspace.path] : []),
@@ -365,6 +414,41 @@ export function apply(ctx: Context) {
     },
   })
   step(ctx, 'webnovel:indexing', () => () => indexing.close())
+  step(ctx, 'webnovel:preferences', () => {
+    const host = ctx as unknown as NarrowHost
+    const offs: Array<() => void> = []
+    if (typeof host.on === 'function') {
+      const offValidate = host.on('internal/config', ((fiber: unknown, next: () => unknown) => {
+        const raw = next()
+        if (fiber === (ctx as { fiber?: unknown }).fiber) validateWebnovelPreferences(raw)
+        return raw
+      }) as never)
+      if (typeof offValidate === 'function') offs.push(offValidate as () => void)
+      const offVolatile = host.on('loader/volatile-update', (() => {
+        void indexing.refresh()
+      }) as never)
+      if (typeof offVolatile === 'function') offs.push(offVolatile as () => void)
+      const offDoc = host.on('settings/document-updated', ((ns: unknown) => {
+        if (ns === WEBNOVEL_SETTINGS_NAMESPACE) void indexing.refresh()
+      }) as never)
+      if (typeof offDoc === 'function') offs.push(offDoc as () => void)
+    }
+    const settingsReg = withServices(ctx, ['settings'], (scope) => {
+      const settings = ctxGet<{ configure?: (presentation: { auto: boolean }, owner?: unknown) => () => void }>(scope, 'settings')
+      if (typeof settings?.configure !== 'function') return
+      step(scope, 'webnovel:settings-presentation', () => {
+        try {
+          return settings.configure!({ auto: false }, (ctx as { fiber?: unknown }).fiber)
+        } catch {
+          return undefined
+        }
+      })
+    })
+    return () => {
+      for (const off of offs.reverse()) off()
+      void settingsReg.fiber?.dispose?.()
+    }
+  })
   const editorRequests = new EditorRequestHub()
   attachStudyWeb(ctx, indexing, editorRequests)
 
@@ -375,7 +459,7 @@ export function apply(ctx: Context) {
     const questions = ctxGet<{ readonly ask?: AskFn }>(scope, 'userQuestions')
     const askFn = typeof questions?.ask === 'function' ? questions.ask.bind(questions) : undefined
     const runtime = ctxGet<ToolRuntime>(scope, 'tools')
-    nativeBridge = runtime !== undefined && typeof runtime.execute === 'function' ? createNativeWriteBridge(runtime) : undefined
+    nativeBridge = runtime !== undefined && typeof runtime.execute === 'function' ? createNativeWriteBridge(nativeToolRuntime(scope)) : undefined
     const bridge = nativeBridge
     step(scope, 'native-write', () => () => { bridge?.dispose() })
     toolKit = {

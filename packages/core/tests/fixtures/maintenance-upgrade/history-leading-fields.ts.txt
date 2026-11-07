@@ -1,0 +1,13 @@
+export const FIELD_RE = /^\s*(?:[-*]\s*)?([^：:]+)[：:]\s*(.*?)\s*$/
+
+export function leadingFields(lines: readonly string[], fields: readonly string[]): LeadingField[] {
+  const found: LeadingField[] = []
+  for (const [index, line] of lines.entries()) {
+    if (line.trim() === '') continue
+    const match = FIELD_RE.exec(line)
+    const field = match?.[1]?.trim()
+    if (match === null || field === undefined || !fields.includes(field)) break
+    found.push({ field, value: match[2]!, index })
+  }
+  return found
+}

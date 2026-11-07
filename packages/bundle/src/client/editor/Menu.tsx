@@ -1,10 +1,12 @@
 import * as React from 'react'
 import { useLayoutEffect, useRef, useState } from 'react'
-import { ChevronRight, type LucideIcon } from 'lucide-react'
+import { MenuSurface, ShortcutKeys } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCheck, IconChevronRight, type Icon } from '../icons'
+import { HintTooltip } from '../tooltip'
 
 export interface MenuItem {
   id: string
-  icon: LucideIcon
+  icon: Icon
   label: string
   shortcut?: string
   disabled?: boolean
@@ -18,7 +20,11 @@ export interface MenuSection { id: string; row?: boolean; items: MenuItem[] }
 const tipOf = (item: MenuItem) => item.label + (item.shortcut ? ' · ' + item.shortcut : '')
 const SUBMENU_WIDTH = 196
 
-/** Right-click menu: an icon row for clipboard and history, then icon-and-label sections. */
+/**
+ * Right-click menu: an icon row for clipboard and history, then icon-and-label sections.
+ * The card is DSH's MenuSurface (material and corners); rows, placement and keys stay ours, because the
+ * DSH Menu has no icon row and no Left/Right submenu keys.
+ */
 export function ContextMenu({ x, y, bounds, sections, header, onClose }: {
   x: number; y: number; bounds: { width: number; height: number }; sections: MenuSection[]; header: string
   onClose: (refocus: boolean) => void
@@ -68,21 +74,22 @@ export function ContextMenu({ x, y, bounds, sections, header, onClose }: {
     item.run?.()
   }
   const button = (item: MenuItem, iconOnly: boolean) => {
-    const Icon = item.icon
-    return <button key={item.id} type="button" role="menuitem" className={'ed-menu-item' + (item.agent ? ' is-agent' : '') + (iconOnly ? ' is-icon' : '') + (open === item.id ? ' is-open' : '')}
+    const Glyph = item.icon
+    const row = <button key={item.id} type="button" role="menuitem" className={'ed-menu-item' + (item.agent ? ' is-agent' : '') + (iconOnly ? ' is-icon' : '') + (open === item.id ? ' is-open' : '')}
       disabled={item.disabled} aria-label={item.label} aria-haspopup={item.submenu ? 'menu' : undefined} aria-expanded={item.submenu ? open === item.id : undefined}
-      aria-pressed={item.checked} data-sub={item.submenu ? item.id : undefined} data-tip={iconOnly ? tipOf(item) : undefined}
+      aria-pressed={item.checked} data-sub={item.submenu ? item.id : undefined}
       onMouseEnter={() => { if (iconOnly || layout.sub === 'inline') return; if (item.submenu) openSub(item.id); else if (open && !(document.activeElement as HTMLElement | null)?.closest('.ed-submenu')) openSub(null) }}
       onClick={() => activate(item)}>
-      <Icon size={16} strokeWidth={1.75} />
+      <Glyph size={14} className="ed-menu-icon" />
       {!iconOnly && <span className="ed-menu-label">{item.label}</span>}
-      {!iconOnly && item.checked !== undefined && <span className={'ed-menu-check' + (item.checked ? ' is-on' : '')} aria-hidden="true" />}
-      {!iconOnly && item.shortcut && <kbd>{item.shortcut}</kbd>}
-      {!iconOnly && item.submenu && <ChevronRight size={14} className="ed-menu-chevron" />}
+      {!iconOnly && item.shortcut && <span className="ed-menu-shortcut" aria-hidden="true"><ShortcutKeys keys={item.shortcut.split(' ')} className="ed-menu-keys" /></span>}
+      {!iconOnly && item.checked && <IconCheck size={14} className="ed-menu-check" />}
+      {!iconOnly && item.submenu && <IconChevronRight size={14} className="ed-menu-chevron" />}
     </button>
+    return iconOnly ? <HintTooltip key={item.id} tip={tipOf(item)}>{row}</HintTooltip> : row
   }
   const submenu = sections.flatMap(section => section.items).find(item => item.id === open)?.submenu
-  return <div ref={ref} className={'ed-float ed-menu is-labeled sub-' + layout.sub} role="menu" aria-label="编辑器菜单" onKeyDown={onKeyDown}
+  return <MenuSurface ref={ref} className={'ed-menu is-labeled sub-' + layout.sub} role="menu" aria-label="编辑器菜单" onKeyDown={onKeyDown}
     style={{ left: layout.left, top: layout.top, opacity: layout.ready ? undefined : 0 }}
     onContextMenu={event => event.preventDefault()} onMouseDown={event => event.preventDefault()}>
     <div className="ed-menu-main">
@@ -97,8 +104,8 @@ export function ContextMenu({ x, y, bounds, sections, header, onClose }: {
         </div>
       })}
     </div>
-    {layout.sub !== 'inline' && submenu && <div className="ed-float ed-submenu" role="menu" style={{ top: Math.max(0, subTop - 5) }}>
+    {layout.sub !== 'inline' && submenu && <MenuSurface className="ed-submenu" role="menu" style={{ top: Math.max(0, subTop - 5) }}>
       {submenu.map(item => button(item, false))}
-    </div>}
-  </div>
+    </MenuSurface>}
+  </MenuSurface>
 }

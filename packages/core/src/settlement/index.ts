@@ -8,6 +8,10 @@ import { assertSegment, LEDGER_KINDS, MEMORY_KINDS, paths } from '../repo/paths'
 import { bookMemoryOps, type BookMemoryInput } from '../memory/book'
 import { memoryTextHash, normalizeMemoryText, readMemoryText } from '../memory/write'
 import { MACHINE_SCHEMA_VERSION, parseMachineJson } from '../repo/schema'
+import { leadingFields, type LeadingField } from '../ledger/clue'
+import { CLUE_FIELDS, CLUE_STATES, LEDGER_FIELD_KEYS, LEDGER_STATES, type LedgerField } from '../repo/ledger-field-contract'
+import { DOCUMENT_FIELDS, isDocumentFieldValue, TIMELINE_FIELD_KEYS } from '../repo/document-fields'
+import { parseLedgerHistory } from '../ledger'
 
 export const ledgerKinds = LEDGER_KINDS
 export const memoryKinds = MEMORY_KINDS
@@ -222,7 +226,12 @@ export function parseTimelineSections(text: string): Section[] {
     if (title !== null) {
       const value = body.join('\n').trim()
       if (value === '') parseFail('时间线变更', itemLine, `事件「${title}」正文为空`, '在该事件下写「- 事件：<一句话>」和「- 时点：<时点>」')
-      if (!/(?:^|\n)\s*[-*]?\s*事件[：:]/m.test(value)) {
+      const lead = leadingFields(value.split('\n'), TIMELINE_FIELD_KEYS)
+      for (const field of TIMELINE_FIELD_KEYS) {
+        if (lead.filter(item => item.field === field).length > 1) parseFail('时间线变更', itemLine, `事件「${title}」的${field}重复`, `只保留一行「- ${field}：…」，说明正文写在字段行之后`)
+      }
+      if (!isDocumentFieldValue(DOCUMENT_FIELDS.timelineEvent, leadingValue(lead, DOCUMENT_FIELDS.timelineEvent.name))) {
+        if (!lead.some(item => item.field === '事件') && extractField(value, '事件') !== null) parseFail('时间线变更', itemLine, `事件「${title}」的事件字段不在事件开头的字段行中`, '把「- 事件：<一句话>」移到时点、来源等字段行旁边，写在说明正文之前')
         parseFail('时间线变更', itemLine, `事件「${title}」缺少事件字段`, '在该事件下加一行「- 事件：<一句话>」')
       }
       sections.push({ title, body: value })
@@ -349,8 +358,11 @@ function factOps(bookRoot: string, sections: readonly FactSection[], chapter: Ch
     if (!doc.ok) throw new Error(`世界书条目解析失败：${rel}——${doc.detail}`)
     const parent = extractVersionFields(doc.data.fields).版本
     const generator = mode === '更正' ? '吃书补偿' : '事实沉淀'
+    // A correction replaces the whole body with facts, including an originally planned head.
+    // Keep that ownership durable across later appends, also for the evidenced old correction marker.
+    const correctedFact = mode === '更正' || doc.data.fields['生成模块'] === '吃书补偿'
     const fields = applyVersionFields(
-      { ...doc.data.fields },
+      { ...doc.data.fields, ...(correctedFact ? { 性质: '事实' } : {}) },
       parent === null ? initialVersion(generator) : bumpVersion(parent, generator),
     )
     const appended = `${doc.data.body.replace(/\n+$/, '')}\n\n### 事实@${chapterLabel}\n来源：${source}\n${section.body}\n`
@@ -399,24 +411,42 @@ function replaceEntry(existing: string, title: string, block: string, label: str
 
 /** 账本条目字段级校验(预校验与 ledgerBlock 共用;报错即入档时会说的原话)。 */
 export function checkLedgerSectionFields(section: LedgerSection): void {
-  const status = extractField(section.body, '状态')
   const at = sectionLine.get(section) ?? null
   const name = `条目「${section.kind}/${section.title}」`
-  const allowed = section.kind === '线索'
-    ? ['已埋', '已示', '已收', '已弃']
-    : ['进行中', '已兑现', '已结束', '已放弃']
+  const lead = ledgerLead(section)
+  for (const field of LEDGER_FIELD_KEYS) {
+    if (lead.filter(item => item.field === field).length > 1) parseFail('账本变更', at, `${name}的${field}字段重复`, `只保留一行「- ${field}：…」，说明正文写在字段行之后`)
+  }
+  const candidateName = leadingValue(lead, '名称')
+  if (candidateName !== null && candidateName !== section.title) {
+    parseFail('账本变更', at, `${name}名称与标题存在歧义：名称「${candidateName}」，标题「${section.title}」`, `删掉「名称」行，或把它改成「${section.title}」`)
+  }
+  const status = leadingValue(lead, '状态')
+  const allowed: readonly string[] = section.kind === '线索' ? CLUE_STATES : LEDGER_STATES
+  if (status === null && !lead.some(item => item.field === '状态') && extractField(section.body, '状态') !== null) parseFail('账本变更', at, `${name}的状态不在条目开头的字段行中`, '把「- 状态：<合法值>」移到计划来源等字段行旁边，写在说明正文之前', allowed)
   if (status === null) parseFail('账本变更', at, `${name}缺少状态字段`, '在条目下加一行「- 状态：<合法值>」', allowed)
-  const plannedFrom = extractField(section.body, '计划来源')
+  const plannedFrom = leadingValue(lead, '计划来源')
+  if (plannedFrom === null && !lead.some(item => item.field === '计划来源') && extractField(section.body, '计划来源') !== null) parseFail('账本变更', at, `${name}的计划来源不在条目开头的字段行中`, '把「- 计划来源：<骨架/卷纲条目引用>」移到状态等字段行旁边，写在说明正文之前')
   if (plannedFrom === null) parseFail('账本变更', at, `${name}缺少计划来源字段`, '加一行「- 计划来源：<骨架/卷纲条目引用>」；本章新增的写「本章新增」')
-  const candidateType = extractField(section.body, '类型')
+  const candidateType = leadingValue(lead, '类型')
   if (candidateType !== null && candidateType !== section.kind) {
     parseFail('账本变更', at, `${name}类型「${candidateType}」与分类不一致`, `删掉「类型」行，或把它改成「${section.kind}」`)
   }
   if (!allowed.includes(status)) parseFail('账本变更', at, `${name}状态非法「${status}」`, '把「状态」改成合法值之一', allowed)
   if (section.kind === '线索') {
-    if (extractField(section.body, '埋设点') === null) parseFail('账本变更', at, `线索「${section.title}」缺少埋设点`, '加一行「- 埋设点：第NNNN章」')
-    if (extractField(section.body, '预期兑现区间') === null) parseFail('账本变更', at, `线索「${section.title}」缺少预期兑现区间`, '加一行「- 预期兑现区间：第N-M章」')
-    if (status === '已弃' && extractField(section.body, '弃因') === null) parseFail('账本变更', at, `线索「${section.title}」已弃但缺少弃因`, '加一行「- 弃因：<一句话>」')
+    const clue = lead.filter(item => (CLUE_FIELDS as readonly string[]).includes(item.field))
+    for (const field of CLUE_FIELDS) {
+      if (clue.filter(item => item.field === field).length > 1) parseFail('账本变更', at, `线索「${section.title}」的${field}重复`, `只保留一行「- ${field}：…」`)
+    }
+    for (const field of status === '已弃' ? CLUE_FIELDS : CLUE_FIELDS.filter(name => name !== '弃因')) {
+      if (!clue.some(item => item.field === field) && extractField(section.body, field) !== null) {
+        parseFail('账本变更', at, `线索「${section.title}」的${field}不在条目开头的字段行中`, `把「- ${field}：…」移到状态、计划来源等字段行旁边，写在说明正文之前`)
+      }
+    }
+    const leading = (field: string): boolean => clue.some(item => item.field === field && item.value !== '')
+    if (!leading('埋设点')) parseFail('账本变更', at, `线索「${section.title}」缺少埋设点`, '加一行「- 埋设点：第NNNN章」')
+    if (!leading('预期兑现区间')) parseFail('账本变更', at, `线索「${section.title}」缺少预期兑现区间`, '加一行「- 预期兑现区间：第N-M章」')
+    if (status === '已弃' && !leading('弃因')) parseFail('账本变更', at, `线索「${section.title}」已弃但缺少弃因`, '加一行「- 弃因：<一句话>」')
   }
 }
 
@@ -477,38 +507,61 @@ export function memoryUpdateBaselines(bookRoot: string, candidate: string | unde
   return Object.fromEntries(baselines)
 }
 
+/** 校验与写入只认同一开头字段区,正文同名行不参与元信息。 */
+function ledgerLead(section: LedgerSection): LeadingField[] {
+  return leadingFields(section.body.split('\n'), [...LEDGER_FIELD_KEYS, ...(section.kind === '线索' ? CLUE_FIELDS : [])])
+}
+
+function leadingValue(lead: readonly LeadingField[], field: string): string | null {
+  return lead.find(item => item.field === field)?.value || null
+}
+
 function ledgerBlock(section: LedgerSection, chapter: ChapterKey, source: string, decision: string): string {
   checkLedgerSectionFields(section)
-  const status = extractField(section.body, '状态')!
-  const plannedFrom = extractField(section.body, '计划来源')!
-  const name = extractField(section.body, '名称') ?? section.title
-  const details = stripFields(section.body, ['名称', '类型', '状态', '计划来源', '实际落点', '来源', '裁决记录'])
+  const lead = ledgerLead(section)
+  const status = leadingValue(lead, '状态')!
+  const plannedFrom = leadingValue(lead, '计划来源')!
+  const name = leadingValue(lead, '名称') ?? section.title
+  // 线索字段从开头字段区搬进系统区;只搬写入的这几行,其余原文(含正文中的同名行)保留。
+  const clue = lead.filter(item => (CLUE_FIELDS as readonly string[]).includes(item.field) && item.value !== '')
+  const details = withoutLeadingFields(section.body, [...lead.filter(item => (LEDGER_FIELD_KEYS as readonly string[]).includes(item.field)), ...clue])
+  const fields: Record<LedgerField, string> = {
+    名称: name,
+    类型: section.kind,
+    状态: status,
+    计划来源: plannedFrom,
+    实际落点: paths.定稿章(chapter.卷, chapter.章, chapter.章名),
+    来源: source,
+    裁决记录: decision,
+  }
+  const clueLines = CLUE_FIELDS.flatMap(field => clue.filter(item => item.field === field).map(item => `${field}：${item.value}`))
   return [
     `## ${section.title}`,
-    `名称：${name}`,
-    `类型：${section.kind}`,
-    `状态：${status}`,
-    `计划来源：${plannedFrom}`,
-    `实际落点：${paths.定稿章(chapter.卷, chapter.章, chapter.章名)}`,
-    `来源：${source}`,
-    `裁决记录：${decision}`,
+    ...LEDGER_FIELD_KEYS.flatMap(field => [`${field}：${fields[field]}`, ...(field === '计划来源' ? clueLines : [])]),
     '### 正文',
     details || '（无正文）',
     '',
   ].filter((line) => line !== '').join('\n') + '\n'
 }
 
-function timelineBlock(section: Section, chapter: ChapterKey, source: string, decision: string): string {
-  const content = stripFields(section.body, ['章号', '来源', '裁决记录'])
-  return [
+function timelineBlock(section: Section, chapter: ChapterKey, source: string, decision: string, previousTime?: string): { content: string; time: string } {
+  const lead = leadingFields(section.body.split('\n'), TIMELINE_FIELD_KEYS)
+  const event = leadingValue(lead, DOCUMENT_FIELDS.timelineEvent.name)!
+  const timeField = lead.find(item => item.field === DOCUMENT_FIELDS.storyTime.name)
+  const time = timeField === undefined ? previousTime || DOCUMENT_FIELDS.storyTime.unknown : timeField.value || DOCUMENT_FIELDS.storyTime.unknown
+  const content = withoutLeadingFields(section.body, lead)
+  const contentBlock = [
     `## ${section.title}`,
-    `章号：第${String(chapter.章).padStart(4, '0')}章`,
-    `来源：${source}`,
-    `裁决记录：${decision}`,
+    `${DOCUMENT_FIELDS.timelineEvent.name}：${event}`,
+    `${DOCUMENT_FIELDS.storyTime.name}：${time}`,
+    `${DOCUMENT_FIELDS.timelineChapter.name}：第${String(chapter.章).padStart(4, '0')}章`,
+    `${DOCUMENT_FIELDS.timelineSource.name}：${source}`,
+    `${DOCUMENT_FIELDS.timelineDecision.name}：${decision}`,
     '### 正文',
     content,
     '',
   ].join('\n')
+  return { content: contentBlock, time }
 }
 
 function extractField(body: string, field: string): string | null {
@@ -517,10 +570,9 @@ function extractField(body: string, field: string): string | null {
   return match?.[1]?.trim() || null
 }
 
-function stripFields(body: string, fields: readonly string[]): string {
-  const escaped = fields.map((field) => field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
-  const pattern = new RegExp(`^\\s*(?:[-*]\\s*)?(?:${escaped})[：:].*$`)
-  return body.split('\n').filter((line) => !pattern.test(line)).join('\n').trim()
+function withoutLeadingFields(body: string, fields: readonly LeadingField[]): string {
+  const moved = new Set(fields.map(item => item.index))
+  return body.split('\n').filter((_, index) => !moved.has(index)).join('\n').trim()
 }
 
 function candidateIsNonEmpty(packageAbs: string, name: string): boolean {
@@ -582,12 +634,19 @@ function planSettlementUnsafe(
     const target = paths.账本('时间线')
     const existing = readExisting(bookRoot, target)
     if (existing === null) return { ok: false, reason: `真源不存在：${target}` }
+    const previousTimes = new Map<string, string | undefined>()
+    if (mode === '更正') {
+      const history = parseLedgerHistory(existing, '时间线', target)
+      if (!history.ok) return { ok: false, reason: history.reason }
+      for (const entry of history.entries) previousTimes.set(entry.名称, entry.字段[DOCUMENT_FIELDS.storyTime.name])
+    }
     ops.push({
       relPath: target,
-      content: timeline.reduce(
-        (text, item) => write(text, item.title, timelineBlock(item, chapter, source, approval.裁决记录), '时间线'),
-        existing,
-      ),
+      content: timeline.reduce((text, item) => {
+        const block = timelineBlock(item, chapter, source, approval.裁决记录, previousTimes.get(item.title))
+        if (mode === '更正') previousTimes.set(item.title, block.time)
+        return write(text, item.title, block.content, '时间线')
+      }, existing),
     })
   }
 
@@ -598,8 +657,8 @@ function planSettlementUnsafe(
     if (entries.length === 0) continue
     if (mode === '更正') {
       for (const entry of entries) {
-        const names = [...entry.body.matchAll(/^\s*(?:[-*]\s*)?名称[：:]\s*(.*?)\s*$/gm)].map(match => match[1]!.trim())
-        if (names.length > 1 || (names.length === 1 && names[0] !== entry.title)) {
+        const names = ledgerLead(entry).filter(item => item.field === '名称').map(item => item.value)
+        if (names.length > 1 || (names.length === 1 && names[0] !== '' && names[0] !== entry.title)) {
           return { ok: false, reason: `账本「${kind}」更正候选名称与标题存在歧义：${entry.title}` }
         }
       }

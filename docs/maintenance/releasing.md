@@ -77,7 +77,7 @@ CI 的分片、诊断与历史失败分析见 [CI 维护说明](ci.md)。
 
 手动流程需要下载未公开的 draft 附件，因此 publish 和 installation job 的 GITHUB_TOKEN 需要 contents: write（只有读取权限会报 release not found）。这与 npm token 分开：NPM_TOKEN 仍仅注入 publish 的上传步骤，installation 不携带 npm 凭据；安装验证通过后 finalize 才公开 draft。
 
-安装验收必须传入 --companion <同批桌宠.tgz>。full 只依赖写作与检索，桌宠独立安装。用户通过侧栏插件页安装，进阶命令见 [CLI 维护说明](cli-install.md)。
+tag 构建阶段的原件安装验收必须传入 --companion <同批桌宠.tgz>。npm 发布后的 registry 安装验收只验证主包、检索和完整版；桌宠 registry 安装独立验证，不阻塞主发行。full 只依赖写作与检索，桌宠独立安装。用户通过侧栏插件页安装，进阶命令见 [CLI 维护说明](cli-install.md)。
 
 ### 早期 preview 发行记录
 

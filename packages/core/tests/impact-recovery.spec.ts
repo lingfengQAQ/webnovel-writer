@@ -59,7 +59,7 @@ describe('影响分析与断更恢复', () => {
       ['时间线', '## 城门异响\n事件：发现异常\n章号：第0001章\n'],
     ] as const) writeFileAtomic(root, `账本/${name}.md`, `# ${name}\n\n${body}`)
     for (const name of ['文风', '决策', '对话', '灵感']) {
-      writeFileAtomic(root, `本书记忆/${name}.md`, `# ${name}\n\n## 条目\n状态：已确认\n正文：已沉淀\n`)
+      writeFileAtomic(root, `本书记忆/${name}条目.md`, serializeDocument({ 名称: `${name}条目`, 类: name, 状态: '已确认' }, '已沉淀。'))
     }
     writeFileAtomic(root, paths.计划时间线(1), '# 计划时间线\n\n## 窗口覆盖\n- 城门异响〔已确认〕\n- 尚未发生〔暂定〕\n')
     const snapshot = rebuildResume(root, { 卷: 1, 章: 1, 章名: '开篇任务' })
@@ -90,5 +90,14 @@ describe('影响分析与断更恢复', () => {
     expect(snapshot.ledger.entries.length).toBeGreaterThan(0)
     expect(snapshot.statusCard).toContain('解析失败')
     expect(snapshot.statusCard).not.toContain('部分缺失')
+  })
+  it('旧分类记忆不进入恢复材料，状态卡明确显示失败并保留维护指引', () => {
+    const root = mkBook(), original = '# 决策\n## 旧条目\n状态：已确认\n### 正文\n旧决定。\n'
+    writeFileAtomic(root, '本书记忆/决策.md', original)
+    const snapshot = rebuildResume(root, { 卷: 1, 章: 1, 章名: '开篇任务' })
+    expect(snapshot.memory).toMatchObject({ ok: false, kind: 'parse-error', entries: [] })
+    expect(!snapshot.memory.ok && snapshot.memory.reason).toContain('预览升级')
+    expect(snapshot.statusCard).toContain('解析失败')
+    expect(fs.readFileSync(path.join(root, '本书记忆/决策.md'), 'utf8')).toBe(original)
   })
 })

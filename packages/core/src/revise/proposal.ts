@@ -193,7 +193,7 @@ export function retconEventOps(
     日期: new Date().toISOString(),
   }
   const body = ['# 补偿事件记录', '', input.摘要.trim(), '', '## 账本留痕', '', input.账本留痕.trim(), ''].join('\n')
-  return { relPath, content: body }
+  return { relPath, content: serializeDocument(fields, body) }
 }
 
 /**

@@ -15,6 +15,12 @@ page.on('request', r => { if (/^https?:/.test(r.url()) && !r.url().startsWith('h
 let graphData = model
 await page.route('**/api/webnovel/study/graph', route => route.fulfill({ json: { ok: true, value: route.request().postDataJSON().space === 'book:acceptance-a' ? graphData : { ...model, records: [], edges: [], events: [] } } }))
 const ready = async () => { await page.waitForTimeout(150); await page.locator('.nw-g6-map[data-ready="true"]').waitFor() }
+// DSH Menu replaced the native select: open the trigger named by the choice, then pick the row.
+const choose = async (label, option) => {
+  await page.getByRole('button', { name: new RegExp('^' + label) }).click()
+  await page.getByRole('menu').getByRole('menuitem', { name: option, exact: true }).click()
+  await page.getByRole('menu').waitFor({ state: 'hidden' })
+}
 const count = () => page.locator('[aria-label="选择图谱记录"] optgroup[label="人物与条目"] option').count()
 const pick = async id => { await page.getByLabel('选择图谱记录', { exact: true }).selectOption(id); await ready() }
 const chapter = async n => { await page.getByLabel('图谱章节时间线').fill(String(n)); await ready() }
@@ -28,8 +34,8 @@ try {
   const workspace = page.getByRole('treeitem', { name: /^S5 临时验收书房/ }).first(); if (await workspace.getAttribute('aria-expanded') === 'false') await workspace.click()
   await page.getByText('S5 书房验收', { exact: true }).first().click()
   await page.getByRole('tab', { name: '可视化', exact: true }).click()
-  await page.getByLabel('选择可视化作品', { exact: true }).selectOption('book:acceptance-a')
-  await page.getByRole('button', { name: '人物关系', exact: true }).click(); await ready()
+  await choose('选择可视化作品', '验收作品甲')
+  await page.getByRole('tab', { name: '人物关系', exact: true }).click(); await ready()
   assert.equal(await count(), 37); await page.getByText('37 个节点 · 66 条关联', { exact: true }).waitFor()
   await capture('g6-overview-light'); report.checks.push('实际产品显示已确认故事样本：37节点、66关联、五类实体')
   await pick('father'); assert.equal(await page.locator('.nw-graph-history li').count(), 2); await page.locator('.nw-inspector').filter({ hasText: '紧张' }).waitFor(); await capture('g6-relation-history')
@@ -39,8 +45,8 @@ try {
   assert.equal(await page.locator('option[value="manage"]').count(), 0)
   await page.getByRole('button', { name: '回到最新', exact: true }).click(); await ready()
   await page.getByLabel('包括计划').check(); await ready(); assert.equal(await count(), 39)
-  await page.getByLabel('图谱信息视图').selectOption('reader'); await ready(); assert.equal(await page.locator('option[value="poetry"],option[value="finance"],option[value="oldaccount"]').count(), 0)
-  await page.getByLabel('图谱信息视图').selectOption('author'); await page.getByLabel('包括计划').uncheck(); await ready()
+  await page.getByRole('tablist', { name: '图谱信息视图' }).getByRole('tab', { name: '仅已披露', exact: true }).click(); await ready(); assert.equal(await page.locator('option[value="poetry"],option[value="finance"],option[value="oldaccount"]').count(), 0)
+  await page.getByRole('tablist', { name: '图谱信息视图' }).getByRole('tab', { name: '作者视角', exact: true }).click(); await page.getByLabel('包括计划').uncheck(); await ready()
   report.checks.push('旧章历史不显示未来版本、已埋/已收、失效关系、计划与披露筛选')
   await pick('baoyu'); await page.getByRole('button', { name: '直接关联', exact: true }).click(); await ready(); const one = await count()
   await page.getByRole('button', { name: '更多关联', exact: true }).click(); await ready(); assert.ok(await count() > one)
@@ -68,9 +74,9 @@ try {
   await page.setViewportSize({ width: 360, height: 1000 }); await ready(); await capture('g6-360px'); assert.equal(await page.locator('.nw-viz').evaluate(el => el.scrollWidth > el.clientWidth + 1), false)
   report.checks.push('缩放、键盘平移/归位、全屏含详情、深浅主题、720/360px无横向溢出')
   await page.setViewportSize({ width: 1500, height: 1250 }); await page.getByLabel('搜索图谱').fill('不存在的名字'); await page.getByText('当前没有匹配记录', { exact: true }).waitFor(); await page.getByLabel('搜索图谱').fill(''); await ready()
-  await page.getByLabel('选择可视化作品').selectOption('book:acceptance-b'); await page.getByText('还没有人物关系', { exact: true }).waitFor(); assert.equal(await page.locator('.nw-inspector').count(), 0)
+  await choose('选择可视化作品', '验收作品乙'); await page.getByText('还没有人物关系', { exact: true }).waitFor(); assert.equal(await page.locator('.nw-inspector').count(), 0)
   graphData = { ...model, records: Array.from({ length: 185 }, (_, i) => ({ ...model.records[0], id: 'stress' + i, label: '长中文测试人物' + i })), edges: [], events: [] }
-  await page.getByLabel('选择可视化作品').selectOption('book:acceptance-a'); await ready(); assert.equal(await count(), 180)
+  await choose('选择可视化作品', '验收作品甲'); await ready(); assert.equal(await count(), 180)
   await page.getByLabel('搜索图谱').fill('长中文测试人物184'); await ready(); assert.equal(await count(), 1); await page.locator('.nw-map-search-results button').click(); await ready(); await page.getByRole('heading', { name: '长中文测试人物184', exact: true }).waitFor(); assert.equal(await count(), 1)
   const singleBox = await page.locator('.nw-g6-canvas').boundingBox()
   await page.locator('.nw-g6-scroll').scrollIntoViewIfNeeded()

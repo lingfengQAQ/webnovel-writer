@@ -5,8 +5,11 @@ import { pathToFileURL } from 'node:url'
 import { createPresetAgent, resumePresetAgent } from './preset-agents.mjs'
 
 const labels = { drafting: '正文起草', polish: '润色', revision: '改稿', review: '审读', settle: '沉淀对账' }
-export async function checkWorkerPolicy({ book, workspace, ctx, service, check, report, host, execute, toggle, settingsProfile, toolCatalog }) {
+export async function checkWorkerPolicy({ root, book, workspace, ctx, service, check, report, host, execute, toggle, settingsProfile, toolCatalog }) {
   const { LlmAdapter } = await import(host === undefined ? '@deepseek-ai/dsh-llm' : pathToFileURL(host.entry('@deepseek-ai/dsh-llm')).href)
+  const { WorkflowObserver, observeWorkflow } = await import(pathToFileURL(path.join(root, 'workflow-observer.mjs')).href)
+  const workflow = new WorkflowObserver()
+  observeWorkflow(ctx, workflow)
   const cases = new Map()
   const parentNotices = new Map()
   let serial = 0
@@ -48,6 +51,7 @@ export async function checkWorkerPolicy({ book, workspace, ctx, service, check, 
       const key = /\[probe:([^\]]+)\]/.exec(textOf(task))[1]
       const test = cases.get(key)
       assert.ok(test)
+      if (test.role) assert.ok(textOf(task).includes('<!-- scriptor-assignment:v1:{"bookId":"worker-fixture-book","chapter":3} -->'))
       verify(options, test)
       test.requests++
       test.childId = options.sessionId
@@ -67,16 +71,24 @@ export async function checkWorkerPolicy({ book, workspace, ctx, service, check, 
   service('llm').registerAdapter(['worker-fixture'], new Adapter())
   const main = await createPresetAgent(service('agents'), { sessionId: 'worker-main', meta: { cwd: workspace },
     agentOptions: { provider: 'worker-fixture', model: 'fixture' } })
+  const workflowLog = []
+  const workflowAgent = { get status() { return main.agent.status }, session: { header: main.agent.session.header,
+    get seq() { return workflowLog.length }, eventAt: index => workflowLog[index] } }
   const novelNames = () => service('tools').schemas(main.agent).map(tool => tool.name).filter(name => name.startsWith('novel_')).sort()
   const startCase = async (role, options = {}) => {
     const key = String(++serial)
     const test = { role, requests: 0, file: path.join(book, `草稿区/草稿/卷01-角色${key}/稿1.md`),
       entered: Promise.withResolvers(), release: Promise.withResolvers(), ...options }
     cases.set(key, test)
-    const result = await execute(main.agent, role ? 'novel_delegate' : 'subagent', {
-      ...(role ? { role } : {}), description: '起草润色审读研究（标题不决定权限）',
+    const args = {
+      ...(role ? { role, bookId: 'worker-fixture-book', chapter: 3 } : {}), description: '起草润色审读研究（标题不决定权限）',
       prompt: `[probe:${key}] 检查工具可用性并返回。`, ...(options.preset ? { agent_preset: options.preset } : {}),
-    })
+    }
+    // Explicit parent call records; activation events themselves come from the real DSH runtime.
+    test.callId = `workflow-${key}`
+    workflowLog.push({ type: 'tool/call', time: Date.now(), data: { callId: test.callId, name: role ? 'novel_delegate' : 'subagent', arguments: JSON.stringify(args) } })
+    const result = await execute(main.agent, role ? 'novel_delegate' : 'subagent', args)
+    workflowLog.push({ type: 'tool/result', time: Date.now(), data: { message: { role: 'tool', toolCallId: test.callId, content: [{ type: 'text', text: JSON.stringify(result.value) }] } } })
     assert.equal(result.isError, false, JSON.stringify(result))
     assert.equal(result.value.kind, 'activation')
     test.childId = result.value.subagentId
@@ -92,6 +104,7 @@ export async function checkWorkerPolicy({ book, workspace, ctx, service, check, 
     else assert.match(parentNotices.get(test.childId), /完成/)
     assert.equal(service('agents').get(test.childId), undefined, 'settled children release their live Agent')
     const { role } = test
+    if (role) assert.equal(workflow.read(workflowAgent, 'worker-fixture-book').calls.find(call => call.id === test.callId)?.state, test.fail ? 'error' : 'success')
     assert.equal(fs.existsSync(test.file), Boolean(role && !readOnly(role)))
     return test
   }
@@ -99,9 +112,9 @@ export async function checkWorkerPolicy({ book, workspace, ctx, service, check, 
   try {
     await check('原生委派按显式角色隔离规则与执行权限', async () => {
       assert.deepEqual(novelNames(), [...toolCatalog.production].sort())
-      assert.equal(toolCatalog.business.length, 31)
+      assert.equal(toolCatalog.business.length, 36)
       assert.equal(toolCatalog.conditional.length, 1)
-      assert.equal(new Set(toolCatalog.production).size, 32)
+      assert.equal(new Set(toolCatalog.production).size, 37)
       for (const role of Object.keys(labels)) await runCase(role)
       await runCase(undefined)
       // Same parent, overlapping starts: one role must not leak into its sibling.
@@ -113,10 +126,12 @@ export async function checkWorkerPolicy({ book, workspace, ctx, service, check, 
       await runCase('review', { fail: true })
       const cancelled = await startCase('drafting', { hold: true })
       await cancelled.entered.promise
+      assert.equal(workflow.read(workflowAgent, 'worker-fixture-book').calls.find(call => call.id === cancelled.callId)?.state, 'running')
       service('subagents').interrupt(cancelled.childId, { kind: 'ancestor', agent: main.agent })
       cancelled.release.resolve()
       await service('subagents').waitForChildren(main.agent)
       await main.agent.whenIdle()
+      assert.equal(workflow.read(workflowAgent, 'worker-fixture-book').calls.find(call => call.id === cancelled.callId)?.state, 'stopped')
       assert.equal(fs.existsSync(cancelled.file), false)
       assert.match(parentNotices.get(cancelled.childId), /was stopped before it finished/)
       assert.equal((await execute(main.agent, 'pwsh', {})).isError, false)
@@ -126,7 +141,7 @@ export async function checkWorkerPolicy({ book, workspace, ctx, service, check, 
       assert.equal(service('tools').schemas(main.agent).filter(tool => tool.name === 'subagent').length, 1)
       assert.equal((await execute(main.agent, 'novel_delegate', { role: 'research', prompt: '不可创建', description: '非法角色' })).isError, true)
       report.workerPolicy = { explicitRoles: 5, ordinaryUnchanged: true, concurrentSiblings: true, nativeSchemaPreserved: true,
-        independentPreset: true, activationThenCompletion: true, failedCompletion: true, cancelledWithoutWrite: true,
+        independentPreset: true, explicitBookChapterPreserved: true, nativeWorkflowLifecycle: true, activationThenCompletion: true, failedCompletion: true, cancelledWithoutWrite: true,
         tools: { business: toolCatalog.business.length, conditional: toolCatalog.conditional.length, registered: novelNames().length } }
     })
     await check('委派工具随原生入口和插件装卸且角色可恢复', async () => {
@@ -144,11 +159,17 @@ export async function checkWorkerPolicy({ book, workspace, ctx, service, check, 
       assert.ok(child)
       await toggle('webnovel', true)
       assert.deepEqual(novelNames(), [])
-      assert.equal((await execute(child, 'pwsh', {})).isError, false)
+      const callsBeforeDisable = shells
+      await assert.rejects(execute(child, 'pwsh', {}), error => error.code === 'TOOL_EXECUTOR_UNAVAILABLE')
+      await assert.rejects(service('systemPrompt').assemble({ agent: child, scope: child }), error => error.code === 'TOOL_EXECUTOR_UNAVAILABLE')
+      assert.equal(shells, callsBeforeDisable)
       await toggle('webnovel', false)
       assert.deepEqual(novelNames(), [...toolCatalog.production].sort())
       assert.equal((await execute(child, 'pwsh', {})).isError, true)
       assert.equal((await execute(child, 'write', { file_path: test.file, content: '不应写入' })).isError, true)
+      assert.equal((await execute(child, 'read', { file_path: path.join(book, '作品契约/契约.md') })).isError, false)
+      const restoredPolicy = await service('systemPrompt').assemble({ agent: child, scope: child })
+      assert.ok(restoredPolicy.sections.find(section => section.name === 'webnovel.worker-policy')?.text.includes('【当前角色：审读】'))
       test.release.resolve()
       await finishCase(test)
       await service('sessionPersistence').flush()

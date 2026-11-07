@@ -8,9 +8,9 @@ describe('业务与条件委派工具清单', () => {
   it('完整清单包含业务工厂与条件工具，名称唯一且不混入测试工具', () => {
     const tools = createNovelTools({ workspaceRoot: () => undefined, bookRootOfBookId: () => undefined })
     expect(tools.map(tool => tool.name)).toEqual(NOVEL_TOOL_NAMES)
-    expect(NOVEL_TOOL_NAMES).toHaveLength(31)
+    expect(NOVEL_TOOL_NAMES).toHaveLength(36)
     expect(NOVEL_CONDITIONAL_TOOL_NAMES).toEqual(['novel_delegate'])
-    expect(NOVEL_PRODUCTION_TOOL_NAMES).toHaveLength(32)
+    expect(NOVEL_PRODUCTION_TOOL_NAMES).toHaveLength(37)
     expect(new Set(NOVEL_PRODUCTION_TOOL_NAMES).size).toBe(NOVEL_PRODUCTION_TOOL_NAMES.length)
     for (const name of REFERENCE_TOOL_NAMES) expect(NOVEL_TOOL_NAMES).toContain(name)
     for (const name of NOVEL_TEST_TOOL_NAMES) expect(NOVEL_PRODUCTION_TOOL_NAMES).not.toContain(name)

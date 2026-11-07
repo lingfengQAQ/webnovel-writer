@@ -1,0 +1,53 @@
+function factOps(bookRoot: string, sections: readonly FactSection[], chapter: ChapterKey, mode: SettlementMode): readonly FileOp[] {
+  const ops: FileOp[] = []
+  const chapterLabel = `第${String(chapter.章).padStart(4, '0')}章`
+  const source = paths.定稿章(chapter.卷, chapter.章, chapter.章名)
+  for (const section of sections) {
+    assertSegment(section.module, '世界书模块名')
+    assertSegment(section.title, '世界书条目名')
+    const moduleDir = path.join(bookRoot, '世界书', section.module)
+    if (!fs.existsSync(moduleDir) || !fs.statSync(moduleDir).isDirectory()) {
+      throw new Error(`世界书模块「${section.module}」不存在，不猜模块`)
+    }
+    const rel = `世界书/${section.module}/${section.title}.md`
+    const existing = readExisting(bookRoot, rel)
+    if (existing === null) {
+      if (mode === '更正') throw new Error(`世界书更正目标条目不存在：${rel}`)
+      ops.push({
+        relPath: rel,
+        content: serializeDocument(
+          {
+            名称: section.title,
+            类型: section.module,
+            性质: '事实',
+            状态: '已成事实',
+            来源: source,
+            版本: 1,
+          },
+          section.body,
+          ['名称', '类型', '性质', '状态', '来源', '版本'],
+        ),
+      })
+      continue
+    }
+    const doc = parseDocument(existing)
+    if (!doc.ok) throw new Error(`世界书条目解析失败：${rel}——${doc.detail}`)
+    const parent = extractVersionFields(doc.data.fields).版本
+    const generator = mode === '更正' ? '吃书补偿' : '事实沉淀'
+    const fields = applyVersionFields(
+      { ...doc.data.fields },
+      parent === null ? initialVersion(generator) : bumpVersion(parent, generator),
+    )
+    const appended = `${doc.data.body.replace(/\n+$/, '')}\n\n### 事实@${chapterLabel}\n来源：${source}\n${section.body}\n`
+    ops.push({ relPath: rel, content: serializeDocument(fields, mode === '更正' ? section.body : appended) })
+  }
+  return ops
+}
+
+function readExisting(root: string, relPath: string): string | null {
+  try {
+    return fs.readFileSync(path.join(root, relPath), 'utf-8')
+  } catch {
+    return null
+  }
+}

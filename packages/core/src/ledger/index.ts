@@ -1,11 +1,14 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { parseDocument } from '../repo/frontmatter'
+import { DOCUMENT_FIELDS, TIMELINE_FIELD_KEYS } from '../repo/document-fields'
+import { currentBookMemoryDocument } from '../repo/book-memory-contract'
+import { ACTIVE_CLUE_STATES, CLUE_FIELDS, LEDGER_FIELD_KEYS } from '../repo/ledger-field-contract'
 import { isLegacySeedPlan } from '../design/legacy-seed'
+import { FIELD_RE, ledgerContentShape } from './clue'
 import {
   CN_NUMERAL,
   LEDGER_NAMES,
-  MEMORY_KINDS,
   type MemoryKind,
   type LedgerName,
   paths,
@@ -140,7 +143,6 @@ export type BookLedgerReconciliationResult =
   | { readonly ok: true; readonly report: BookLedgerReconciliation }
   | { readonly ok: false; readonly kind: 'missing' | 'parse-error'; readonly reason: string; readonly file?: string }
 
-const FIELD_RE = /^\s*(?:[-*]\s*)?([^：:]+)[：:]\s*(.*?)\s*$/
 const GENERIC_PLAN_HEADINGS = new Set(['窗口覆盖', '窗口外锚点', '计划', '时间线'])
 const PLAN_SECTIONS = ['窗口覆盖', '窗口外锚点']
 /**
@@ -149,9 +151,9 @@ const PLAN_SECTIONS = ['窗口覆盖', '窗口外锚点']
  */
 const PLAN_NOTE_RE = /^(?:与[^，。；;]*(?:并行|同时)|并行|间隔|本卷时间|备注|说明|待[^，。；;]*确认)/
 const STRUCTURED_FIELDS = new Set([
-  '名称', '类型', '状态', '计划来源', '实际落点', '来源', '裁决记录',
-  '埋设点', '预期兑现区间', '弃因', '事件', '章号', '类',
+  ...LEDGER_FIELD_KEYS, ...CLUE_FIELDS, '事件', '章号', '类',
 ])
+const TIMELINE_STRUCTURED_FIELDS = new Set([...STRUCTURED_FIELDS, ...TIMELINE_FIELD_KEYS])
 
 function read(root: string, relPath: string, label: string): { readonly ok: true; readonly text: string } | { readonly ok: false; readonly kind: 'missing'; readonly reason: string } {
   try {
@@ -172,10 +174,12 @@ interface ParsedEntry<T extends string> {
 
 function parseEntries<T extends string>(text: string, category: T, source: string): ParsedEntry<T>[] | { readonly reason: string; readonly line: number } {
   const lines = text.replace(/\r\n/g, '\n').split('\n')
+  const acceptedFields = category === '时间线' ? TIMELINE_STRUCTURED_FIELDS : STRUCTURED_FIELDS
   const entries: ParsedEntry<T>[] = []
   let title: string | null = null
   let titleLine = 0
-  let body: Array<{ readonly line: number; readonly text: string }> = []
+  let body: Array<{ readonly line: number; readonly text: string; readonly fenced: boolean }> = []
+  let fence: { char: string; length: number } | undefined
 
   const flush = (): void => {
     if (title === null) return
@@ -183,14 +187,14 @@ function parseEntries<T extends string>(text: string, category: T, source: strin
     const prose: string[] = []
     let inBody = false
     for (const item of body) {
-      if (/^###\s+正文\s*$/.test(item.text.trim())) {
+      if (!item.fenced && /^###\s+正文\s*$/.test(item.text.trim())) {
         inBody = true
         continue
       }
       const match = FIELD_RE.exec(item.text)
       const field = match?.[1]?.trim()
       const value = match?.[2]?.trim()
-      if (!inBody && field !== undefined && value !== undefined && STRUCTURED_FIELDS.has(field)) {
+      if (!inBody && !item.fenced && field !== undefined && value !== undefined && acceptedFields.has(field)) {
         if (fields[field] !== undefined) {
           throw new ParseEntryError(`字段重复：${field}`, item.line)
         }
@@ -200,6 +204,10 @@ function parseEntries<T extends string>(text: string, category: T, source: strin
       prose.push(item.text)
     }
     const bodyText = prose.join('\n').trim()
+    if (category === '线索' || category === '时间线') {
+      const shape = ledgerContentShape(category === '线索' ? '线索' : '时间线', fields, bodyText)
+      if (shape) throw new ParseEntryError(shape.reason, titleLine)
+    }
     entries.push({ 分类: category, 名称: title, 字段: fields, 正文: bodyText, 来源文件: source, 行号: titleLine })
     body = []
   }
@@ -207,7 +215,12 @@ function parseEntries<T extends string>(text: string, category: T, source: strin
   try {
     for (let index = 0; index < lines.length; index += 1) {
       const line = lines[index] ?? ''
-      const heading = /^##\s+(.+?)\s*$/.exec(line.trim())
+      const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line)
+      const fenced = !!fence || !!marker
+      if (fence) {
+        if (marker && marker[1]![0] === fence.char && marker[1]!.length >= fence.length && !marker[2]!.trim()) fence = undefined
+      } else if (marker) fence = { char: marker[1]![0]!, length: marker[1]!.length }
+      const heading = !fenced ? /^##\s+(.+?)\s*$/.exec(line.trim()) : null
       if (heading !== null) {
         flush()
         const nextTitle = heading[1]!.trim()
@@ -216,7 +229,7 @@ function parseEntries<T extends string>(text: string, category: T, source: strin
         titleLine = index + 1
         continue
       }
-      if (title !== null) body.push({ line: index + 1, text: line })
+      if (title !== null) body.push({ line: index + 1, text: line, fenced })
     }
     flush()
   } catch (err) {
@@ -294,8 +307,24 @@ function currentEntries<T extends { readonly 名称: string }>(entries: readonly
 /** 查询五类故事账本，只读并区分缺失与解析失败。 */
 export function parseLedgerHistory(text: string, category: LedgerName, source: string): LedgerQueryResult {
   const parsed = parseEntries(text, category, source)
-  if (!Array.isArray(parsed)) return { ok: false, kind: 'parse-error', reason: parsed.reason, file: source, entries: [], files: [] }
+  if (!Array.isArray(parsed)) return { ok: false, kind: 'parse-error', reason: `${source}:${parsed.line}:${parsed.reason}`, file: source, entries: [], files: [] }
   return { ok: true, entries: parsed, files: [source] }
+}
+
+/** Reading views include semantic fields that no longer live inside the prose. */
+export function renderTimelineContent(entry: Pick<LedgerEntry, '字段' | '正文'>): string {
+  return [
+    ...[DOCUMENT_FIELDS.timelineEvent.name, DOCUMENT_FIELDS.storyTime.name].flatMap(field => {
+      const value = entry.字段[field]
+      return value === undefined || value === '' ? [] : [`${field}：${value}`]
+    }),
+    entry.正文,
+  ].filter(Boolean).join('\n')
+}
+
+/** Only the current structural time field supplies story time. */
+export function timelineStoryTime(entry: Pick<LedgerEntry, '字段' | '正文'>): string | undefined {
+  return entry.字段['时点']
 }
 
 /** Query current state; history consumers use the same parser without folding it first. */
@@ -351,7 +380,7 @@ export function queryLedger(bookRoot: string, filter?: LedgerEntryFilter): Ledge
 /**
  * 查询本书记忆，只读并区分缺失与解析失败。
  * 新格式＝一事一文件(`本书记忆/<条目名>.md`,frontmatter 带 类);旧格式＝
- * 一类一文件(`本书记忆/<类>.md`,`## 条目` 分节),条目标 `格式:'旧'`,不自动迁移。
+ * 旧分类有正文时报告升级，不作为当前条目读取；空分类脚手架可保留。
  */
 export function queryMemory(
   bookRoot: string,
@@ -359,22 +388,44 @@ export function queryMemory(
 ): MemoryQueryResult {
   const collected: MemoryEntry[] = []
   const files: string[] = []
+  const missing: string[] = []
   const failures: string[] = []
   let firstFailure: string | undefined
   const dir = path.join(bookRoot, '本书记忆')
   let names: string[] = []
   try {
     names = fs.readdirSync(dir).filter((n) => n.endsWith('.md') && n !== '索引.md').sort()
-  } catch {
-    names = []
+  } catch (error) {
+    const absent = (error as NodeJS.ErrnoException).code === 'ENOENT'
+    return { ok: false, kind: absent ? 'missing' : 'parse-error', reason: absent ? '本书记忆不存在' : `本书记忆目录读取失败：${error instanceof Error ? error.message : String(error)}`, file: '本书记忆', entries: [], files: [] }
   }
   for (const name of names) {
     const source = paths.本书记忆条目(name.replace(/\.md$/, ''))
-    const result = read(bookRoot, source, '本书记忆文件')
-    if (!result.ok) continue
-    const doc = parseDocumentFs(result.text)
-    const 类 = doc?.fields['类']
-    if (doc !== null && typeof 类 === 'string' && (MEMORY_KINDS as readonly string[]).includes(类)) {
+    let text: string
+    try {
+      text = fs.readFileSync(path.join(bookRoot, source), 'utf-8')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') missing.push(source)
+      else {
+        failures.push(`${source}:本书记忆文件读取失败——${error instanceof Error ? error.message : String(error)}`)
+        firstFailure ??= source
+      }
+      continue
+    }
+    const parsedDoc = parseDocument(text)
+    if (!parsedDoc.ok) {
+      failures.push(`${source}:本书记忆解析失败——${parsedDoc.detail}`)
+      firstFailure ??= source
+      continue
+    }
+    const doc = parsedDoc.data
+    const shape = currentBookMemoryDocument(doc.fields, name.replace(/\.md$/, ''), doc.body)
+    if (!shape.ok) {
+      failures.push(`${source}:${shape.reason}`)
+      firstFailure ??= source
+      continue
+    }
+    if (shape.format === 'current') {
       // 新格式:一事一文件,一个文件一条目
       const fields: Record<string, string> = {}
       for (const [k, v] of Object.entries(doc.fields)) {
@@ -382,7 +433,7 @@ export function queryMemory(
       }
       files.push(source)
       collected.push({
-        类: 类 as MemoryKind,
+        类: shape.memoryKind,
         名称: typeof doc.fields['名称'] === 'string' ? doc.fields['名称'] : name.replace(/\.md$/, ''),
         字段: fields,
         正文: doc.body,
@@ -391,42 +442,21 @@ export function queryMemory(
       })
       continue
     }
-    // 旧格式候选:文件名即类名
-    const base = name.replace(/\.md$/, '')
-    if (!(MEMORY_KINDS as readonly string[]).includes(base)) continue
-    const parsed = parseEntries(result.text, base as MemoryKind, source)
-    if (!Array.isArray(parsed)) {
-      const detail = `${source}:${parsed.line}:${parsed.reason}`
-      failures.push(detail)
-      firstFailure ??= source
-      continue
-    }
+    // Legal empty scaffolds contain no entries.
     files.push(source)
-    collected.push(...parsed.map((entry) => ({
-      类: entry.分类,
-      名称: entry.名称,
-      字段: entry.字段,
-      正文: entry.正文,
-      来源文件: entry.来源文件,
-      行号: entry.行号,
-      格式: '旧' as const,
-    })))
   }
   const current = currentEntries(collected, (entry) => `${entry.类}:${normalizeName(entry.名称)}`)
     .filter((entry) => memoryMatches(entry, filter))
   if (failures.length > 0) {
     return { ok: false, kind: 'parse-error', reason: failures.join('；'), file: firstFailure, entries: current, files }
   }
+  if (missing.length > 0) {
+    return { ok: false, kind: 'missing', reason: `本书记忆文件缺失：${missing.join('、')}`, file: missing[0], entries: current, files }
+  }
   if (files.length === 0) {
     return { ok: false, kind: 'missing', reason: '本书记忆不存在', entries: current, files }
   }
   return { ok: true, entries: current, files }
-}
-
-/** parseDocument 的容错包装:读侧只需要「有 frontmatter 字段就用,没有就按旧格式」。 */
-function parseDocumentFs(text: string): { readonly fields: Record<string, unknown>; readonly body: string } | null {
-  const r = parseDocument(text)
-  return r.ok ? { fields: r.data.fields, body: r.data.body } : null
 }
 
 interface PlanParse {
@@ -632,7 +662,7 @@ export function queryDueLedger(bookRoot: string, key: { readonly 卷: number; re
   const 区间不明: DueLedgerItem[] = []
   for (const entry of ledger.entries) {
     const status = entry.字段['状态']
-    if (status !== '已埋' && status !== '已示') continue
+    if (status === undefined || !(ACTIVE_CLUE_STATES as readonly string[]).includes(status)) continue
     const parsed = parseDueInterval(entry.字段['预期兑现区间'] ?? '')
     if (parsed === null) {
       区间不明.push(dueItem(entry, status, null))

@@ -1,4 +1,4 @@
-import type { FileRef, StudyDocument, StudySave } from '../study/types'
+import type { FileRef, SourceLocation, StudyDocument, StudySave } from '../study/types'
 import { callStudy, StudyApiError } from './api'
 
 export const fileKey = (ref: FileRef): string => JSON.stringify([ref.space, ref.path])
@@ -15,6 +15,7 @@ export interface BufferState {
   attempt?: SaveAttempt
   /** Accepted suggestion ids submitted with the save. Notify retries send this same list. */
   accepted?: readonly string[]
+  location?: SourceLocation & { readonly requestId: number }
 }
 export interface SessionEditor {
   readonly buffers: Readonly<Record<string, BufferState>>
@@ -47,7 +48,7 @@ export function createEditorStore(reveal?: (sessionId: string) => void) {
   }
   const updateBuffer = (id: string, key: string, patch: Partial<BufferState>) => {
     const state = get(id), existing = state.buffers[key]
-    if (existing) update(id, { buffers: { ...state.buffers, [key]: { ...existing, ...patch } } })
+    if (existing) update(id, { buffers: { ...state.buffers, [key]: { ...existing, ...('text' in patch || 'document' in patch ? { location: undefined } : {}), ...patch } } })
   }
   const failure = (error: unknown) => ({ error: error instanceof Error ? error.message : '操作失败', errorCode: error instanceof StudyApiError ? error.code : 'network' })
   const receive = (id: string, document: StudyDocument) => {
@@ -84,19 +85,32 @@ export function createEditorStore(reveal?: (sessionId: string) => void) {
     },
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } },
     hasUnsaved() { return [...sessions.values()].some(state => Object.values(state.buffers).some(buffer => buffer.text !== buffer.document.body || buffer.saving || buffer.attempt)) },
-    async open(id: string, ref: FileRef) {
+    async open(id: string, ref: FileRef, location?: SourceLocation) {
       const sequence = (openSequence.get(id) ?? 0) + 1
       openSequence.set(id, sequence)
       let key = fileKey(ref)
       update(id, { error: undefined, notice: undefined })
       try {
-        if (!get(id).buffers[key]) {
+        if (!get(id).buffers[key] || location) {
           const document = await callStudy<StudyDocument>(id, 'read', { ref })
           if (!live || openSequence.get(id) !== sequence) return
           key = fileKey(document.ref)
-          if (!get(id).buffers[key]) update(id, { buffers: { ...get(id).buffers, [key]: { document, text: document.body } } })
+          receive(id, document)
+          if (location) {
+            const buffer = get(id).buffers[key]!
+            const prefix = document.prefix ?? '', original = prefix + document.body
+            const from = prefix.length + location.from, to = prefix.length + location.to
+            const valid = location.hash === document.hash && Number.isSafeInteger(from) && Number.isSafeInteger(to)
+              && from >= 0 && to >= from && to <= original.length && original.slice(from, to) === location.quote
+            if (buffer.text !== buffer.document.body || buffer.saving || buffer.attempt) {
+              updateBuffer(id, key, { location: undefined }); update(id, { notice: '当前文档有未保存编辑，已保留编辑；保存或处理差异后可重新定位来源。' })
+            } else if (!valid) {
+              updateBuffer(id, key, { location: undefined }); update(id, { notice: '来源已变化或位置无法核对，请刷新关系视图后重试。' })
+            } else updateBuffer(id, key, { location: { ...location, requestId: sequence } })
+          }
         }
         if (openSequence.get(id) === sequence) {
+          if (!location) updateBuffer(id, key, { location: undefined })
           update(id, { current: key, mode: 'read', selection: '' })
           reveal?.(id)
         }

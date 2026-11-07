@@ -1,7 +1,7 @@
 /** Reference-library data never participates in a target book's fact graph. */
 export const REFERENCE_PROTOCOL = 'reference-1'
 export const PARSE_VERSION = 'txt-epub-1'
-export const REFERENCE_LIMITS = { sourceBytes: 64 * 1024 * 1024, entries: 20_000, entryBytes: 32 * 1024 * 1024, expandedBytes: 256 * 1024 * 1024, batchChars: 6000, overlapChars: 200, outputChars: 48_000 } as const
+export const REFERENCE_LIMITS = { sourceBytes: 64 * 1024 * 1024, entries: 20_000, entryBytes: 32 * 1024 * 1024, expandedBytes: 256 * 1024 * 1024, batchChars: 6000, overlapChars: 200 } as const
 export class ReferenceError extends Error {
   constructor(readonly code: string, message: string) { super(message); this.name = 'ReferenceError' }
 }
@@ -125,10 +125,9 @@ export interface ReferenceManifest {
   mechanisms: Record<string, MechanismRecord[]>
   report?: { path: string; hash: string; inputHash: string }
 }
-export interface ModelInput { system: string; text: string; route: ReferenceRoute; maxOutputTokens: number }
+export interface ModelInput { system: string; text: string; route: ReferenceRoute }
 /** Trusted host route lookup, never provider/model supplied by the model itself. */
 export interface ModelRunner {
   route(): Promise<ReferenceRoute>
-  maxInputChars(): Promise<number>
   run(input: ModelInput, signal: AbortSignal): Promise<string>
 }

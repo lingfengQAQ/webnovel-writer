@@ -1,6 +1,6 @@
 # 日常写作与恢复
 
-Scriptor 8.3.2 配套 DSH 0.2.1-rc.3。操作见 [新编辑器教程](editor.md)。文件卡见 [结果卡与导出成品](result-cards.md)。参考资料见 [参考小说分析](reference-analysis.md)。图谱和流程状态见 [界面参考](ui-reference.md)。
+Scriptor 8.4.0 配套 DSH 0.2.2-rc.1。操作见 [新编辑器教程](editor.md)。文件卡见 [结果卡与导出成品](result-cards.md)。参考资料见 [参考小说分析](reference-analysis.md)。图谱和流程状态见 [界面参考](ui-reference.md)。
 
 新建对话并选择 **写作模式**，再打开原工作区继续。普通对话仍可手动编辑；AI 写作和编辑协作需要写作模式，旧对话不会自动切换。
 

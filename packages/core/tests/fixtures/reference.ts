@@ -16,7 +16,6 @@ export class FakeReferenceRunner implements ModelRunner {
   current: ReferenceRoute = { provider: 'fake', model: 'fixture', service: 'local-fixture' }
   handler?: (input: ModelInput, signal: AbortSignal) => Promise<string>
   async route() { return { ...this.current } }
-  async maxInputChars() { return 600 }
   async run(input: ModelInput, signal: AbortSignal) { this.calls++; return this.handler ? this.handler(input, signal) : JSON.stringify(extractionFor(input)) }
 }
 function crc32(bytes: Buffer): number {

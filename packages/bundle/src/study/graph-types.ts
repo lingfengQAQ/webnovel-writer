@@ -1,4 +1,7 @@
 import type { FileRef } from './types'
+import type { GraphEvidence } from './graph-evidence'
+import type { BookFormatVersionResult } from '@webnovel/core'
+import type { GraphState } from '../indexing/graph-storage'
 
 export interface StoryGraphRecord {
   readonly id: string
@@ -12,11 +15,21 @@ export interface StoryGraphRecord {
   readonly source: FileRef
   readonly line: number
   readonly preview: string
+  readonly evidenceId?: string
+  readonly recordChapter?: number
+  readonly storyTime?: string
+  readonly historyBasis?: GraphEvidence['historyBasis']
+  readonly currentOnlyAt?: number
+  /** Display tags explicitly present on this record, never inferred from names. */
+  readonly affiliations?: readonly { readonly field: string; readonly label: string }[]
 }
 export interface StoryGraphEdge extends StoryGraphRecord {
   readonly from: string
   readonly to: string
   readonly relation: boolean
+  readonly evidenceKind?: 'explicit' | 'reference' | 'extracted'
+  readonly qualifier?: string
+  readonly model?: string
 }
 export interface StoryGraph {
   readonly bookId: string
@@ -26,12 +39,21 @@ export interface StoryGraph {
   readonly edges: readonly StoryGraphEdge[]
   readonly events: readonly StoryGraphRecord[]
   readonly warnings: readonly { path: string; message: string }[]
+  readonly evidence?: readonly GraphEvidence[]
+  readonly entities?: readonly { readonly id: string; readonly label: string; readonly aliases: readonly string[]; readonly kind: string }[]
+  readonly sourceHashes?: Readonly<Record<string, string>>
+  readonly fingerprint?: string
+  readonly format?: BookFormatVersionResult
+  readonly index?: { readonly state?: GraphState; readonly cache: 'missing' | 'ready' | 'stale' | 'invalid'; readonly error?: string }
+  readonly unassigned?: readonly (StoryGraphRecord & { readonly from: string; readonly to: string; readonly qualifier: string; readonly evidenceId: string })[]
 }
 export interface GraphFilter { readonly chapter: number; readonly reader: boolean; readonly unknown: boolean; readonly plans: boolean }
 
 /** The same visibility rule applies to the current projection and its history. */
 export function graphRecordVisible(item: StoryGraphRecord, filter: GraphFilter): boolean {
   return (!item.plan || filter.plans)
+    && (item.currentOnlyAt === undefined || filter.chapter >= item.currentOnlyAt)
+    && (item.recordChapter === undefined || item.recordChapter <= filter.chapter)
     && (item.chapter === undefined ? filter.unknown && !filter.reader : item.chapter <= filter.chapter)
     && (!filter.reader || item.revealChapter !== undefined && item.revealChapter <= filter.chapter)
 }

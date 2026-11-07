@@ -36,6 +36,12 @@ export interface WorkflowCall {
   ended?: number
   summary: string
   failureCode?: string
+  activationId?: string
+  role?: string
+  settledAt?: number
+  /** This call's lifecycle is independent of the parent turn. */
+  background?: boolean
+  lifecycleVerified?: boolean
 }
 export interface WorkflowView {
   available: boolean
@@ -48,6 +54,21 @@ export interface WorkflowView {
 }
 export const recordOf = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 export const isStoppedError = (error: unknown): boolean => ['interrupted', 'ABORTED', 'ABORTED_BEFORE_DISPATCH', 'ASK_ABORTED'].includes(String(recordOf(error).code))
+
+/** Request completion cannot cover an unchecked, partial or unstable maintenance result. */
+export function maintenanceNeedsAttention(value: Record<string, unknown>): boolean {
+  if (value.maintenance === 'book-upgrade') return !['committed', 'already-committed', 'unchanged'].includes(String(value.state))
+  if (!Object.hasOwn(value, '书仓检查') && !Object.hasOwn(value, '开章核对')) return false
+  const inspection = recordOf(value.书仓检查)
+  if (inspection.状态 !== '已检查' || inspection.结论 !== '未发现已知问题' || recordOf(inspection.快照).稳定 !== true) return true
+  if (!Array.isArray(inspection.未检范围) || inspection.未检范围.length > 0 || !Array.isArray(inspection.问题) || inspection.问题.length > 0) return true
+  if (Object.hasOwn(value, '开章核对')) {
+    const opening = recordOf(value.开章核对)
+    if (opening.状态 !== '边界已核对' || recordOf(opening.快照).稳定 !== true) return true
+  }
+  return Object.hasOwn(value, '状态读取') && recordOf(value.状态读取).ok !== true
+}
+
 export function resultState(content: unknown, isError: unknown, error: unknown): Pick<WorkflowCall, 'state' | 'summary'> {
   if (isStoppedError(error)) return { state: 'stopped', summary: '操作已中断，请核对已有结果。' }
   if (isError === true) return { state: 'error', summary: '操作失败，请查看对话中的错误详情。' }
@@ -58,6 +79,6 @@ export function resultState(content: unknown, isError: unknown, error: unknown):
   if (typeof value.ok !== 'boolean') return { state: 'unknown', summary: '结果已返回，完成情况待核对。' }
   if (!value.ok || value.commitState === 'failed') return { state: 'error', summary: '操作未完成，请查看对话中的原因。' }
   if (value.commitState !== undefined && !['committed', 'unchanged', 'not-required'].includes(String(value.commitState))) return { state: 'unknown', summary: '提交结果待核对。' }
-  const pending = value.完成 === false || value.审核通过 === false || ['待处置数', '待继承处置数', '待回写模块', '未决偏离', '待核对', '内容问题'].some(key => typeof value[key] === 'number' ? Number(value[key]) > 0 : Array.isArray(value[key]) && value[key].length > 0)
+  const pending = maintenanceNeedsAttention(value) || value.完成 === false || value.审核通过 === false || ['待处置数', '待继承处置数', '待回写模块', '未决偏离', '待核对', '内容问题'].some(key => typeof value[key] === 'number' ? Number(value[key]) > 0 : Array.isArray(value[key]) && value[key].length > 0)
   return pending ? { state: 'attention', summary: '本次操作已返回，仍有事项待处理。' } : { state: 'success', summary: '本次操作完成，不代表整个环节已完成。' }
 }

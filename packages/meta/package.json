@@ -1,6 +1,6 @@
 {
   "name": "@linfengqaqtat/dsh-scriptor-full",
-  "version": "8.3.2",
+  "version": "8.4.0",
   "description": "网文写作工作台完整版（含可选嵌入提供方）",
   "keywords": [
     "dsh-plugin",
@@ -47,6 +47,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "engines": {
-    "dsh": "0.2.1-rc.3"
+    "dsh": ">=0.2.2-rc.1 <0.3.0-0",
+    "node": ">=24.9.0"
   }
 }

@@ -29,7 +29,7 @@ it('原生 subagent 显式角色、普通同级隔离及持久恢复', async () 
     else {
       const host = loadSourceHost(source)
       fs.mkdirSync(path.join(root, 'node_modules/@deepseek-ai'), { recursive: true })
-      for (const name of ['cordis', 'dsh-tools', 'dsh-llm', 'dsh-credentials', 'dsh-skill-filesystem']) {
+      for (const name of ['cordis', 'dsh-tools', 'dsh-tool-executor-native', 'dsh-llm', 'dsh-credentials', 'dsh-skill-filesystem']) {
         fs.symlinkSync(host.get(`@deepseek-ai/${name}`).directory, path.join(root, 'node_modules/@deepseek-ai', name), 'junction')
       }
     }
@@ -39,12 +39,13 @@ it('原生 subagent 显式角色、普通同级隔离及持久恢复', async () 
       entryPoints: {
         'lib/webnovel': path.join(packageRoot, 'src/index.ts'),
         'lib/preset': path.join(packageRoot, 'src/preset.ts'),
+        'workflow-observer': path.join(packageRoot, 'src/study/workflow.ts'),
         'embedding-provider': path.join(packageRoot, '../embedding-provider/src/index.ts'),
         scenes: path.join(packageRoot, '../embedding-provider/src/scenes.ts'),
         reranking: path.join(packageRoot, '../embedding-provider/src/reranking.ts'),
       },
       outdir: root, outExtension: { '.js': '.mjs' }, bundle: true, platform: 'node', target: 'node20', format: 'esm',
-      external: ['@deepseek-ai/cordis', '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-credentials', '@deepseek-ai/dsh-skill-filesystem', 'node:*'],
+      external: ['@deepseek-ai/cordis', '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-tool-executor-native', '@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-credentials', '@deepseek-ai/dsh-skill-filesystem', 'node:*'],
       banner: { js: "import { createRequire as __createRequire } from 'node:module'\nconst require = __createRequire(import.meta.url)" },
     })
     await promisify(execFile)(process.execPath, [path.join(packageRoot, 'tests/fixtures/host-loader.mjs'), root,
@@ -58,7 +59,7 @@ it('原生 subagent 显式角色、普通同级隔离及持久恢复', async () 
     const report = JSON.parse(fs.readFileSync(path.join(root, 'report.json'), 'utf8'))
     for (const check of Object.values(report.checks) as Array<{ ok: boolean; error?: string }>) expect(check, check.error).toEqual({ ok: true })
     expect(report.workerPolicy).toMatchObject({ explicitRoles: 5, ordinaryUnchanged: true, concurrentSiblings: true, nativeSchemaPreserved: true, restoredRole: true,
-      independentPreset: true, activationThenCompletion: true, failedCompletion: true, cancelledWithoutWrite: true,
-      tools: { business: 31, conditional: 1, registered: 32 } })
+      independentPreset: true, explicitBookChapterPreserved: true, nativeWorkflowLifecycle: true, activationThenCompletion: true, failedCompletion: true, cancelledWithoutWrite: true,
+      tools: { business: 36, conditional: 1, registered: 37 } })
   } finally { removeSync(root) }
 }, 60000)

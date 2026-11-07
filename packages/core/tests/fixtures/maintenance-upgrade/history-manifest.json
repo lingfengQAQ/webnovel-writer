@@ -1,0 +1,182 @@
+{
+  "schema": 1,
+  "evidence": "G: original historical serializer functions executed with explicit synthetic input; not a real book or full historical runtime",
+  "sourceManifest": [
+    {
+      "file": "history-paths.ts.txt",
+      "sourceCommit": "d6659e09715f67ec6481fc075ffa552574854b41",
+      "sourcePath": "packages/core/src/repo/paths.ts",
+      "sourceBlob": "6b353b56fb466755501abe31275dfcc791ba4519",
+      "sourceSha256": "5ed42be3e1c199b76bed9239c4bfe6446693b1becb34a8ae0a38fd63ed55011d",
+      "extractedNames": null,
+      "sha256": "5ed42be3e1c199b76bed9239c4bfe6446693b1becb34a8ae0a38fd63ed55011d"
+    },
+    {
+      "file": "history-clue.ts.txt",
+      "sourceCommit": "d6659e09715f67ec6481fc075ffa552574854b41",
+      "sourcePath": "packages/core/src/settlement/index.ts",
+      "sourceBlob": "017c8575c7753f87b897c09e88d7c024896d5a6d",
+      "sourceSha256": "0544d89d84cf26eb0027d59f63857dabaedbf19dbbec4e1c7f9eb45c868fcba3",
+      "extractedNames": [
+        "checkLedgerSectionFields",
+        "ledgerBlock",
+        "extractField",
+        "stripFields"
+      ],
+      "sha256": "3f29e11ad1bcee80adab2865c39de7c8bb6885402b1c3211757bee803453970c"
+    },
+    {
+      "file": "history-memory.ts.txt",
+      "sourceCommit": "dc0a5d8638e0a6bbc6d8b90e6fd4f09ee8ef2ea9",
+      "sourcePath": "packages/core/src/settlement/index.ts",
+      "sourceBlob": "f801dd07549ef617d7a425e2f6b6948876492db3",
+      "sourceSha256": "45cc6838ea70d3f8601020c1711c54ee61689b3977ae58be97fc2b9b319aef1b",
+      "extractedNames": [
+        "memoryBlock",
+        "extractField",
+        "stripFields"
+      ],
+      "sha256": "eff982c39ae8df3401b5a98ac1dbc66f9cd263984f8e32f4b0741925443685ce"
+    },
+    {
+      "file": "history-timeline.ts.txt",
+      "sourceCommit": "23d3e5ab050c44ddf184a9d2e2cfb18535597a31",
+      "sourcePath": "packages/core/src/settlement/index.ts",
+      "sourceBlob": "888c041a12a07c2dcc435e8c8ae26eb6dd8c6b46",
+      "sourceSha256": "5bd65767bf465cc8a1eb8e328c1dcd04fbfbf0ea0ef338bf843df78e9dcad387",
+      "extractedNames": [
+        "timelineBlock",
+        "withoutLeadingFields",
+        "TIMELINE_FIELDS"
+      ],
+      "sha256": "060e486c550d4ef1127caeb2ae572f253dd2d408f94667b5786a01903c0f51cd"
+    },
+    {
+      "file": "history-leading-fields.ts.txt",
+      "sourceCommit": "23d3e5ab050c44ddf184a9d2e2cfb18535597a31",
+      "sourcePath": "packages/core/src/ledger/clue.ts",
+      "sourceBlob": "cf321850223e1a5c441a2e9a34dbb71c85aef842",
+      "sourceSha256": "915f950d69b1336bd0022bd0f8f582767a9d49b346e8561c18308092dc6503c6",
+      "extractedNames": [
+        "leadingFields",
+        "FIELD_RE"
+      ],
+      "sha256": "e1d40a32f7574443655043e01610745a19b2cebe5137945baf80fc0884971fdf"
+    },
+    {
+      "file": "history-frontmatter.ts.txt",
+      "sourceCommit": "23d3e5ab050c44ddf184a9d2e2cfb18535597a31",
+      "sourcePath": "packages/core/src/repo/frontmatter.ts",
+      "sourceBlob": "51527d62f349ca5a225bc60310e2bca784bfba3e",
+      "sourceSha256": "f891ab3e109846007dcfeb3f73c6c82032b317db10b0a5deb90ce26f74b2e43f",
+      "extractedNames": [
+        "parseDocument",
+        "serializeDocument",
+        "COMMON_FIELD_KEYS",
+        "FM_OPEN",
+        "FM_CLOSE"
+      ],
+      "sha256": "6459a0e01b885fc759596b3480ec930c6469c1008948d1c526ac4ff24fa78d05"
+    },
+    {
+      "file": "history-index.ts.txt",
+      "sourceCommit": "23d3e5ab050c44ddf184a9d2e2cfb18535597a31",
+      "sourcePath": "packages/core/src/memory/write.ts",
+      "sourceBlob": "b5ff7b8df674a779159f20e229f216e1f8494702",
+      "sourceSha256": "8ff61548c763f4e66c054775c4d13ea5f68585a55ba9b8c40ecec235453c2dbb",
+      "extractedNames": [
+        "memoryIndex"
+      ],
+      "sha256": "9ff582ab37f206064756de5098ffa4ea1c881979cd34863e99c3292542f98cd7"
+    },
+    {
+      "file": "history-versions.ts.txt",
+      "sourceCommit": "23d3e5ab050c44ddf184a9d2e2cfb18535597a31",
+      "sourcePath": "packages/core/src/provenance/index.ts",
+      "sourceBlob": "cfe243fedf7805a4e8ab594292faf608f0502681",
+      "sourceSha256": "dd8ff4b62ba31ae25e4f86c0bc0e97432ec484f599033c92675dc6702f473302",
+      "extractedNames": [
+        "extractVersionFields",
+        "applyVersionFields",
+        "initialVersion",
+        "bumpVersion"
+      ],
+      "sha256": "2062dedfbf1e38c6748cae44d3a8816874ef2d4508416718fe6cddda09f94f60"
+    },
+    {
+      "file": "history-worldbook.ts.txt",
+      "sourceCommit": "23d3e5ab050c44ddf184a9d2e2cfb18535597a31",
+      "sourcePath": "packages/core/src/settlement/index.ts",
+      "sourceBlob": "888c041a12a07c2dcc435e8c8ae26eb6dd8c6b46",
+      "sourceSha256": "5bd65767bf465cc8a1eb8e328c1dcd04fbfbf0ea0ef338bf843df78e9dcad387",
+      "extractedNames": [
+        "factOps",
+        "readExisting"
+      ],
+      "sha256": "7c08033c5dea1fb30a897e972606dcf8c7d194d11c5df2dbe50ec3ca08eb141c"
+    }
+  ],
+  "inputs": {
+    "chapter": {
+      "卷": 1,
+      "章": 3,
+      "章名": "渡口"
+    },
+    "source": "定稿/卷01/0003-渡口.md",
+    "decision": "作者批准：历史夹具",
+    "clue": {
+      "kind": "线索",
+      "title": "渡口印记",
+      "body": "状态：已埋\n计划来源：本章新增\n埋设点：第0003章\n预期兑现区间：第4-8章\n石上留有半枚印记。"
+    },
+    "timeline": {
+      "title": "渡口会面",
+      "body": "事件：林舟在渡口遇见摆渡人\n时点：次日清晨\n两人相约第三次潮落后出发。"
+    },
+    "memory": {
+      "kind": "决策",
+      "title": "保留渡口视角",
+      "body": "类：决策\n状态：候选\n保留摆渡人的观察，不提前写明他的来历。"
+    },
+    "index": [
+      {
+        "relPath": "本书记忆/%41.md",
+        "text": "---\n名称: \"%41\"\n来源: 作者对谈\n类: 对话\n---\n百分号是文件名的一部分。\n"
+      }
+    ],
+    "worldbook": {
+      "before": "---\n版本: 3\n状态: 已确认\n名称: 林舟\n性质: 计划\n来源: 对谈共创\n类型: 人物\n---\n更正前的计划。\n",
+      "sections": [
+        {
+          "module": "人物档案",
+          "title": "林舟",
+          "body": "更正后的事实。"
+        }
+      ],
+      "mode": "更正"
+    }
+  },
+  "adaptation": "The original clue validator is executed. Its line-number WeakMap is empty; its diagnostic thrower is a fixture function. Worldbook file reads use an explicit in-memory input map. Original frontmatter and version helpers execute unchanged with the installed YAML library. No output-producing function is replaced.",
+  "outputs": [
+    {
+      "file": "historical-clue.md",
+      "sha256": "c11c2bccda5b7a50b374f529375646c2e00ef4acaa0077e183de3584de037cec"
+    },
+    {
+      "file": "historical-timeline.md",
+      "sha256": "9ea5e749c88f2cae5dbdd75e747639cbe8de7a8ca997785cdd7410f6fd2c65df"
+    },
+    {
+      "file": "historical-memory.md",
+      "sha256": "457bb2e8c7e23612971f87e44fc215095e759341e821652570b8b0ea34ab6f26"
+    },
+    {
+      "file": "historical-index.md",
+      "sha256": "4e67add6fee598643a6ff742b45d2ab33de2bb7a7755fe22aedaa0e490e6df3c"
+    },
+    {
+      "file": "historical-worldbook.md",
+      "sha256": "8f57afab135335d429d688a243bc32f92d6590d9419af67f37904a70a02c2daa"
+    }
+  ]
+}

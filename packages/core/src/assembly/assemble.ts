@@ -6,12 +6,13 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { listChapters, type ChapterKey } from '../derive/scan'
-import { entryChapterNo as ledgerEntryChapterNo, queryDueLedger, queryLedger, queryMemory, type LedgerEntry } from '../ledger'
+import { entryChapterNo as ledgerEntryChapterNo, queryDueLedger, queryLedger, queryMemory, renderTimelineContent, type LedgerEntry } from '../ledger'
 import { parseOutline } from '../outline/parse'
 import { extractVersionFields } from '../provenance'
 import { writeBatchAtomic, type FileOp } from '../repo/atomic'
 import { parseDocument } from '../repo/frontmatter'
 import { paths } from '../repo/paths'
+import { parseMemoryIndexLinks } from '../repo/memory-index-links'
 import { MACHINE_SCHEMA_VERSION, parseMachineJson, serializeMachineJson } from '../repo/schema'
 import { parseSourceRef } from '../repo/sourceRef'
 import { 材料预算 } from './budget'
@@ -336,7 +337,10 @@ function computeBaseMaterials(bookRoot: string, input: AssembleInput): ComputedM
   const tlExcluded = tlEntriesAll.length - tlEntries.length
   const recent = tlEntries.slice(-材料预算.时间线最近条数)
   const terms = 时空.split(/[，,、；;。！!？?\s]+/).map((t) => t.trim()).filter((t) => t.length >= 2)
-  const hits = tlEntries.filter((e) => terms.some((t) => e.名称.includes(t) || e.正文.includes(t)))
+  const hits = tlEntries.filter((e) => {
+    const content = renderTimelineContent(e)
+    return terms.some((t) => e.名称.includes(t) || content.includes(t))
+  })
   const pickedTl: LedgerEntry[] = []
   const seenTl = new Set<string>()
   for (const entry of [...recent, ...hits]) {
@@ -404,38 +408,57 @@ function computeBaseMaterials(bookRoot: string, input: AssembleInput): ComputedM
   const 暂定Body = 暂定Parts.join('\n\n') || '（无）'
   const 暂定Sources = [...(契约 === null ? [] : [paths.契约()]), ...(卷纲 === null ? [] : [paths.卷纲(input.卷)])]
 
-  // ── 文风:索引类:文风行全量 ＋ 点名条目正文(无点名取最近 J 条);旧格式整文件 ──
-  const indexText = readText(bookRoot, paths.本书记忆索引())
-  let 文风Body = '（无文风记忆）'
-  let 文风Sources: string[] = []
-  let 文风完整: SectionRecord['完整性'] = '空'
-  if (indexText !== null) {
-    const styleRows = indexText.split('\n').filter((line) => line.trim().startsWith('- ') && line.includes('类：文风'))
-    const memQuery = queryMemory(bookRoot, { 类: '文风' })
-    const styleEntries = memQuery.entries
-    const named = styleEntries.filter((e) => outlineBody.includes(`[[${e.名称}]]`) || outlineBody.includes(e.名称))
-    const chosen = named.length > 0
-      ? named
-      : styleEntries.slice(-材料预算.文风最近条数)
-    const parts = []
-    if (styleRows.length > 0) parts.push(['### 文风索引', '', ...styleRows].join('\n'))
-    if (chosen.length > 0) {
-      parts.push(['### 条目正文', '', ...chosen.map((e) => `## ${e.名称}\n\n${e.正文}`)].join('\n\n'))
-      文风Sources = [...new Set(chosen.map((e) => e.来源文件))]
-    } else if (styleRows.length === 0) {
-      parts.push('（无文风记忆）')
+  // ── 文风:索引类:文风行全量 ＋ 点名条目正文(无点名取最近 J 条);不加载旧分类正文 ──
+  const memQuery = queryMemory(bookRoot, { 类: '文风' })
+  const 文风问题: string[] = []
+  const 文风Parts: string[] = []
+  const 文风Sources: string[] = []
+  const indexRel = paths.本书记忆索引()
+  let indexMissing = false
+  let indexReadable = false
+  let styleRows: string[] = []
+  try {
+    const indexDoc = parseDocument(fs.readFileSync(path.join(bookRoot, indexRel), 'utf-8'))
+    if (!indexDoc.ok) 文风问题.push(`${indexRel}:索引解析失败——${indexDoc.detail}`)
+    else {
+      for (const problem of parseMemoryIndexLinks(indexDoc.data.body).problems) {
+        文风问题.push(`${indexRel}:索引链接解析失败——${problem}`)
+      }
+      styleRows = indexDoc.data.body.split('\n').filter((line) => line.trim().startsWith('- ') && line.includes('类：文风'))
+      if (styleRows.length > 0) 文风Parts.push(['### 文风索引', '', ...styleRows].join('\n'))
+      indexReadable = true
     }
-    文风Body = parts.join('\n\n') || '（无文风记忆）'
-    文风Sources = [...new Set([...文风Sources, paths.本书记忆索引()])]
-    文风完整 = chosen.length > 0 || styleRows.length > 0 ? '完整' : '空'
-  } else {
-    const oldText = readText(bookRoot, paths.记忆('文风'))
-    if (oldText !== null) {
-      文风Body = oldText.trim()
-      文风Sources = [paths.记忆('文风')]
-      文风完整 = '旧格式'
-    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') indexMissing = true
+    else 文风问题.push(`${indexRel}:索引读取失败——${error instanceof Error ? error.message : String(error)}`)
   }
+  // 未初始化的可选目录不同于已枚举文件缺失;有索引声明时也不能冒充合法空内容。
+  const memoryAbsent = !memQuery.ok && memQuery.kind === 'missing' && memQuery.files.length === 0
+    && (memQuery.file === undefined || memQuery.file === '本书记忆') && styleRows.length === 0
+  if (!memQuery.ok && !memoryAbsent) 文风问题.push(memQuery.reason)
+
+  const styleEntries = memQuery.entries
+  if (indexMissing && styleEntries.length > 0) {
+    文风问题.push(`${indexRel}:本书记忆索引缺失，已保留可读文风条目，不能视为完整材料`)
+  }
+  const named = styleEntries.filter((e) => outlineBody.includes(`[[${e.名称}]]`) || outlineBody.includes(e.名称))
+  const chosen = named.length > 0 ? named : styleEntries.slice(-材料预算.文风最近条数)
+  const selected = chosen
+  if (selected.length > 0) {
+    文风Parts.push(['### 条目正文', '', ...selected.map((e) => `## ${e.名称}\n\n${e.正文}`)].join('\n\n'))
+    文风Sources.push(...new Set(selected.map((e) => e.来源文件)))
+  }
+  if (indexReadable) 文风Sources.push(indexRel)
+  if (文风Parts.length === 0) 文风Parts.push(文风问题.length > 0
+    ? '（未取得可用文风正文，不能据此判定文风记忆为空）' : '（无文风记忆）')
+  const 文风诊断 = 文风问题.map((problem) => `文风材料残缺：${problem}`)
+  if (文风诊断.length > 0) {
+    文风Parts.push(['### 读取警告', '', ...文风诊断].join('\n'))
+    gaps.push(...文风诊断)
+  }
+  const 文风Body = 文风Parts.join('\n\n')
+  const 文风完整: SectionRecord['完整性'] = 文风问题.length > 0 ? '残缺'
+    : chosen.length > 0 || styleRows.length > 0 ? '完整' : '空'
 
   type Built = { body: string; 来源: readonly string[]; 版本: string; 选用原因: string; 完整性: SectionRecord['完整性'] }
 
@@ -499,7 +522,7 @@ function computeBaseMaterials(bookRoot: string, input: AssembleInput): ComputedM
       body: 文风Body,
       来源: 文风Sources,
       版本: '',
-      选用原因: '本书文风记忆切片',
+      选用原因: ['本书文风记忆切片', ...文风诊断].join('；'),
       完整性: 文风完整,
     },
     暂定与警告: {

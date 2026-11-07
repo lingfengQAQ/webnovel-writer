@@ -68,12 +68,6 @@ export class ReferenceHost {
     }
     return {
       route: getRoute,
-      maxInputChars: async () => {
-        const route = await getRoute(), llm = this.access.llm(agent)!
-        const prepared = await llm.prepareCall({ provider: route.provider, model: route.model, maxTokens: 8192 })
-        // UTF-8 bytes bound text tokens conservatively; reserve output, protocol and context.
-        return Math.min(REFERENCE_LIMITS.batchChars, Math.floor(((prepared.context?.contextWindow ?? 32768) - 16_000) / 4))
-      },
       run: async (input, signal) => {
         const active = AbortSignal.any([signal, this.shutdown.signal]), generation = this.generation
         const check = async () => {
@@ -83,17 +77,13 @@ export class ReferenceHost {
         await check()
         const llm = this.access.llm(agent)
         if (!llm) throw new ReferenceError('model-unavailable', 'DSH 模型服务不可用')
-        const prepared = await abortableReference(llm.prepareCall({ provider: input.route.provider, model: input.route.model, maxTokens: input.maxOutputTokens }, active), active)
+        const prepared = await abortableReference(llm.prepareCall({ provider: input.route.provider, model: input.route.model }, active), active)
         await check()
-        if (Buffer.byteLength(input.system + input.text) + input.maxOutputTokens > (prepared.context?.contextWindow ?? 32768)) throw new ReferenceError('model-budget', '本批超出模型上下文预算，请重新计划更小范围')
         const assembler = new BlockAssembler()
-        let outputSize = 0
         try {
           await abortableReference((async () => {
             for await (const chunk of prepared.stream({ ...prepared.config, system: input.system, messages: [createUserMessage({ content: [{ type: 'text', text: input.text }], source: { kind: 'user' } })], signal: active })) {
               active.throwIfAborted(); assembler.push(chunk)
-              outputSize += JSON.stringify(chunk).length
-              if (outputSize > REFERENCE_LIMITS.outputChars * 8) throw new ReferenceError('model-output', '分析回复超过限制')
             }
           })(), active)
         } catch (error) {

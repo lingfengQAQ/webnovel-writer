@@ -1,3 +1,4 @@
+import { dshBaseline } from '../dsh-compatibility.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -40,6 +41,7 @@ test('companion exclusion cannot relax upload or dry-run validation', () => {
 })
 const version = '8.0.0'
 const commit = 'a'.repeat(40)
+const engines = { dsh: dshBaseline.compatibility.range, node: dshBaseline.compatibility.nodeRange }
 const publishConfig = { access: 'public', tag: 'latest', registry: 'https://registry.npmjs.org/' }
 
 test('registry processing stays pending; wrong bytes and lookup failures still fail', async () => {
@@ -72,12 +74,12 @@ async function fixture(callback) {
   ]
   const packages = entries.map(([name, v, tarball]) => ({ name, version: v, tarball }))
   for (const [index, item] of packages.entries()) {
-    const manifest = { name: item.name, version: item.version, license: 'GPL-3.0-only', publishConfig,
+    const manifest = { name: item.name, version: item.version, license: 'GPL-3.0-only', publishConfig, engines,
       repository: { url: 'https://github.com/lingfengQAQ/webnovel-writer.git' } }
     const files = { 'package.json': manifest, LICENSE: 'GNU GENERAL PUBLIC LICENSE', 'README.md': 'Example' }
     if (index === 1) {
-      manifest.exports = { './scenes': './lib/scenes.js', './reranking': './lib/reranking.js' }
-      Object.assign(files, { 'lib/index.js': '', 'lib/scenes.js': '', 'lib/reranking.js': '', 'lib/client.js': `window.__ModuleLoader__.load({ id: ${JSON.stringify(item.name)},`, 'cordis.patch.yml': fs.readFileSync(path.join(root, 'packages/embedding-provider/cordis.patch.yml'), 'utf8'), 'MODEL_DIMENSIONS.md': '', 'THIRD_PARTY_NOTICES.md': 'Original notices' })
+      manifest.exports = { './scenes': './lib/scenes.js', './reranking': './lib/reranking.js', './graph': './lib/graph.js' }
+      Object.assign(files, { 'lib/index.js': '', 'lib/scenes.js': '', 'lib/reranking.js': '', 'lib/graph.js': '', 'lib/client.js': `window.__ModuleLoader__.load({ id: ${JSON.stringify(item.name)},`, 'cordis.patch.yml': fs.readFileSync(path.join(root, 'packages/embedding-provider/cordis.patch.yml'), 'utf8'), 'MODEL_DIMENSIONS.md': '', 'THIRD_PARTY_NOTICES.md': 'Original notices' })
     }
     if (index === 2) {
       manifest.dependencies = { '@linfengqaqtat/dsh-scriptor': version, '@linfengqaqtat/dsh-scriptor-retrieval': version }
@@ -139,7 +141,7 @@ test('npm retry permits identical bytes but rejects replaced versions and latest
   assert.equal(registryStatus(pkg, metadata), 'identical')
 })
 test('publish contract rejects private, lifecycle hooks, local dependencies and unintended tags', () => {
-  const base = { publishConfig }
+  const base = { publishConfig, engines }
   checkPublishableManifest(base)
   for (const change of [{ private: true }, { scripts: { prepare: 'arbitrary-command' } }, { dependencies: { local: 'workspace:*' } }, { publishConfig: { ...publishConfig, tag: 'preview' } }]) {
     assert.throws(() => checkPublishableManifest({ ...base, ...change }))

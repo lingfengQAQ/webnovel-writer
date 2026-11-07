@@ -137,6 +137,29 @@ async function failFirst(root: string, args: Record<string, unknown>): Promise<v
 }
 
 describe('F06: 吃书补偿完整工具链收据', () => {
+  it('正式事件保留提案和受影响工件，提交失败后重放不重写元数据', async () => {
+    const { root, args } = await fixture()
+    args['提案编号'] = '0007'
+    await failFirst(root, args)
+    const relative = '定稿/卷01/补偿/补偿-0001.md'
+    const original = fs.readFileSync(path.join(root, relative), 'utf8')
+    const event = parseDocument(original)
+    expect(event.ok).toBe(true)
+    if (!event.ok) throw new Error(event.detail)
+    expect(event.data.fields).toMatchObject({ 关联提案: '0007', 受影响工件: [chapter], 日期: expect.any(String) })
+    expect(event.data.body).toContain('修正铜铃')
+    const before = snapshot(root)
+    const retry = await apply(root, args, { callId: 'metadata-retry' })
+    expect(retry).toMatchObject({ ok: true, 补偿事件: relative })
+    expect(snapshot(root)).toEqual(before)
+    expect(git(root, '-c', 'core.quotepath=false', 'show', '--pretty=format:', '--name-only', 'HEAD').split('\n')).toContain(relative)
+    const head = git(root, 'rev-parse', 'HEAD')
+    expect(await apply(root, args, { callId: 'metadata-replay' })).toMatchObject({ ok: true, 补偿事件: relative })
+    expect(fs.readFileSync(path.join(root, relative), 'utf8')).toBe(original)
+    expect(snapshot(root)).toEqual(before)
+    expect(git(root, 'rev-parse', 'HEAD')).toBe(head)
+  })
+
   it.each([false, true, 'all'] as const)('提交失败后只补提交，成功重放不变（候选=%s）', async candidate => {
     const { root, args } = await fixture(candidate)
     await failFirst(root, args)

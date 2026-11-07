@@ -1,21 +1,58 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
-import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
+import { Button, Checkbox, IconChevronDownOutlineRegular, Input, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SceneSettings, RerankSettings } from './auxiliary-config'
+import type { GraphSettings } from './graph-config'
 import { DEFAULT_RERANK_TIMEOUT_MS, MAX_RERANK_TIMEOUT_MS, MIN_RERANK_TIMEOUT_MS } from '@webnovel/core/retrieval-policy'
+import { SelectMenu } from './select-menu'
 
-type Draft = SceneSettings & RerankSettings
+export interface PluginConfigViewProps {
+  readonly view: 'summary' | 'page'
+  readonly form?: {
+    readonly state: ConfigFormSnapshot<Record<string, unknown>>
+    readonly mutate: ConfigForm<Record<string, unknown>>['mutate']
+  } | undefined
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    pluginNavigation?: {
+      openBundle(packageName: string): void
+    }
+  }
+}
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotMap {
+    'plugins.bundle.config': {
+      kind: 'keyed'
+      scope: 'root'
+      owner: PluginConfigViewProps
+    }
+    'plugins.row.config': {
+      kind: 'keyed'
+      scope: 'root'
+      owner: PluginConfigViewProps
+    }
+  }
+}
+
+export const RETRIEVAL_BUNDLES = ['@linfengqaqtat/dsh-scriptor-full', '@linfengqaqtat/dsh-scriptor-retrieval'] as const
+
+type Draft = SceneSettings & RerankSettings & GraphSettings
 type Group = { readonly id: string; readonly name: string; readonly models: readonly { readonly id: string; readonly name: string }[] }
-const sceneFields = ['enabled', 'provider', 'model', 'concurrency', 'timeoutMs', 'maxInputChars'] as const
+const sceneFields = ['enabled', 'provider', 'model', 'concurrency', 'timeoutMs'] as const
 const rankFields = ['enabled', 'endpoint', 'model', 'apiKeyEnv', 'candidates', 'timeoutMs'] as const
+const graphFields = ['enabled', 'provider', 'model', 'timeoutMs'] as const
 
-function ModelCard({ scope, host, kind }: { scope: ConfigForm<Draft>; host: Context; kind: 'scenes' | 'reranking' }) {
+export function ModelCard({ scope, host, kind, defaultOpen = false }: { scope: ConfigForm<Draft>; host: Context; kind: 'scenes' | 'reranking' | 'graph'; defaultOpen?: boolean }) {
   const state = useSyncExternalStore(listener => scope.subscribe(listener), () => scope.getSnapshot())
   const [draft, setDraft] = useState<Draft>({})
   const [revision, setRevision] = useState<number>()
   const [dirty, setDirty] = useState(false)
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(defaultOpen)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [key, setKey] = useState('')
@@ -25,8 +62,11 @@ function ModelCard({ scope, host, kind }: { scope: ConfigForm<Draft>; host: Cont
   const [loading, setLoading] = useState(false)
   const alive = useRef(true)
   const catalogRequest = useRef(0)
-  const scene = kind === 'scenes'
-  const title = scene ? '混合检索 · 场景识别' : '混合检索 · 重排序 API'
+  const graph = kind === 'graph', scene = kind !== 'reranking'
+  const title = graph ? '人物关系 · 沉淀抽取' : scene ? '混合检索 · 场景识别' : '混合检索 · 重排序 API'
+  const modelLabel = graph ? '图谱抽取模型' : '场景识别模型'
+  const explanation = graph ? '只发送已入档沉淀及本书实体名称与别名。保存配置后，仍须在每本书的关系页预览并手动启用；不依赖向量或场景模型。'
+    : scene ? '向所选模型发送已启用书仓的定稿正文，只保存边界。普通向量重建、改名和换模型复用已有结果；关闭后不再识别新章。' : '查询时向本接口发送问题与候选正文；不参与索引重建。服务失败时使用原排序，并返回降级原因。'
   const ref = draft.apiKeyEnv || 'WEBNOVEL_RERANK_API_KEY'
   useEffect(() => { alive.current = true; return () => { alive.current = false; catalogRequest.current++ } }, [])
   useEffect(() => { if (!dirty && state.value) { setDraft({ ...state.value }); setRevision(state.revision) } }, [state, dirty])
@@ -56,6 +96,9 @@ function ModelCard({ scope, host, kind }: { scope: ConfigForm<Draft>; host: Cont
     } catch (error) { if (alive.current && request === catalogRequest.current) setMessage(error instanceof Error ? error.message : '模型列表读取失败') }
     finally { if (alive.current && request === catalogRequest.current) setLoading(false) }
   }
+  useEffect(() => {
+    if (defaultOpen && scene && !groups.length && !loading) void catalog()
+  }, [])
   const save = async (event: React.FormEvent) => {
     event.preventDefault()
     setBusy(true); setMessage('')
@@ -67,67 +110,66 @@ function ModelCard({ scope, host, kind }: { scope: ConfigForm<Draft>; host: Cont
         keySaved = true
         if (alive.current) { setKey(''); setCredentialRevision(value => value + 1) }
       }
-      const accepted = await scope.mutate((scene ? sceneFields : rankFields).map(field => draft[field] === undefined
+      const accepted = await scope.mutate((graph ? graphFields : scene ? sceneFields : rankFields).map(field => draft[field] === undefined
         ? { op: 'unset' as const, path: [field] }
         : { op: 'set' as const, path: [field], value: draft[field] }), revision)
       if (!accepted) throw new Error('配置未保存；请载入最新配置后重试')
-      if (alive.current) { setDirty(false); setOpen(false) }
+      if (alive.current) { setDirty(false); if (!defaultOpen) setOpen(false) }
     } catch (error) { if (alive.current) setMessage((keySaved ? 'API Key 已保存；' : '') + (error instanceof Error ? error.message : '设置保存失败')) }
     finally { if (alive.current) setBusy(false) }
   }
   const text = (field: 'provider' | 'model' | 'endpoint' | 'apiKeyEnv', label: string, placeholder?: string) => <label className="we-field">
-    <span className="we-label">{label}</span><input aria-label={label} value={draft[field] ?? ''} placeholder={placeholder} onChange={event => change(field, event.target.value)} />
+    <span className="we-label">{label}</span><Input aria-label={label} value={draft[field] ?? ''} placeholder={placeholder} onChange={event => change(field, event.target.value)} />
   </label>
-  const number = (field: 'concurrency' | 'timeoutMs' | 'maxInputChars' | 'candidates', label: string, min: number, max: number, fallback: number) => <label className="we-field">
-    <span className="we-label">{label}</span><input aria-label={label} type="number" step={1} min={min} max={max} value={draft[field] ?? fallback}
+  const number = (field: 'concurrency' | 'timeoutMs' | 'candidates', label: string, min: number, max: number, fallback: number) => <label className="we-field">
+    <span className="we-label">{label}</span><Input aria-label={label} type="number" step={1} min={min} max={max} value={draft[field] ?? fallback}
       onChange={event => change(field, event.target.value === '' ? undefined : Number(event.target.value))} />
   </label>
   const selected = draft.provider && draft.model ? JSON.stringify([draft.provider, draft.model]) : ''
   const inCatalog = groups.some(group => group.id === draft.provider && group.models.some(model => model.id === draft.model))
   if (state.status === 'unavailable') return null
-  return <li className={'webnovel-embedding-card' + (open ? ' we-open' : '')}>
-    <button type="button" className="we-header" aria-expanded={open} aria-label={(open ? '收起' : '展开') + '设置: ' + title}
+  return <li className={'webnovel-embedding-card' + (open ? ' we-open' : '') + (defaultOpen ? ' we-page' : '')}>
+    {!defaultOpen ? <button type="button" className="we-header" aria-expanded={open} aria-label={(open ? '收起' : '展开') + '设置: ' + title}
       onClick={() => { setOpen(value => !value); if (!open && scene && !groups.length && !loading) void catalog() }}>
-      <span className="we-head-text"><span className="we-title">{title}</span><span className="we-description">{scene ? '复用已配置的聊天模型，每章识别一次并缓存场景边界。' : '对少量正文候选重新排序，提高相关片段的可见性。'}</span></span>
-      {dirty ? <span className="we-tag">未保存</span> : null}<span className="we-chevron" aria-hidden="true">⌄</span>
-    </button>
-    {open ? <form className="we-body" onSubmit={event => void save(event)}><fieldset disabled={busy || state.status !== 'ready' || !state.writable}>
-      <label className="we-check"><input type="checkbox" checked={draft.enabled ?? false} onChange={event => change('enabled', event.target.checked)} />{scene ? '启用后台场景识别' : '启用查询重排序'}</label>
-      <p className="we-hint">{scene ? '向所选模型发送已启用书仓的定稿正文，只保存边界。普通向量重建、改名和换模型复用已有结果；关闭后不再识别新章。' : '查询时向本接口发送问题与候选正文；不参与索引重建。服务失败时使用原排序，并返回降级原因。'}</p>
+      <span className="we-head-text"><span className="we-title">{title}</span><span className="we-description">{graph ? '从已入档沉淀提取带原文依据的辅助关系。' : scene ? '复用已配置的聊天模型，每章识别一次并缓存场景边界。' : '对少量正文候选重新排序，提高相关片段的可见性。'}</span></span>
+      {dirty ? <Tag tone="warning" className="we-tag">未保存</Tag> : null}<IconChevronDownOutlineRegular className="we-chevron" />
+    </button> : null}
+    {open ? <form className="we-body" onSubmit={event => void save(event)}><fieldset className="we-fieldset" disabled={busy || state.status !== 'ready' || !state.writable}>
+      <Checkbox className="we-check" checked={draft.enabled ?? false} onChange={checked => change('enabled', checked)} label={graph ? '提供图谱抽取模型' : scene ? '启用后台场景识别' : '启用查询重排序'} />
+      <p className="we-hint">{explanation}</p>
       <div className="we-fields">{scene ? <>
-        <label className="we-field"><span className="we-label">场景识别模型</span><select aria-label="场景识别模型" value={selected} onChange={event => {
-          if (!event.target.value) return
-          const [provider, model] = JSON.parse(event.target.value) as [string, string]
+        <div className="we-field"><span className="we-label">{modelLabel}</span><SelectMenu label={modelLabel} value={selected} disabled={busy || !state.writable} onChange={value => {
+          if (!value) return
+          const [provider, model] = JSON.parse(value) as [string, string]
           setDraft(previous => ({ ...previous, provider, model })); setDirty(true); setMessage('')
-        }}><option value="">请选择宿主模型</option>
-          {selected && !inCatalog ? <option value={selected}>{draft.provider} / {draft.model}</option> : null}
-          {groups.map(group => <optgroup key={group.id} label={group.name}>{group.models.map(model => <option key={model.id} value={JSON.stringify([group.id, model.id])}>{model.name}</option>)}</optgroup>)}
-        </select></label>
-        <button type="button" className="we-discard" disabled={loading} onClick={() => { void catalog() }}>{loading ? '读取中…' : '刷新宿主模型列表'}</button>
-        {number('concurrency', '场景并发数', 1, 8, 2)}
+        }} options={[{ value: '', label: '请选择宿主模型' }, ...(selected && !inCatalog ? [{ value: selected, label: `${draft.provider} / ${draft.model}` }] : []),
+          ...groups.flatMap(group => group.models.map(model => ({ value: JSON.stringify([group.id, model.id]), label: `${group.name} / ${model.name}` })))]} /></div>
+        <Button variant="outline" size="sm" className="we-discard we-inline-btn" disabled={loading} onClick={() => { void catalog() }}>{loading ? '读取中…' : '刷新宿主模型列表'}</Button>
+        {!graph ? number('concurrency', '场景并发数', 1, 8, 2) : null}
+        <p className="we-hint">输出长度沿用宿主模型设置；请求失败或超时后保留已完成结果。</p>
       </> : <>
         {text('endpoint', '完整重排接口地址', 'https://api.example.com/v1/rerank')}
         {text('model', '重排序模型')}
         {number('candidates', '重排候选数', 1, 200, 40)}
         <label className="we-field"><span className="we-label">重排等待时间（秒）</span>
-          <input aria-label="重排等待时间（秒）" type="number" min={MIN_RERANK_TIMEOUT_MS / 1000} max={MAX_RERANK_TIMEOUT_MS / 1000} step={0.001}
+          <Input aria-label="重排等待时间（秒）" type="number" min={MIN_RERANK_TIMEOUT_MS / 1000} max={MAX_RERANK_TIMEOUT_MS / 1000} step={0.001}
             value={(draft.timeoutMs ?? DEFAULT_RERANK_TIMEOUT_MS) / 1000}
             onChange={event => change('timeoutMs', event.target.value === '' ? undefined : Math.round(Number(event.target.value) * 1000))} />
           <span className="we-hint">默认 {DEFAULT_RERANK_TIMEOUT_MS / 1000} 秒，最长 {MAX_RERANK_TIMEOUT_MS / 1000} 秒；超时后使用原排序。</span>
         </label>
         <label className="we-field"><span className="we-label">重排 API Key {credential.configured ? '（已配置）' : '（未配置）'}</span>
-          <input aria-label="重排 API Key" type="password" autoComplete="off" value={key} disabled={!credential.writable} placeholder={credential.configured ? '留空保持现有密钥' : ''}
+          <Input aria-label="重排 API Key" type="password" autoComplete="off" value={key} disabled={!credential.writable} placeholder={credential.configured ? '留空保持现有密钥' : ''}
             onChange={event => { setKey(event.target.value); setDirty(true) }} /><span className="we-hint">由 DSH 凭据服务保存，普通配置只保留引用。</span></label>
       </>}</div>
-      <details className="we-advanced"><summary>高级设置</summary><div className="we-fields">
-        {scene ? <>{text('provider', '宿主提供方路由')}{text('model', '场景模型标识')}{number('maxInputChars', '单章输入字符预算', 100, 500_000, 60_000)}</> : text('apiKeyEnv', '重排凭据引用名称', 'WEBNOVEL_RERANK_API_KEY')}
-        {scene ? number('timeoutMs', '场景请求超时（毫秒）', 100, 180_000, 60_000) : null}
+      <details className="we-advanced"><summary className="we-summary">高级设置</summary><div className="we-fields">
+        {scene ? <>{text('provider', '宿主提供方路由')}{text('model', graph ? '图谱模型标识' : '场景模型标识')}</> : text('apiKeyEnv', '重排凭据引用名称', 'WEBNOVEL_RERANK_API_KEY')}
+        {scene ? number('timeoutMs', graph ? '图谱请求超时（毫秒）' : '场景请求超时（毫秒）', 100, 180_000, 60_000) : null}
       </div></details>
       <div className="we-actions">{message ? <p className="we-error" role="status">{message}</p> : null}
-        <button type="button" className="we-discard" disabled={!dirty} onClick={() => { setDirty(false); setDraft({ ...state.value }); setRevision(state.revision); setKey(''); setMessage('') }}>放弃更改</button>
-        <button type="submit" className="we-save" disabled={!dirty}>{busy ? '保存中…' : '保存'}</button>
+        <Button variant="outline" size="sm" className="we-discard" disabled={!dirty} onClick={() => { setDirty(false); setDraft({ ...state.value }); setRevision(state.revision); setKey(''); setMessage('') }}>放弃更改</Button>
+        <Button variant="primary" size="sm" type="submit" className="we-save" disabled={!dirty}>{busy ? '保存中…' : '保存'}</Button>
       </div>
-      {dirty && revision !== state.revision ? <p className="we-hint">配置已在其他位置更新；放弃当前更改后载入最新配置。</p> : null}
+      {dirty && revision !== state.revision ? <p className="we-hint" role="status">配置已在其他位置更新；放弃当前更改后载入最新配置。</p> : null}
     </fieldset></form> : null}
   </li>
 }
@@ -135,6 +177,18 @@ function ModelCard({ scope, host, kind }: { scope: ConfigForm<Draft>; host: Cont
 export function installAuxiliaryCards(host: Context): void {
   const scenes = host.configForms.get<Draft>('webnovel-scenes')
   const reranking = host.configForms.get<Draft>('webnovel-reranking')
-  host.slots.inject('settings.models.footer', () => host.slots.register({ name: 'settings.models.footer', id: 'webnovel-auxiliary-models', order: 51 }, () =>
-    <section className="webnovel-embedding-section"><h3>检索辅助模型</h3><ul><ModelCard host={host} scope={scenes} kind="scenes" /><ModelCard host={host} scope={reranking} kind="reranking" /></ul></section>))
+  const graph = host.configForms.get<Draft>('webnovel-graph')
+  host.slots.inject('plugins.row.config', () => RETRIEVAL_BUNDLES.flatMap(bundle => [
+    host.slots.register({ name: 'plugins.row.config', key: `${bundle}#webnovel-graph` }, ({ view }: PluginConfigViewProps) =>
+      view === 'summary' ? '从已入档沉淀提取带原文依据的辅助关系；在每本书的关系页单独启用。'
+        : <div className="webnovel-embedding-section"><ul className="we-list"><ModelCard host={host} scope={graph} kind="graph" defaultOpen /></ul></div>),
+    host.slots.register({ name: 'plugins.row.config', key: `${bundle}#webnovel-scenes` }, ({ view }: PluginConfigViewProps) =>
+      view === 'summary'
+        ? '复用已配置的聊天模型，每章识别一次并缓存场景边界。'
+        : <div className="webnovel-embedding-section"><ul className="we-list"><ModelCard host={host} scope={scenes} kind="scenes" defaultOpen /></ul></div>),
+    host.slots.register({ name: 'plugins.row.config', key: `${bundle}#webnovel-reranking` }, ({ view }: PluginConfigViewProps) =>
+      view === 'summary'
+        ? '对少量正文候选重新排序，提高相关片段的可见性。'
+        : <div className="webnovel-embedding-section"><ul className="we-list"><ModelCard host={host} scope={reranking} kind="reranking" defaultOpen /></ul></div>),
+  ]))
 }

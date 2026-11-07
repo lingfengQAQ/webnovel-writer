@@ -50,7 +50,7 @@ describe('记忆目录快照（15A）', () => {
     fs.mkdirSync(path.join(book, '本书记忆'))
     fs.writeFileSync(path.join(book, '本书记忆/文风.md'), '# 旧文风\n旧正文')
     fs.writeFileSync(path.join(book, '本书记忆/索引.md'), '- [文风](文风.md)\n')
-    expect(readBookMemoryCatalog(book).状态).toBe('正常')
+    expect(readBookMemoryCatalog(book).状态).toBe('读取错误')
   })
   it('没有记忆：状态无记忆，索引位置仍给出', () => {
     const ws = mkDir('webnovel-catalog-')
@@ -81,14 +81,14 @@ describe('记忆目录快照（15A）', () => {
     fs.writeFileSync(path.join(book, '本书记忆', '文风.md'), '## 条目\n- 名称: 旧条\n', 'utf-8')
     const c = readBookMemoryCatalog(book)
     expect(c.归属).toBe('本书')
-    expect(c.状态).toBe('正常')
+    expect(c.状态).toBe('读取错误')
     expect(c.条目).toEqual([
       { 名称: '主角不下山', 类: '决策', 来源: '定稿/卷01/0001-开篇.md', 全文位置: '本书记忆/主角不下山.md' },
-      { 名称: '文风', 类: '文风', 全文位置: '本书记忆/文风.md', 格式: '旧' },
     ])
     const text = renderMemoryCatalog(c, '选书时')
     expect(text).toContain('- 主角不下山 — （缺描述）｜类：决策')
-    expect(text).toContain('- 文风（旧格式文件，一类一文件）｜文件：本书记忆/文风.md')
+    expect(text).toContain('本书记忆/文风.md')
+    expect(text).toContain('预览升级')
     expect(text).not.toContain('第三章前不离开山门')
   })
 

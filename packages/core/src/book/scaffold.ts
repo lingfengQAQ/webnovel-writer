@@ -10,6 +10,7 @@ import { parseConcept, serializeConcept, type Concept } from '../inspire/concept
 import { writeBatchAtomic, type FileOp } from '../repo/atomic'
 import { runtimeIgnoreLine } from '../repo/transaction'
 import { parseDocument, serializeDocument } from '../repo/frontmatter'
+import { BOOK_FORMAT_VERSION_FIELD, CURRENT_BOOK_FORMAT_VERSION } from '../repo/book-format'
 import { LEDGER_NAMES, LAYOUT, MEMORY_KINDS, DRAFT_DIRS, paths } from '../repo/paths'
 
 export const 账本五文件 = LEDGER_NAMES
@@ -20,8 +21,10 @@ function labeledHeadings(names: readonly string[], state: string): string {
 }
 
 export function emptyContractBody(bookId?: string): string {
-  const fm = bookId === undefined ? '' : `---\n书id: ${bookId}\n---\n`
-  return `${fm}# 作品契约\n\n${labeledHeadings(契约六部, '留白')}`
+  return serializeDocument({
+    ...(bookId === undefined ? {} : { 书id: bookId }),
+    [BOOK_FORMAT_VERSION_FIELD]: CURRENT_BOOK_FORMAT_VERSION,
+  }, `# 作品契约\n\n${labeledHeadings(契约六部, '留白')}`, ['书id', BOOK_FORMAT_VERSION_FIELD])
 }
 
 export function emptySkeletonBody(): string {

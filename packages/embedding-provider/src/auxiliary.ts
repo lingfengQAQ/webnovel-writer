@@ -21,7 +21,7 @@ export class AuxiliaryService<T extends Client> extends Service {
   private readonly binding: { dependency?: unknown } = {}
   private closed = false
   private readonly retiring = new Set<Promise<void>>()
-  constructor(ctx: Context, name: 'sceneSegmentation' | 'reranking', private readonly factory: () => { key: string; dependency?: unknown; create(): T } | undefined) { super(ctx, name) }
+  constructor(ctx: Context, name: 'sceneSegmentation' | 'reranking' | 'graphExtraction', private readonly factory: () => { key: string; dependency?: unknown; create(): T } | undefined) { super(ctx, name) }
   current(): T | undefined {
     if (this.closed) return undefined
     const options = this.factory()

@@ -1,4 +1,4 @@
-export const skills = ['novel-director', 'novel-inspiration', 'novel-design', 'novel-outline', 'novel-drafting', 'novel-review', 'novel-polish', 'novel-revision', 'novel-settle', 'novel-export', 'novel-analyze']
+export const skills = ['novel-director', 'novel-inspiration', 'novel-design', 'novel-outline', 'novel-drafting', 'novel-review', 'novel-polish', 'novel-revision', 'novel-settle', 'novel-export', 'novel-analyze', 'novel-maintenance']
 /** Dispatch references must travel with the skills that consume them. */
 export const referenceDocs = [
   ...['导入与覆盖', '事实提取', '机制与灵感'].map(name => `skills/novel-analyze/工序/${name}.md`),
@@ -7,6 +7,7 @@ export const referenceDocs = [
   ...['1-表达清理', '2-节奏与重塑', '3-平台格式'].map(name => `skills/novel-polish/工序/${name}.md`),
   'skills/novel-revision/底本/改稿章程.md',
   'skills/novel-settle/底本/沉淀对账.md',
+  'skills/novel-maintenance/参考/书仓格式速查.md',
 ]
 export const thinScripts = [
   ['skills/novel-drafting/scripts/核验字数.mjs', 'draftLengthCli'],

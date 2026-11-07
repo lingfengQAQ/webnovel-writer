@@ -36,6 +36,12 @@ await page.route('**/api/webnovel/study/chapters', async route => {
   ] } } })
 })
 const node = id => page.locator('.nw-archify g[data-node-id="' + id + '"]')
+// DSH Menu replaced the native select: open the trigger named by the choice, then pick the row.
+const choose = async (label, option) => {
+  await page.getByRole('button', { name: new RegExp('^' + label) }).click()
+  await page.getByRole('menu').getByRole('menuitem', { name: option, exact: true }).click()
+  await page.getByRole('menu').waitFor({ state: 'hidden' })
+}
 const state = async (id, value) => page.waitForFunction(({ id, value }) => document.querySelector('[data-node-id="' + id + '"]')?.getAttribute('data-run-state') === value, { id, value })
 const capture = async name => {
   await page.locator('.nw-viz').evaluate(el => { el.scrollTop = 0 })
@@ -55,13 +61,13 @@ try {
   if (await workspace.getAttribute('aria-expanded') === 'false') await workspace.click()
   await page.getByText('S5 书房验收', { exact: true }).first().click()
   await page.getByRole('tab', { name: '可视化', exact: true }).click()
-  await page.getByLabel('选择可视化作品', { exact: true }).selectOption('book:acceptance-a')
+  await choose('选择可视化作品', '验收作品甲')
   await node('concept').waitFor()
   assert.equal(await page.locator('.nw-archify g[data-node-id]').count(), 13)
   await capture('archify-overview-light')
   report.checks.push('原13节点成图与全部章节状态')
 
-  await page.getByLabel('选择流程章节', { exact: true }).selectOption('12')
+  await choose('选择流程章节', '第 12 章')
   await page.locator('.nw-flow-summary').filter({ hasText: '改稿 · 进行中' }).waitFor()
   await state('materials', '')
   await node('revision').click()
@@ -69,7 +75,7 @@ try {
   await page.getByText('第12章正在重试', { exact: true }).waitFor()
   assert.equal(await page.locator('.nw-inspector').getByText('第13章等待资料取舍', { exact: true }).count(), 0)
   await capture('archify-retry-details')
-  await page.getByLabel('选择流程章节', { exact: true }).selectOption('13')
+  await choose('选择流程章节', '第 13 章')
   await page.locator('.nw-flow-summary').filter({ hasText: '备料 · 待确认' }).waitFor()
   await state('revision', '')
   await page.getByRole('button', { name: '回到当前', exact: true }).click()
@@ -119,7 +125,7 @@ try {
   await page.setViewportSize({ width: 1500, height: 1300 })
   report.checks.push('深浅主题及720px窄窗口详情无横向溢出')
 
-  await page.getByLabel('选择流程章节', { exact: true }).selectOption('12')
+  await choose('选择流程章节', '第 12 章')
   calls = [call('等待作者批准入档', 12, 'confirm', 'waiting', 0)]
   await state('approval', 'waiting'); await state('settled', '')
   await node('approval').click()
@@ -148,10 +154,11 @@ try {
   disconnected = true; await page.locator('.nw-flow-summary').filter({ hasText: '连接已断' }).waitFor()
   await state('review', 'unknown')
   disconnected = false; await state('review', 'running')
-  await page.getByLabel('选择可视化作品', { exact: true }).selectOption('book:acceptance-b')
+  await choose('选择可视化作品', '验收作品乙')
   await node('concept').waitFor()
   assert.equal(await page.locator('.nw-inspector').count(), 0)
-  assert.equal(await page.getByLabel('选择流程章节').inputValue(), '0')
+  // The chapter choice is a DSH Menu; its trigger names the current value.
+  assert.equal(await page.getByRole('button', { name: /^选择流程章节/ }).getAttribute('aria-label'), '选择流程章节：全部章节')
   await state('review', '')
   report.checks.push('同步/断线移除假运行、重连恢复及切书清空旧章节与详情')
   assert.deepEqual(report.errors, [])

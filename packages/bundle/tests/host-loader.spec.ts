@@ -33,6 +33,7 @@ const checks = [
   '作者裁决预取消与迟到批准',
   '工作区注册、别名与非法 cwd',
   '裁决服务失败不写真源',
+  '只读开章与主动检查不增加状态调用或书仓写入',
   '真实提案与补偿提交',
   '七类设计文件复用原生观察与 design 提交',
   '作者保存和落盘前并发修改使旧观察失效',
@@ -71,7 +72,7 @@ function linkHostDependencies(fixtureRoot: string) {
   } else {
     const host = loadSourceHost(source)
     fs.mkdirSync(path.join(fixtureRoot, 'node_modules', '@deepseek-ai'), { recursive: true })
-    for (const name of ['cordis', 'dsh-tools', 'dsh-llm', 'dsh-credentials', 'dsh-skill-filesystem']) {
+    for (const name of ['cordis', 'dsh-tools', 'dsh-tool-executor-native', 'dsh-llm', 'dsh-credentials', 'dsh-skill-filesystem']) {
       fs.symlinkSync(host.get(`@deepseek-ai/${name}`).directory, path.join(fixtureRoot, 'node_modules', '@deepseek-ai', name), 'junction')
     }
   }
@@ -101,7 +102,7 @@ beforeAll(async () => {
     platform: 'node',
     target: 'node20',
     format: 'esm',
-    external: ['@deepseek-ai/cordis', '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-credentials', '@deepseek-ai/dsh-skill-filesystem', 'node:*'],
+    external: ['@deepseek-ai/cordis', '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-tool-executor-native', '@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-credentials', '@deepseek-ai/dsh-skill-filesystem', 'node:*'],
     legalComments: 'none',
     banner: { js: "import { createRequire as __createRequire } from 'node:module'\nconst require = __createRequire(import.meta.url)" },
   })
@@ -120,7 +121,8 @@ beforeAll(async () => {
     const partial = fs.existsSync(partialPath) ? fs.readFileSync(partialPath, 'utf8') : '(report not created)'
     const reportPath = process.env['WEBNOVEL_LOADER_REPORT']
     if (reportPath !== undefined) fs.writeFileSync(path.resolve(reportPath), partial)
-    throw new Error(`Loader process failed; last progress report:\n${partial}`, { cause: error })
+    const failure = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+    throw new Error(`Loader process failed: ${failure}\nLast progress report:\n${partial}`, { cause: error })
   })
   report = JSON.parse(fs.readFileSync(path.join(root, 'report.json'), 'utf8')) as LoaderReport
   const reportPath = process.env['WEBNOVEL_LOADER_REPORT']
@@ -135,6 +137,24 @@ afterAll(() => {
 })
 
 describe('真实 DSH Loader 验收（独立进程）', () => {
+  it('整仓升级通过真实问答批准，失败续办不重复写入，收据拒绝原生改写', async () => {
+    const upgradeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'webnovel-maintenance-loader-'))
+    try {
+      linkHostDependencies(upgradeRoot)
+      for (const file of ['embedding-provider.mjs', 'scenes.mjs', 'reranking.mjs']) fs.copyFileSync(path.join(root, file), path.join(upgradeRoot, file))
+      fs.cpSync(path.join(packageRoot, 'skills'), path.join(upgradeRoot, 'skills'), { recursive: true })
+      const result = await run(process.execPath, [path.join(packageRoot, 'tests/fixtures/host-loader.mjs'), upgradeRoot, path.join(root, 'lib/webnovel.mjs'), 'book-upgrade'], {
+        cwd: upgradeRoot, env: { ...process.env, DSH_HOME: path.join(upgradeRoot, '.dsh'), DSH_AGENTS_HOME: path.join(upgradeRoot, '.agents'), DSH_TELEMETRY_DISABLED: '1' },
+        timeout: 60_000, windowsHide: true, maxBuffer: 2 * 1024 * 1024,
+      }).catch(error => { throw new Error(fs.readFileSync(path.join(upgradeRoot, 'report.json'), 'utf8'), { cause: error }) })
+      const outcome = JSON.parse(fs.readFileSync(path.join(upgradeRoot, 'report.json'), 'utf8'))
+      expect(outcome.checks['整仓升级真实批准、失败续办和收据保护'], outcome.checks['整仓升级真实批准、失败续办和收据保护']?.error).toEqual({ ok: true })
+      expect(outcome.maintenanceUpgrade).toEqual({ readonlyPreview: true, authorQuestions: 3, rejectedBeforeWrite: true, pendingCommit: true, resumeWithoutRewrite: true, repeatWithoutCommit: true, receiptProtected: true, delegatedToolsDenied: true })
+      report.maintenanceUpgrade = outcome.maintenanceUpgrade
+      const reportPath = process.env['WEBNOVEL_LOADER_REPORT']
+      if (reportPath) fs.writeFileSync(path.resolve(reportPath), JSON.stringify({ ...report, maintenanceUpgradeLoader: { ...outcome, stdout: result.stdout, stderr: result.stderr } }, null, 2))
+    } finally { removeSync(upgradeRoot) }
+  }, 70_000)
   it('原生草稿统计、PTC、取消、隔离与恢复', async () => {
     const feedbackRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'webnovel-draft-length-'))
     try {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import zlib from 'node:zlib'
+import { checkDshCompatibility } from './dsh-compatibility.mjs'
 
 /** Read regular package files without extracting an untrusted archive. */
 export function packageFiles(filename) {
@@ -41,6 +42,7 @@ export function packageFiles(filename) {
 }
 
 export function checkPublishableManifest(manifest) {
+  checkDshCompatibility(manifest)
   assert.notEqual(manifest.private, true, 'Release packages must not be private')
   assert.equal(manifest.publishConfig?.access, 'public')
   assert.equal(manifest.publishConfig?.tag, 'latest')
@@ -63,15 +65,15 @@ export function checkEmbeddingPackage(filename, expectedVersion) {
   checkPublishableManifest(manifest)
   assert.ok(read('LICENSE').includes('GNU GENERAL PUBLIC LICENSE'))
   assert.ok(read('THIRD_PARTY_NOTICES.md').includes('Original notices'))
-  for (const name of ['lib/index.js', 'lib/client.js', 'lib/scenes.js', 'lib/reranking.js', 'cordis.patch.yml', 'README.md', 'MODEL_DIMENSIONS.md']) read(name)
-  for (const entry of ['scenes', 'reranking']) {
+  for (const name of ['lib/index.js', 'lib/client.js', 'lib/scenes.js', 'lib/reranking.js', 'lib/graph.js', 'cordis.patch.yml', 'README.md', 'MODEL_DIMENSIONS.md']) read(name)
+  for (const entry of ['scenes', 'reranking', 'graph']) {
     assert.equal(manifest.exports?.[`./${entry}`], `./lib/${entry}.js`, `Missing auxiliary export: ${entry}`)
   }
   assert.equal(read('cordis.patch.yml').replaceAll('\r\n', '\n').trim(),
-    "- insert:\n    - id: webnovel-embeddings\n      name: '@linfengqaqtat/dsh-scriptor-retrieval'\n    - id: webnovel-scenes\n      name: '@linfengqaqtat/dsh-scriptor-retrieval/scenes'\n    - id: webnovel-reranking\n      name: '@linfengqaqtat/dsh-scriptor-retrieval/reranking'")
+    "- insert:\n    - id: webnovel-embeddings\n      name: '@linfengqaqtat/dsh-scriptor-retrieval'\n    - id: webnovel-scenes\n      name: '@linfengqaqtat/dsh-scriptor-retrieval/scenes'\n    - id: webnovel-reranking\n      name: '@linfengqaqtat/dsh-scriptor-retrieval/reranking'\n    - id: webnovel-graph\n      name: '@linfengqaqtat/dsh-scriptor-retrieval/graph'")
   assert.ok(read('lib/client.js').startsWith(`window.__ModuleLoader__.load({ id: ${JSON.stringify(manifest.name)},`), 'Embedding client identity must match its installed package name')
   for (const [file, data] of files) {
-    assert.match(file, /^(package\.json|LICENSE|THIRD_PARTY_NOTICES\.md|README\.md|MODEL_DIMENSIONS\.md|cordis\.patch\.yml|lib\/(index|client|scenes|reranking)\.js|licenses\/[^/]+\.txt)$/)
+    assert.match(file, /^(package\.json|LICENSE|THIRD_PARTY_NOTICES\.md|README\.md|MODEL_DIMENSIONS\.md|cordis\.patch\.yml|lib\/(index|client|scenes|reranking|graph)\.js|licenses\/[^/]+\.txt)$/)
     assert.ok(!/-----BEGIN [A-Z ]*PRIVATE KEY-----|sk-[A-Za-z0-9_-]{30,}/.test(data.toString('utf8')), `Possible credential in ${file}`)
   }
   for (const [name, version] of Object.entries({ ...manifest.dependencies, ...manifest.peerDependencies })) {
@@ -94,7 +96,7 @@ export function checkMetaPackage(filename, expectedVersion, embeddingVersion) {
   })
   assert.deepEqual(manifest.dsh?.bundle?.patch, ['./cordis.patch.yml', './presets/writing.patch.yml'])
   assert.equal(read('cordis.patch.yml').replaceAll('\r\n', '\n').trim(),
-    "- insert:\n    - id: webnovel\n      name: '@linfengqaqtat/dsh-scriptor'\n    - id: webnovel-embeddings\n      name: '@linfengqaqtat/dsh-scriptor-retrieval'\n    - id: webnovel-scenes\n      name: '@linfengqaqtat/dsh-scriptor-retrieval/scenes'\n    - id: webnovel-reranking\n      name: '@linfengqaqtat/dsh-scriptor-retrieval/reranking'")
+    "- insert:\n    - id: webnovel\n      name: '@linfengqaqtat/dsh-scriptor'\n    - id: webnovel-embeddings\n      name: '@linfengqaqtat/dsh-scriptor-retrieval'\n    - id: webnovel-scenes\n      name: '@linfengqaqtat/dsh-scriptor-retrieval/scenes'\n    - id: webnovel-reranking\n      name: '@linfengqaqtat/dsh-scriptor-retrieval/reranking'\n    - id: webnovel-graph\n      name: '@linfengqaqtat/dsh-scriptor-retrieval/graph'")
   assert.match(read('presets/writing.patch.yml'), /id: preset-scriptor[\s\S]*name: 写作模式/)
   assert.ok(read('LICENSE').includes('GNU GENERAL PUBLIC LICENSE'))
   read('README.md')

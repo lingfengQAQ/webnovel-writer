@@ -5,16 +5,21 @@ import {
   AuthorDocumentError, authorDocumentPath, authorReadOnlyReason, documentHash, saveAuthorDocument, readAuthorSave,
   parseDocument, listChapters, scanChapter, deriveChapterFacts, paths, retryAuthorSaveCommit, withBookWrite,
   canonicalizePath, isFullyQualifiedPath, findPendingReviewDraft,
-  type OperationProvenance, type AuthorSaveResult,
+  inspectBookDocuments, type OperationProvenance, type AuthorSaveResult,
 } from '@webnovel/core'
 import { scanBooks } from '../bookshelf'
 import { progressLineOf } from '../status-context'
 import type { ChapterView, FileRef, StudyDocument, StudySave, StudyShelf, TreeEntry } from './types'
 import type { IndexBook } from '../indexing/manager'
 import { readStoryGraph } from './graph'
+import { readGraphFile, scanGraphFiles } from './graph-source'
+import { GRAPH_PROMPT_VERSION, overlayExtractions } from './graph-extraction'
+import { graphCacheSignature, readGraphCache, readGraphState } from '../indexing/graph-storage'
+import type { StoryGraph } from './graph-types'
 
 const MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
 const ROOT_ORDER = ['作品契约', '构想', '大纲', '世界书', '定稿', '账本', '本书记忆', '草稿区']
+const readerSnapshots = new Map<string, { fingerprint: string; graph: StoryGraph; cache: ReturnType<typeof readGraphCache> }>()
 
 export function routeForDocument(ref: FileRef): string {
   if (ref.space === 'shared') return '共享资料更新：只处理相关构想、灵感或作者记忆，不默认复审所有书'
@@ -31,7 +36,7 @@ function textOf(target: string): string {
   if (fs.statSync(target).size > MAX_DOCUMENT_BYTES) throw new AuthorDocumentError('read-only', '文件超过 4 MiB，不能在编辑器中打开；内容未截断')
   const bytes = fs.readFileSync(target)
   if (bytes.includes(0)) throw new AuthorDocumentError('read-only', '该文件不是文本文件')
-  try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes) } catch {
+  try { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) } catch {
     throw new AuthorDocumentError('read-only', '只支持 UTF-8 文档')
   }
 }
@@ -94,15 +99,70 @@ export class StudyService {
     return { root: source.root, name: source.owner, bookId: source.bookId, workspace: this.workspace }
   }
 
-  graph(space: string) {
+  graphSource(space: string) {
     const source = this.source(space)
     if (!source.bookId) throw new AuthorDocumentError('invalid-path', '图谱只适用于指定作品')
     return readStoryGraph({ bookId: source.bookId, bookName: source.owner,
+      contract: textOf(authorDocumentPath(source.root, paths.契约())),
       maxChapter: Math.max(0, ...listChapters(source.root).map(item => item.章)),
-      list: relative => this.treeAt(source, { space, path: relative }),
-      read: relative => textOf(authorDocumentPath(source.root, relative)),
+      // Graph parsing supplies its own metadata. Avoid reading/parsing every file
+      // once for tree badges and a second time for the evidence itself.
+      list: relative => {
+        const directory = authorDocumentPath(source.root, relative, true)
+        if (!fs.existsSync(directory)) throw new AuthorDocumentError('not-found', '目录不存在')
+        return fs.readdirSync(directory, { withFileTypes: true }).filter(entry => !entry.name.startsWith('.') && entry.name !== 'node_modules')
+          .map(entry => ({ name: entry.name, directory: entry.isDirectory(), draft: false, ref: { space, path: path.posix.join(relative, entry.name) },
+            ...(entry.isSymbolicLink() || !entry.isDirectory() && !entry.isFile() ? { error: '该条目不是安全的普通文件或目录' } : {}) }))
+      },
+      read: relative => {
+        try { return readGraphFile(source.root, relative) }
+        catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new AuthorDocumentError('not-found', '文件不存在')
+          throw error
+        }
+      },
     })
   }
+
+  graph(space: string) {
+    const graph = this.graphSource(space), source = this.indexBook(space)
+    const cache = readGraphCache(source.root, source.bookId)
+    let state
+    try { state = readGraphState(source.root, source.bookId) }
+    catch (error) { return { ...graph, index: { cache: 'invalid' as const, error: error instanceof Error ? error.message : '图谱控制记录不可读' } } }
+    const projected = overlayExtractions(graph, cache.extractions)
+    const stale = cache.fingerprint !== graph.fingerprint || cache.extractions.some(item => item.version !== GRAPH_PROMPT_VERSION)
+    return { ...projected, index: { state, cache: cache.status === 'ready' && stale ? 'stale' as const : cache.status, error: cache.error } }
+  }
+
+  async graphForReader(space: string, signal?: AbortSignal) {
+    const source = this.source(space)
+    if (!source.bookId) throw new AuthorDocumentError('invalid-path', '图谱只适用于指定作品')
+    const files = await scanGraphFiles(source.root, space, signal)
+    signal?.throwIfAborted()
+    const current = this.source(space)
+    if (current.root !== source.root || current.bookId !== source.bookId) throw new AuthorDocumentError('conflict', '作品身份已变化')
+    const maxChapter = listChapters(source.root).reduce((max, item) => Math.max(max, item.章), 0)
+    let cacheSignature: string
+    try { cacheSignature = graphCacheSignature(source.root) } catch { cacheSignature = 'unsafe' }
+    const fingerprint = JSON.stringify([source.bookId, files.fingerprint, maxChapter, cacheSignature, GRAPH_PROMPT_VERSION])
+    let saved = readerSnapshots.get(source.root)
+    if (!saved || saved.fingerprint !== fingerprint || cacheSignature === 'unsafe') {
+      const sourceGraph = readStoryGraph({ bookId: source.bookId, bookName: source.owner, maxChapter, contract: files.read('作品契约/契约.md'), ...files })
+      const cache = readGraphCache(source.root, source.bookId)
+      saved = { fingerprint, graph: overlayExtractions(sourceGraph, cache.extractions), cache }
+      readerSnapshots.delete(source.root); readerSnapshots.set(source.root, saved)
+      while (readerSnapshots.size > 2) readerSnapshots.delete(readerSnapshots.keys().next().value!)
+    }
+    const { graph, cache } = saved
+    let state
+    try { state = readGraphState(source.root, source.bookId) }
+    catch (error) { return { ...graph, index: { cache: 'invalid' as const, error: error instanceof Error ? error.message : '图谱控制记录不可读' } } }
+    const stale = cache.fingerprint !== graph.fingerprint || cache.extractions.some(item => item.version !== GRAPH_PROMPT_VERSION)
+    return { ...graph, index: { state, cache: cache.status === 'ready' && stale ? 'stale' as const : cache.status, error: cache.error } }
+  }
+
+  inspect(space: string) { return inspectBookDocuments(this.indexBook(space).root) }
 
   tree(ref: FileRef): readonly TreeEntry[] {
     const source = this.source(ref.space)
@@ -147,6 +207,7 @@ export class StudyService {
     return {
       ref, owner: source.owner, name: path.basename(ref.path), absolutePath,
       body: parsed.ok ? parsed.data.body : text, hash: documentHash(text),
+      ...(parsed.ok ? { prefix: text.replace(/\r\n/g, '\n').slice(0, text.replace(/\r\n/g, '\n').length - parsed.data.body.length) } : {}),
       ...metadata, ...(readOnly ? { readOnly } : {}),
     }
   }

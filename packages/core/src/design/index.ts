@@ -33,5 +33,8 @@ export {
   writeEntry,
   prepareEntry,
   type WorldbookEntryFields,
+  type WorldbookEntryInput,
+  type 世界书状态,
   type 世界书性质,
 } from './worldbook'
+export { parseWorldbookHistory, type WorldbookFactAppend, type WorldbookHistory } from './worldbook-history'

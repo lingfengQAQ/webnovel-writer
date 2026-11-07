@@ -11,6 +11,10 @@ const diagnostics = fileURLToPath(new URL('./.tmp/ci', import.meta.url));
 if (process.env['CI']) mkdirSync(diagnostics, { recursive: true });
 
 export default defineConfig({
+  resolve: {
+    // The shell-seeded primitives package only loads through the DSH shell build; unit tests use a semantic stand-in.
+    alias: { '@deepseek-ai/dsh-client-ui-primitives': fileURLToPath(new URL('./packages/bundle/tests/support/ui-primitives.tsx', import.meta.url)) },
+  },
   test: {
     include: ['packages/*/tests/**/*.{spec,test}.ts', 'packages/*/src/**/*.{spec,test}.ts'],
     environment: 'node',

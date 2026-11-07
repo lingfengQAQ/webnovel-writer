@@ -26,17 +26,18 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const manifest = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'))
 
 /** dsh 宿主提供的服务面,不进产物。 */
-const EXTERNAL = ['@deepseek-ai/cordis', '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-skill-filesystem', 'node:*']
+const EXTERNAL = ['@deepseek-ai/cordis', '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-tool-executor-native', '@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-skill-filesystem', 'node:*']
 
 function checkDependencies(result) {
   for (const output of Object.values(result.metafile.outputs)) {
     for (const entry of output.imports.filter(entry => entry.external)) {
-      if (!isBuiltin(entry.path) && !manifest.peerDependencies?.[entry.path] && !manifest.dependencies?.[entry.path]) {
+      const packageName = entry.path.startsWith('@') ? entry.path.split('/').slice(0, 2).join('/') : entry.path.split('/')[0]
+      if (!isBuiltin(entry.path) && !manifest.peerDependencies?.[packageName] && !manifest.dependencies?.[packageName]) {
         throw new Error(`未声明产物运行依赖: ${entry.path}`)
       }
     }
   }
-  const shared = /node_modules\/(?:@deepseek-ai\/(?:cordis|dsh-tools|dsh-llm|dsh-skill-filesystem)\/|react\/)/
+  const shared = /node_modules\/(?:@deepseek-ai\/(?:cordis|dsh-tools|dsh-llm|dsh-skill-filesystem|dsh-client-ui-primitives)\/|react\/)/
   for (const input of Object.keys(result.metafile.inputs)) {
     if (shared.test(input.replaceAll('\\', '/'))) throw new Error(`共享运行时被内联: ${input}`)
   }
@@ -84,11 +85,11 @@ if (!writingPreset.equals(fs.readFileSync(path.join(packageRoot, '../meta/preset
   throw new Error('主包与完整版的写作模式定义不一致')
 }
 
-// DSH's native client module loader supplies the shared React runtime.
+// DSH's native client module loader supplies React and the shell-seeded ui-primitives instance.
 const clientBuild = await esbuild.build({
   entryPoints: [path.join(packageRoot, 'src', 'client', 'index.tsx')],
   outfile: path.join(packageRoot, 'lib', 'client.js'),
-  platform: 'browser', format: 'cjs', bundle: true, external: ['react'], target: 'chrome110',
+  platform: 'browser', format: 'cjs', bundle: true, external: ['react', '@deepseek-ai/dsh-client-ui-primitives'], target: 'chrome110',
   loader: { '.css': 'text' }, minify: true, legalComments: 'inline', metafile: true,
   banner: { js: `window.__ModuleLoader__.load({ id: ${JSON.stringify(manifest.name)}, factory: (require) => { const module = { exports: {} }; const exports = module.exports;` },
   footer: { js: 'return module.exports; } });' },

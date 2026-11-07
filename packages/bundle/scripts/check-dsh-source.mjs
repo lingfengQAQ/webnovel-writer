@@ -13,7 +13,7 @@ const sourcePath = process.argv.slice(2).filter(arg => arg !== '--')[0] ?? proce
 if (sourcePath === undefined) throw new Error('Usage: pnpm test:dsh-source -- <DSH checkout>')
 const host = loadSourceHost(sourcePath)
 host.entry('@deepseek-ai/dsh-app-boot')
-for (const name of ['@deepseek-ai/cordis', '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-user-questions/types']) {
+for (const name of ['@deepseek-ai/cordis', '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-user-questions/types', '@deepseek-ai/dsh-client-ui-primitives']) {
   if (host.typePaths[name] === undefined) throw new Error(`DSH declarations missing: ${name}`)
 }
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'webnovel-dsh-types-'))
@@ -29,7 +29,7 @@ try {
   }
   console.log('[dsh-source] running the real Loader against the same built checkout')
   const vitest = path.join(path.dirname(require.resolve('vitest/package.json')), 'vitest.mjs')
-  execFileSync(process.execPath, [vitest, 'run', 'packages/bundle/tests/host-loader.spec.ts', 'packages/bundle/tests/worker-policy.spec.ts', '--maxWorkers=1'], {
+  execFileSync(process.execPath, [vitest, 'run', 'packages/bundle/tests/host-loader.spec.ts', 'packages/bundle/tests/worker-policy.spec.ts', 'packages/bundle/tests/client-styles.spec.ts', 'packages/embedding-provider/tests/graph-host.spec.ts', '--maxWorkers=1'], {
     cwd: repoRoot,
     env: { ...process.env, WEBNOVEL_DSH_SOURCE: host.root },
     stdio: 'inherit',

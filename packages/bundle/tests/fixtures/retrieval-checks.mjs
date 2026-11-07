@@ -119,6 +119,12 @@ export async function checkSearch({ root, workspace, main, child, ctx, service, 
       try {
         assert.equal((await search('林舟', other.agent)).hits.length, 0)
         assert.equal((await search('其他工作区线索', other.agent)).hits[0].absolutePath, path.join(otherBook, '定稿/卷01/0001-独立.md'))
+        // Automatic indexing now belongs to the profile. Keep the separate
+        // identity fixture paused so request-count assertions below cover only
+        // this test's two target chapters, not a second workspace's background job.
+        const paused = await execute(other.agent, 'novel_index_manage', { bookId, action: 'pause' })
+        assert.equal(paused.value.ok, true, JSON.stringify(paused))
+        assert.equal(paused.value.index.paused, true)
       } finally { await other.dispose() }
     })
 
@@ -133,6 +139,8 @@ export async function checkSearch({ root, workspace, main, child, ctx, service, 
       })
       step('enable-index')
       await manage('enable')
+      assert.equal(service('settings').describe().find(item => item.ns === 'webnovel').value.autoIndexOnCommit, true)
+      assert.equal(Object.hasOwn(JSON.parse(fs.readFileSync(path.join(book, '.webnovel/finalized-search-state.json'), 'utf8')), 'auto'), false)
       step('first-index')
       assert.equal((await ready()).generated, 2)
       step('first-search')
@@ -141,7 +149,7 @@ export async function checkSearch({ root, workspace, main, child, ctx, service, 
       assert.deepEqual(result.hits.map(hit => hit.chapter), [1, 2])
       assert.deepEqual(result.hits.map(hit => hit.matchedBy), [['keyword', 'semantic'], ['semantic']])
       assert.equal(result.index.embedded, 0)
-      assert.equal(requests.length, 2)
+      assert.equal(requests.length, 2, JSON.stringify(requests.map(request => request.input)))
       assert.ok(requests[0].input.every(text => text.startsWith('document:\n')))
       assert.deepEqual(requests[1].input, ['query:\n归家'])
       assert.ok(!/页眉秘密|候选秘密|未定稿秘密/.test(JSON.stringify(requests)))

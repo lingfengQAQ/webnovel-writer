@@ -12,6 +12,8 @@ export const OPERATION_DIR = `${RUNTIME_DIR}/operations`
 
 export interface BookLockOptions {
   readonly operationId?: string
+  /** Maintenance continuation must remain bound to the originally approved physical book. */
+  readonly bookRootIdentity?: string
   readonly sessionId?: string
   readonly agentId?: string
   readonly toolName?: string

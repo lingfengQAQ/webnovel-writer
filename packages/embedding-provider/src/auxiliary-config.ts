@@ -4,7 +4,7 @@ import { DEFAULT_RERANK_TIMEOUT_MS, MAX_RERANK_TIMEOUT_MS, MIN_RERANK_TIMEOUT_MS
 export const SCENE_NAMESPACE = 'webnovel-scenes'
 export const RERANK_NAMESPACE = 'webnovel-reranking'
 export const RERANK_CREDENTIAL = 'WEBNOVEL_RERANK_API_KEY'
-export interface SceneSettings { enabled?: boolean; provider?: string; model?: string; concurrency?: number; timeoutMs?: number; maxInputChars?: number }
+export interface SceneSettings { enabled?: boolean; provider?: string; model?: string; concurrency?: number; timeoutMs?: number }
 export interface RerankSettings { enabled?: boolean; endpoint?: string; model?: string; apiKeyEnv?: string; candidates?: number; timeoutMs?: number }
 export const SceneConfig: z<SceneSettings> = z.object({
   enabled: z.boolean().default(false).description('后台向所选聊天模型发送定稿正文，识别场景边界；关闭后已有边界继续复用'),
@@ -12,7 +12,6 @@ export const SceneConfig: z<SceneSettings> = z.object({
   model: z.string().description('场景识别模型'),
   concurrency: z.number().step(1).min(1).max(8).default(2),
   timeoutMs: z.number().step(1).min(100).max(180_000).default(60_000),
-  maxInputChars: z.number().step(1).min(100).max(500_000).default(60_000),
 })
 export const RerankConfig: z<RerankSettings> = z.object({
   enabled: z.boolean().default(false).description('语义查询向重排服务发送问题及少量定稿候选；不参与索引重建'),
@@ -34,8 +33,7 @@ function name(value: string | undefined, label: string): string {
 export function resolveSceneSettings(input: SceneSettings): Required<Omit<SceneSettings, 'enabled'>> | undefined {
   if (!input.enabled) return undefined
   return { provider: name(input.provider, '宿主提供方'), model: name(input.model, '场景模型'),
-    concurrency: integer(input.concurrency, 2, 1, 8), timeoutMs: integer(input.timeoutMs, 60_000, 100, 180_000),
-    maxInputChars: integer(input.maxInputChars, 60_000, 100, 500_000) }
+    concurrency: integer(input.concurrency, 2, 1, 8), timeoutMs: integer(input.timeoutMs, 60_000, 100, 180_000) }
 }
 export function resolveRerankSettings(input: RerankSettings): Required<Omit<RerankSettings, 'enabled'>> | undefined {
   if (!input.enabled) return undefined

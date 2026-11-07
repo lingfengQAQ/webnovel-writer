@@ -89,7 +89,7 @@ describe('渐进拆书与版本化灵感', () => {
     expect(referenceStatus(workspace, imported.sourceId).fullBookEligible).toBe(true)
   })
   it('长阅读单元连续分块，重叠不重复统计覆盖', async () => {
-    const { workspace, imported, runner } = await setup('第一章 长章\n' + '船主在等待。\n'.repeat(210))
+    const { workspace, imported, runner } = await setup('第一章 长章\n' + '船主在等待。\n'.repeat(2100))
     await complete(workspace, imported.sourceId, runner)
     const status = referenceStatus(workspace, imported.sourceId)
     expect(status.units[0]!.covered).toBe(imported.units[0]!.characters)

@@ -67,15 +67,12 @@ describe('本书记忆一事一文件(A10)', () => {
     expect(fs.readFileSync(path.join(root, paths.本书记忆索引()), 'utf-8')).toBe(first)
   })
 
-  it('旧仓只有 本书记忆/文风.md 时 queryMemory 仍返回条目并标旧格式', () => {
+  it('旧分类正文不进入正常查询，保留升级指引', () => {
     const root = mkDir('webnovel-membook-old-')
     writeFileAtomic(root, paths.记忆('文风'), '# 文风\n\n## 旧条目\n状态：已确认\n### 正文\n旧文风记忆。\n')
     const q = queryMemory(root, { 类: '文风' })
-    expect(q.ok).toBe(true)
-    if (q.ok) {
-      expect(q.entries.find((entry) => entry.名称 === '旧条目')?.正文).toContain('旧文风记忆')
-      expect(q.entries.find((entry) => entry.名称 === '旧条目')?.格式).toBe('旧')
-    }
+    expect(q).toMatchObject({ ok: false, kind: 'parse-error', entries: [] })
+    expect(!q.ok && q.reason).toContain('预览升级')
   })
 
   it('条目名为「索引」或为空被拒', () => {
@@ -93,7 +90,7 @@ describe('本书记忆一事一文件(A10)', () => {
       .toMatchObject({ ok: false, reason: expect.stringMatching(/旧格式|冲突/) })
     expect(fs.readFileSync(path.join(root, paths.记忆('文风')), 'utf8')).toBe(legacy)
     expect(fs.readFileSync(path.join(root, paths.本书记忆索引()), 'utf8')).toBe('# 作者已有索引\n')
-    expect(queryMemory(root, { 类: '文风' }).entries.map(entry => entry.名称)).toEqual(['旧条目甲', '旧条目乙'])
+    expect(queryMemory(root, { 类: '文风' }).entries.map(entry => entry.名称)).toEqual([])
   })
 
   it.each(['---\n类: 文风\n名称: 别的名称\n---\n原文\n', '---\n类: 未知\n名称: 同名\n---\n原文\n', '---\n名称: [坏格式\n---\n原文\n'])('无法确认的一事一文件格式不被覆盖', (original) => {

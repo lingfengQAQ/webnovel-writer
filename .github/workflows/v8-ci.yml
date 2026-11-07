@@ -15,6 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Disable background Git maintenance on the ephemeral runner
+        run: |
+          git config --global maintenance.auto false
+          git config --global gc.auto 0
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
@@ -40,11 +44,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ['22.19.0', '24.15.0']
-        shard: [1, 2]
+        node: ['24.9.0', '24.15.0']
+        shard: [1, 2, 3, 4]
     env:
       WEBNOVEL_LOADER_REPORT: ${{ github.workspace }}/.tmp/ci/loader.json
     steps:
+      - name: Disable background Git maintenance on the ephemeral runner
+        run: |
+          git config --global maintenance.auto false
+          git config --global gc.auto 0
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
@@ -56,32 +64,58 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Run every test once per Node version across two shards
-        run: pnpm test --shard=${{ matrix.shard }}/2 --reporter=default --reporter=json --reporter=./scripts/release/ci-reporter.mjs --outputFile=.tmp/ci/results.json
-      - run: pnpm build
-        if: matrix.shard == 1
-      - run: pnpm --filter @linfengqaqtat/dsh-scriptor typecheck
-        if: matrix.shard == 1
-      - run: pnpm --filter @linfengqaqtat/dsh-scriptor dump-config-check
-        if: matrix.shard == 1
-      - run: pnpm --filter @linfengqaqtat/dsh-scriptor pack-check
-        if: matrix.shard == 1
-      - name: Generated notices are current
-        if: matrix.shard == 1
-        run: git diff --exit-code
+      - name: Run every test once per Node version across four shards
+        run: pnpm test --shard=${{ matrix.shard }}/4 --reporter=default --reporter=json --reporter=./scripts/release/ci-reporter.mjs --outputFile=.tmp/ci/results.json
       - name: Preserve timings and worker failure diagnostics
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ci-${{ matrix.node }}-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
           path: .tmp/ci/
           include-hidden-files: true
           retention-days: 14
+  build:
+    name: v8-build-${{ matrix.node }}
+    runs-on: windows-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['24.9.0', '24.15.0']
+    steps:
+      - name: Disable background Git maintenance on the ephemeral runner
+        run: |
+          git config --global maintenance.auto false
+          git config --global gc.auto 0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.27.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm --filter @linfengqaqtat/dsh-scriptor typecheck
+      - run: pnpm --filter @linfengqaqtat/dsh-scriptor dump-config-check
+      - run: pnpm --filter @linfengqaqtat/dsh-scriptor pack-check
+      - name: Generated notices are current
+        run: |
+          node --input-type=module -e "import { restoreNoticeLineEndings } from './scripts/release/release-source.mjs'; restoreNoticeLineEndings(process.cwd())"
+          git diff --exit-code
   portability:
     name: v8-linux
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Disable background Git maintenance on the ephemeral runner
+        run: |
+          git config --global maintenance.auto false
+          git config --global gc.auto 0
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
@@ -101,6 +135,10 @@ jobs:
     timeout-minutes: 15
     continue-on-error: true
     steps:
+      - name: Disable background Git maintenance on the ephemeral runner
+        run: |
+          git config --global maintenance.auto false
+          git config --global gc.auto 0
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
@@ -117,12 +155,17 @@ jobs:
   required:
     name: v8-required
     runs-on: ubuntu-latest
-    needs: [policy, quality, portability]
+    needs: [policy, quality, build, portability]
     if: always()
     steps:
+      - name: Disable background Git maintenance on the ephemeral runner
+        run: |
+          git config --global maintenance.auto false
+          git config --global gc.auto 0
       - name: All Windows and Linux checks passed
         env:
           RESULT: ${{ needs.quality.result }}
           POLICY: ${{ needs.policy.result }}
+          BUILD: ${{ needs.build.result }}
           LINUX: ${{ needs.portability.result }}
-        run: test "$RESULT" = success && test "$POLICY" = success && test "$LINUX" = success
+        run: test "$RESULT" = success && test "$POLICY" = success && test "$LINUX" = success && test "$BUILD" = success

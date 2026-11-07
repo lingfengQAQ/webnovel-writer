@@ -8,7 +8,9 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { parseDocument } from '../repo/frontmatter'
-import { MEMORY_KINDS } from '../repo/paths'
+import { currentBookMemoryDocument } from '../repo/book-memory-contract'
+import { parseMemoryIndexLinks } from '../repo/memory-index-links'
+import { parseLegacyMemoryIndexLinks } from '../repo/legacy-memory-index-links'
 import { 作者记忆相对目录 } from './author'
 import { canonicalizePath } from '../gate/canonical'
 
@@ -43,6 +45,7 @@ export interface MemoryCatalog {
 
 interface ScanResult {
   readonly entries: MemoryCatalogEntry[]
+  readonly scaffolds: ReadonlySet<string>
   readonly problems: string[]
   readonly indexed: ReadonlySet<string> | undefined
   readonly indexExists: boolean
@@ -67,6 +70,7 @@ function checkedPath(root: string, relative: string, kind: 'file' | 'directory')
 
 function scanDir(root: string, relDir: string, owner: MemoryCatalogOwner): ScanResult {
   const entries: MemoryCatalogEntry[] = []
+  const scaffolds = new Set<string>()
   const problems: string[] = []
   let names: string[] = []
   try {
@@ -74,7 +78,7 @@ function scanDir(root: string, relDir: string, owner: MemoryCatalogOwner): ScanR
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code
     if (code !== 'ENOENT') problems.push(`读取目录失败：${relDir}（${err instanceof Error ? err.message : String(err)}）`)
-    return { entries, problems, indexed: undefined, indexExists: false }
+    return { entries, scaffolds, problems, indexed: undefined, indexExists: false }
   }
   const files = names.filter((n) => n.endsWith('.md') && n !== '索引.md').sort()
   for (const name of files) {
@@ -94,9 +98,16 @@ function scanDir(root: string, relDir: string, owner: MemoryCatalogOwner): ScanR
     const fields = doc.data.fields
     const base = name.replace(/\.md$/, '')
     const 类 = typeof fields['类'] === 'string' ? fields['类'] : undefined
-    if (owner === '本书' && 类 === undefined && (MEMORY_KINDS as readonly string[]).includes(base)) {
-      entries.push({ 名称: base, 类: base, 全文位置: rel, 格式: '旧' })
-      continue
+    if (owner === '本书') {
+      const shape = currentBookMemoryDocument(fields, base, doc.data.body)
+      if (!shape.ok) {
+        problems.push(`解析失败：${rel}（${shape.reason}）`)
+        continue
+      }
+      if (shape.format === 'empty') {
+        scaffolds.add(name)
+        continue
+      }
     }
     const 描述 = typeof fields['描述'] === 'string' && fields['描述'].trim() !== '' ? fields['描述'].trim() : undefined
     const 来源 = typeof fields['来源'] === 'string' ? fields['来源'] : undefined
@@ -115,14 +126,15 @@ function scanDir(root: string, relDir: string, owner: MemoryCatalogOwner): ScanR
   try {
     const indexText = fs.readFileSync(checkedPath(root, `${relDir}/索引.md`, 'file'), 'utf-8')
     indexExists = true
-    indexed = new Set<string>()
-    for (const m of indexText.matchAll(/^- \[[^\]]*\]\(([^)]+\.md)\)/gm)) indexed.add(m[1]!)
+    const parsed = owner === '作者' ? parseLegacyMemoryIndexLinks(indexText) : parseMemoryIndexLinks(indexText)
+    indexed = new Set(parsed.filenames)
+    for (const problem of parsed.problems) problems.push(`解析索引失败：${relDir}/索引.md（${problem}）`)
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
       problems.push(`读取索引失败：${relDir}/索引.md（${err instanceof Error ? err.message : String(err)}）`)
     }
   }
-  return { entries, problems, indexed, indexExists }
+  return { entries, scaffolds, problems, indexed, indexExists }
 }
 
 function catalogOf(root: string, relDir: string, owner: MemoryCatalogOwner): MemoryCatalog {
@@ -142,7 +154,7 @@ function catalogOf(root: string, relDir: string, owner: MemoryCatalogOwner): Mem
       problems.push('索引文件不存在，目录按条目文件列出')
     } else {
       const missing = scan.entries.filter(e => e.格式 === undefined).map(e => path.basename(e.全文位置)).filter(n => !scan.indexed!.has(n))
-      const stale = [...scan.indexed!].filter((n) => !onDisk.has(n))
+      const stale = [...scan.indexed!].filter((n) => !onDisk.has(n) && !scan.scaffolds.has(n))
       if (missing.length > 0 || stale.length > 0) {
         状态 = '索引失效'
         if (missing.length > 0) problems.push(`索引未收录：${missing.join('、')}`)
