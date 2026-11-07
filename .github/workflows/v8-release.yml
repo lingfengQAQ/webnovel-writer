@@ -19,6 +19,10 @@ jobs:
     env:
       WEBNOVEL_LOADER_REPORT: ${{ github.workspace }}/.tmp/ci/loader.json
     steps:
+      - name: Disable background Git maintenance on the ephemeral runner
+        run: |
+          git config --global maintenance.auto false
+          git config --global gc.auto 0
       - name: Check out with repository line endings only
         run: git config --global core.autocrlf false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -53,6 +57,10 @@ jobs:
       RELEASE_TAG: ${{ github.ref_name }}
       WEBNOVEL_LOADER_REPORT: ${{ github.workspace }}/.tmp/ci/loader.json
     steps:
+      - name: Disable background Git maintenance on the ephemeral runner
+        run: |
+          git config --global maintenance.auto false
+          git config --global gc.auto 0
       - name: Check out with repository line endings only
         run: git config --global core.autocrlf false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

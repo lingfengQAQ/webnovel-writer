@@ -15,6 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Disable background Git maintenance on the ephemeral runner
+        run: |
+          git config --global maintenance.auto false
+          git config --global gc.auto 0
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
@@ -45,6 +49,10 @@ jobs:
     env:
       WEBNOVEL_LOADER_REPORT: ${{ github.workspace }}/.tmp/ci/loader.json
     steps:
+      - name: Disable background Git maintenance on the ephemeral runner
+        run: |
+          git config --global maintenance.auto false
+          git config --global gc.auto 0
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
@@ -76,6 +84,10 @@ jobs:
       matrix:
         node: ['24.9.0', '24.15.0']
     steps:
+      - name: Disable background Git maintenance on the ephemeral runner
+        run: |
+          git config --global maintenance.auto false
+          git config --global gc.auto 0
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
@@ -100,6 +112,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Disable background Git maintenance on the ephemeral runner
+        run: |
+          git config --global maintenance.auto false
+          git config --global gc.auto 0
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
@@ -119,6 +135,10 @@ jobs:
     timeout-minutes: 15
     continue-on-error: true
     steps:
+      - name: Disable background Git maintenance on the ephemeral runner
+        run: |
+          git config --global maintenance.auto false
+          git config --global gc.auto 0
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
@@ -138,6 +158,10 @@ jobs:
     needs: [policy, quality, build, portability]
     if: always()
     steps:
+      - name: Disable background Git maintenance on the ephemeral runner
+        run: |
+          git config --global maintenance.auto false
+          git config --global gc.auto 0
       - name: All Windows and Linux checks passed
         env:
           RESULT: ${{ needs.quality.result }}
