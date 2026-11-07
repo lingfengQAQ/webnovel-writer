@@ -2,11 +2,11 @@
   "name": "webnovel-writer-v8",
   "private": true,
   "type": "module",
-  "version": "8.3.2",
+  "version": "8.4.0",
   "description": "DSH Scriptor: a long-form fiction writing workspace for DeepSeek Harness",
   "packageManager": "pnpm@11.27.1",
   "scripts": {
-    "prepare": "node tools/git-hooks/install.mjs || echo [git-hooks] skipped",
+    "prepare": "node -e \"const fs=require('node:fs');if(fs.existsSync('tools/git-hooks/install.mjs'))import('./tools/git-hooks/install.mjs')\"",
     "test": "vitest run",
     "build": "pnpm -r --if-present build",
     "test:dsh-source": "node packages/bundle/scripts/check-dsh-source.mjs",
@@ -25,10 +25,10 @@
     "release:smoke": "node scripts/release/install-smoke.mjs"
   },
   "engines": {
-    "node": "^22.19.0 || ^24.0.0"
+    "node": ">=24.9.0"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.5",
+    "@deepseek-ai/cordis": "4.1.0",
     "@types/node": "^22.0.0",
     "eslint": "9.39.1",
     "typescript": "^5.5.0",

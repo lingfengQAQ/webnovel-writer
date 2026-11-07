@@ -7,13 +7,13 @@ import { writeNotices } from '../../../scripts/release/notices.mjs'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const manifest = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'))
 const hostBuild = await build({
-  entryPoints: ['index', 'scenes', 'reranking'].map(name => path.join(root, `src/${name}.ts`)), outdir: path.join(root, 'lib'),
+  entryPoints: ['index', 'scenes', 'reranking', 'graph'].map(name => path.join(root, `src/${name}.ts`)), outdir: path.join(root, 'lib'),
   bundle: true, platform: 'node', format: 'esm', target: 'node22', legalComments: 'inline', metafile: true,
   external: ['@deepseek-ai/cordis', '@deepseek-ai/dsh-llm', 'node:*'],
 })
 const clientBuild = await build({
   entryPoints: [path.join(root, 'src/client.tsx')], outfile: path.join(root, 'lib/client.js'),
-  bundle: true, platform: 'browser', format: 'cjs', target: 'chrome110', external: ['react'],
+  bundle: true, platform: 'browser', format: 'cjs', target: 'chrome110', external: ['react', '@deepseek-ai/dsh-client-ui-primitives'],
   loader: { '.css': 'text' },
   legalComments: 'inline', metafile: true, minify: true,
   banner: { js: `window.__ModuleLoader__.load({ id: ${JSON.stringify(manifest.name)}, factory: (require) => { const module = { exports: {} }; const exports = module.exports;` },

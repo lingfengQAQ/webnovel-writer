@@ -61,9 +61,20 @@ const openSession = async (title = mainTitle, workspaceTitle = 'S5 临时验收�
   await page.getByRole('tab', { name: '书房', exact: true }).click()
 }
 const editor = () => page.getByRole('textbox', { name: '文档正文', exact: true })
+// The live-typesetting editor has no read/edit modes and no toolbar save button; save is Ctrl+S.
 const editAppend = async text => {
-  await page.getByRole('button', { name: '编辑', exact: true }).click()
   await editor().click(); await page.keyboard.press('Control+End'); await page.keyboard.insertText('\n' + text + '\n')
+}
+const save = async () => { await editor().click(); await page.keyboard.press('Control+s') }
+// Save toast parts are joined with " · " in one DSH Toast banner, portaled to the body.
+const waitForToast = async pattern => {
+  await page.waitForFunction(source => [...document.querySelectorAll('body > [role="alert"]')].some(node => new RegExp(source).test(node.textContent ?? '')), pattern.source)
+}
+// DSH Menu replaced the native select: open the trigger named by the choice, then pick the row.
+const choose = async (label, option) => {
+  await page.getByRole('button', { name: new RegExp('^' + label) }).click()
+  await page.getByRole('menu').getByRole('menuitem', { name: option, exact: true }).click()
+  await page.getByRole('menu').waitFor({ state: 'hidden' })
 }
 // CodeMirror virtualizes long documents: innerText returns only the rendered
 // viewport, and a remounted editor scrolls back to the top. Read the end slice.
@@ -85,12 +96,15 @@ const openDraft = async file => {
   await book.getByRole('button', { name: new RegExp('^' + file.replace('.', '\\.')) }).click()
   await page.getByRole('tab', { name: new RegExp('^' + file.replace('.', '\\.')) }).waitFor()
 }
+// DSH 0.2 tab chips carry no aria-label: the accessible name is the title plus
+// the nested close button's label, so match the leading file name only.
+const sharedTab = () => page.getByRole('tab', { name: /^写作笔记\.md/ })
 const openShared = async () => {
   const search = page.getByRole('textbox', { name: '搜索书名或文件', exact: true })
   await search.fill('写作笔记.md')
   await page.locator('.nw-search-result').filter({ hasText: '写作笔记.md' }).click()
   await search.fill('')
-  await page.getByRole('tab', { name: '写作笔记.md', exact: true }).waitFor()
+  await sharedTab().waitFor()
 }
 
 const held = []
@@ -114,23 +128,22 @@ try {
     await openShared()
     const marker = '正常保存验收：原文来自临时书房。'
     await editAppend(marker)
-    await page.getByRole('button', { name: '保存', exact: true }).click()
-    await page.getByText('文件已保存', { exact: true }).waitFor()
-    await page.getByText('已交给主控，处理结果见对话', { exact: true }).waitFor()
+    await save()
+    await waitForToast(/文件已保存[\s\S]*已交给主控，处理结果见对话/)
     assert.ok(fs.readFileSync(path.join(runtime.workspace, '书房/知识库/写作笔记.md'), 'utf8').includes(marker))
     await screenshot('normal-save')
     await page.reload({ waitUntil: 'domcontentloaded' })
     await page.getByRole('tab', { name: '书房', exact: true }).waitFor()
     await openSession(); await openShared()
-    assert.ok((await page.getByLabel('文档预览', { exact: true }).innerText()).includes(marker))
+    assert.ok((await editorEndText()).includes(marker))
   })
   await stage('session-separation', async () => {
     await openSession('S5 会话隔离验收', 'S5 空工作范围')
     await page.getByText(/当前工作范围还没有作品/).waitFor()
-    assert.equal(await page.getByRole('tab', { name: '写作笔记.md', exact: true }).count(), 0)
+    assert.equal(await sharedTab().count(), 0)
     await screenshot('separate-session')
     await openSession()
-    await page.getByRole('tab', { name: '写作笔记.md', exact: true }).waitFor()
+    await sharedTab().waitFor()
   })
   await stage('F01-save-retry-keeps-both-dirty-buffers', async () => {
     let firstPayload, droppedResponse
@@ -158,7 +171,7 @@ try {
     const firstMarker = 'F01 原保存的作者文字。'
     const secondMarker = 'F01 目标稿尚未保存的另一份作者文字。'
     await editAppend(firstMarker)
-    await page.getByRole('button', { name: '保存', exact: true }).click()
+    await save()
     await page.getByRole('button', { name: '重试保存', exact: true }).waitFor()
     const dir = path.join(runtime.workspace, '验收作品甲/草稿区/草稿/卷01-来信')
     const disk = fs.readFileSync(path.join(dir, '稿2.md'), 'utf8')
@@ -170,8 +183,8 @@ try {
     await page.getByRole('button', { name: '重试保存', exact: true }).click()
     await page.getByText(/目标稿已有未合并的编辑或保存请求/).waitFor()
     assert.equal(report.saveRequests.length, 2)
-    assert.equal(await page.getByRole('tab', { name: /^稿1\.md/ }).getByLabel('未保存', { exact: true }).count(), 1)
-    assert.equal(await page.getByRole('tab', { name: /^稿2\.md/ }).getByLabel('未保存', { exact: true }).count(), 1)
+    assert.equal(await page.getByRole('tab', { name: /^稿1\.md/ }).getByLabel('未保存修改', { exact: true }).count(), 1)
+    assert.equal(await page.getByRole('tab', { name: /^稿2\.md/ }).getByLabel('未保存修改', { exact: true }).count(), 1)
     // The retried request body is the preserved buffer text: the server-visible
     // proof the lost-response save kept the author's words in the source buffer.
     assert.ok(report.saveRequests[1].body.includes(firstMarker))
@@ -195,8 +208,7 @@ try {
   })
   await stage('F11-index-control-cancellation-and-new-request', async () => {
     await page.getByRole('button', { name: '查看检索索引', exact: true }).click()
-    const choice = page.getByRole('combobox', { name: '选择索引作品', exact: true })
-    await choice.selectOption('book:acceptance-a')
+    await choose('选择索引作品', '验收作品甲')
     const checkbox = page.getByRole('checkbox', { name: '提交后自动更新', exact: true })
     await checkbox.waitFor()
     assert.equal(await checkbox.isEnabled(), true)
@@ -223,9 +235,9 @@ try {
     await until(() => held[0]?.responseReady, 'first real control completed behind delayed response')
     assert.equal(await checkbox.isEnabled(), false)
     held[0].cancelled = true
-    await choice.selectOption('book:acceptance-b')
+    await choose('选择索引作品', '验收作品乙')
     await until(() => checkbox.isEnabled(), 'other book control is usable')
-    await choice.selectOption('book:acceptance-a')
+    await choose('选择索引作品', '验收作品甲')
     await until(() => checkbox.isEnabled(), 'cancelled book control is usable on return')
     await checkbox.click()
     await until(() => held[1]?.responseReady, 'new real control completed behind delayed response')
@@ -245,13 +257,19 @@ try {
     await page.unroute('**/api/webnovel/study/index-control')
   })
   await stage('settings-open-and-return', async () => {
-    // Use the host's own settings entry, discovered by its accessible label.
-    const settings = page.getByRole('button', { name: /设置/ }).filter({ visible: true })
-    assert.ok(await settings.count() > 0, 'host exposes settings')
-    await settings.first().click()
-    await page.getByText('模型', { exact: true }).first().waitFor()
+    // DSH 0.2.1 moves Settings into the sidebar's bottom More menu.
+    const direct = page.getByRole('button', { name: '设置', exact: true })
+    if (await direct.isVisible().catch(() => false)) await direct.click()
+    else {
+      await page.getByText('更多', { exact: true }).last().click()
+      await page.getByText('设置', { exact: true }).last().click()
+    }
+    const dialog = page.getByRole('dialog').filter({ hasText: '通用设置' })
+    await dialog.waitFor()
+    await dialog.getByText('模型', { exact: true }).first().waitFor()
     await screenshot('host-settings')
     await page.keyboard.press('Escape')
+    await dialog.waitFor({ state: 'hidden' })
   })
   report.host = JSON.parse(fs.readFileSync(path.join(evidence, 'browser-host-report.json'), 'utf8'))
   assert.ok(report.host.savesReceived > 0)

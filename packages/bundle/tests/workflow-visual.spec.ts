@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { WorkflowObserver } from '../src/study/workflow'
-import { resultState } from '../src/study/workflow-types'
+import { resultState, toolStages } from '../src/study/workflow-types'
 import { graphLayout, graphPath, neighbors } from '../src/client/graph-model'
 import { projectStoryGraph, type StoryGraph, type StoryGraphEdge, type StoryGraphRecord } from '../src/study/graph-types'
 
@@ -15,6 +15,13 @@ function runtime() {
   return { agent, push, start, finish }
 }
 describe('运行图从真实事件语义投影', () => {
+  it('维护操作不点亮写作工序，预览与恢复仍标待处理', () => {
+    for (const name of ['novel_preview_book_upgrade', 'novel_apply_book_upgrade', 'novel_resume_book_upgrade']) expect(toolStages[name]).toBeUndefined()
+    for (const state of ['ready', 'blocked', 'recovered']) {
+      expect(resultState([{ type: 'text', text: JSON.stringify({ ok: true, maintenance: 'book-upgrade', state }) }], false, undefined).state).toBe('attention')
+    }
+    expect(resultState([{ type: 'text', text: JSON.stringify({ ok: false, maintenance: 'book-upgrade', state: 'written-pending-commit' }) }], false, undefined).state).toBe('error')
+  })
   it('按结构化目标区分卷规划与卷末摘要，不从文案猜测', () => {
     const r = runtime(), observer = new WorkflowObserver()
     r.push('tool/call', { callId: 'close', name: 'novel_confirm_volume_outline', arguments: JSON.stringify({ bookId: 'a', 目标: '卷摘要' }) })
@@ -53,6 +60,16 @@ describe('运行图从真实事件语义投影', () => {
     expect(observer.read(r.agent, 'a').calls[0]?.stage).toBeUndefined()
     expect(observer.read(r.agent, 'b').calls[0]?.stage).toBe('settle')
     expect(observer.read(runtime().agent, 'a').calls).toHaveLength(0)
+  })
+  it('开章与主动检查都没有写作阶段，未检查结果保留待处理', () => {
+    const r = runtime(), observer = new WorkflowObserver()
+    r.start('begin', 'novel_begin_chapter', 'a')
+    r.finish('begin', { ok: true, 开章核对: { 状态: '需恢复' }, 书仓检查: { 状态: '未检查' } })
+    r.start('check', 'novel_check_book', 'a')
+    r.finish('check', { ok: true, 书仓检查: { 状态: '已检查', 结论: '未发现已知问题', 问题: [], 未检范围: [], 快照: { 稳定: true } } })
+    expect(observer.read(r.agent, 'a').calls.map(call => ({ stage: call.stage, state: call.state }))).toEqual([
+      { stage: undefined, state: 'attention' }, { stage: undefined, state: 'success' },
+    ])
   })
   it('PTC 子调用失败不会被外层成功覆盖', () => {
     const r = runtime(), observer = new WorkflowObserver()

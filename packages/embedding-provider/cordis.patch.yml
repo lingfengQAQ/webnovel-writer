@@ -5,3 +5,5 @@
       name: '@linfengqaqtat/dsh-scriptor-retrieval/scenes'
     - id: webnovel-reranking
       name: '@linfengqaqtat/dsh-scriptor-retrieval/reranking'
+    - id: webnovel-graph
+      name: '@linfengqaqtat/dsh-scriptor-retrieval/graph'

@@ -5,7 +5,7 @@ import * as os from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { createNovelTools, NOVEL_TEST_TOOL_NAMES, NOVEL_TOOL_NAMES } from '../src/novel-tools'
 import { EDITOR_CANCELLED_REASON, EDITOR_DUPLICATE_REASON, EDITOR_UNKNOWN_REASON, EditorRequestHub, type EditorIntent, type EditorRequestSnapshot } from '../src/study/editor-requests'
-import { createBook, scanDesign, writeContract, 契约六部 } from '@webnovel/core'
+import { createBook, parseDocument, parseWorldbookHistory, scanDesign, serializeDocument, writeContract, 契约六部 } from '@webnovel/core'
 import { nativeWriteStub } from './fixtures/native-write-stub'
 
 const roots: string[] = []
@@ -284,6 +284,151 @@ describe('主 Agent 专用 Tools (方案 A)', () => {
     const seedReplay = (await seedTool.execute({ bookId: createRes.bookId })) as { ok: boolean }
     expect(seedReplay.ok).toBe(true)
     expect(Number(count())).toBe(Number(beforeSeed) + 1)
+  })
+})
+
+describe('RW09 世界书字段补丁与历史保全', () => {
+  async function setup() {
+    const ws = mkRoot()
+    const root = path.join(ws, '世界书回归')
+    const writes: string[] = []
+    const tools = createNovelTools({ workspaceRoot: () => ws, bookRootOfBookId: () => root,
+      nativeWrite: async (...args) => { writes.push(args[1].content); await nativeWriteStub(...args) } })
+    const created = await tools.find(t => t.name === 'novel_create_book')!.execute({
+      bookName: '世界书回归', concept: { 状态: '已确认', 核心创意: '寻找失踪家人', 题材与目标读者: '悬疑' },
+    }) as { ok: boolean; bookId: string }
+    expect(created.ok).toBe(true)
+    const tool = tools.find(t => t.name === 'novel_confirm_worldbook_entry')!
+    const identity = { bookId: created.bookId, 模块: '人物档案', 名称: '裴笑' }
+    const fields = { 名称: '裴笑', 类型: '人物', 性质: '计划', 状态: '已确认', 来源: '作者对谈' }
+    const relative = '世界书/人物档案/裴笑.md'
+    const file = path.join(root, relative)
+    const git = (...args: string[]) => {
+      const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true })
+      expect(result.status, result.stderr).toBe(0)
+      return result.stdout.trim()
+    }
+    const put = (text: string) => {
+      fs.mkdirSync(path.dirname(file), { recursive: true })
+      fs.writeFileSync(file, text)
+      git('add', '--', relative)
+      git('commit', '-m', 'test: worldbook source fixture')
+    }
+    return { root, tool, identity, fields, relative, file, writes, put, head: () => git('rev-parse', 'HEAD') }
+  }
+
+  const tail = '### 事实@第0001章\r\n来源：定稿/卷01/0001-渡口.md\r\n\r\n裴笑抵达渡口。  \r\n\r\n```md\r\n### 事实@第0999章\r\n来源：纸条中的原话\r\n```\r\n\r\n### 事实@第0002章\r\n来源：定稿/卷01/0002-旧宅.md\r\n\r\n他找到了旧宅。\r\n\r\n'
+
+  it('新建接通字符串别名，更新省略保留字段/正文，计划首段不覆盖追加事实', async () => {
+    const { tool, identity, fields, file, writes, put, head } = await setup()
+    expect(tool.parameters.required).toEqual(['bookId', '模块', '名称'])
+    expect(tool.parameters.properties).toHaveProperty('别名', expect.objectContaining({ type: 'string' }))
+    expect(await tool.execute({ ...identity, ...fields, 别名: '阿笑', 正文: '# 裴笑\n\n寻找妹妹。\n' })).toMatchObject({ ok: true })
+    const created = parseDocument(fs.readFileSync(file, 'utf8'))
+    expect(created.ok && created.data.fields['别名']).toBe('阿笑')
+
+    const preserved = { ...fields, 别名: ['阿笑', '旧称'], 版本: 7, 父版本: 6, 来源快照: null,
+      来源引用: ['作品契约/契约.md@1'], 作者扩展: { 留白: '', 空列表: [], 细节: { 标签: '保留' } } }
+    put(`${serializeDocument(preserved, '# 旧计划\n\n原计划正文。\n').replace(/\n/g, '\r\n')}\r\n${tail}`)
+    expect(await tool.execute({ ...identity, 正文: '# 新计划\n\n仍然寻找妹妹，不改已发生的事实。\n' })).toMatchObject({ ok: true, commitState: 'committed' })
+    const changed = fs.readFileSync(file, 'utf8')
+    expect(changed.endsWith(tail)).toBe(true)
+    const history = parseWorldbookHistory(changed)
+    expect(history.ok).toBe(true)
+    if (!history.ok) throw new Error(history.detail)
+    expect(history.data.字段).toEqual(preserved)
+    expect(history.data.首段).toBe('# 新计划\n\n仍然寻找妹妹，不改已发生的事实。')
+    expect(history.data.追加.map(item => item.章)).toEqual([1, 2])
+
+    const beforeAlias = parseDocument(changed)
+    expect(await tool.execute({ ...identity, 别名: '笑哥' })).toMatchObject({ ok: true, commitState: 'committed' })
+    const saved = fs.readFileSync(file, 'utf8')
+    const parsed = parseDocument(saved)
+    expect(parsed.ok && parsed.data.fields).toEqual({ ...preserved, 别名: '笑哥' })
+    expect(parsed.ok && parsed.data.body).toBe(beforeAlias.ok && beforeAlias.data.body)
+    expect(saved.endsWith(tail)).toBe(true)
+    const count = writes.length
+    const committed = head()
+    expect(await tool.execute(identity)).toMatchObject({ ok: true, commitState: 'unchanged' })
+    expect(writes).toHaveLength(count + 1)
+    expect(writes.at(-1)).toBe(saved)
+    expect(fs.readFileSync(file, 'utf8')).toBe(saved)
+    expect(head()).toBe(committed)
+  })
+
+  it('新建缺字段、非法值和直接事实请求均在 native 写入与 Git 之前拒绝', async () => {
+    const { tool, identity, fields, file, writes, root, head } = await setup()
+    const beforeHead = head()
+    const declaration = fs.readFileSync(path.join(root, '世界书/模块声明.md'), 'utf8')
+    const initialWrites = writes.length
+    const required = ['类型', '性质', '状态', '来源']
+    const inputs: Record<string, unknown>[] = required.map(missing =>
+      Object.fromEntries(Object.entries(fields).filter(([key]) => key !== missing)))
+    inputs.push({ ...fields, 性质: '事实' }, { ...fields, 性质: '已成事实' })
+    for (const key of [...required, '别名', '正文']) {
+      inputs.push({ ...fields, [key]: null }, { ...fields, [key]: 123 })
+    }
+    for (const input of inputs) {
+      expect(await tool.execute({ ...identity, ...input }), JSON.stringify(input)).toMatchObject({ ok: false })
+      expect(writes).toHaveLength(initialWrites)
+      expect(fs.existsSync(file)).toBe(false)
+      expect(head()).toBe(beforeHead)
+      expect(fs.readFileSync(path.join(root, '世界书/模块声明.md'), 'utf8')).toBe(declaration)
+    }
+  })
+
+  it('计划不能改成事实；既有事实字段与正文只读，但无改动仍经过 native', async () => {
+    const { tool, identity, fields, file, writes, put, head } = await setup()
+    put(serializeDocument(fields, '# 原计划\n'))
+    const plan = fs.readFileSync(file, 'utf8')
+    const initialWrites = writes.length
+    expect(await tool.execute({ ...identity, 性质: '事实' })).toMatchObject({ ok: false })
+    expect(fs.readFileSync(file, 'utf8')).toBe(plan)
+    expect(writes).toHaveLength(initialWrites)
+
+    const fact = serializeDocument({ ...fields, 性质: '事实', 状态: '已成事实', 来源: '定稿/卷01/0001-渡口.md', 来源快照: { 章: 1 } }, '# 裴笑\n\n裴笑抵达渡口。\n')
+    put(fact)
+    const beforeHead = head()
+    for (const patch of [{ 正文: '替换既有事实。' }, { 别名: '新称' }, { 状态: '已废弃' }, { 来源: '改写来源' }, { 性质: '计划' }]) {
+      expect(await tool.execute({ ...identity, ...patch })).toMatchObject({ ok: false })
+      expect(fs.readFileSync(file, 'utf8')).toBe(fact)
+      expect(writes).toHaveLength(initialWrites)
+      expect(head()).toBe(beforeHead)
+    }
+    expect(await tool.execute(identity)).toMatchObject({ ok: true, commitState: 'unchanged' })
+    expect(writes).toHaveLength(initialWrites + 1)
+    expect(writes.at(-1)).toBe(fact)
+    expect(head()).toBe(beforeHead)
+  })
+
+  it('世界书写入成功但 Git 失败后原参数重试，历史只保留一份且再次 no-op 仍写 native', async () => {
+    const { root, tool, identity, fields, file, writes, put, head } = await setup()
+    const metadata = { ...fields, 版本: 3, 来源快照: { 原始: ['不清空'] }, 作者扩展: null }
+    put(`${serializeDocument(metadata, '# 原计划\n\n寻找线索。\n')}\n${tail}`)
+    const args = { ...identity, 别名: '阿笑', 正文: '# 调整后的计划\n\n跟进旧宅线索。\n' }
+    const beforeHead = head()
+    const count = writes.length
+    const lock = path.join(root, '.git/index.lock')
+    fs.writeFileSync(lock, '', { flag: 'wx' })
+    try {
+      expect(await tool.execute(args)).toMatchObject({ ok: false, commitState: 'failed', retryable: true })
+      expect(head()).toBe(beforeHead)
+    } finally { fs.unlinkSync(lock) }
+    const saved = fs.readFileSync(file, 'utf8')
+    expect(saved.endsWith(tail)).toBe(true)
+    expect(saved.split('### 事实@第0001章')).toHaveLength(2)
+    const parsed = parseDocument(saved)
+    expect(parsed.ok && parsed.data.fields).toEqual({ ...metadata, 别名: '阿笑' })
+    expect(writes).toHaveLength(count + 1)
+    expect(await tool.execute(args)).toMatchObject({ ok: true, commitState: 'committed', retryable: false })
+    expect(fs.readFileSync(file, 'utf8')).toBe(saved)
+    expect(writes.at(-1)).toBe(saved)
+    const committed = head()
+    expect(committed).not.toBe(beforeHead)
+    expect(await tool.execute(args)).toMatchObject({ ok: true, commitState: 'unchanged', retryable: false })
+    expect(writes).toHaveLength(count + 3)
+    expect(writes.at(-1)).toBe(saved)
+    expect(head()).toBe(committed)
   })
 })
 

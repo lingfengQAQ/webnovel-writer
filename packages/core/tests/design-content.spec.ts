@@ -2,9 +2,10 @@ import { afterAll, describe, expect, it } from 'vitest'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
-import { deriveDesign, scanDesign, 故事骨架九部 } from '../src/derive/design'
+import { deriveDesign, scanDesign, 故事骨架九部, parseVolumeAllocations } from '../src/derive/design'
 import { scanDesignDetail, renderBookProgress } from '../src/progress'
 import { seedMinDesign } from '../src/design/seed'
+import { isLegacySeedPlan } from '../src/design/legacy-seed'
 import { LEDGER_NAMES, paths } from '../src/repo/paths'
 import { serializeDocument } from '../src/repo/frontmatter'
 import { reconcileBookLedger, reconcileLedger } from '../src/ledger'
@@ -30,6 +31,45 @@ function readyBook(): string {
   writeReadyDesign(root)
   return root
 }
+
+describe('旧 seed 计划按完整正文识别', () => {
+  const seed = '# 计划时间线\n\n## 窗口覆盖\n\n- 开篇任务（先后:最先）\n\n## 窗口外锚点\n\n- 卷末锚点'
+  const versioned = serializeDocument({
+    版本: 2, 父版本: 1, 状态: '已确认', 生成模块: '计划时间线确认',
+    来源快照: { 契约: '作品契约/契约.md@1' }, 自定义: ['保留'],
+  }, seed)
+
+  it.each([
+    seed,
+    `\n${seed}\n\n`.replace(/\n/g, '\r\n'),
+    versioned,
+    `\uFEFF${versioned}`.replace(/\n/g, '\r\n'),
+  ])('无元数据与合法版本化文档保持同一完整模板判定 (%#)', text => {
+    expect(isLegacySeedPlan(text)).toBe(true)
+  })
+
+  it.each([
+    `---\n版本: [损坏\n---\n${seed}`,
+    `---\n版本: 2\n${seed}`,
+    `---\n- 非字段映射\n---\n${seed}`,
+    `---\n版本: 1\n版本: 2\n---\n${seed}`,
+  ])('损坏元数据不被忽略后判为模板 (%#)', text => {
+    expect(isLegacySeedPlan(text)).toBe(false)
+  })
+
+  it.each([
+    `${seed}\n\n## 作者说明\n开篇任务是主角实际接受的委托。`,
+    `作者确认的计划。\n\n${seed}`,
+    seed.replace('开篇任务', '开篇委托'),
+    seed.replace('卷末锚点', '卷末真相'),
+    seed.replace('先后:最先', '先后:次日'),
+    seed.replace('## 窗口覆盖\n\n', '## 窗口覆盖\n'),
+    `\`\`\`markdown\n${seed}\n\`\`\``,
+    `---\n来源: 正文示例\n---\n${seed}`,
+  ])('元数据不能把修改过或嵌套的同名正文伪装成完整模板 (%#)', body => {
+    expect(isLegacySeedPlan(serializeDocument({ 生成模块: '计划时间线确认' }, body))).toBe(false)
+  })
+})
 
 describe('#165 内容与就绪建议同源', () => {
   it('当前必要骨架确认，远期七部留白/暂定与生命周期子条目不妨碍开写，查询不写盘', () => {
@@ -60,6 +100,8 @@ describe('#165 内容与就绪建议同源', () => {
     const facts = scanDesign(root)
     expect(facts.契约六部已确认).toBe(true)
     expect(facts.骨架当前阶段已确认).toBe(true)
+    expect(parseVolumeAllocations(fs.readFileSync(path.join(root, paths.分卷布局()), 'utf8'))).toMatchObject([{ 有效状态: '已确认' }])
+    expect(facts.内容问题?.some(issue => issue.问题 === '状态冲突' && issue.路径 === paths.分卷布局())).toBe(false)
     expect(deriveDesign(facts).建议).not.toBe('开写就绪')
     expect(facts.内容问题).toEqual(expect.arrayContaining([expect.objectContaining({ 路径: paths.契约(), 分部: '叙事方式与文风基调' })]))
     const detail = scanDesignDetail(root)
@@ -95,6 +137,16 @@ describe('#165 内容与就绪建议同源', () => {
     const result = deriveDesign(scanDesign(root))
     expect(result.建议).toBe('分卷布局')
     expect(result.内容问题).toEqual(expect.arrayContaining([expect.objectContaining({ 问题: '状态冲突' })]))
+  })
+
+  it('重复的正式小节都参与核对，围栏中的示例不产生分配或冲突', () => {
+    const text = '# 分卷布局\n## 故事阶段分配\n- 卷01：启程 〔已确认〕\n## 故事阶段分配\n- 卷01：另一方向 〔暂定〕\n'
+    expect(parseVolumeAllocations(text)).toMatchObject([{ 卷: 1, 冲突: true }, { 卷: 1, 冲突: true }])
+    const real = '## 故事阶段分配\n- 卷02：远期方向 〔暂定〕\n'
+    expect(parseVolumeAllocations(`\`\`\`markdown\n${text}\`\`\`\n${real}`)).toMatchObject([{ 卷: 2, 有效状态: '暂定' }])
+    expect(parseVolumeAllocations(`~~~markdown\n${text}~~~\n${real}`)).toHaveLength(1)
+    expect(parseVolumeAllocations(`<!--\n${text}-->\n${real}`)).toMatchObject([{ 卷: 2, 有效状态: '暂定' }])
+    expect(parseVolumeAllocations(text.replace('卷01：另一方向', '卷02：另一方向'))).toMatchObject([{ 卷: 1, 有效状态: '已确认' }, { 卷: 2, 有效状态: '暂定' }])
   })
 
   it.each([

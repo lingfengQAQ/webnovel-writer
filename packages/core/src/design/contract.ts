@@ -12,6 +12,7 @@ import { parseDocument, serializeDocument } from '../repo/frontmatter'
 import { paths } from '../repo/paths'
 import { bookWriter } from '../repo/atomic'
 import { parseChapterLength } from './chapter-length'
+import { BOOK_FORMAT_VERSION_FIELD } from '../repo/book-format'
 
 export type ContractPartState = '已确认' | '暂定' | '留白'
 
@@ -92,6 +93,9 @@ function extractContractSectionBodies(body: string): Record<string, string> {
 
 /** 安全更新契约分部（合并现有 frontmatter 和未更新的分部，防止 N1 抹除书id 与正文） */
 export function prepareContract(bookRoot: string, parts: ContractParts = {}, extraFields: Record<string, unknown> = {}): FileOp {
+  if (Object.hasOwn(extraFields, BOOK_FORMAT_VERSION_FIELD)) {
+    throw new Error('书仓格式版本由建书或批准迁移维护，普通契约更新不能设置')
+  }
   const existing = readExistingContract(bookRoot)
   const mergedFields = { ...existing.fields, ...extraFields }
   const mergedParts: ContractParts = { ...existing.parts }

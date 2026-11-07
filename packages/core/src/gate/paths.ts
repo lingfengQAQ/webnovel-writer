@@ -45,7 +45,7 @@ export function gateFileAccess(bookRoot: string, target: string): FileAccessDeci
   const protectedPath = process.platform === 'win32'
     ? resolved.relPath.split('/').map(part => part.replace(/[. ]+$/, '').toLowerCase()).join('/')
     : resolved.relPath
-  if (/^草稿区\/\.(archive-receipts|author-edits)(?:\/|$)/.test(protectedPath)) {
+  if (/^草稿区\/\.(archive-receipts|maintenance-receipts|author-edits)(?:\/|$)/.test(protectedPath)) {
     return { allow: false, zone, relPath: resolved.relPath, reason: '操作收据由工作台维护，文件工具不得修改。需要处理收据时，请把情况呈报作者' }
   }
   if (zone === '草稿区') return { allow: true, zone, relPath: resolved.relPath }

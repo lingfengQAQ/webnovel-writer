@@ -6,7 +6,8 @@ import { pathToFileURL } from 'node:url'
 
 async function checkSchemaGreeting({ workspace, main, service, host }) {
   const { LlmAdapter, createUserMessage } = await import(host ? pathToFileURL(host.entry('@deepseek-ai/dsh-llm')).href : '@deepseek-ai/dsh-llm')
-  const { assertObjectJsonSchema, jsonSchemaToTs } = await import(host ? pathToFileURL(host.entry('@deepseek-ai/dsh-tools')).href : '@deepseek-ai/dsh-tools')
+  const { assertObjectJsonSchema } = await import(host ? pathToFileURL(host.entry('@deepseek-ai/dsh-tools')).href : '@deepseek-ai/dsh-tools')
+  const { jsonSchemaToTs } = await import(host ? pathToFileURL(host.entry('@deepseek-ai/dsh-tool-executor-ptc')).href : '@deepseek-ai/dsh-tool-executor-ptc')
   let requests = 0
   class SchemaAdapter extends LlmAdapter {
     async *stream(options) {
@@ -54,12 +55,14 @@ export async function checkReferences({ workspace, main, service, execute, check
     let calls = 0
     class Adapter extends LlmAdapter {
       providerInfo(id) { return { id, name: '参考库测试服务' } }
+      async resolveModel(provider, model) { return { provider, id: model, name: model, defaultMaxTokens: 24576 } }
       async *stream(options) {
         calls++
         assert.equal(options.messages.length, 1)
         assert.equal(options.tools, undefined)
         assert.equal(options.sessionId, undefined)
         assert.equal(options.provider, 'reference-fixture')
+        assert.equal(options.maxTokens, 24576)
         const input = JSON.parse(options.messages[0].content[0].text)
         assert.ok(input.text.includes('原文私密标记'))
         const text = JSON.stringify({ evidence: [], observations: [], hypotheses: [], openQuestions: ['这里只验证宿主接线，不代表分析质量。'], mechanisms: [] })

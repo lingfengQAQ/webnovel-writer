@@ -108,6 +108,28 @@ describe('沉淀候选经 novel_prepare_pack 预校验(A2)', () => {
     expect(fs.existsSync(path.join(root, PKG))).toBe(false)
   })
 
+  it('线索字段写在说明之后 → 组包拒绝,包目录无变化', () => {
+    const root = mkDir('webnovel-cand-clue-')
+    confirmWithHard(root)
+    const r = preparePack(root, key, {
+      账本变更: '# 账本变更\n\n## 线索\n### 纸鹤\n状态：已埋\n计划来源：卷纲#4\n纸鹤落在窗台。\n埋设点：第1章\n预期兑现区间：第8-12章\n',
+    })
+    expect(r.ok).toBe(false)
+    expect(r.reason).toMatch(/埋设点不在条目开头/)
+    expect(fs.existsSync(path.join(root, PKG))).toBe(false)
+  })
+
+  it.each([
+    ['账本变更', '# 账本变更\n## 承诺\n### 保留记录\n状态：进行中\n计划来源：本章新增\n状态：已结束\n说明。\n', /状态.*重复/],
+    ['时间线变更', '# 时间线变更\n## 进城\n时点：清晨\n这是引文：\n事件：甲进城。\n', /事件字段.*不在.*开头/],
+  ])('非前置或重复字段在组包前拒绝：%s', (field, candidate, reason) => {
+    const root = mkDir('webnovel-cand-fields-')
+    confirmWithHard(root)
+    const result = preparePack(root, key, { [field]: candidate })
+    expect(result).toMatchObject({ ok: false, reason: expect.stringMatching(reason) })
+    expect(fs.existsSync(path.join(root, PKG))).toBe(false)
+  })
+
   it('无候选组包 → 四件占位,章摘要为占位而非首行(R4)', () => {
     const root = mkDir('webnovel-cand-none-')
     confirmWithHard(root)

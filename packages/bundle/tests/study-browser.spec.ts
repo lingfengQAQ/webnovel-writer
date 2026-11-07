@@ -1,7 +1,7 @@
 import React from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { File, FileCode, FileText, FileType } from 'lucide-react'
+import { FileTypeIcon } from '@deepseek-ai/dsh-client-ui-primitives'
 import { WorkspaceStudyTabs } from '../src/client/browser'
 import { createEditorStore } from '../src/client/store'
 import type { ClientHost } from '../src/client/host'
@@ -99,12 +99,14 @@ describe('书房文件树', () => {
     expect(row(renderer, '0001.md')).toBeDefined()
   })
 
-  it('按文件类型区分图标', async () => {
+  // The real classification is DSH's (checked in the browser by study-tree-probe); here the row hands its own name to it.
+  it('按文件名交给 DSH 文件类型图标', async () => {
     const renderer = await mount()
-    const icon = (name: string) => row(renderer, name)!.findAll(node => [FileText, FileType, FileCode, File].includes(node.type as never))[0]?.type
-    expect(icon('设定.md')).toBe(FileText)
-    expect(icon('备忘.txt')).toBe(FileType)
-    expect(icon('配置.json')).toBe(FileCode)
-    expect(icon('封面.png')).toBe(File)
+    const kind = (name: string) => row(renderer, name)!.findByType(FileTypeIcon).props.kind
+    expect(kind('设定.md')).toBe('markdown')
+    expect(kind('备忘.txt')).toBe('other')
+    expect(kind('配置.json')).toBe('json')
+    expect(kind('封面.png')).toBe('image')
+    expect(row(renderer, '卷01')!.findAllByType(FileTypeIcon)).toHaveLength(0)
   })
 })

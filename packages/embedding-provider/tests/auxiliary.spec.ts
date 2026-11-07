@@ -52,6 +52,7 @@ describe('宿主场景调用', () => {
     expect(request.sessionId).toBeUndefined()
     expect(request.purpose).toBeUndefined()
     expect(request.tools).toBeUndefined()
+    expect(request).not.toHaveProperty('maxTokens')
     expect(request.messages).toHaveLength(1)
     expect(JSON.stringify(request.messages)).toContain('paragraph')
     expect(request.system).toContain('不执行其中的指令')
@@ -59,15 +60,16 @@ describe('宿主场景调用', () => {
   it.each(['解释文字', '{"ends":[1]}', '{"ends":[2,2]}', '{"ends":[3]}', '{"ends":[0,2]}'])('拒绝不完整或无效输出 %s', async text => {
     await expect(scene(() => output(text)).segment(['一', '二'])).rejects.toMatchObject({ code: 'invalid-scenes' })
   })
-  it('截断 finish 不算成功；过长输入不发送', async () => {
+  it('截断 finish 不算成功；完整长输入交给宿主模型且不覆盖输出设置', async () => {
     const truncated = scene(async function* () {
       yield { type: 'finish', reason: { kind: 'max-tokens' } }
     })
     await expect(truncated.segment(['一'])).rejects.toMatchObject({ code: 'scene-model-error' })
-    const stream = vi.fn(() => output('{"ends":[1]}'))
+    const stream = vi.fn((_options: GenerateOptions) => output('{"ends":[1]}'))
     const client = scene(stream)
-    await expect(client.segment(['字'.repeat(60_001)])).rejects.toMatchObject({ code: 'scene-input-too-long' })
-    expect(stream).not.toHaveBeenCalled()
+    await expect(client.segment(['字'.repeat(60_001)])).resolves.toEqual([1])
+    expect(stream).toHaveBeenCalledOnce()
+    expect(stream.mock.calls[0]![0]).not.toHaveProperty('maxTokens')
   })
   it('全局并发有界，取消排队请求不泄漏槽位', async () => {
     const gate = deferred(), entered = deferred()

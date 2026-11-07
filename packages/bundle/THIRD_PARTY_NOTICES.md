@@ -32,12 +32,12 @@ Shared DSH/React peers are provided by the host and are not included in this bun
 | @codemirror/search | 6.7.1 | MIT | [Original notices](licenses/codemirror__search--6.7.1.txt) |
 | @codemirror/state | 6.7.1 | MIT | [Original notices](licenses/codemirror__state--6.7.1.txt) |
 | @codemirror/view | 6.43.8 | MIT | [Original notices](licenses/codemirror__view--6.43.8.txt) |
-| @deepseek-ai/cosmokit | 1.8.6 | MIT | [Original notices](licenses/deepseek-ai__cosmokit--1.8.6.txt) |
-| @deepseek-ai/dsh-brand | 0.2.1-rc.3 | MIT | [Original notices](licenses/deepseek-ai__dsh-brand--0.2.1-rc.3.txt) |
-| @deepseek-ai/dsh-scope | 0.2.1-rc.3 | MIT | [Original notices](licenses/deepseek-ai__dsh-scope--0.2.1-rc.3.txt) |
-| @deepseek-ai/dsh-system-prompt | 0.2.1-rc.3 | MIT | [Original notices](licenses/deepseek-ai__dsh-system-prompt--0.2.1-rc.3.txt) |
-| @deepseek-ai/dsh-util-workspace-path | 0.2.1-rc.3 | MIT | [Original notices](licenses/deepseek-ai__dsh-util-workspace-path--0.2.1-rc.3.txt) |
-| @deepseek-ai/schemastery | 3.18.5 | MIT | [Original notices](licenses/deepseek-ai__schemastery--3.18.5.txt) |
+| @deepseek-ai/cosmokit | 1.9.0 | MIT | [Original notices](licenses/deepseek-ai__cosmokit--1.9.0.txt) |
+| @deepseek-ai/dsh-brand | 0.2.2-rc.1 | MIT | [Original notices](licenses/deepseek-ai__dsh-brand--0.2.2-rc.1.txt) |
+| @deepseek-ai/dsh-scope | 0.2.2-rc.1 | MIT | [Original notices](licenses/deepseek-ai__dsh-scope--0.2.2-rc.1.txt) |
+| @deepseek-ai/dsh-system-prompt | 0.2.2-rc.1 | MIT | [Original notices](licenses/deepseek-ai__dsh-system-prompt--0.2.2-rc.1.txt) |
+| @deepseek-ai/dsh-util-workspace-path | 0.2.2-rc.1 | MIT | [Original notices](licenses/deepseek-ai__dsh-util-workspace-path--0.2.2-rc.1.txt) |
+| @deepseek-ai/schemastery | 3.19.0 | MIT | [Original notices](licenses/deepseek-ai__schemastery--3.19.0.txt) |
 | @lezer/common | 1.5.2 | MIT | [Original notices](licenses/lezer__common--1.5.2.txt) |
 | @lezer/css | 1.3.6 | MIT | [Original notices](licenses/lezer__css--1.3.6.txt) |
 | @lezer/highlight | 1.2.3 | MIT | [Original notices](licenses/lezer__highlight--1.2.3.txt) |
@@ -50,17 +50,12 @@ Shared DSH/React peers are provided by the host and are not included in this bun
 | color-name | 1.1.4 | MIT | [Original notices](licenses/color-name--1.1.4.txt) |
 | color-string | 1.9.1 | MIT | [Original notices](licenses/color-string--1.9.1.txt) |
 | crelt | 1.0.7 | MIT | [Original notices](licenses/crelt--1.0.7.txt) |
-| d3-dispatch | 3.0.1 | ISC | [Original notices](licenses/d3-dispatch--3.0.1.txt) |
-| d3-force | 3.0.0 | ISC | [Original notices](licenses/d3-force--3.0.0.txt) |
-| d3-quadtree | 3.0.1 | ISC | [Original notices](licenses/d3-quadtree--3.0.1.txt) |
-| d3-timer | 3.0.1 | ISC | [Original notices](licenses/d3-timer--3.0.1.txt) |
 | diff | 8.0.3 | BSD-3-Clause | [Original notices](licenses/diff--8.0.3.txt) |
 | eventemitter3 | 5.0.4 | MIT | [Original notices](licenses/eventemitter3--5.0.4.txt) |
 | fecha | 4.2.3 | MIT | [Original notices](licenses/fecha--4.2.3.txt) |
 | gl-matrix | 3.4.4 | MIT | [Original notices](licenses/gl-matrix--3.4.4.txt) |
 | html2canvas | 1.4.1 | MIT | [Original notices](licenses/html2canvas--1.4.1.txt) |
 | is-arrayish | 0.3.4 | MIT | [Original notices](licenses/is-arrayish--0.3.4.txt) |
-| lucide-react | 0.468.0 | ISC | [Original notices](licenses/lucide-react--0.468.0.txt) |
 | pend | 1.2.0 | MIT | [Original notices](licenses/pend--1.2.0.txt) |
 | saxes | 6.0.0 | ISC | [Original notices](licenses/saxes--6.0.0.txt) |
 | simple-swizzle | 0.2.4 | MIT | [Original notices](licenses/simple-swizzle--0.2.4.txt) |
@@ -76,9 +71,9 @@ The release includes source materials and a manifest for these bundled component
 
 ## DSH writing preset basis
 
-The writing preset is adapted from the DSH 0.2.1-rc.3 standard preset (MIT).
+The writing preset is adapted from the DSH 0.2.2-rc.1 standard preset (MIT).
 Copyright (c) 2026 DeepSeek. [Original notice](licenses/dsh-preset.txt).
-Source: https://github.com/deepseek-ai/deepseek-harness/tree/1f81c047fc48fa190a683e469daa699857e9afe8/packages/bundle/web-app/presets
+Source: https://github.com/deepseek-ai/deepseek-harness/tree/66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db/packages/bundle/web-app/presets
 
 ## Archify artwork
 

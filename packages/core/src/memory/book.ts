@@ -3,8 +3,9 @@ import * as path from 'node:path'
 import { writeBatchAtomic, writeFileAtomic, type FileOp, bookWriter } from '../repo/atomic'
 import { paths, type MemoryKind } from '../repo/paths'
 import { parseDocument } from '../repo/frontmatter'
+import { currentBookMemoryDocument, isMemoryKind } from '../repo/book-memory-contract'
 import {
-  memoryDocuments, memoryIndex, memoryPath, prepareMemory, type MemoryMutation, type PreparedMemory, MemoryWriteError,
+  memoryDocuments, memoryIndex, memoryPath, prepareMemory, readMemoryText, type MemoryMutation, type PreparedMemory, MemoryWriteError,
 } from './write'
 
 export interface BookMemoryInput extends MemoryMutation {
@@ -27,9 +28,19 @@ export interface BookMemoryEntryView {
   readonly 正文: string
 }
 
+function bookMemoryDocuments(bookRoot: string) {
+  const documents = memoryDocuments(bookRoot, '本书记忆')
+  return documents.filter(document => {
+    const shape = currentBookMemoryDocument(document.fields, path.posix.basename(document.relPath, '.md'), document.body)
+    if (!shape.ok) throw new MemoryWriteError(`记忆条目解析失败：${document.relPath}；${shape.reason}`)
+    // prepareMemory still reads the target on disk, so a scaffold cannot be overwritten.
+    return shape.format === 'current'
+  })
+}
+
 export function listBookMemoryEntries(bookRoot: string): readonly BookMemoryEntryView[] {
-  return memoryDocuments(bookRoot, '本书记忆').flatMap(({ fields, relPath, body }) => typeof fields['类'] !== 'string' ? [] : [{
-    类: fields['类'] as MemoryKind,
+  return bookMemoryDocuments(bookRoot).flatMap(({ fields, relPath, body }) => !isMemoryKind(fields['类']) ? [] : [{
+    类: fields['类'],
     名称: typeof fields['名称'] === 'string' ? fields['名称'] : path.basename(relPath, '.md'),
     ...(typeof fields['描述'] === 'string' ? { 描述: fields['描述'] } : {}),
     状态: typeof fields['状态'] === 'string' ? fields['状态'] : '',
@@ -41,12 +52,12 @@ export function listBookMemoryEntries(bookRoot: string): readonly BookMemoryEntr
 export const rebuildBookMemoryIndex = bookWriter((bookRoot: string): string => {
   const relPath = paths.本书记忆索引()
   memoryPath(bookRoot, relPath)
-  writeFileAtomic(bookRoot, relPath, memoryIndex('本书记忆索引', memoryDocuments(bookRoot, '本书记忆'), []))
+  writeFileAtomic(bookRoot, relPath, memoryIndex('本书记忆索引', bookMemoryDocuments(bookRoot), [], readMemoryText(bookRoot, relPath)))
   return relPath
 })
 
 function prepareBookMemories(bookRoot: string, inputs: readonly BookMemoryInput[]): { ops: FileOp[]; results: PreparedMemory[] } {
-  const docs = memoryDocuments(bookRoot, '本书记忆')
+  const docs = bookMemoryDocuments(bookRoot)
   const originalDocs = [...docs]
   const results: PreparedMemory[] = []
   const names = new Set<string>()
@@ -70,7 +81,7 @@ function prepareBookMemories(bookRoot: string, inputs: readonly BookMemoryInput[
     }
   }
   const ops: FileOp[] = results.filter(item => item.changed).map(item => ({ relPath: item.relPath, content: item.content }))
-  if (ops.length) ops.push({ relPath: paths.本书记忆索引(), content: memoryIndex('本书记忆索引', originalDocs, results) })
+  if (ops.length) ops.push({ relPath: paths.本书记忆索引(), content: memoryIndex('本书记忆索引', originalDocs, results, readMemoryText(bookRoot, paths.本书记忆索引())) })
   return { ops, results }
 }
 

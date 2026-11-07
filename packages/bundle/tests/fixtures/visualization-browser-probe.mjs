@@ -20,6 +20,12 @@ const report = { checks: [], errors: [] }
 page.on('pageerror', e => report.errors.push(e.message))
 const save = () => fs.writeFileSync(path.join(evidence, 'visualization-report.json'), JSON.stringify(report, null, 2))
 const capture = name => page.screenshot({ path: path.join(evidence, name + '.png'), fullPage: true })
+// DSH Menu replaced the native select: open the trigger named by the choice, then pick the row.
+const choose = async (label, option) => {
+  await page.getByRole('button', { name: new RegExp('^' + label) }).click()
+  await page.getByRole('menu').getByRole('menuitem', { name: option, exact: true }).click()
+  await page.getByRole('menu').waitFor({ state: 'hidden' })
+}
 try {
   let url
   for (let i = 0; i < 120 && !url; i++) {
@@ -39,11 +45,11 @@ try {
   await page.getByText('S5 书房验收', { exact: true }).first().click()
   await page.getByRole('tab', { name: '可视化', exact: true }).click()
   await page.getByRole('heading', { name: '写作流程', exact: true }).waitFor()
-  await page.getByLabel('选择可视化作品', { exact: true }).selectOption('book:acceptance-a')
+  await choose('选择可视化作品', '验收作品甲')
   await page.locator('.nw-archify [data-node-id="concept"]').waitFor()
   await capture('workflow-idle')
   report.checks.push('中文流程初始视图'); save()
-  await page.getByRole('button', { name: '人物关系', exact: true }).click()
+  await page.getByRole('tab', { name: '人物关系', exact: true }).click()
   await page.getByRole('slider', { name: '图谱章节时间线' }).fill('4')
   const person = await page.getByLabel('选择图谱记录').locator('option').filter({ hasText: '人物：林舟' }).first().getAttribute('value')
   await page.getByLabel('选择图谱记录').selectOption(person)
@@ -74,7 +80,7 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false)
   report.checks.push('窄窗口无横向溢出')
   await page.setViewportSize({ width: 1500, height: 1000 })
-  await page.getByRole('button', { name: '写作流程', exact: true }).click()
+  await page.getByRole('tab', { name: '写作流程', exact: true }).click()
   const api = async (method, body) => page.evaluate(async ({ method, body }) => {
     const response = await fetch(method, { method: 'POST', headers: { 'content-type': 'application/json', 'x-webnovel-request': '1' }, body: JSON.stringify(body) })
     return { status: response.status, data: await response.json() }
@@ -104,7 +110,7 @@ try {
   report.checks.push('API书身份与未知书保护')
   await page.reload()
   await page.getByRole('tab', { name: '可视化', exact: true }).click()
-  await page.getByLabel('选择可视化作品', { exact: true }).selectOption('book:acceptance-a')
+  await choose('选择可视化作品', '验收作品甲')
   await page.locator('.nw-flow-summary').filter({ hasText: '当前没有执行中的操作' }).waitFor()
   report.checks.push('刷新后历史调用不恢复为运行中')
   await page.locator('.nw-archify [data-node-id="materials"]').click()
@@ -114,8 +120,8 @@ try {
   await page.unroute('**/api/webnovel/study/workflow')
   await page.locator('.nw-flow-summary').filter({ hasText: '当前没有执行中的操作' }).waitFor()
   report.checks.push('断线提示与重连快照恢复')
-  await page.getByLabel('选择可视化作品', { exact: true }).selectOption('book:visual-stress')
-  await page.getByRole('button', { name: '人物关系', exact: true }).click()
+  await choose('选择可视化作品', '图谱压力样本')
+  await page.getByRole('tab', { name: '人物关系', exact: true }).click()
   await page.waitForFunction(() => document.querySelectorAll('[aria-label="选择图谱记录"] optgroup[label="人物与条目"] option').length === 180)
   await page.getByRole('textbox', { name: '搜索图谱' }).fill('测试人物185')
   await page.locator('.nw-map-search-results button').first().click()

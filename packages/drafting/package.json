@@ -15,10 +15,10 @@
     "@webnovel/core": "workspace:*"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "4.0.5"
+    "@deepseek-ai/cordis": "^4.1.0"
   },
   "license": "GPL-3.0-only",
   "engines": {
-    "node": "^22.19.0 || ^24.0.0"
+    "node": ">=24.9.0"
   }
 }

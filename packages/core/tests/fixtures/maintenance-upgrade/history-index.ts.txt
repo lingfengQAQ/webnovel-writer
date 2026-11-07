@@ -1,0 +1,17 @@
+export function memoryIndex(title: string, documents: readonly MemoryDocument[], changes: readonly PreparedMemory[]): string {
+  const files = new Map(documents.map(doc => [doc.relPath, doc.text]))
+  for (const change of changes) if (change.changed) files.set(change.relPath, change.content)
+  const lines = [`# ${title}`, '']
+  for (const rel of [...files.keys()].sort()) {
+    const parsed = parseDocument(files.get(rel)!)
+    if (!parsed.ok) throw new MemoryWriteError(`记忆条目解析失败：${rel}`)
+    const f = parsed.data.fields
+    const filename = path.posix.basename(rel)
+    const name = typeof f['名称'] === 'string' ? f['名称'] : filename.replace(/\.md$/, '')
+    const details = [typeof f['描述'] === 'string' ? f['描述'] : undefined,
+      typeof f['类'] === 'string' ? `类：${f['类']}` : '旧格式记忆',
+      typeof f['来源'] === 'string' ? `来源：${f['来源']}` : undefined].filter(Boolean)
+    lines.push(`- [${name}](${filename}) — ${details.join('｜')}`)
+  }
+  return `${lines.join('\n')}\n`
+}

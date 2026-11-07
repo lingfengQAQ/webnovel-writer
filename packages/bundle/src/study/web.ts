@@ -2,14 +2,15 @@ import { isWritingAgent } from '../agent-mode'
 import { AUTHOR_SAVE_SOURCE, EDITOR_REQUEST_SOURCE } from '../message-sources'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-connection'
-import { createUserMessage, type UserMessage } from '@deepseek-ai/dsh-llm'
+import { boundContextSummary, createUserMessage, type UserMessage } from '@deepseek-ai/dsh-llm'
 import { AuthorDocumentError, isFullyQualifiedPath } from '@webnovel/core'
 import { StudyService } from './service'
+import { readGraphPage, type GraphReaderRequest } from './graph-reader'
 import type { FileRef, StudySave } from './types'
 import { studyFileLink } from './links'
 import type { BookIndexManager } from '../indexing/manager'
 import type { IndexAction } from '@webnovel/core'
-import { WorkflowObserver, observeWorkflow, type WorkflowAgent } from './workflow'
+import { WorkflowObserver, observeWorkflow, type WorkflowAgent, type WorkflowChildReader } from './workflow'
 import {
   EDITOR_CONTEXT_LIMIT, EDITOR_ENTRY_LIMIT, EDITOR_INSTRUCTION_LIMIT, EDITOR_INTENTS, EDITOR_REQUEST_ID, EDITOR_SELECTION_LIMIT,
   EditorRequestError, EditorRequestHub, requestMessage, textLength,
@@ -27,7 +28,28 @@ export interface StudyWebRuntime {
 }
 
 export const STUDY_API_PATH = '/api/webnovel/study/'
-const METHODS = ['shelf', 'tree', 'read', 'resolve', 'search', 'chapters', 'graph', 'workflow', 'save', 'notify', 'retry-commit', 'index-status', 'index-control', 'ask', 'ask-cancel', 'suggestions']
+const METHODS = ['shelf', 'tree', 'read', 'resolve', 'search', 'chapters', 'graph', 'graph-view', 'graph-preview', 'graph-control', 'book-inspection', 'workflow', 'save', 'notify', 'retry-commit', 'index-status', 'index-control', 'ask', 'ask-cancel', 'suggestions']
+
+function graphReaderRequest(input: Record<string, unknown>): GraphReaderRequest {
+  const result: Record<string, unknown> = {}
+  for (const key of ['person', 'query', 'cluster', 'relation', 'groupField', 'evidenceId']) if (input[key] !== undefined) {
+    if (typeof input[key] !== 'string' || input[key].length > 2048) throw new AuthorDocumentError('invalid-document', '图谱阅读参数无效')
+    result[key] = input[key]
+  }
+  for (const key of ['chapter', 'catalogPage', 'relationPage', 'clusterPage', 'memberPage', 'unassignedPage', 'transitionPage', 'evidencePage', 'foldAfter']) if (input[key] !== undefined) {
+    if (!Number.isSafeInteger(input[key]) || Number(input[key]) < 0 || Number(input[key]) > 1000000) throw new AuthorDocumentError('invalid-document', '图谱阅读参数无效')
+    result[key] = input[key]
+  }
+  for (const key of ['reader', 'unknown', 'plans']) if (input[key] !== undefined) {
+    if (typeof input[key] !== 'boolean') throw new AuthorDocumentError('invalid-document', '图谱阅读参数无效')
+    result[key] = input[key]
+  }
+  if (input.mode !== undefined) {
+    if (!['person', 'chapter', 'all'].includes(String(input.mode))) throw new AuthorDocumentError('invalid-document', '图谱阅读参数无效')
+    result.mode = input.mode
+  }
+  return result as GraphReaderRequest
+}
 
 function stringOf(record: Record<string, unknown>, key: string): string {
   const value = record[key]
@@ -98,9 +120,15 @@ export function savedMessage(result: Pick<StudySave, 'operationId' | 'document' 
 
 const WRITING_MODE_REQUIRED = '请新建「写作模式」对话后再使用这项 AI 写作。当前会话可以继续手动保存。'
 
-export function notifySaved(agent: StudyAgent, message: string): Pick<StudySave, 'notification' | 'notificationError'> {
+export function savedSummary(result: Pick<StudySave, 'document' | 'commit'>): string {
+  const label = (value: string) => Array.from(value.replace(/[\r\n\t]+/g, ' ')).slice(0, 32).join('')
+  return boundContextSummary(`${label(result.document.owner)} · ${label(result.document.name)} 已保存；${result.commit === 'failed' ? '提交待重试；' : ''}请主控核对本次修改`)
+}
+
+export function notifySaved(agent: StudyAgent, message: string, summary?: string, documentPath?: string): Pick<StudySave, 'notification' | 'notificationError'> {
   try {
-    agent.followup(createUserMessage({ content: [{ type: 'text', text: message }], source: { kind: AUTHOR_SAVE_SOURCE } }))
+    const source: UserMessage['source'] = summary ? { kind: AUTHOR_SAVE_SOURCE, form: 'notice', summary, ...(documentPath ? { documentPath } : {}) } : { kind: AUTHOR_SAVE_SOURCE }
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: message }], source }))
     return { notification: 'delivered' }
   } catch (error) {
     return { notification: 'failed', notificationError: error instanceof Error ? error.message : '主控未收到通知' }
@@ -182,7 +210,7 @@ function openEditorRequest(hub: EditorRequestHub, agent: StudyAgent, snapshot: E
   }
 }
 
-export function createStudyHandler(runtime: StudyWebRuntime, indexing?: BookIndexManager, workflow = new WorkflowObserver(), editorRequests = new EditorRequestHub(), writing: (agent: StudyAgent) => boolean = () => true) {
+export function createStudyHandler(runtime: StudyWebRuntime, indexing?: BookIndexManager, workflow = new WorkflowObserver(), editorRequests = new EditorRequestHub(), writing: (agent: StudyAgent) => boolean = () => true, readChild?: WorkflowChildReader) {
   const delivered = new Map<string, StudyAgent>()
   return async (request: Request): Promise<Response> => {
     if (request.method !== 'POST' || request.headers.get('x-webnovel-request') !== '1') {
@@ -199,7 +227,7 @@ export function createStudyHandler(runtime: StudyWebRuntime, indexing?: BookInde
       const service = new StudyService(cwd)
       const notify = (saved: Omit<StudySave, 'notification' | 'notificationError'>, accepted: readonly string[] = []): Pick<StudySave, 'notification' | 'notificationError'> => {
         if (delivered.get(saved.operationId) === agent) return { notification: 'delivered' }
-        const result = notifySaved(agent, savedMessage(saved, studyFileLink(saved.document.absolutePath), accepted))
+        const result = notifySaved(agent, savedMessage(saved, studyFileLink(saved.document.absolutePath), accepted), savedSummary(saved), saved.document.absolutePath)
         if (result.notification === 'delivered') {
           delivered.set(saved.operationId, agent)
           if (delivered.size > 256) delivered.delete(delivered.keys().next().value!)
@@ -226,7 +254,19 @@ export function createStudyHandler(runtime: StudyWebRuntime, indexing?: BookInde
         case 'search': value = service.search(stringOf(input, 'query')); break
         case 'chapters': value = service.chapters(stringOf(input, 'space')); break
         case 'graph': value = service.graph(stringOf(input, 'space')); break
-        case 'workflow': value = workflow.read(agent, service.indexBook(stringOf(input, 'space')).bookId); break
+        case 'graph-view': value = readGraphPage(await service.graphForReader(stringOf(input, 'space'), request.signal), graphReaderRequest(input)); break
+        case 'book-inspection': value = service.inspect(stringOf(input, 'space')); break
+        case 'graph-preview': {
+          if (!indexing) throw new Error('图谱索引服务尚未就绪')
+          value = indexing.graphs.preview(service.indexBook(stringOf(input, 'space')), typeof input['action'] === 'string' ? input['action'] : undefined); break
+        }
+        case 'graph-control': {
+          if (!indexing) throw new Error('图谱索引服务尚未就绪')
+          value = await indexing.graphs.control(service.indexBook(stringOf(input, 'space')), stringOf(input, 'action'),
+            typeof input['token'] === 'string' ? input['token'] : undefined)
+          break
+        }
+        case 'workflow': value = await workflow.readWithChildren(agent, service.indexBook(stringOf(input, 'space')).bookId, readChild, request.signal); break
         case 'save': {
           const ref = refOf(input)
           const current = service.read(ref).ref
@@ -292,7 +332,27 @@ export function attachStudyWeb(ctx: Context, indexing?: BookIndexManager, editor
   ctx.inject(['connection', 'agents'], scope => {
     const workflow = new WorkflowObserver()
     observeWorkflow(scope, workflow)
-    const handler = createStudyHandler(scope, indexing, workflow, editorRequests, agent => isWritingAgent(agent as { ctx?: unknown }))
+    const readChild: WorkflowChildReader = async (childId, settledAt, signal) => {
+      const query = scope.get('sessionQuery')
+      if (!query) return undefined
+      const observation = await query.observeSession(childId as Parameters<typeof query.observeSession>[0], { signal, projectionMode: 'none' })
+      try {
+        const child = scope.agents.get(observation.header.id)
+        const events = observation.events
+        let checked = 0
+        for (let index = events.length - 1; index >= observation.inheritedEventCount && checked < 5000; index--) {
+          const event = events[index]!
+          checked++
+          if (settledAt !== undefined && event.time > settledAt) continue
+          if (event.type === 'turn/end') return { parentId: observation.header.parentSession, active: false,
+            ended: event.time, reason: typeof event.data.reason === 'string' ? event.data.reason : event.data.reason.kind }
+          if (event.type === 'turn/start') return { parentId: observation.header.parentSession,
+            active: observation.source === 'live' && child?.status === 'running', waiting: !!child && workflow.waiting(child) }
+        }
+        return { parentId: observation.header.parentSession, active: false }
+      } finally { observation[Symbol.dispose]() }
+    }
+    const handler = createStudyHandler(scope, indexing, workflow, editorRequests, agent => isWritingAgent(agent as { ctx?: unknown }), readChild)
     for (const method of METHODS) {
       scope.connection.fetch.register({ path: STUDY_API_PATH + method, methods: ['POST'], requestBody: 'streaming', fetch: handler })
     }

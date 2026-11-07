@@ -48,23 +48,18 @@ describe('故事账本查询', () => {
     if (timeline.ok) expect(timeline.entries[0]?.字段['事件']).toBe('发现异常')
   })
 
-  it('旧格式记忆部分文件在时按条目读并标旧;全无记忆才报缺失', () => {
+  it('旧格式记忆明确拒绝，混合时保留当前条目', () => {
     const root = mkBook()
     for (const 类 of MEMORY_KINDS) {
       if (类 === '灵感') continue
       writeFileAtomic(root, paths.记忆(类), `# ${类}\n\n## 条目-${类}\n类：${类}\n状态：已确认\n`)
     }
     const partial = queryMemory(root, { 类: '文风' })
-    expect(partial.ok).toBe(true)
-    if (partial.ok) {
-      expect(partial.entries.map((entry) => entry.名称)).toEqual(['条目-文风'])
-      expect(partial.entries[0]!.格式).toBe('旧')
-    }
+    expect(partial).toMatchObject({ ok: false, kind: 'parse-error', entries: [] })
     // 新格式一事一文件:条目文件带 类 字段,不标旧
     writeFileAtomic(root, paths.本书记忆条目('克制叙述'), '---\n名称: 克制叙述\n类: 文风\n状态: 已确认\n来源: x\n---\n短句。\n')
     const mixed = queryMemory(root, { 类: '文风' })
-    expect(mixed.ok).toBe(true)
-    if (mixed.ok) expect(mixed.entries.map((entry) => entry.名称).sort()).toEqual(['克制叙述', '条目-文风'])
-    if (mixed.ok) expect(mixed.entries.find((entry) => entry.名称 === '克制叙述')?.格式).toBeUndefined()
+    expect(mixed).toMatchObject({ ok: false, kind: 'parse-error' })
+    expect(mixed.entries.map(entry => entry.名称)).toEqual(['克制叙述'])
   })
 })

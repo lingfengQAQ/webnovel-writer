@@ -1,17 +1,25 @@
 import * as fs from 'node:fs'
 import {
   canonicalizePath, changeIndexState, embeddingRevision, emptyIndexState, indexFailure, onBookCommit,
-  readIndexState, syncFinalizedIndex, forgetSceneBoundaries,
-  type EmbeddingProvider, type SceneProvider, type IndexAction, type IndexFailure, type IndexNotice, type IndexRetryPolicy, type IndexSyncState,
+  readIndexState, readPersistedIndexAuto, stripPersistedIndexAuto, syncFinalizedIndex, forgetSceneBoundaries,
+  type EmbeddingProvider, type SceneProvider, type GraphModelProvider, type IndexAction, type IndexFailure, type IndexNotice, type IndexRetryPolicy, type IndexSyncState,
 } from '@webnovel/core'
 import { scanBooks } from '../bookshelf'
 import { bookGitWatchPaths, bookHead, finalizedChanged } from './git'
+import { GraphIndexManager } from './graph-manager'
 
 export interface IndexBook { readonly root: string; readonly bookId: string; readonly name: string; readonly workspace: string }
 export interface IndexView extends IndexSyncState { readonly bookId: string; readonly bookName: string; readonly providerConfigured: boolean; readonly sceneConfigured: boolean }
+export interface IndexAutoPreference {
+  get(): boolean | undefined
+  set(enabled: boolean): void | Promise<void>
+  migrateIfUnset(): void | Promise<void>
+}
 export interface IndexManagerOptions {
   readonly getProvider: () => EmbeddingProvider | undefined
   readonly getSceneProvider?: () => SceneProvider | undefined
+  readonly getGraphProvider?: () => GraphModelProvider | undefined
+  readonly autoPreference?: IndexAutoPreference
   readonly workspaces?: () => readonly string[]
   readonly notify?: (book: IndexBook, notice: IndexNotice) => boolean | Promise<boolean>
   readonly pollMs?: number
@@ -39,6 +47,7 @@ const resumable = (state: IndexSyncState) => !state.paused && ['queued', 'scanni
 
 /** Book-owned work survives agent inactivity. Only this plugin's lifetime stops its workers. */
 export class BookIndexManager {
+  readonly graphs: GraphIndexManager
   private readonly books = new Map<string, TrackedBook>()
   private readonly workspaces = new Set<string>()
   private readonly interval: ReturnType<typeof setInterval>
@@ -47,13 +56,34 @@ export class BookIndexManager {
   private refreshing: Promise<void> | undefined
 
   constructor(private readonly options: IndexManagerOptions) {
+    this.graphs = new GraphIndexManager(options.getGraphProvider ?? (() => undefined))
     this.interval = setInterval(() => { void this.refresh() }, options.pollMs ?? 5000)
     this.interval.unref()
     this.offCommit = onBookCommit(event => {
       const record = this.books.get(canonicalizePath(event.bookRoot))
       if (record) void this.probe(record, event.sessionId)
       else void this.refresh()
+      void this.graphs.refresh()
     })
+  }
+
+  private stateWriteOptions(): { readonly omitAuto?: boolean } | undefined {
+    return this.options.autoPreference ? { omitAuto: true } : undefined
+  }
+
+  private effectiveAuto(state: IndexSyncState): boolean {
+    if (!this.options.autoPreference) return state.auto
+    return this.options.autoPreference.get() ?? false
+  }
+
+  private async syncAutoPreference(root: string): Promise<void> {
+    if (!this.options.autoPreference) return
+    const persisted = readPersistedIndexAuto(root)
+    if (persisted === undefined) return
+    if (this.options.autoPreference.get() === undefined && persisted === true) {
+      await this.options.autoPreference.migrateIfUnset()
+    }
+    await stripPersistedIndexAuto(root)
   }
 
   addWorkspace(workspace: string): void {
@@ -63,6 +93,7 @@ export class BookIndexManager {
   }
 
   private track(book: IndexBook): TrackedBook {
+    this.graphs.track(book)
     const root = canonicalizePath(book.root)
     let record = this.books.get(root)
     if (!record) {
@@ -85,6 +116,7 @@ export class BookIndexManager {
         }
       }
       await Promise.allSettled([...this.books.values()].map(record => this.probe(record)))
+      await this.graphs.refresh()
     })()
     this.refreshing = running
     try { await running } finally { this.refreshing = undefined }
@@ -140,10 +172,12 @@ export class BookIndexManager {
     if (record.probing) return record.probing
     const running = (async () => {
       try {
+        await this.syncAutoPreference(record.book.root)
         let state = readIndexState(record.book.root)
+        const auto = this.effectiveAuto(state)
         if (record.active && (state.paused || state.generation !== record.active.generation)) record.active.controller.abort()
         await this.deliver(record)
-        if (!state.auto && !resumable(state)) return
+        if (!auto && !resumable(state)) return
         await this.watch(record)
         let provider: EmbeddingProvider | undefined
         try { provider = this.provider() } catch { /* Configuration is reported by the worker. */ }
@@ -159,13 +193,13 @@ export class BookIndexManager {
         const head = await bookHead(record.book.root)
         if (this.closing || !this.hasIdentity(record) || state.paused) return
         const changedHead = head !== state.head
-        if (state.auto && (changedHead || revision !== state.targetRevision || changedProvider || changedScene)) {
+        if (auto && (changedHead || state.phase === 'disabled' || revision !== state.targetRevision || changedProvider || changedScene)) {
           if (changedHead && state.phase === 'ready' && revision === state.targetRevision && !changedProvider && !changedScene
             && !await finalizedChanged(record.book.root, state.indexedHead, head)) {
             await changeIndexState(record.book.root, latest => {
               this.requireIdentity(record)
               return latest.generation === state.generation ? { ...latest, head, indexedHead: head, updatedAt: Date.now() } : latest
-            })
+            }, this.stateWriteOptions())
           } else {
             state = await this.enqueue(record, head, revision, sessionId, sceneRevision)
           }
@@ -188,10 +222,11 @@ export class BookIndexManager {
     record.reschedules = 0
     const next = await changeIndexState(record.book.root, state => {
       this.requireIdentity(record)
-      if (!state.auto || state.paused || state.head === head && state.targetRevision === revision && state.sceneRevision === sceneRevision && resumable(state)) return state
-      return { ...state, generation: state.generation + 1, phase: 'queued', head, targetRevision: revision, sceneRevision,
+      const auto = this.effectiveAuto(state)
+      if (!auto || state.paused || state.head === head && state.targetRevision === revision && state.sceneRevision === sceneRevision && resumable(state)) return state
+      return { ...state, auto, generation: state.generation + 1, phase: 'queued', head, targetRevision: revision, sceneRevision,
         recipientSession: sessionId ?? state.recipientSession, retryAt: undefined, lastError: undefined, notice: undefined, updatedAt: Date.now() }
-    })
+    }, this.stateWriteOptions())
     if (record.active && record.active.generation !== next.generation) record.active.controller.abort()
     return next
   }
@@ -242,7 +277,7 @@ export class BookIndexManager {
   private async fail(record: TrackedBook, generation: number, failure: IndexFailure): Promise<void> {
     await changeIndexState(record.book.root, state => !this.hasIdentity(record) || state.generation !== generation ? state : ({ ...state, phase: 'failed', lastError: failure,
       updatedAt: Date.now(), notice: { id: `${generation}-${failure.code}`, generation, error: failure, attempts: state.attempt,
-        completed: state.completedChunks, total: state.chunks, head: state.head, sessionId: state.recipientSession } }))
+        completed: state.completedChunks, total: state.chunks, head: state.head, sessionId: state.recipientSession } }), this.stateWriteOptions())
   }
 
   private async deliver(record: TrackedBook): Promise<void> {
@@ -253,21 +288,24 @@ export class BookIndexManager {
     try {
       const delivered = await this.options.notify(record.book, notice)
       if (delivered) await changeIndexState(record.book.root, state => state.notice?.id === notice.id
-        ? { ...state, notice: { ...state.notice, delivered: true, deliveryError: undefined } } : state)
+        ? { ...state, notice: { ...state.notice, delivered: true, deliveryError: undefined } } : state, this.stateWriteOptions())
     } catch {
       await changeIndexState(record.book.root, state => state.notice?.id === notice.id
-        ? { ...state, notice: { ...state.notice, deliveryError: '主会话暂时不可用，恢复后重试投递' } } : state)
+        ? { ...state, notice: { ...state.notice, deliveryError: '主会话暂时不可用，恢复后重试投递' } } : state, this.stateWriteOptions())
     } finally { record.delivering = false }
   }
 
   async status(book: IndexBook): Promise<IndexView> {
     const record = this.track(book)
-    if (this.hasIdentity(record)) void this.probe(record)
+    if (this.hasIdentity(record)) {
+      await this.syncAutoPreference(record.book.root)
+      void this.probe(record)
+    }
     let state: IndexSyncState
     try { state = readIndexState(record.book.root) } catch (error) { state = { ...emptyIndexState(), phase: 'failed', lastError: indexFailure(error) } }
     let providerConfigured = false
     try { providerConfigured = !!this.provider() } catch { /* Shown as configuration unavailable. */ }
-    return { ...state, ...(record.localError && !state.lastError ? { lastError: record.localError } : {}),
+    return { ...state, auto: this.effectiveAuto(state), ...(record.localError && !state.lastError ? { lastError: record.localError } : {}),
       ...(record.identityError ? { phase: 'failed', lastError: record.identityError } as const : {}),
       bookId: book.bookId, bookName: book.name, providerConfigured, sceneConfigured: this.sceneConfigured() }
   }
@@ -294,6 +332,7 @@ export class BookIndexManager {
   private async applyControl(record: TrackedBook, action: IndexAction, sessionId: string, chapter?: number): Promise<IndexView> {
     if (this.closing) throw new Error('索引服务正在关闭，请稍后重试')
     this.requireIdentity(record)
+    await this.syncAutoPreference(record.book.root)
     if (record.timer) { clearTimeout(record.timer); record.timer = undefined }
     record.active?.controller.abort()
     // Abort first; wait until its short source snapshot/book lock has been released.
@@ -304,17 +343,20 @@ export class BookIndexManager {
       if (!this.sceneConfigured()) throw new Error('请先启用并配置场景识别模型')
       await forgetSceneBoundaries(record.book.root, chapter)
     }
+    if (action === 'enable') await this.options.autoPreference?.set(true)
+    if (action === 'disable') await this.options.autoPreference?.set(false)
     const head = action === 'pause' || action === 'disable' ? readIndexState(record.book.root).head : await bookHead(record.book.root)
     let revision: string | undefined
     try { revision = embeddingRevision(this.provider()) } catch { /* Worker reports the invalid configuration. */ }
     await changeIndexState(record.book.root, state => {
       this.requireIdentity(record)
-      const base = { ...state, generation: state.generation + 1, recipientSession: sessionId, updatedAt: Date.now(), retryAt: undefined, notice: undefined, lastError: undefined }
+      const auto = action === 'enable' ? true : action === 'disable' ? false : this.effectiveAuto(state)
+      const base = { ...state, auto, generation: state.generation + 1, recipientSession: sessionId, updatedAt: Date.now(), retryAt: undefined, notice: undefined, lastError: undefined }
       if (action === 'pause') return { ...base, paused: true, phase: 'paused' }
       if (action === 'disable') return { ...base, auto: false, paused: false, phase: 'disabled' }
-      return { ...base, sceneRevision: this.options.getSceneProvider?.()?.metadata.revision, auto: action === 'enable' ? true : state.auto, paused: false, phase: 'queued', head, targetRevision: revision,
+      return { ...base, sceneRevision: this.options.getSceneProvider?.()?.metadata.revision, auto, paused: false, phase: 'queued', head, targetRevision: revision,
         rebuild: action === 'rebuild' || state.rebuild, generated: 0, failed: 0 }
-    })
+    }, this.stateWriteOptions())
     record.localError = undefined
     record.reschedules = 0
     if (action !== 'disable' && action !== 'pause') { await this.watch(record); this.scheduleRun(record) }
@@ -323,6 +365,7 @@ export class BookIndexManager {
 
   async close(): Promise<void> {
     this.closing = true
+    const graphsClosed = this.graphs.close()
     clearInterval(this.interval)
     this.offCommit()
     for (const record of this.books.values()) {
@@ -332,5 +375,6 @@ export class BookIndexManager {
     }
     await Promise.allSettled([...this.books.values()].flatMap(record => [record.active?.promise, record.probing, record.controls].filter((item): item is Promise<void> => !!item)))
     this.books.clear()
+    await graphsClosed
   }
 }

@@ -80,7 +80,10 @@ assert.ok(read('README.md').includes('--from-default-profile web'))
 assert.ok(read('lib/client.js').includes(`id: ${JSON.stringify(manifest.name)}`))
 const compiled = await build({ entryPoints: [path.join(extracted, 'lib/index.js')], bundle: true, packages: 'external', write: false, metafile: true, platform: 'node', format: 'esm', logLevel: 'silent' })
 const imports = [...new Set(Object.values(compiled.metafile.outputs).flatMap(output => output.imports).map(item => item.path))].sort()
-for (const name of imports) assert.ok(isBuiltin(name) || manifest.peerDependencies?.[name] || manifest.dependencies?.[name], `Undeclared packed import: ${name}`)
+for (const name of imports) {
+  const packageName = name.startsWith('@') ? name.split('/').slice(0, 2).join('/') : name.split('/')[0]
+  assert.ok(isBuiltin(name) || manifest.peerDependencies?.[packageName] || manifest.dependencies?.[packageName], `Undeclared packed import: ${name}`)
+}
 assert.equal(Object.keys(compiled.metafile.inputs).length, 1, 'Packed Host must be self-contained apart from declared peers')
 const cli = await build({ entryPoints: [path.join(extracted, 'lib/cli.js')], bundle: true, packages: 'external', write: false, metafile: true, platform: 'node', format: 'esm', logLevel: 'silent' })
 checkCliDependencies(cli)

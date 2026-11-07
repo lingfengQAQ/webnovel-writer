@@ -2,7 +2,9 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { createHash } from 'node:crypto'
 import { parseDocument, serializeDocument } from '../repo/frontmatter'
-import { assertSegment, MEMORY_KINDS, type MemoryKind } from '../repo/paths'
+import { assertSegment, type MemoryKind } from '../repo/paths'
+import { isMemoryKind } from '../repo/book-memory-contract'
+import { memoryIndexLink, memoryIndexText, parseMemoryIndexLinks } from '../repo/memory-index-links'
 
 export class MemoryWriteError extends Error {}
 
@@ -84,7 +86,7 @@ export function prepareMemory(
   const name = input.名称.trim()
   if (!name || name === '索引') throw new MemoryWriteError('记忆名称必填且不得为「索引」')
   assertSegment(name, '记忆名称')
-  if (!(MEMORY_KINDS as readonly string[]).includes(input.类)) throw new MemoryWriteError('记忆类别必须为文风、决策、对话或灵感')
+  if (!isMemoryKind(input.类)) throw new MemoryWriteError('记忆类别必须为文风、决策、对话或灵感')
   if (!input.正文.trim()) throw new MemoryWriteError(`记忆「${name}」正文为空`)
   const operation = input.操作 ?? '新增'
   if (operation !== '新增' && operation !== '更新') throw new MemoryWriteError('记忆操作必须为新增或更新')
@@ -134,10 +136,10 @@ export function prepareMemory(
 }
 
 /** Index entries retain the actual filenames, including read-only legacy files. */
-export function memoryIndex(title: string, documents: readonly MemoryDocument[], changes: readonly PreparedMemory[]): string {
+export function memoryIndex(title: string, documents: readonly MemoryDocument[], changes: readonly PreparedMemory[], originalIndex?: string): string {
   const files = new Map(documents.map(doc => [doc.relPath, doc.text]))
   for (const change of changes) if (change.changed) files.set(change.relPath, change.content)
-  const lines = [`# ${title}`, '']
+  const lines: string[] = []
   for (const rel of [...files.keys()].sort()) {
     const parsed = parseDocument(files.get(rel)!)
     if (!parsed.ok) throw new MemoryWriteError(`记忆条目解析失败：${rel}`)
@@ -146,8 +148,15 @@ export function memoryIndex(title: string, documents: readonly MemoryDocument[],
     const name = typeof f['名称'] === 'string' ? f['名称'] : filename.replace(/\.md$/, '')
     const details = [typeof f['描述'] === 'string' ? f['描述'] : undefined,
       typeof f['类'] === 'string' ? `类：${f['类']}` : '旧格式记忆',
-      typeof f['来源'] === 'string' ? `来源：${f['来源']}` : undefined].filter(Boolean)
-    lines.push(`- [${name}](${filename}) — ${details.join('｜')}`)
+      typeof f['来源'] === 'string' ? `来源：${f['来源']}` : undefined].filter((detail): detail is string => detail !== undefined && detail !== '')
+    lines.push(`- ${memoryIndexLink(name, filename)} — ${details.map(memoryIndexText).join('｜')}`)
   }
-  return `${lines.join('\n')}\n`
+  const newline = originalIndex?.includes('\r\n') ? '\r\n' : '\n'
+  let retained = `# ${title}${newline}${newline}`
+  if (originalIndex?.trim()) {
+    if (parseMemoryIndexLinks(originalIndex).problems.length) throw new MemoryWriteError('记忆索引解析失败；请先核对原文并检查书仓，未重建索引')
+    // Replace filename rows only; category notes retained by C5 and author prose survive.
+    retained = (originalIndex.match(/[^\n]*\n|[^\n]+$/g) ?? []).filter(line => !parseMemoryIndexLinks(line).filenames.length).join('')
+  }
+  return retained + (retained.endsWith('\n') ? '' : newline) + (lines.length ? lines.join(newline) + newline : '')
 }

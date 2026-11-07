@@ -1,6 +1,8 @@
-import React from 'react'
-import { BookOpen } from 'lucide-react'
+import React, { useEffect } from 'react'
+import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ClientHost, NativeOpenService } from './host'
+import { IconBook } from './icons'
+import { HintTooltip } from './tooltip'
 import type { StudyDocument } from '../study/types'
 import { callStudy } from './api'
 import { installWorkspaceStudyTabs } from './workspace-slots'
@@ -16,18 +18,27 @@ import { mainSessionOf } from './host'
 import { installNativeDocuments, openWritingDocument } from './native-documents'
 import { createEditorStore, fileKey } from './store'
 import { bindEditorRequests, createEditorRequests } from './editor/requests'
-import { documentQuote } from './quote'
-import { parseStudyLink, studyFileLink } from '../study/links'
+import { createQuoteInputs, installQuoteReferences, quoteReference } from './quote-reference'
+import { parseStudyLink } from '../study/links'
 import styles from './styles.css'
 import indexStyles from './indexing.css'
 import { installIndexSidebar } from './indexing'
 import { installNovelToolCards } from './tool-result-card'
+import { installSaveNotices } from './save-notice'
 import resultStyles from './tool-result.css'
+import preferenceStyles from './preferences.css'
+import { followPreference, installPreferences } from './preferences'
+import { installBundleConfig } from './bundle-config'
 
 export const inject = ['slots', 'sidebarRight', 'sidebarRightTabs', 'conversation', 'sessions', 'uiWorkspace', 'remote', 'remote.workspaceFiles']
 
 export function apply(host: ClientHost) {
+  const preferences = installPreferences(host)
+  installBundleConfig(host)
   installNovelToolCards(host)
+  installSaveNotices(host)
+  installQuoteReferences(host)
+  const quoteInputs = createQuoteInputs()
   const store = createEditorStore(id => openWritingDocument(host, store, id))
   const openIndex = installIndexSidebar(host)
   const memory = new EditorMemory()
@@ -61,18 +72,20 @@ export function apply(host: ClientHost) {
       const scope = host.sessions.scope(id)
       if (!buffer || !scope || !selection.text.trim()) return
       const input = host.conversation.input.for(scope)
-      const previous = input.state.getSnapshot().draft
-      input.setDraft(previous + (previous && !previous.endsWith('\n\n') ? '\n\n' : '') + documentQuote(buffer.document, buffer.text, selection.text, selection.line)
-        + '\n[在书房打开原文](<' + studyFileLink(buffer.document.absolutePath) + '>)\n')
+      if (!quoteInputs.insert(id, input, quoteReference(id, buffer.document, buffer.text, selection.text, selection.line))) {
+        store.update(id, { notice: '输入框正在发送或内容已变化，请稍后重新引用' })
+        return
+      }
       store.update(id, { selection: '', notice: '已放进对话输入框，等你发送' })
       window.getSelection()?.removeAllRanges()
       if (window.innerWidth < 1024) actions.close(id)
+      input.focus()
     },
   }
   host.effect(() => {
     const style = document.createElement('style')
     style.dataset.webnovel = ''
-    style.textContent = styles + '\n' + indexStyles + '\n' + visualizationStyles + '\n' + workflowArtworkStyles + '\n' + resultStyles + '\n' + editorStyles + '\n' + layoutSwapStyles
+    style.textContent = styles + '\n' + indexStyles + '\n' + visualizationStyles + '\n' + workflowArtworkStyles + '\n' + resultStyles + '\n' + editorStyles + '\n' + layoutSwapStyles + '\n' + preferenceStyles
     document.head.append(style)
     const offMove = store.onMove((id, previous, next) => {
       memory.move(id, previous, next)
@@ -89,12 +102,14 @@ export function apply(host: ClientHost) {
       requests.dispose(); bindEditorRequests(undefined); store.dispose(); memory.clear(); style.remove()
     }
   }, 'webnovel: client lifetime')
-  host.slots.inject('shell.overlay', () => host.slots.register({ name: 'shell.overlay', id: 'webnovel-layout-swap' }, SwapHandle))
-  host.slots.inject('conversation.input.right', () => host.slots.register({ name: 'conversation.input.right', id: 'webnovel-open', order: 50 }, () => {
+  host.slots.inject('shell.overlay', () => host.slots.register({ name: 'shell.overlay', id: 'webnovel-layout-swap' }, () => <SwapHandle preferences={preferences} />))
+  host.slots.inject('conversation.input.right', () => host.slots.register({ name: 'conversation.input.right', id: 'webnovel-open', order: 50 }, (props: PropsRuntime<'conversation.input.right'>) => {
     const id = useSession(host)
-    return <button type="button" className="webnovel nw-launch" disabled={!id} title="打开书稿与资料" aria-label="打开书稿与资料" onClick={() => { if (id) openWritingDocument(host, store, id) }}><BookOpen size={17} /><span>书稿</span></button>
+    useEffect(() => quoteInputs.bind(props.sessionId, props.inputActions), [props.sessionId, props.inputActions])
+    return <HintTooltip tip="打开书稿与资料"><button type="button" className="webnovel nw-launch" disabled={!id} aria-label="打开书稿与资料" onClick={() => { if (id) openWritingDocument(host, store, id) }}><IconBook size={16} /><span className="nw-launch-label">书稿</span></button></HintTooltip>
   }))
-  host.slots.inject('conversation.view', () => host.slots.register({ name: 'conversation.view', id: 'webnovel-visual', label: '可视化', order: 30, inject: () => ({ host, store, openIndex }) }, VisualView))
+  host.slots.inject('conversation.view', () => followPreference(preferences, 'showVisualTab',
+    () => host.slots.register({ name: 'conversation.view', id: 'webnovel-visual', label: '可视化', order: 30, inject: () => ({ host, store, openIndex }) }, VisualView)))
   installNativeDocuments(host, store, actions, memory, requests)
   host.effect(() => {
     const openLink = (link: NonNullable<ReturnType<typeof parseStudyLink>>) => {

@@ -27,6 +27,23 @@ describe('小说结果卡的证据边界', () => {
     expect(model.state).toBe('attention')
     expect(model.facts).toContainEqual({ label: '审核', value: '尚未通过' })
   })
+  it('只读核对完成不叫章节已开始；未检查、缺字段或不稳定不显示绿色成功', () => {
+    const inspection = { 状态: '已检查', 结论: '未发现已知问题', 未检范围: [], 问题: [], 快照: { 稳定: true } }
+    const complete = { ok: true, 状态读取: { ok: true }, 开章核对: { 状态: '边界已核对', 快照: { 稳定: true } }, 书仓检查: inspection }
+    expect(novelResultModel(settled(complete))).toMatchObject({ state: 'success', label: '检查完成' })
+    expect(novelResultModel(settled(complete)).facts).toContainEqual({ label: '开章核对', value: '边界已核对' })
+    for (const value of [
+      { ...complete, 书仓检查: { 状态: '未检查', 原因: '需先恢复' } },
+      { ...complete, 书仓检查: { ...inspection, 状态: '部分失败' } },
+      { ...complete, 书仓检查: { ...inspection, 结论: '需升级' } },
+      { ...complete, 书仓检查: { ...inspection, 快照: { 稳定: false } } },
+      { ...complete, 书仓检查: { ...inspection, 未检范围: [{ 路径: '未知.json' }] } },
+      { ...complete, 书仓检查: { ...inspection, 问题: [{ 说明: '读取失败' }] } },
+      { ...complete, 状态读取: { ok: false } },
+      { ...complete, 开章核对: { 状态: '需恢复' } },
+      { ok: true, 开章核对: { 状态: '边界已核对' } },
+    ]) expect(novelResultModel(settled(value)).state).toBe('attention')
+  })
   it('业务失败和运行时错误都优先于成功信息', () => {
     expect(novelResultModel(settled({ ok: false, reason: '旧批准已失效', message: '成功' })).summary).toBe('旧批准已失效')
     const input = settled({ ok: true, message: '成功' }); input.block.isError = true
@@ -34,6 +51,30 @@ describe('小说结果卡的证据边界', () => {
     input.block.error = { name: 'Abort', code: 'interrupted' }
     expect(novelResultModel(input).state).toBe('stopped')
     expect(novelResultModel(settled({ ok: true, commitState: 'failed' })).state).toBe('error')
+  })
+  it('升级预览、恢复与已写未交分别呈报，不把检查或恢复当升级完成', () => {
+    const result = (ok: boolean, state: string) => settled({ maintenance: 'book-upgrade', ok, state, operationId: 'a'.repeat(64), paths: ['作品契约/契约.md'] })
+    expect(novelResultModel(result(true, 'ready'))).toMatchObject({ state: 'attention', label: '待批准' })
+    expect(novelResultModel(result(true, 'blocked'))).toMatchObject({ state: 'attention', label: '暂不可升级' })
+    expect(novelResultModel(result(true, 'recovered'))).toMatchObject({ state: 'attention', label: '已恢复，待重新预览' })
+    expect(novelResultModel(result(false, 'written-pending-commit'))).toMatchObject({ state: 'error', label: '已写待提交' })
+    expect(novelResultModel(result(true, 'written-pending-commit')).state).toBe('error')
+    expect(novelResultModel(result(true, 'committed'))).toMatchObject({ state: 'success', label: '升级已提交' })
+    expect(novelResultModel(result(true, 'already-committed'))).toMatchObject({ state: 'success', label: '已核实原提交' })
+    expect(novelResultModel(result(true, 'unchanged'))).toMatchObject({ state: 'success', label: '无需升级' })
+    expect(novelResultModel(result(true, 'new-unknown-state')).state).toBe('unknown')
+    const stopped = result(true, 'committed'); stopped.block.error = { name: 'Abort', code: 'interrupted' }
+    expect(novelResultModel(stopped).state).toBe('stopped')
+  })
+  it('升级卡区分原书检查、未写入后态与预期材料过期', () => {
+    const model = novelResultModel(settled({ maintenance: 'book-upgrade', ok: true, state: 'ready',
+      inspectionBefore: { 结论: '需升级' }, inspectionAfter: { 结论: '需处理' }, expectedStaleIssues: [{ 代码: 'EVIDENCE_STALE' }], issues: [],
+    }))
+    expect(model).toMatchObject({ state: 'attention', label: '待批准' })
+    expect(model.facts).toEqual(expect.arrayContaining([
+      { label: '原书检查', value: '需升级' }, { label: '拟变换后检查（未写入）', value: '需处理' },
+      { label: '预计过期材料', value: '1' }, { label: '阻断项', value: '0' },
+    ]))
   })
   it('无变化无需重试；进度待核对与渲染文本保留', () => {
     expect(novelResultModel(settled({ ok: true, commitState: 'unchanged' })).label).toBe('无变化')

@@ -27,7 +27,7 @@ html[data-webnovel-swap][data-windows-titlebar] div:has(> [data-rightbar-col]):n
 }
 
 html[data-webnovel-swap][data-windows-titlebar] div:has(> [data-rightbar-col]):not([data-rightbar-collapsed]):not([data-rightbar-fullscreen]) [data-rightbar-col] [data-dockkit-column='0'][data-dockkit-pane] {
-  border-radius: var(--dsh-windows-content-radius, 16px) 0 0 0;
+  border-radius: var(--dsh-windows-content-radius, var(--dsw-radius-lg)) 0 0 0;
   corner-shape: round;
 }
 

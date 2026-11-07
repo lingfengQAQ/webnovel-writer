@@ -18,6 +18,9 @@ export function checkPublicText(file, data) {
   assert.ok(!/[A-Z]:[\\/](?:Users|wk)[\\/]/.test(text), `Personal absolute path in ${file}`)
 }
 export function checkMarkdownLinks(root, file, text) {
+  // Frozen historical serializer output: its deliberately broken literal-percent
+  // target is tested by the migration suite, not a documentation navigation link.
+  if (file === 'packages/core/tests/fixtures/maintenance-upgrade/historical-index.md') return
   const prose = text.replace(/```[\s\S]*?```/g, '')
   for (const match of prose.matchAll(/\]\(([^)]+)\)/g)) {
     const target = match[1].replace(/^<|>$/g, '').split('#')[0]

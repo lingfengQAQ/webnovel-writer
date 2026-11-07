@@ -8,7 +8,43 @@ concurrency:
   group: v8-release-${{ github.ref }}
   cancel-in-progress: false
 jobs:
+  tests:
+    name: release-tests-${{ matrix.shard }}
+    runs-on: windows-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      WEBNOVEL_LOADER_REPORT: ${{ github.workspace }}/.tmp/ci/loader.json
+    steps:
+      - name: Check out with repository line endings only
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.27.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24.15.0'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run disjoint release test shard
+        run: pnpm test --shard=${{ matrix.shard }}/4 --reporter=default --reporter=json --reporter=./scripts/release/ci-reporter.mjs --outputFile=.tmp/ci/results.json
+      - name: Preserve timings and worker failure diagnostics
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-tests-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
+          path: .tmp/ci/
+          include-hidden-files: true
+          retention-days: 14
   release:
+    needs: tests
     runs-on: windows-latest
     timeout-minutes: 50
     permissions:
@@ -38,8 +74,6 @@ jobs:
       - run: pnpm audit --audit-level=high
       - run: pnpm lint
       - run: pnpm test:release
-      # Root Vitest includes all package tests; do not run the same suite a second time.
-      - run: pnpm test --reporter=default --reporter=json --reporter=./scripts/release/ci-reporter.mjs --outputFile=.tmp/ci/results.json
       - run: pnpm release:build -- --out .tmp/release
       - name: Install the exact release assets into a clean host
         run: |
@@ -71,6 +105,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Preserve timings and worker failure diagnostics
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-tests-attempt-${{ github.run_attempt }}

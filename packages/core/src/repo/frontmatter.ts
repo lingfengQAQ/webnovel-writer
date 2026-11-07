@@ -23,7 +23,8 @@ const FM_CLOSE = '---'
 
 /** 解析「---\n…\n---\n正文」结构;无 frontmatter 时返回空字段集(合法)。 */
 export function parseDocument(text: string): ReadResult<Frontmatter> {
-  const normalized = text.replace(/\r\n/g, '\n')
+  const lineNormalized = text.replace(/\r\n/g, '\n')
+  const normalized = lineNormalized.startsWith(`\uFEFF${FM_OPEN}\n`) ? lineNormalized.slice(1) : lineNormalized
   if (!normalized.startsWith(FM_OPEN + '\n')) {
     return { ok: true, data: { fields: {}, body: normalized } }
   }

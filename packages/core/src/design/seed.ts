@@ -49,7 +49,7 @@ function seedMinDesignLocked(bookRoot: string, input: SeedMinDesignInput = {}): 
     [
       '# 分卷布局',
       '',
-      ...分卷布局八部.flatMap((n) => (n === '故事阶段分配' ? [`## ${n} 〔留白〕`, '', `- 卷${pad(卷)} 〔已确认〕`] : [`## ${n} 〔留白〕`])),
+      ...分卷布局八部.flatMap((n) => (n === '故事阶段分配' ? [`## ${n}`, '', `- 卷${pad(卷)} 〔已确认〕`] : [`## ${n} 〔留白〕`])),
       '',
     ].join('\n'),
   )

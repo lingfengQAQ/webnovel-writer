@@ -129,17 +129,19 @@ export function suggestionMode(item: SuggestionItem, current: string): 'inline' 
   return changed / Math.max(1, item.original.length + item.text.length) > 0.55 ? 'block' : 'inline'
 }
 
+// Widget DOM is built as HTML inside the CodeMirror view, so these glyphs are drawn here on the DSH 16px grid
+// (see client/icons.tsx); the 1.3 stroke is the DSH Medium weight, which keeps them legible at 12-15px.
 function iconSvg(name: keyof typeof ICONS): string {
-  return `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`
+  return `<svg class="cm-icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`
 }
 const ICONS = {
-  check: '<path d="M20 6 9 17l-5-5"/>',
-  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
-  retry: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
-  chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
-  warn: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
-  spark: '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>',
-  loader: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+  check: '<path d="M2.5 8.5L6 12L13.5 4"/>',
+  x: '<path d="M3 3L13 13"/><path d="M13 3L3 13"/>',
+  retry: '<path d="M14.5 8A6.5 6.5 0 1 1 8 1.5C9.9 1.5 11.7 2.3 13 3.6L14.5 5.1"/><path d="M14.5 1.5V5.1H10.9"/>',
+  chat: '<path d="M14 9.5C14 10.33 13.33 11 12.5 11H5.5L2 14V3.5C2 2.67 2.67 2 3.5 2H12.5C13.33 2 14 2.67 14 3.5Z"/>',
+  warn: '<path d="M6.87 2.6a1.33 1.33 0 0 1 2.26 0l5.34 9.33A1.33 1.33 0 0 1 13.33 14H2.67a1.33 1.33 0 0 1-1.14-2.07Z"/><path d="M8 6v3"/><path d="M8 11.33h.01"/>',
+  spark: '<path d="M8 1.5C8 5.5 10.5 8 14.5 8C10.5 8 8 10.5 8 14.5C8 10.5 5.5 8 1.5 8C5.5 8 8 5.5 8 1.5Z"/>',
+  loader: '<path d="M14.5 8A6.5 6.5 0 1 1 10 1.82"/>',
 }
 
 /** 转义写入 HTML 属性的值；id、提示文字都可能来自请求内容。 */

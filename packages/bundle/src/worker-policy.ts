@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import { NativeToolExecutor } from '@deepseek-ai/dsh-tool-executor-native'
 import type { AgentLike } from './novel-tools'
 import type { WritingRole } from './writing-delegation'
 
@@ -65,7 +66,7 @@ export function attachWorkerPolicyToAgent(agent: AgentLike, role: WritingRole): 
       })
       // PTC's reserved run_code is added after ordinary tool restrictions.
       // Production workers use native file tools; keep the parent's PTC intact.
-      yield scope.tools.presentAs('native')
+      yield scope.tools.setExecutor(new NativeToolExecutor(scope))
       yield scope.tools.guard(exec => exec.agent === agent && !allowedTools.has(exec.name)
         && scope.tools.get(exec.name, exec.agent) !== undefined
         ? '当前写作角色不允许使用此工具；请报告限制并交回主控。' : undefined)

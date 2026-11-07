@@ -18,6 +18,7 @@ import { safeRelPath } from './rel-path'
 
 export interface OperationProvenance {
   readonly operationId?: string
+  readonly bookRootIdentity?: string
   readonly sessionId?: string
   readonly agentId?: string
   readonly toolName?: string

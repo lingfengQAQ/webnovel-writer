@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { checkPublicPath, checkPublicText, checkMarkdownLinks } from '../check-public-tree.mjs'
-import { releaseVersion, root as sourceRoot } from '../version.mjs'
+import { checkCurrentInstructions, releaseVersion, root as sourceRoot } from '../version.mjs'
 
 test('public policy rejects private files and permits runtime Markdown', () => {
   for (const file of ['.trellis/prd.md', 'session.jsonl', 'packages/bundle/.env', '../README.md', 'packages/bundle/dsh-local.yml', 'docs/dsh-baseline.md']) assert.throws(() => checkPublicPath(file))
@@ -51,5 +51,15 @@ test('documentation links cannot escape the exported tree', () => {
     checkMarkdownLinks(root, 'README.md', '[self](README.md)')
     assert.throws(() => checkMarkdownLinks(root, 'README.md', '[private](../secret.md)'))
     assert.throws(() => checkMarkdownLinks(root, 'README.md', '[missing](missing.md)'))
+    checkMarkdownLinks(root, 'packages/core/tests/fixtures/maintenance-upgrade/historical-index.md', '[%41](%41.md)')
+    assert.throws(() => checkMarkdownLinks(root, 'packages/core/tests/fixtures/maintenance-upgrade/README.md', '[missing](missing.md)'))
   } finally { fs.unlinkSync(path.join(root, 'README.md')); fs.rmdirSync(root) }
+})
+
+
+test('current prose, host and UI checks preserve historical provenance', () => {
+  for (const text of ['Scriptor 8.3.2 配套 DSH 0.2.1-rc.3', '成功时，已安装列表显示 8.3.2', '本版配套 **DSH 0.2.1-rc.3**', '11 个写作技能', '设置 → 模型 → 嵌入模型', '这一轮没有把它们搬到插件管理页']) {
+    assert.throws(() => checkCurrentInstructions(text, 'guide.md', '8.4.0', '0.2.2-rc.1'), /Stale current/)
+  }
+  checkCurrentInstructions('Scriptor 8.4.0 配套 DSH 0.2.2-rc.1\n| 0.2.1-rc.3 | 8.3.2 |\n> 图中是 Scriptor 8.2.0 的截图。\n## 8.3.2 历史升级说明\n本版配套 DSH 0.2.1-rc.3', 'guide.md', '8.4.0', '0.2.2-rc.1')
 })

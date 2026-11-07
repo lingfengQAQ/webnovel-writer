@@ -18,6 +18,8 @@ import { checkSaveLoop } from './save-loop-check.mjs'
 import { checkReferences } from './reference-checks.mjs'
 import { checkDraftLength } from './draft-length-checks.mjs'
 import { checkWorkerPolicy } from './worker-policy-checks.mjs'
+import { checkMaintenanceReadonly } from './maintenance-readonly-checks.mjs'
+import { checkMaintenanceUpgrade } from './maintenance-upgrade-checks.mjs'
 
 const root = path.resolve(process.argv[2])
 const bundleUrl = pathToFileURL(path.resolve(process.argv[3])).href
@@ -28,13 +30,20 @@ const require = createRequire(import.meta.url)
 const host = process.env.WEBNOVEL_DSH_SOURCE === undefined ? undefined : loadSourceHost(process.env.WEBNOVEL_DSH_SOURCE)
 const appBoot = await import(host === undefined ? '@deepseek-ai/dsh-app-boot' : pathToFileURL(host.entry('@deepseek-ai/dsh-app-boot')).href)
 const expectedVersion = host?.version ?? baseline.registry.version
-const report = { node: process.version, checks: {}, versions: {}, baseline: { version: expectedVersion, sourceCommit: host?.commit ?? null, kind: host === undefined ? 'npm' : 'source' } }
+const startedAt = performance.now()
+const report = { node: process.version, checks: {}, versions: {}, timings: [], baseline: { version: expectedVersion, sourceCommit: host?.commit ?? null, kind: host === undefined ? 'npm' : 'source' } }
+const timing = step => {
+  report.elapsedMs = Math.round(performance.now() - startedAt)
+  report.timings.push({ check: report.running, step, elapsedMs: report.elapsedMs })
+}
 const check = async (name, fn) => {
   report.running = name
+  timing('start')
   fs.writeFileSync(path.join(root, 'report.json'), JSON.stringify(report, null, 2))
   try {
     await fn(step => {
       report.runningStep = step
+      timing(step)
       fs.writeFileSync(path.join(root, 'report.json'), JSON.stringify(report, null, 2))
     })
     report.checks[name] = { ok: true }
@@ -42,6 +51,7 @@ const check = async (name, fn) => {
     report.checks[name] = { ok: false, error: error.stack ?? String(error) }
   }
   delete report.runningStep
+  timing('finished')
   fs.writeFileSync(path.join(root, 'report.json'), JSON.stringify(report, null, 2))
 }
 
@@ -62,6 +72,7 @@ const profile = [
   { id: 'agent', name: '@deepseek-ai/dsh-agent' },
   { id: 'system-prompt', name: '@deepseek-ai/dsh-system-prompt' },
   { id: 'tools', name: '@deepseek-ai/dsh-tools' },
+  { id: 'tool-executor-native', name: '@deepseek-ai/dsh-tool-executor-native' },
   { id: 'skills', name: '@deepseek-ai/dsh-skill' },
   { id: 'session-projection', name: '@deepseek-ai/dsh-session-projection' },
   { id: 'agent-loop', name: '@deepseek-ai/dsh-agent-loop' },
@@ -113,9 +124,13 @@ const ctx = await settingsProfile.start('webnovel-loader-test')
 const service = name => ctx.get(name)
 const schemas = agent => service('tools').schemas(agent).map(tool => tool.name).filter(name => name.startsWith('novel_')).sort()
 let sequence = 0
-const execute = (agent, name, args, signal = new AbortController().signal) => service('tools').execute({
-  agent, name, arguments: args, signal, callId: `loader-call-${++sequence}`,
-})
+const execute = async (agent, name, args, signal = new AbortController().signal) => {
+  const batch = await service('tools').execute({ agent, signal,
+    calls: [{ type: 'tool-call', name, arguments: JSON.stringify(args), id: `loader-call-${++sequence}` }],
+  })
+  assert.equal(batch.results.length, 1)
+  return batch.results[0].result
+}
 const events = agent => Array.from({ length: agent.session.seq }, (_, index) => agent.session.eventAt(index))
 const entry = id => [...service('loader').entries()].find(item => item.options.id === id)
 const presentation = async agent => {
@@ -146,6 +161,8 @@ try {
     await checkDraftLength({ root, book, workspace, ctx, service, check, report, host, execute, toggle, settingsProfile })
   } else if (process.argv[4] === 'worker-policy') {
     await checkWorkerPolicy({ root, book, workspace, ctx, service, check, report, host, execute, toggle, settingsProfile, toolCatalog })
+  } else if (process.argv[4] === 'book-upgrade') {
+    await checkMaintenanceUpgrade({ workspace, ctx, service, execute, withTurn, check, report })
   } else {
   await check('真实 Loader 与基线版本', async () => {
     for (const row of profile.filter(row => row.name.startsWith('@deepseek-ai/dsh-'))) {
@@ -259,7 +276,8 @@ try {
   await check('随包技能发现、资源、覆盖优先级与卸载重载', async () => {
     const skills = () => service('skills').list({ cwd: workspace, scope: main })
     const names = (await skills()).map(skill => skill.name).sort()
-    assert.equal(names.length, 11)
+    assert.equal(names.length, 12)
+    assert.ok(names.includes('novel-maintenance'))
     for (const name of names) {
       const skill = await service('skills').get(name, { cwd: workspace, scope: main })
       assert.equal(skill.provider, 'webnovel-bundled')
@@ -500,12 +518,30 @@ try {
       report.axes = { retconAuthorQuestions: authorQuestions, retconActionQuestions: actionQuestions }
     } finally { offAction(); offAuthor() }
   })
+  await checkMaintenanceReadonly({ workspace, main, child, ctx, execute, check, report })
   await checkNativeWrites({ root, book, main, ctx, service, execute, git, check, report })
   await checkReliability({ root, book, main, ctx, service, execute, git, check, report, withTurn })
   await checkMemoryCatalog({ host, ctx, workspace, book, service, execute, check, report, withTurn })
   await checkMaterialSupplements({ root, workspace, main, execute, check, report, withTurn })
   await checkReferences({ workspace, main, service, execute, check, host })
   await checkMinimalExport({ root, workspace, check, report })
+  // The next profile-wide switch also applies to earlier retcon/export
+  // fixtures. Pause those existing books before checkSearch creates its two
+  // target chapters; request counts remain exact for the selected input.
+  report.searchIsolationPausedBooks = []
+  for (const directory of fs.readdirSync(workspace, { withFileTypes: true })) {
+    if (!directory.isDirectory()) continue
+    const contract = path.join(workspace, directory.name, '作品契约/契约.md')
+    if (!fs.existsSync(contract)) continue
+    const header = fs.readFileSync(contract, 'utf8').match(/^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/)?.[1]
+    if (!header) continue
+    const id = parse(header)?.['书id']
+    if (typeof id !== 'string') continue
+    const paused = await execute(main, 'novel_index_manage', { bookId: id, action: 'pause' })
+    assert.equal(paused.value.ok, true, JSON.stringify(paused))
+    assert.equal(paused.value.index.paused, true)
+    report.searchIsolationPausedBooks.push(id)
+  }
   await checkSearch({ root, workspace, main, child, ctx, service, execute, check, toggle, host })
   await check('工作区依赖重启交回旧根', async () => {
     const bundle = await import(bundleUrl)
@@ -523,7 +559,7 @@ try {
     const capability = service('agentPresets').serviceFor(main, 'webnovelWriting')
     const implementation = Object.getOwnPropertySymbols(ctx.reflect.store)
       .map(key => ctx.reflect.store[key]).find(item => item?.value === capability)
-    const writingEntry = implementation?.fiber.entry
+    const writingEntry = implementation?.fiber?.entry ?? implementation?.ctx?.fiber.entry
     assert.equal(writingEntry?.options.id, 'scriptor-agent')
     const tree = writingEntry.parent.tree
     const assertInactive = async () => {

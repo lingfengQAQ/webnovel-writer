@@ -1,4 +1,4 @@
-# Based on DSH dsh-v0.2.1-alpha.4 (86a402200d95fecef4529d969836f1fe13c6cb0d) standard preset.
+# Based on DSH dsh-v0.2.2-rc.1 (66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db) standard preset.
 # Canonical definition: packages/bundle/presets/writing.patch.yml; meta ships an identical copy.
 - insert:
     - id: preset-scriptor
@@ -25,6 +25,8 @@
             disabled: !!js process.platform !== 'win32'
           - id: tool-fs
             name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              applyPatch: false
           - id: tool-fs-search
             name: '@deepseek-ai/dsh-tool-fs-search'
             config:
@@ -87,14 +89,13 @@
             config:
               - id: tool-subagent-control
                 name: '@deepseek-ai/dsh-tool-subagent-control'
-              - id: tool-subagent-list-agents
-                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
               - id: tool-subagent
                 name: '@deepseek-ai/dsh-tool-subagent'
                 config:
                   provider: spawn
                   toolName: subagent
-                  modelSelectionSettings: true
+                  modelSelection: true
+                  modelDiscovery: true
               - id: tool-subagent-fork
                 name: '@deepseek-ai/dsh-tool-subagent'
                 config:

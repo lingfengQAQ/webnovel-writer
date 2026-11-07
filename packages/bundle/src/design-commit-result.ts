@@ -1,6 +1,7 @@
 import { AUTHOR_SAVE_SOURCE, EDITOR_REQUEST_SOURCE } from './message-sources'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionSeq } from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 import type { commitConfirmed } from '@webnovel/core'
 import type { ToolExecContext } from './novel-tools'
 

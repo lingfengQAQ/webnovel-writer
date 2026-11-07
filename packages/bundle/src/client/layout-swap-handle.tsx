@@ -1,7 +1,13 @@
 import * as React from 'react'
-import { useEffect, useRef, useState } from 'react'
-import { ArrowLeftRight } from 'lucide-react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { IconSwap } from './icons'
+import { HintTooltip } from './tooltip'
 import { applySwap, probeFrame, restoreSwap, swappable, type ProbeHit } from './layout-swap'
+import type { PreferencesStore } from './preferences'
+import { DEFAULT_WEBNOVEL_PREFERENCES } from '../preferences'
+
+const defaultSnapshot = { value: DEFAULT_WEBNOVEL_PREFERENCES, writable: false, busy: false }
+const defaultPreferences = { subscribe: (_listener: () => void) => () => {}, getSnapshot: () => defaultSnapshot }
 
 const FRAME_ATTRS = ['data-rightbar-collapsed', 'data-rightbar-fullscreen', 'data-rightbar-instant']
 
@@ -30,12 +36,15 @@ function shellsOf(rightbar: Element): Element[] {
 }
 
 /** Divider button. The overlay stays click-through; only this 22px control receives hits. */
-export function SwapHandle(): React.ReactElement | null {
+export function SwapHandle({ preferences = defaultPreferences }: { preferences?: Pick<PreferencesStore, 'getSnapshot' | 'subscribe'> } = {}): React.ReactElement | null {
+  const enabled = useSyncExternalStore(preferences.subscribe, preferences.getSnapshot).value.showLayoutSwap
   const [box, setBox] = useState<{ x: number; y: number } | null>(null)
   const [pressed, setPressed] = useState(false)
   const last = useRef('')
 
   useEffect(() => {
+    last.current = ''
+    if (!enabled) { applySwap(document, localStorage, false); setBox(null); setPressed(false); return }
     const ro = new ResizeObserver(() => { schedule() })
     const mo = new MutationObserver(() => { schedule() })
     let raf = 0
@@ -121,21 +130,20 @@ export function SwapHandle(): React.ReactElement | null {
       mo.disconnect()
       document.documentElement.removeAttribute('data-webnovel-swap')
     }
-  }, [])
+  }, [enabled])
 
-  if (!box) return null
+  if (!enabled || !box) return null
   const label = pressed ? '把对话移回中间' : '把对话移到右侧'
-  return <button
+  return <HintTooltip tip={label} side="right"><button
     type="button"
     className="nw-swap"
     style={{ left: box.x, top: box.y }}
     aria-label={label}
     aria-pressed={pressed}
-    title={label}
     onClick={() => {
       if (!applySwap(document, localStorage, !document.documentElement.hasAttribute('data-webnovel-swap'))) return
       last.current = ''
       setPressed(document.documentElement.hasAttribute('data-webnovel-swap'))
     }}
-  ><ArrowLeftRight size={13} strokeWidth={1.75} /></button>
+  ><IconSwap size={14} /></button></HintTooltip>
 }

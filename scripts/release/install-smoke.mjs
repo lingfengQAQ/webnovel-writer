@@ -152,10 +152,12 @@ try {
       const config = fullDump()
       assert.equal((config.match(/id: webnovel(?:\r?\n|$)/g) ?? []).length, 1)
       assert.equal((config.match(/id: webnovel-embeddings(?:\r?\n|$)/g) ?? []).length, 1)
+      assert.equal((config.match(/id: webnovel-graph(?:\r?\n|$)/g) ?? []).length, 1)
       log(`${label}-prepare`, run(prepare, [fullProfile, hostAnchor]))
       const fullReport = path.join(root, `${label}-isolation.json`)
       log(`${label}-loader`, execFileSync(process.execPath, ['--permission', '--allow-addons', ...permissionGrants('read'), ...permissionGrants('write'), `--allow-fs-read=${path.dirname(process.execPath)}`, script, fullProfile, hostAnchor, blocked, fullReport, '--embedding'], { cwd: workspace, env, encoding: 'utf8', windowsHide: true, timeout: 45000 }))
       assert.equal(JSON.parse(fs.readFileSync(fullReport, 'utf8')).embeddingLoaded, true)
+      assert.equal(JSON.parse(fs.readFileSync(fullReport, 'utf8')).graphLoaded, true)
     }
     log('add-meta', run(cli, ['plugin', '--profile', fullName, 'add', fullSpec, ...registryArgs]))
     verifyFull('full')

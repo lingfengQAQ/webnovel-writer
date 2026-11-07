@@ -11,15 +11,16 @@ const workflow = name => parse(fs.readFileSync(path.join(root, `.github/workflow
 
 test('both Windows runtimes keep complete, disjoint test shards and required policy checks', async () => {
   const ci = workflow('v8-ci')
-  assert.deepEqual(ci.jobs.quality.strategy.matrix.node, ['22.19.0', '24.15.0'])
-  assert.deepEqual(ci.jobs.quality.strategy.matrix.shard, [1, 2])
-  assert.deepEqual(ci.jobs.required.needs, ['policy', 'quality', 'portability'])
+  assert.deepEqual(ci.jobs.quality.strategy.matrix.node, ['24.9.0', '24.15.0'])
+  assert.deepEqual(ci.jobs.quality.strategy.matrix.shard, [1, 2, 3, 4])
+  assert.deepEqual(ci.jobs.required.needs, ['policy', 'quality', 'build', 'portability'])
+  assert.deepEqual(ci.jobs.build.strategy.matrix.node, ci.jobs.quality.strategy.matrix.node)
   assert.equal(ci.jobs.portability['runs-on'], 'ubuntu-latest')
   assert.equal(ci.jobs.macos['runs-on'], 'macos-latest')
   assert.equal(ci.jobs.macos['continue-on-error'], true)
-  for (const job of [ci.jobs.policy, ci.jobs.quality, ci.jobs.portability]) assert.notEqual(job['continue-on-error'], true)
+  for (const job of [ci.jobs.policy, ci.jobs.quality, ci.jobs.build, ci.jobs.portability]) assert.notEqual(job['continue-on-error'], true)
   const testStep = ci.jobs.quality.steps.find(step => step.run?.startsWith('pnpm test '))
-  assert.match(testStep.run, /--shard=\$\{\{ matrix.shard \}\}\/2/)
+  assert.match(testStep.run, /--shard=\$\{\{ matrix.shard \}\}\/4/)
   assert.equal(testStep.if, undefined)
   assert.notEqual(testStep['continue-on-error'], true)
   assert.ok(ci.jobs.policy.steps.some(step => step.run === 'pnpm check:public'))
@@ -45,7 +46,7 @@ test('both Windows runtimes keep complete, disjoint test shards and required pol
     assert.deepEqual(actual, expected.sort(), 'the root run must cover every package test')
     const shards = []
     for (const index of ci.jobs.quality.strategy.matrix.shard) {
-      vitest.config.shard = { index, count: 2 }
+      vitest.config.shard = { index, count: 4 }
       shards.push(await new BaseSequencer(vitest).shard(specifications))
     }
     const combined = shards.flat().map(spec => path.resolve(spec.moduleId))
@@ -55,14 +56,35 @@ test('both Windows runtimes keep complete, disjoint test shards and required pol
 })
 
 test('release runs one complete test suite and keeps installation before draft creation', () => {
-  const steps = workflow('v8-release').jobs.release.steps
+  const jobs = workflow('v8-release').jobs
+  const steps = jobs.release.steps
   const commands = steps.map(step => step.run ?? '')
-  assert.equal(commands.filter(command => /^pnpm test(?: |$)/.test(command)).length, 1)
+  assert.equal(commands.filter(command => /^pnpm test(?: |$)/.test(command)).length, 0)
+  assert.equal(jobs.release.needs, 'tests')
+  assert.deepEqual(jobs.tests.strategy.matrix.shard, [1, 2, 3, 4])
+  assert.match(jobs.tests.steps.find(step => step.run?.startsWith('pnpm test ')).run, /--shard=\$\{\{ matrix.shard \}\}\/4/)
+  assert.notEqual(jobs.tests['continue-on-error'], true)
   assert.ok(!commands.some(command => /pnpm -r.*\btest\b/.test(command)))
   const install = steps.findIndex(step => step.name === 'Install the exact release assets into a clean host')
   const draft = steps.findIndex(step => step.name === 'Create a draft; never replace an existing release')
   assert.ok(install >= 0 && draft > install)
   assert.match(steps[draft].run, /DSH Scriptor v\$\(\$manifest.version\)/)
+})
+
+test('only optional diagnostics may fail without hiding validation errors', () => {
+  for (const name of ['v8-ci', 'v8-release']) {
+    for (const [key, job] of Object.entries(workflow(name).jobs)) {
+      for (const step of job.steps ?? []) {
+        if (step['continue-on-error'] === true) assert.match(step.uses ?? '', /^actions\/upload-artifact@/, `${name}/${key}`)
+      }
+    }
+  }
+  const build = workflow('v8-ci').jobs.build.steps
+  assert.ok(build.some(step => step.run === 'pnpm build'))
+  assert.ok(build.some(step => step.run?.includes('pack-check')))
+  const notices = build.find(step => step.name === 'Generated notices are current')
+  assert.match(notices.run, /restoreNoticeLineEndings/)
+  assert.match(notices.run, /git diff --exit-code/)
 })
 
 test('required registry packages gate finalize, companion stays independent, verify cannot upload', () => {

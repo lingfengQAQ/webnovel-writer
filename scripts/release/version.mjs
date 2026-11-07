@@ -4,6 +4,25 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
 
 export const root = path.resolve(fileURLToPath(new URL('../../', import.meta.url)))
+/** Check current instructions while retaining explicit historical tables and screenshot provenance. */
+export function checkCurrentInstructions(text, file, version, hostVersion) {
+  let historical = false
+  for (const line of text.split(/\r?\n/)) {
+    if (/^## /.test(line)) historical = /历史/.test(line)
+    if (historical || /^>.*截图/.test(line) || /^\| \d/.test(line) || /^(?:> )?(?:图中|截图|历史截图|!\[)/.test(line)) continue
+    const plain = line.replace(/[*`]/g, '')
+    for (const match of plain.matchAll(/(?:Scriptor|当前主包|本次安装包都是|已安装列表显示|写作工作台和检索增强|升级到|更新到)\s*(\d+\.\d+\.\d+)/g)) {
+      assert.equal(match[1], version, `Stale current version instruction in ${file}`)
+    }
+    if (/(?:本版|配套|本次|本页适用|先安装|先升级|安装.*客户端)/.test(plain)) {
+      for (const match of plain.matchAll(/DSH\s+(\d+\.\d+\.\d+(?:-[\w.]+)?)/g)) {
+        assert.equal(match[1], hostVersion, `Stale current host instruction in ${file}`)
+      }
+    }
+    assert.doesNotMatch(plain, /(?:11\s*个写作技能|设置 → 模型 → (?:嵌入模型|检索辅助模型)|没有把它们搬到插件管理页)/, `Stale current UI instruction in ${file}`)
+  }
+}
+
 export function releaseVersion(directory = root, tag) {
   const bundle = JSON.parse(fs.readFileSync(path.join(directory, 'packages/bundle/package.json'), 'utf8'))
   const workspace = JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8'))
@@ -23,8 +42,10 @@ export function releaseVersion(directory = root, tag) {
   const documents = ['README.md', 'packages/bundle/README.md', 'packages/meta/README.md', 'packages/meta/RELEASE_NOTES.md',
     'packages/embedding-provider/README.md', 'packages/companion/README.md',
     ...fs.readdirSync(path.join(directory, 'docs/user')).filter(file => file.endsWith('.md')).map(file => `docs/user/${file}`)]
+  if (fs.existsSync(path.join(directory, 'docs/maintenance/cli-install.md'))) documents.push('docs/maintenance/cli-install.md')
   for (const file of documents) {
     const text = fs.readFileSync(path.join(directory, file), 'utf8')
+    checkCurrentInstructions(text, file, bundle.version, bundle.devDependencies['@deepseek-ai/dsh-llm'])
     for (const match of text.matchAll(/linfengqaqtat-dsh-scriptor-(?:(?:full|retrieval|companion)-)?([\d][\w.-]*)\.tgz/g)) {
       assert.equal(match[1], bundle.version, `Stale installation example in ${file}`)
     }

@@ -13,7 +13,7 @@ export {
 export { lineDiff, replayLines, type DiffLine } from './diff'
 export { followupReport, type FollowupReport } from './followup'
 export {
-  AuthorDocumentError, authorDocumentPath, authorReadOnlyReason, documentHash, saveAuthorDocument, readAuthorSave, retryAuthorSaveCommit,
+  AuthorDocumentError, authorDocumentPath, authorReadOnlyReason, validateAuthorRelativePath, documentHash, saveAuthorDocument, readAuthorSave, retryAuthorSaveCommit,
   type AuthorSaveInput, type AuthorSaveResult,
 } from './document'
 export {

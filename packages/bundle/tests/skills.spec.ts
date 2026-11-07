@@ -4,7 +4,7 @@ import * as path from 'node:path'
 import { parse as parseYaml } from 'yaml'
 
 /**
- * 主控+节点+聚合技能（全生命周期 11 份）。
+ * 主控+节点+聚合技能（全生命周期 12 份）。
  * 目录名即 frontmatter name（Agent Skills 规范硬要求：name 必须与父目录名一致）。
  */
 const EXPECTED_SKILLS: ReadonlyArray<{ readonly name: string; readonly 中文名: string }> = [
@@ -19,6 +19,7 @@ const EXPECTED_SKILLS: ReadonlyArray<{ readonly name: string; readonly 中文名
   { name: 'novel-settle', 中文名: '定稿沉淀' },
   { name: 'novel-export', 中文名: '最小导出' },
   { name: 'novel-analyze', 中文名: '参考小说拆解' },
+  { name: 'novel-maintenance', 中文名: '书仓维护' },
 ]
 
 const BLACKLIST = ['家位', '门控', '闭环', '抓手', '世代']
@@ -50,7 +51,7 @@ function readFrontmatter(text: string): Record<string, unknown> {
 }
 
 describe('聚合 skills 体系（渐进式披露与 Subagent 协同）', () => {
-  it('交付 11 份 SKILL.md，文件名一一对应', () => {
+  it('交付 12 份 SKILL.md，文件名一一对应', () => {
     for (const s of EXPECTED_SKILLS) {
       expect(fs.existsSync(skillPath(s.name)), `${s.name}/SKILL.md 应存在`).toBe(true)
     }
@@ -80,6 +81,30 @@ describe('聚合 skills 体系（渐进式披露与 Subagent 协同）', () => {
     expect(text).toContain('章内接续')
     expect(text).toContain('直接做下一步，不结束回合等一句「继续」')
     expect(text).toContain('不自动开下一章')
+  })
+
+  it('新章只读核对替换状态调用，恢复和改稿不机械改成开章', () => {
+    const director = readSkill('novel-director'), outline = readSkill('novel-outline'), revision = readSkill('novel-revision')
+    expect(director).toContain('novel_begin_chapter({ bookId })` 替换原状态查询')
+    expect(director).toContain('不再前后加调 `novel_get_story_status`')
+    expect(director).toContain('恢复同章、改稿和普通查询仍用 `novel_get_story_status`')
+    expect(director).toContain('正常开章不额外加载维护技能')
+    expect(director).toContain('不能用文件工具代修，不执行局部修复')
+    expect(director).not.toContain('开场先调 `novel_get_story_status`')
+    expect(outline).toContain('承接总控本次 `novel_begin_chapter` 返回的状态与检查结果')
+    expect(outline).toContain('同章恢复、已有细纲再确认和普通查询仍沿用原状态工具')
+    expect(revision).toContain('novel_get_story_status')
+    expect(revision).not.toContain('novel_begin_chapter')
+  })
+  it('维护按整仓预览批准，续办与语义/正文/记忆写入分别处理', () => {
+    const maintenance = readSkill('novel-maintenance')
+    for (const text of ['novel_preview_book_upgrade', 'novel_apply_book_upgrade', 'novel_resume_book_upgrade', '必须整仓可升级', 'Git 干净', '作者问答批准', 'novel_record_memory', 'novel_apply_retcon', 'novel-revision', 'before', 'after', 'effects']) expect(maintenance).toContain(text)
+    expect(maintenance).toContain('返回 `recovered` 只表示中断文件批次已恢复')
+    expect(maintenance).toContain('必须重新预览并请求新的升级批准')
+    expect(maintenance).toContain('不得覆盖作者后来的修改')
+    expect(maintenance).toContain('当前没有主动撤销工具')
+    expect(maintenance).toContain('改变线索兑现内容属于语义修改')
+    expect(maintenance).toContain('添加一条新决定仍是记忆写入')
   })
 
   it('中文路由标题对应可加载的 frontmatter name，不能用中文标题调用 skill', () => {

@@ -1,11 +1,11 @@
 {
   "docs/user/beginner.md": {
-    "ratio": 0.981,
+    "ratio": 0.982,
     "strong": 2,
     "format": 0
   },
   "docs/user/configuration.md": {
-    "ratio": 0.99,
+    "ratio": 0.991,
     "strong": 1,
     "format": 0
   },
@@ -41,22 +41,22 @@
   },
   "docs/user/result-cards.md": {
     "ratio": 1,
-    "strong": 0,
+    "strong": 1,
     "format": 0
   },
   "docs/user/troubleshooting.md": {
-    "ratio": 0.994,
-    "strong": 3,
+    "ratio": 0.996,
+    "strong": 5,
     "format": 0
   },
   "docs/user/ui-reference.md": {
-    "ratio": 0.99,
+    "ratio": 0.992,
     "strong": 1,
     "format": 0
   },
   "docs/user/upgrade-backup.md": {
-    "ratio": 0.967,
-    "strong": 0,
+    "ratio": 0.979,
+    "strong": 1,
     "format": 0
   },
   "docs/user/workflows.md": {
@@ -85,17 +85,17 @@
     "format": 0
   },
   "packages/bundle/skills/novel-design/SKILL.md": {
-    "ratio": 0.911,
-    "strong": 5,
+    "ratio": 0.944,
+    "strong": 7,
     "format": 0
   },
   "packages/bundle/skills/novel-director/SKILL.md": {
-    "ratio": 0.932,
-    "strong": 24,
-    "format": 9
+    "ratio": 0.945,
+    "strong": 25,
+    "format": 5
   },
   "packages/bundle/skills/novel-drafting/SKILL.md": {
-    "ratio": 0.983,
+    "ratio": 0.984,
     "strong": 14,
     "format": 0
   },
@@ -109,20 +109,30 @@
     "strong": 3,
     "format": 6
   },
+  "packages/bundle/skills/novel-maintenance/参考/书仓格式速查.md": {
+    "ratio": 1,
+    "strong": 8,
+    "format": 0
+  },
+  "packages/bundle/skills/novel-maintenance/SKILL.md": {
+    "ratio": 1,
+    "strong": 12,
+    "format": 0
+  },
   "packages/bundle/skills/novel-outline/SKILL.md": {
     "ratio": 1,
-    "strong": 7,
+    "strong": 9,
     "format": 0
   },
   "packages/bundle/skills/novel-polish/工序/1-表达清理.md": {
-    "ratio": 0.982,
-    "strong": 3,
-    "format": 14
+    "ratio": 0.987,
+    "strong": 6,
+    "format": 3
   },
   "packages/bundle/skills/novel-polish/工序/2-节奏与重塑.md": {
-    "ratio": 0.923,
-    "strong": 1,
-    "format": 24
+    "ratio": 1,
+    "strong": 3,
+    "format": 1
   },
   "packages/bundle/skills/novel-polish/工序/3-平台格式.md": {
     "ratio": 1,
@@ -130,8 +140,8 @@
     "format": 0
   },
   "packages/bundle/skills/novel-polish/SKILL.md": {
-    "ratio": 0.887,
-    "strong": 4,
+    "ratio": 0.918,
+    "strong": 5,
     "format": 1
   },
   "packages/bundle/skills/novel-review/底本/读者承诺审读.md": {
@@ -180,8 +190,8 @@
     "format": 0
   },
   "packages/bundle/skills/novel-review/SKILL.md": {
-    "ratio": 0.984,
-    "strong": 16,
+    "ratio": 0.985,
+    "strong": 17,
     "format": 0
   },
   "packages/bundle/skills/novel-revision/底本/改稿章程.md": {
@@ -191,22 +201,32 @@
   },
   "packages/bundle/skills/novel-revision/SKILL.md": {
     "ratio": 1,
-    "strong": 11,
+    "strong": 12,
     "format": 0
   },
   "packages/bundle/skills/novel-settle/底本/沉淀对账.md": {
     "ratio": 1,
-    "strong": 2,
+    "strong": 6,
     "format": 0
   },
   "packages/bundle/skills/novel-settle/SKILL.md": {
     "ratio": 1,
-    "strong": 10,
+    "strong": 11,
     "format": 0
   },
   "packages/bundle/src/approval-snapshot.ts": {
     "ratio": 1,
     "strong": 0,
+    "format": 0
+  },
+  "packages/bundle/src/book-upgrade-output.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
+  "packages/bundle/src/book-upgrade-tools.ts": {
+    "ratio": 0.963,
+    "strong": 2,
     "format": 0
   },
   "packages/bundle/src/design-commit-result.ts": {
@@ -229,6 +249,16 @@
     "strong": 0,
     "format": 0
   },
+  "packages/bundle/src/indexing/graph-manager.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
+  "packages/bundle/src/indexing/graph-storage.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
   "packages/bundle/src/indexing/manager.ts": {
     "ratio": 1,
     "strong": 0,
@@ -239,14 +269,19 @@
     "strong": 0,
     "format": 0
   },
+  "packages/bundle/src/maintenance-output.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
   "packages/bundle/src/native-write.ts": {
     "ratio": 1,
     "strong": 0,
     "format": 0
   },
   "packages/bundle/src/novel-tools.ts": {
-    "ratio": 0.982,
-    "strong": 30,
+    "ratio": 0.983,
+    "strong": 31,
     "format": 3
   },
   "packages/bundle/src/paths.ts": {
@@ -256,12 +291,22 @@
   },
   "packages/bundle/src/persona.ts": {
     "ratio": 1,
-    "strong": 3,
+    "strong": 4,
     "format": 0
   },
   "packages/bundle/src/persona.ts#prompt": {
     "ratio": 1,
-    "strong": 3,
+    "strong": 4,
+    "format": 0
+  },
+  "packages/bundle/src/preferences-host.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
+  "packages/bundle/src/preferences.ts": {
+    "ratio": 1,
+    "strong": 2,
     "format": 0
   },
   "packages/bundle/src/reference/host.ts": {
@@ -314,26 +359,6 @@
     "strong": 0,
     "format": 0
   },
-  "packages/bundle/src/worker-policy.ts": {
-    "ratio": 1,
-    "strong": 1,
-    "format": 0
-  },
-  "packages/bundle/src/writing-delegation.ts": {
-    "ratio": 1,
-    "strong": 1,
-    "format": 0
-  },
-  "packages/bundle/src/worker-policy.ts#prompt": {
-    "ratio": 1,
-    "strong": 1,
-    "format": 0
-  },
-  "packages/bundle/src/writing-delegation.ts#prompt": {
-    "ratio": 1,
-    "strong": 1,
-    "format": 0
-  },
   "packages/bundle/src/status-context.ts#prompt": {
     "ratio": 1,
     "strong": 0,
@@ -347,6 +372,21 @@
   "packages/bundle/src/study/editor-requests.ts#prompt": {
     "ratio": 0.978,
     "strong": 5,
+    "format": 0
+  },
+  "packages/bundle/src/study/graph-extraction.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
+  "packages/bundle/src/study/graph-reader.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
+  "packages/bundle/src/study/graph-source.ts": {
+    "ratio": 1,
+    "strong": 3,
     "format": 0
   },
   "packages/bundle/src/study/graph.ts": {
@@ -379,9 +419,29 @@
     "strong": 0,
     "format": 0
   },
+  "packages/bundle/src/worker-policy.ts": {
+    "ratio": 1,
+    "strong": 1,
+    "format": 0
+  },
+  "packages/bundle/src/worker-policy.ts#prompt": {
+    "ratio": 1,
+    "strong": 1,
+    "format": 0
+  },
   "packages/bundle/src/workspace.ts": {
     "ratio": 1,
     "strong": 2,
+    "format": 0
+  },
+  "packages/bundle/src/writing-delegation.ts": {
+    "ratio": 1,
+    "strong": 1,
+    "format": 0
+  },
+  "packages/bundle/src/writing-delegation.ts#prompt": {
+    "ratio": 1,
+    "strong": 1,
     "format": 0
   },
   "packages/core/src/arbitration/ask.ts": {
@@ -402,11 +462,11 @@
   "packages/core/src/assembly/assemble.ts": {
     "ratio": 1,
     "strong": 0,
-    "format": 5
+    "format": 4
   },
   "packages/core/src/assembly/read.ts": {
     "ratio": 1,
-    "strong": 1,
+    "strong": 2,
     "format": 0
   },
   "packages/core/src/assembly/sections.ts": {
@@ -526,7 +586,7 @@
   },
   "packages/core/src/design/worldbook.ts": {
     "ratio": 1,
-    "strong": 0,
+    "strong": 10,
     "format": 0
   },
   "packages/core/src/evidence/record.ts": {
@@ -569,9 +629,89 @@
     "strong": 1,
     "format": 0
   },
+  "packages/core/src/ledger/clue.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
   "packages/core/src/ledger/index.ts": {
     "ratio": 1,
     "strong": 0,
+    "format": 0
+  },
+  "packages/core/src/maintenance/inspection.ts": {
+    "ratio": 1,
+    "strong": 10,
+    "format": 0
+  },
+  "packages/core/src/maintenance/opening-git.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
+  "packages/core/src/maintenance/opening-materials.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
+  "packages/core/src/maintenance/opening.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
+  "packages/core/src/maintenance/snapshot.ts": {
+    "ratio": 1,
+    "strong": 3,
+    "format": 0
+  },
+  "packages/core/src/maintenance/upgrade-effects.ts": {
+    "ratio": 1,
+    "strong": 3,
+    "format": 0
+  },
+  "packages/core/src/maintenance/upgrade-plan.ts": {
+    "ratio": 1,
+    "strong": 2,
+    "format": 0
+  },
+  "packages/core/src/maintenance/upgrade-reader.ts": {
+    "ratio": 1,
+    "strong": 1,
+    "format": 0
+  },
+  "packages/core/src/maintenance/upgrade-receipt.ts": {
+    "ratio": 1,
+    "strong": 3,
+    "format": 0
+  },
+  "packages/core/src/maintenance/upgrade-recovery.ts": {
+    "ratio": 1,
+    "strong": 3,
+    "format": 0
+  },
+  "packages/core/src/maintenance/upgrade-rule-draft.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
+  "packages/core/src/maintenance/upgrade-rule-memory.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
+  "packages/core/src/maintenance/upgrade-rule-text.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
+  "packages/core/src/maintenance/upgrade-rules.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
+  "packages/core/src/maintenance/upgrade.ts": {
+    "ratio": 1,
+    "strong": 2,
     "format": 0
   },
   "packages/core/src/memory/author.ts": {
@@ -654,6 +794,26 @@
     "strong": 0,
     "format": 0
   },
+  "packages/core/src/repo/book-format.ts": {
+    "ratio": 1,
+    "strong": 2,
+    "format": 0
+  },
+  "packages/core/src/repo/book-memory-contract.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
+  "packages/core/src/repo/document-fields.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
+  "packages/core/src/repo/document-types.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
   "packages/core/src/repo/draft-length.ts": {
     "ratio": 1,
     "strong": 0,
@@ -669,9 +829,24 @@
     "strong": 2,
     "format": 0
   },
+  "packages/core/src/repo/ledger-field-contract.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
+  "packages/core/src/repo/legacy-memory-index-links.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
   "packages/core/src/repo/lock.ts": {
     "ratio": 1,
     "strong": 5,
+    "format": 0
+  },
+  "packages/core/src/repo/memory-index-links.ts": {
+    "ratio": 1,
+    "strong": 1,
     "format": 0
   },
   "packages/core/src/repo/paths.ts": {

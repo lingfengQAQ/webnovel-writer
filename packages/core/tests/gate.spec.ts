@@ -65,7 +65,7 @@ describe('文件门禁(不变量 4/5)', () => {
 
   it('内部收据路径在创建前后都受保护，Windows 别名不能绕过', () => {
     const root = mkBook()
-    for (const dir of ['.archive-receipts', '.author-edits']) {
+    for (const dir of ['.archive-receipts', '.maintenance-receipts', '.author-edits']) {
       const exact = path.join(root, '草稿区', dir, 'receipt.json')
       expect(decidePreExecute(root, write(exact)).kind).toBe('deny')
       for (const alias of [dir.toUpperCase(), dir.toUpperCase() + '.', dir.toUpperCase() + ' ']) {

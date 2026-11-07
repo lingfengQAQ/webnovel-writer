@@ -1,0 +1,54 @@
+export function checkLedgerSectionFields(section: LedgerSection): void {
+  const status = extractField(section.body, '状态')
+  const at = sectionLine.get(section) ?? null
+  const name = `条目「${section.kind}/${section.title}」`
+  const allowed = section.kind === '线索'
+    ? ['已埋', '已示', '已收', '已弃']
+    : ['进行中', '已兑现', '已结束', '已放弃']
+  if (status === null) parseFail('账本变更', at, `${name}缺少状态字段`, '在条目下加一行「- 状态：<合法值>」', allowed)
+  const plannedFrom = extractField(section.body, '计划来源')
+  if (plannedFrom === null) parseFail('账本变更', at, `${name}缺少计划来源字段`, '加一行「- 计划来源：<骨架/卷纲条目引用>」；本章新增的写「本章新增」')
+  const candidateType = extractField(section.body, '类型')
+  if (candidateType !== null && candidateType !== section.kind) {
+    parseFail('账本变更', at, `${name}类型「${candidateType}」与分类不一致`, `删掉「类型」行，或把它改成「${section.kind}」`)
+  }
+  if (!allowed.includes(status)) parseFail('账本变更', at, `${name}状态非法「${status}」`, '把「状态」改成合法值之一', allowed)
+  if (section.kind === '线索') {
+    if (extractField(section.body, '埋设点') === null) parseFail('账本变更', at, `线索「${section.title}」缺少埋设点`, '加一行「- 埋设点：第NNNN章」')
+    if (extractField(section.body, '预期兑现区间') === null) parseFail('账本变更', at, `线索「${section.title}」缺少预期兑现区间`, '加一行「- 预期兑现区间：第N-M章」')
+    if (status === '已弃' && extractField(section.body, '弃因') === null) parseFail('账本变更', at, `线索「${section.title}」已弃但缺少弃因`, '加一行「- 弃因：<一句话>」')
+  }
+}
+
+function ledgerBlock(section: LedgerSection, chapter: ChapterKey, source: string, decision: string): string {
+  checkLedgerSectionFields(section)
+  const status = extractField(section.body, '状态')!
+  const plannedFrom = extractField(section.body, '计划来源')!
+  const name = extractField(section.body, '名称') ?? section.title
+  const details = stripFields(section.body, ['名称', '类型', '状态', '计划来源', '实际落点', '来源', '裁决记录'])
+  return [
+    `## ${section.title}`,
+    `名称：${name}`,
+    `类型：${section.kind}`,
+    `状态：${status}`,
+    `计划来源：${plannedFrom}`,
+    `实际落点：${paths.定稿章(chapter.卷, chapter.章, chapter.章名)}`,
+    `来源：${source}`,
+    `裁决记录：${decision}`,
+    '### 正文',
+    details || '（无正文）',
+    '',
+  ].filter((line) => line !== '').join('\n') + '\n'
+}
+
+function extractField(body: string, field: string): string | null {
+  const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = body.match(new RegExp(`(?:^|\\n)\\s*(?:[-*]\\s*)?${escaped}[：:]\\s*(.+?)\\s*$`, 'm'))
+  return match?.[1]?.trim() || null
+}
+
+function stripFields(body: string, fields: readonly string[]): string {
+  const escaped = fields.map((field) => field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
+  const pattern = new RegExp(`^\\s*(?:[-*]\\s*)?(?:${escaped})[：:].*$`)
+  return body.split('\n').filter((line) => !pattern.test(line)).join('\n').trim()
+}

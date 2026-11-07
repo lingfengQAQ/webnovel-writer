@@ -2,15 +2,29 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { randomUUID } from 'node:crypto'
 import * as path from 'node:path'
-import type { ToolRuntime } from '@deepseek-ai/dsh-tools'
+import type { Context } from '@deepseek-ai/cordis'
+import type { ToolExecutionInput, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
+import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import { resolveInsideBook, type FileOp } from '@webnovel/core'
 import type { PreToolExec } from './gates'
 import type { ToolExecContext } from './novel-tools'
 
 export type NativeWrite = (root: string, op: FileOp, exec?: ToolExecContext) => Promise<void>
 
+export interface NativeToolRuntime { execute(input: ToolExecutionInput): Promise<ToolExecutionResult> }
+
+/** A composite keeps its nested identity while using the host's policy, observation and settlement stages. */
+export function nativeToolRuntime(ctx: Context): NativeToolRuntime {
+  const pipeline = new ToolExecutionPipeline(ctx)
+  return { async execute(input) {
+    const prepared = await pipeline.prepare(input)
+    const outcome = prepared.kind === 'dispatch' ? await pipeline.dispatch(prepared.exec) : prepared
+    return pipeline.complete(prepared.exec, outcome)
+  } }
+}
+
 /** One exact nested dispatch, scoped to this plugin's dependency lifetime. */
-export function createNativeWriteBridge(runtime: Pick<ToolRuntime, 'execute'>) {
+export function createNativeWriteBridge(runtime: NativeToolRuntime) {
   const pending = new Map<string, { parent: symbol; agent: unknown; file: string; content: string }>()
   let disposed = false
   return {
@@ -35,7 +49,7 @@ export function createNativeWriteBridge(runtime: Pick<ToolRuntime, 'execute'>) {
       try {
         const result = await runtime.execute({
           callId, rootCallId: brandString<ToolCallId>(exec.rootCallId ?? exec.callId ?? callId),
-          parent: exec.token, agent: exec.agent as Parameters<ToolRuntime['execute']>[0]['agent'],
+          parent: exec.token, agent: exec.agent as ToolExecutionInput['agent'],
           signal: exec.signal, name: 'write', arguments: { file_path: file, content: op.content },
         })
         for (const context of result.additionalContexts ?? []) exec.deferContext?.(context)

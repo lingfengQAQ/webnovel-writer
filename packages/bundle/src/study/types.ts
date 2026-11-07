@@ -3,6 +3,16 @@ export interface FileRef {
   readonly path: string
 }
 
+/** A verified snapshot location; from/to are UTF-16 offsets in the editor body, end-exclusive. */
+export interface SourceLocation {
+  readonly hash: string
+  readonly from: number
+  readonly to: number
+  readonly quote: string
+  readonly startLine: number
+  readonly endLine: number
+}
+
 export interface StudyBook {
   readonly absolutePath?: string
   readonly id: string
@@ -34,6 +44,8 @@ export interface StudyDocument {
   readonly name: string
   readonly absolutePath: string
   readonly body: string
+  /** Original normalized prefix hidden from the editable body, for source verification. */
+  readonly prefix?: string
   readonly hash: string
   readonly version: string | number | null
   readonly readOnly?: string

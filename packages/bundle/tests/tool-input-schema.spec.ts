@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { assertObjectJsonSchema, jsonSchemaToTs, validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
+import { assertObjectJsonSchema, validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
+import { jsonSchemaToTs } from '@deepseek-ai/dsh-tool-executor-ptc'
 import { createNovelTools } from '../src/novel-tools'
 import { createReferenceTools } from '../src/reference/tools'
 

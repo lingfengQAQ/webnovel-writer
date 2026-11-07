@@ -17,13 +17,20 @@ const manifest = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json
 const currentClient = fs.readFileSync(path.join(packageRoot, 'lib/client.js'), 'utf8').trim()
 const oldSources = new Map(['browser.tsx', 'styles.css'].map(name => [path.join(packageRoot, 'src/client', name),
   execFileSync('git', ['show', `${baselineRef}:packages/bundle/src/client/${name}`], { cwd: repo, encoding: 'utf8' })]))
+// The pre-fix sources still import lucide-react, which the client no longer ships; any glyph serves the geometry check.
+const oldIcons = [...new Set([...oldSources.values()].flatMap(source => [...source.matchAll(/import\s*\{([^}]*)\}\s*from\s*'lucide-react'/g)]
+  .flatMap(match => match[1].split(',').map(name => name.trim()).filter(Boolean))))]
 const baseline = await esbuild.build({
   entryPoints: [path.join(packageRoot, 'src/client/index.tsx')], write: false,
-  platform: 'browser', format: 'cjs', bundle: true, external: ['react'], target: 'chrome110',
+  platform: 'browser', format: 'cjs', bundle: true, external: ['react', '@deepseek-ai/dsh-client-ui-primitives'], target: 'chrome110',
   loader: { '.css': 'text' }, minify: true, legalComments: 'inline',
   banner: { js: `window.__ModuleLoader__.load({ id: ${JSON.stringify(manifest.name)}, factory: (require) => { const module = { exports: {} }; const exports = module.exports;` },
   footer: { js: 'return module.exports; } });' },
   plugins: [{ name: 'pre-fix-tree', setup(build) {
+    build.onResolve({ filter: /^lucide-react$/ }, () => ({ path: 'lucide-react', namespace: 'pre-fix-icons' }))
+    build.onLoad({ filter: /.*/, namespace: 'pre-fix-icons' }, () => ({ resolveDir: packageRoot, loader: 'js',
+      contents: "const React = require('react'); const icon = props => React.createElement('svg', { width: props.size, height: props.size, className: props.className, 'aria-hidden': true });\n"
+        + oldIcons.map(name => `exports.${name} = icon;`).join('\n') }))
     build.onLoad({ filter: /(?:browser\.tsx|styles\.css)$/ }, args => {
       const contents = oldSources.get(path.normalize(args.path))
       return contents === undefined ? undefined : { contents, loader: args.path.endsWith('.css') ? 'text' : 'tsx', resolveDir: path.dirname(args.path) }
@@ -239,17 +246,19 @@ try {
           guideCenter: list.getBoundingClientRect().x + parseFloat(guide.left) + .5,
           selectedCenter: selected.getBoundingClientRect().x + parseFloat(bar.left) + 1,
           animations: [...scroll.querySelectorAll('.nw-tree, .nw-chevron')].map(node => ({ animation: getComputedStyle(node).animationName, transition: getComputedStyle(node).transitionDuration })),
-          icons: [...list.querySelectorAll(':scope > li > button')].filter(node => !node.hasAttribute('aria-expanded')).map(node => ({ name: node.querySelector('.nw-file-name').textContent, icon: node.querySelector('svg').getAttribute('class') })),
+          icons: [...list.querySelectorAll(':scope > li > button')].filter(node => !node.hasAttribute('aria-expanded')).map(node => ({ name: node.querySelector('.nw-file-name').textContent, icon: node.querySelector('.nw-file-icon')?.dataset.fileType, drawn: !!node.querySelector('.nw-file-icon svg') })),
         }
       })
       assert.ok(style.heights.every(height => Math.abs(height - 28) < .5))
       assert.ok(Math.abs(style.parentCenter - style.guideCenter) < .6)
       assert.ok(Math.abs(style.selectedCenter - style.guideCenter) < .6)
       assert.ok(style.animations.every(value => value.animation === 'none' && value.transition.split(',').every(value => parseFloat(value) === 0)))
-      assert.match(style.icons.find(value => value.name === '读我.md').icon, /lucide-file-text/)
-      assert.match(style.icons.find(value => value.name === '笔记.txt').icon, /lucide-file-type/)
-      assert.match(style.icons.find(value => value.name === '配置.json').icon, /lucide-file-code/)
-      assert.equal(style.icons.find(value => value.name === '图片.png').icon, 'lucide lucide-file')
+      // DSH FileTypeIcon classification, the same glyphs its file sidebar draws.
+      assert.equal(style.icons.find(value => value.name === '读我.md').icon, 'markdown')
+      assert.equal(style.icons.find(value => value.name === '笔记.txt').icon, 'other')
+      assert.equal(style.icons.find(value => value.name === '配置.json').icon, 'json')
+      assert.equal(style.icons.find(value => value.name === '图片.png').icon, 'image')
+      assert.ok(style.icons.every(value => value.drawn))
       report[media] = style
       await shot(page, 'tree-' + media)
     }

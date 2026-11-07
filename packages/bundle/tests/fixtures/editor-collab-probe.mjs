@@ -181,8 +181,8 @@ try {
     const push = text => { if (text) log.push(text) }
     const see = node => {
       if (!node || node.nodeType !== 1) return
-      if (node.matches?.('.ed-toast')) push(node.textContent || '')
-      for (const toast of node.querySelectorAll?.('.ed-toast') ?? []) push(toast.textContent || '')
+      // DSH Toast mounts each banner as a fresh role="alert" child of the body.
+      if (node.parentElement === document.body && node.getAttribute('role') === 'alert') push(node.textContent || '')
     }
     new MutationObserver(records => {
       for (const record of records) for (const node of record.addedNodes) see(node)

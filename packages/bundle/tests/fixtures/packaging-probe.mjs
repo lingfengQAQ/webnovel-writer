@@ -24,7 +24,7 @@ export async function apply(ctx, config) {
     assert.equal(tools.length, config.installed ? 30 : 0)
     assert.ok(!tools.some(tool => tool.name === 'novel_seed_min_design'), 'production install must not expose the test-only seed')
     const skills = (await ctx.skills.list({ cwd: config.workspace, scope: agent })).filter(skill => skill.provider === 'webnovel-bundled')
-    assert.equal(skills.length, config.installed ? 11 : 0)
+    assert.equal(skills.length, config.installed ? 12 : 0)
     report.tools = tools.length
     report.skills = []
     if (config.installed) {
@@ -45,7 +45,8 @@ export async function apply(ctx, config) {
         assert.ok(fs.realpathSync(skill.resourceBase.path).startsWith(fs.realpathSync(path.join(packageRoot, 'skills'))))
         report.skills.push({ name: skill.name, resource: path.relative(packageRoot, skill.resourceBase.path).replaceAll('\\', '/'), chars: skill.content.length })
       }
-      const result = await ctx.tools.execute({ agent, name: 'novel_select_book', arguments: { bookId: 'packaging-book' }, signal: new AbortController().signal, callId: 'packaging-select' })
+      const batch = await ctx.tools.execute({ agent, signal: new AbortController().signal, calls: [{ type: 'tool-call', name: 'novel_select_book', arguments: JSON.stringify({ bookId: 'packaging-book' }), id: 'packaging-select' }] })
+      const result = batch.results[0].result
       assert.equal(result.value.ok, true, JSON.stringify(result))
       report.selectBook = true
     }

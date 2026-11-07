@@ -7,11 +7,14 @@ import {
   computeMaterials,
   confirmOutline,
   deriveChapterFacts,
+  LEDGER_NAMES,
+  planSettlement,
   readManifest,
   scanChapter,
   seedMinDesign,
   serializeDocument,
   writeCandidate,
+  writeBatchAtomic,
   writeRecentWindow,
   材料包十段,
 } from '../src/index'
@@ -54,6 +57,29 @@ function confirmReady(root: string): void {
 }
 
 describe('写作备料(格式规格 §9.2)', () => {
+  it('命中最近条数之外的结构化时间线事件，不因字段搬位丢失备料', () => {
+    const root = mkBook()
+    confirmReady(root)
+    fs.mkdirSync(path.join(root, '账本'), { recursive: true })
+    for (const name of LEDGER_NAMES) fs.writeFileSync(path.join(root, paths.账本(name)), `# ${name}\n`, 'utf8')
+    const pkg = path.join(root, '草稿区', '定稿准备', 'timeline-material')
+    fs.mkdirSync(pkg, { recursive: true })
+    const candidate = Array.from({ length: 25 }, (_, i) => `## 记录${i}\n事件：${i === 0 ? '城门口传来铜铃声。' : `另一个事件${i}。`}\n时点：未知\n普通说明。\n`).join('\n')
+    fs.writeFileSync(path.join(pkg, '时间线变更.md'), candidate, 'utf8')
+    const plan = planSettlement(root, pkg, { 章节: key, 批准: true, 裁决记录: '作者确认' }, key)
+    expect(plan.ok, !plan.ok ? plan.reason : '').toBe(true)
+    if (!plan.ok) throw new Error(plan.reason)
+    writeBatchAtomic(root, plan.ops)
+    const original = fs.readFileSync(path.join(root, paths.账本('时间线')), 'utf8')
+    const material = computeMaterials(root, key)
+    expect(material.ok).toBe(true)
+    const content = material.文件?.find(file => file.relPath.includes('当前事实与连续性'))?.content ?? ''
+    expect(content).toContain('## 记录0\n')
+    expect(content).toContain('事件：城门口传来铜铃声。')
+    expect(content).toContain('时点：未知')
+    expect(fs.readFileSync(path.join(root, paths.账本('时间线')), 'utf8')).toBe(original)
+  })
+
   it('no confirmed outline → assemble fails / 段有缺', () => {
     const root = mkBook()
     const r = assembleMaterials(root, key)

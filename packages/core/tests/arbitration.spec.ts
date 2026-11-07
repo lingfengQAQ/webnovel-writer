@@ -17,15 +17,25 @@ import type {
 } from '@deepseek-ai/dsh-user-questions/types'
 
 describe('不可逆清单(插件规格 §6)', () => {
-  it('五种不可逆动作都在清单内且能生成提问', () => {
+  it('已有裁决与独立维护种类都在清单内且能生成提问', () => {
     expect([...IRREVERSIBLE_KINDS]).toEqual([
       '定稿入档', '世界书条目转正', '记忆入记', '吃书补偿', '规则来源声明',
+      '书仓升级', '书仓升级续办',
     ])
     for (const kind of IRREVERSIBLE_KINDS) {
       const req = buildAskRequest(kind, { 范围: '卷01/初见', 摘要: '测试' })
       expect(req.questions).toHaveLength(1)
       expect(req.questions[0]?.id).toBe(kind)
       expect(req.questions[0]?.options?.map((o) => o.label)).toEqual(['批准', '退回'])
+    }
+  })
+  it('维护批准明确执行原计划，不借用文学事实生效文案', () => {
+    for (const kind of ['书仓升级', '书仓升级续办'] as const) {
+      const question = buildAskRequest(kind, { 范围: '书甲', 摘要: '指纹 abc 与差异' }).questions[0]!
+      expect(question.detail).toContain('指纹 abc 与差异')
+      expect(question.detail).toBe('书甲\n\n指纹 abc 与差异')
+      expect(question.options?.[0]?.description).not.toContain('不可逆动作生效')
+      expect(interpretAnswer(kind, { id: '定稿入档', selected: ['批准'] }).ok).toBe(false)
     }
   })
 })

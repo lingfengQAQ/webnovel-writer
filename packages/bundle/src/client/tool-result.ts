@@ -1,11 +1,13 @@
 import type { ToolCallPhaseProps } from '@deepseek-ai/dsh-client-ui-tool/client'
-import { isStoppedError } from '../study/workflow-types'
+import { isStoppedError, maintenanceNeedsAttention } from '../study/workflow-types'
 
 export const novelToolTitles: Readonly<Record<string, string>> = {
   novel_reference_source: '管理参考小说', novel_reference_analyze: '渐进拆解小说',
   novel_reference_query: '查找参考机制', novel_reference_report: '保存拆书成果',
   novel_select_book: '选择作品', novel_create_book: '创建作品', novel_update_contract: '更新作品契约',
   novel_get_story_status: '查看写作状态', novel_search_finalized: '检索定稿', novel_index_manage: '管理检索索引',
+  novel_check_book: '检查书仓', novel_begin_chapter: '开章前核对',
+  novel_preview_book_upgrade: '预览书仓升级', novel_apply_book_upgrade: '执行书仓升级', novel_resume_book_upgrade: '续办书仓升级',
   novel_prepare_pack: '准备定稿包', novel_settle_chapter: '定稿入档', novel_new_outline_draft: '准备大纲草案',
   novel_confirm_outline: '确认大纲', novel_update_skeleton: '更新故事骨架', novel_update_volume_layout: '更新分卷布局',
   novel_roll_window: '更新近期窗口', novel_confirm_worldbook_entry: '确认世界书', novel_confirm_volume_outline: '确认卷纲',
@@ -44,6 +46,7 @@ export function novelResultModel(props: ToolCallPhaseProps): NovelResultModel {
   let value: unknown
   try { value = JSON.parse(raw) } catch { return result }
   if (!object(value) || typeof value.ok !== 'boolean') return result
+  if (value.maintenance === 'book-upgrade') return bookUpgradeResultModel(result, value)
   if (!value.ok || value.commitState === 'failed') return { ...result, state: 'error', label: '未完成', summary: text(value.reason) ?? text(value.message) ?? '本次操作未完成，请查看详情' }
   const facts: { label: string; value: string }[] = []
   if (value.scope === 'book' || value.scope === 'author') facts.push({ label: '记忆归属', value: value.scope === 'book' ? '本书' : '作者' })
@@ -52,6 +55,13 @@ export function novelResultModel(props: ToolCallPhaseProps): NovelResultModel {
     if (typeof value[key] === 'string' || typeof value[key] === 'number') facts.push({ label, value: String(value[key]) })
   }
   let pending = false
+  const inspection = object(value.书仓检查) ? value.书仓检查 : undefined
+  const opening = object(value.开章核对) ? value.开章核对 : undefined
+  if (opening && text(opening.状态)) facts.push({ label: '开章核对', value: opening.状态 as string })
+  if (inspection && text(inspection.状态)) facts.push({ label: '书仓检查', value: inspection.状态 as string })
+  if (inspection && text(inspection.结论)) facts.push({ label: '受检结论', value: inspection.结论 as string })
+  if (inspection && Array.isArray(inspection.未检范围)) facts.push({ label: '未检项', value: String(inspection.未检范围.length) })
+  pending ||= maintenanceNeedsAttention(value)
   if (typeof value.verifiedBatches === 'number') facts.push({ label: '已校验批次', value: String(value.verifiedBatches) })
   if (typeof value.fullBookComplete === 'boolean') facts.push({ label: '报告范围', value: value.fullBookComplete ? '全书可读正文' : '局部拆解' })
   if (typeof value.selectedRangeComplete === 'boolean') facts.push({ label: '选定范围', value: value.selectedRangeComplete ? '已完成' : '尚未完成' })
@@ -76,9 +86,36 @@ export function novelResultModel(props: ToolCallPhaseProps): NovelResultModel {
     if (!commitLabels[value.commitState]) return result
     facts.push({ label: '提交', value: commitLabels[value.commitState]! })
   }
-  return { ...result, facts, ...(text(value.渲染) ? { report: value.渲染 as string } : {}), state: pending ? 'attention' : 'success', label: pending ? '有待处理项' : value.commitState === 'unchanged' ? '无变化' : '操作成功',
+  return { ...result, facts, ...(text(value.渲染) ? { report: value.渲染 as string } : {}), state: pending ? 'attention' : 'success', label: pending ? '有待处理项' : inspection ? '检查完成' : value.commitState === 'unchanged' ? '无变化' : '操作成功',
     summary: text(value.reason) ?? text(value.message) ?? (pending ? '本次操作已返回，仍有事项需要核对' : '本次操作已完成，可展开查看结果'),
   }
+}
+
+function bookUpgradeResultModel(base: NovelResultModel, value: Record<string, unknown>): NovelResultModel {
+  const facts: { label: string; value: string }[] = []
+  for (const [key, label] of [['inspectionBefore', '原书检查'], ['inspectionAfter', '拟变换后检查（未写入）']] as const) {
+    const inspection = value[key]
+    if (object(inspection) && text(inspection.结论)) facts.push({ label, value: inspection.结论 as string })
+  }
+  if (Array.isArray(value.expectedStaleIssues) && value.expectedStaleIssues.length) facts.push({ label: '预计过期材料', value: String(value.expectedStaleIssues.length) })
+  for (const [key, label] of [['bookId', '书 ID'], ['operationId', '操作编号'], ['commit', '提交']] as const) {
+    if (text(value[key])) facts.push({ label, value: value[key] as string })
+  }
+  for (const [key, label] of [['activeWork', '保留未完工件'], ['changes', '拟变更文件'], ['effects', '受影响工件'], ['issues', '阻断项'], ['paths', '原批次文件']] as const) {
+    if (Array.isArray(value[key])) facts.push({ label, value: String(value[key].length) })
+  }
+  const state = text(value.state)
+  if (!value.ok) return { ...base, facts, state: 'error', label: state === 'written-pending-commit' ? '已写待提交' : '未完成', summary: text(value.reason) ?? '本次书仓升级未完成，请核对已有结果。' }
+  const labels: Readonly<Record<string, { state: NovelResultModel['state']; label: string; summary: string }>> = {
+    ready: { state: 'attention', label: '待批准', summary: '整仓预览已生成，尚未写入。请核对文件差异和受影响工件。' },
+    unchanged: { state: 'success', label: '无需升级', summary: '当前受支持范围无须升级，本次没有写入或新增提交。' },
+    blocked: { state: 'attention', label: '暂不可升级', summary: '整仓条件尚未满足，请核对阻断项。' },
+    committed: { state: 'success', label: '升级已提交', summary: '本次整仓升级的文件与格式标记已提交。' },
+    'already-committed': { state: 'success', label: '已核实原提交', summary: '原升级已有可信提交，本次没有重复写入。' },
+    recovered: { state: 'attention', label: '已恢复，待重新预览', summary: '原中断批次已恢复。继续升级前需重新预览并请求作者批准。' },
+    'written-pending-commit': { state: 'error', label: '已写待提交', summary: '文件已写入，提交尚未完成。请按原操作编号续办。' },
+  }
+  return state !== undefined && labels[state] ? { ...base, facts, ...labels[state]! } : { ...base, facts }
 }
 
 export type EditorDecisionLabel = 'accepted' | 'rejected' | 'reopened' | 'cancelled' | 'expired'

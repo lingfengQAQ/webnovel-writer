@@ -1,0 +1,5 @@
+.nw-preferences { display: flex; flex-direction: column; gap: 16px; color: var(--dsw-alias-label-primary); font-family: var(--dsw-font-family); }
+.nw-preferences-title { margin: 0; font-size: 18px; line-height: 24px; }
+.nw-preference-group { display: flex; flex-direction: column; gap: 14px; padding: 20px; border: .5px solid var(--dsw-alias-settings-card-stroke); border-radius: var(--dsw-radius-xl); background: var(--dsw-alias-settings-card-fill); scroll-margin-block: 20px; }
+.nw-preference-title { margin: 0; font-size: 16px; line-height: 24px; }
+.nw-preferences-note { margin: 0; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-secondary); }

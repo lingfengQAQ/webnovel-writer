@@ -1,6 +1,6 @@
 {
   "name": "@linfengqaqtat/dsh-scriptor-companion",
-  "version": "8.3.2",
+  "version": "8.4.0",
   "homepage": "https://lingfengqaq.github.io/webnovel-writer/",
   "description": "鲸鱼娘桌宠：DSH 窗口内的写作陪伴",
   "type": "module",
@@ -39,18 +39,18 @@
     "pack-check": "node scripts/pack-check.mjs"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "4.0.5",
+    "@deepseek-ai/cordis": "^4.1.0",
     "react": "18.3.1"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.5",
-    "@deepseek-ai/dsh-api-session-controller": "0.2.1-rc.3",
-    "@deepseek-ai/dsh-client-connection": "0.2.1-rc.3",
-    "@deepseek-ai/dsh-client-ui-layout": "0.2.1-rc.3",
-    "@deepseek-ai/dsh-client-ui-session": "0.2.1-rc.3",
-    "@deepseek-ai/dsh-client-ui-settings": "0.2.1-rc.3",
-    "@deepseek-ai/dsh-client-ui-slots": "0.2.1-rc.3",
-    "@deepseek-ai/dsh-client-ui-renderer": "0.2.1-rc.3",
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-api-session-controller": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-connection": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-layout": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-session": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-settings": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.2.2-rc.1",
     "@types/react": "18.3.12",
     "@types/node": "^22.0.0",
     "react": "18.3.1",
@@ -58,8 +58,8 @@
     "typescript": "^5.5.0"
   },
   "engines": {
-    "node": "^22.19.0 || ^24.0.0",
-    "dsh": "0.2.1-rc.3"
+    "node": ">=24.9.0",
+    "dsh": ">=0.2.2-rc.1 <0.3.0-0"
   },
   "license": "GPL-3.0-only",
   "publishConfig": {

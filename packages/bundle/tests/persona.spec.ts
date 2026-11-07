@@ -6,7 +6,10 @@ describe('persona 轻适配内容（只做 dsh 原生身份的小说场景适配
     expect(personaText).toContain('Webnovel Writer 写作工作台')
     expect(personaText).toContain('工作台总控')
     expect(personaText).toContain('skill 工具，参数为 {"name":"novel-director"}')
-    expect(personaText).toContain('novel_get_story_status') // 状态校准第一律
+    expect(personaText).toContain('作者明确开始新章时，用 novel_begin_chapter')
+    expect(personaText).toContain('这次不再加调 novel_get_story_status')
+    expect(personaText).toContain('恢复、改稿或普通查询，用 novel_get_story_status')
+    expect(personaText).toContain('主动查书仓格式，用 novel_check_book')
     expect(personaText).toContain('子代理') // 创作分工
     expect(personaText).toContain('建议稿') // 规划提案
     expect(personaText).toContain('草稿区')

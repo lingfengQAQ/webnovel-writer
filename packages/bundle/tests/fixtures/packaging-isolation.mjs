@@ -22,6 +22,7 @@ const config = [
   { id: 'agent', name: pathToFileURL(require.resolve('@deepseek-ai/dsh-agent')).href },
   { id: 'system-prompt', name: pathToFileURL(require.resolve('@deepseek-ai/dsh-system-prompt')).href },
   { id: 'tools', name: pathToFileURL(require.resolve('@deepseek-ai/dsh-tools')).href },
+  { id: 'tool-executor-native', name: pathToFileURL(require.resolve('@deepseek-ai/dsh-tool-executor-native')).href },
   { id: 'fs', name: pathToFileURL(require.resolve('@deepseek-ai/dsh-fs-local')).href, config: { cwd: process.cwd() } },
   { id: 'working-directory', name: pathToFileURL(require.resolve('@deepseek-ai/dsh-working-directory')).href },
   { id: 'skills', name: pathToFileURL(require.resolve('@deepseek-ai/dsh-skill')).href },
@@ -34,7 +35,7 @@ const config = [
 if (checkEmbedding) {
   config.push({ id: 'credentials', name: pathToFileURL(require.resolve('@deepseek-ai/dsh-credentials-local')).href,
     config: { path: path.join(path.dirname(reportPath), 'full-credentials.yaml'), watch: false } })
-  for (const [id, subpath] of [['webnovel-embeddings', ''], ['webnovel-scenes', '/scenes'], ['webnovel-reranking', '/reranking']]) {
+  for (const [id, subpath] of [['webnovel-embeddings', ''], ['webnovel-scenes', '/scenes'], ['webnovel-reranking', '/reranking'], ['webnovel-graph', '/graph']]) {
     config.push({ id, name: pathToFileURL(packageRequire.resolve(`@linfengqaqtat/dsh-scriptor-retrieval${subpath}`)).href })
   }
 }
@@ -49,7 +50,7 @@ try {
     setup: async scope => { await scope.get('agentPresets').mount(scope, 'scriptor') },
   })
   const skills = await ctx.skills.list({ cwd: process.cwd(), scope: writing.agent })
-  assert.equal(skills.length, 11)
+  assert.equal(skills.length, 12)
   for (const skill of skills) {
     const loaded = await ctx.skills.get(skill.name, { cwd: process.cwd(), scope: writing.agent })
     assert.equal(loaded.provider, 'webnovel-bundled')
@@ -57,10 +58,10 @@ try {
     assert.ok(loaded.content.length > 100)
   }
   if (checkEmbedding) {
-    for (const service of ['embeddings', 'sceneSegmentation', 'reranking']) assert.ok(ctx.get(service), `Full package must load ${service}`)
+    for (const service of ['embeddings', 'sceneSegmentation', 'reranking', 'graphExtraction']) assert.ok(ctx.get(service), `Full package must load ${service}`)
   }
-  fs.writeFileSync(reportPath, JSON.stringify({ ok: true, sourceReadDenied: true, trustedNativeAddons: true, actualLoader: true, skills: skills.length, embeddingLoaded: checkEmbedding && !!ctx.get('embeddings') }, null, 2) + '\n')
-  console.log('Source-blocked installed Host Loader: 11 skills passed')
+  fs.writeFileSync(reportPath, JSON.stringify({ ok: true, sourceReadDenied: true, trustedNativeAddons: true, actualLoader: true, skills: skills.length, embeddingLoaded: checkEmbedding && !!ctx.get('embeddings'), graphLoaded: checkEmbedding && !!ctx.get('graphExtraction') }, null, 2) + '\n')
+  console.log('Source-blocked installed Host Loader: 12 skills passed')
   await writing.dispose()
   assert.equal((await ctx.skills.list({ cwd: process.cwd() })).length, 0)
 } finally { await ctx.fiber.dispose() }

@@ -1,3 +1,4 @@
+import { dshBaseline } from '../dsh-compatibility.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -10,6 +11,7 @@ import { root } from '../version.mjs'
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex')
 const version = '8.0.0'
+const engines = { dsh: dshBaseline.compatibility.range, node: dshBaseline.compatibility.nodeRange }
 const publishConfig = { access: 'public', tag: 'latest', registry: 'https://registry.npmjs.org/' }
 function archive(files) {
   const rows = Object.entries(files).map(([name, text]) => {
@@ -34,12 +36,12 @@ function writeAssets(directory) {
   ]
   const packages = entries.map(([name, v, tarball]) => ({ name, version: v, tarball }))
   for (const [index, item] of packages.entries()) {
-    const manifest = { name: item.name, version: item.version, license: 'GPL-3.0-only', publishConfig,
+    const manifest = { name: item.name, version: item.version, license: 'GPL-3.0-only', publishConfig, engines,
       repository: { url: 'https://github.com/lingfengQAQ/webnovel-writer.git' } }
     const files = { 'package.json': manifest, LICENSE: 'GNU GENERAL PUBLIC LICENSE', 'README.md': 'Example' }
     if (index === 1) {
-      manifest.exports = { './scenes': './lib/scenes.js', './reranking': './lib/reranking.js' }
-      Object.assign(files, { 'lib/index.js': '', 'lib/scenes.js': '', 'lib/reranking.js': '', 'lib/client.js': `window.__ModuleLoader__.load({ id: ${JSON.stringify(item.name)},`, 'cordis.patch.yml': fs.readFileSync(path.join(root, 'packages/embedding-provider/cordis.patch.yml'), 'utf8'), 'MODEL_DIMENSIONS.md': '', 'THIRD_PARTY_NOTICES.md': 'Original notices' })
+      manifest.exports = { './scenes': './lib/scenes.js', './reranking': './lib/reranking.js', './graph': './lib/graph.js' }
+      Object.assign(files, { 'lib/index.js': '', 'lib/scenes.js': '', 'lib/reranking.js': '', 'lib/graph.js': '', 'lib/client.js': `window.__ModuleLoader__.load({ id: ${JSON.stringify(item.name)},`, 'cordis.patch.yml': fs.readFileSync(path.join(root, 'packages/embedding-provider/cordis.patch.yml'), 'utf8'), 'MODEL_DIMENSIONS.md': '', 'THIRD_PARTY_NOTICES.md': 'Original notices' })
     }
     if (index === 2) {
       manifest.dependencies = { '@linfengqaqtat/dsh-scriptor': version, '@linfengqaqtat/dsh-scriptor-retrieval': version }

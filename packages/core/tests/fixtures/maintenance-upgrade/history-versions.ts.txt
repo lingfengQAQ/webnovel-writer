@@ -1,0 +1,34 @@
+export function extractVersionFields(fields: Readonly<Record<string, unknown>>): {
+  readonly 版本: number | null
+  readonly 父版本: number | null
+  readonly 生成模块: string | null
+  readonly 来源快照: unknown
+} {
+  return {
+    版本: typeof fields['版本'] === 'number' ? fields['版本'] : null,
+    父版本: typeof fields['父版本'] === 'number' ? fields['父版本'] : null,
+    生成模块: typeof fields['生成模块'] === 'string' ? fields['生成模块'] : null,
+    来源快照: fields['来源快照'] ?? null,
+  }
+}
+
+export function applyVersionFields(
+  fields: Readonly<Record<string, unknown>>,
+  v: VersionProtocol,
+): Record<string, unknown> {
+  return {
+    ...fields,
+    版本: v.版本,
+    父版本: v.父版本,
+    生成模块: v.生成模块,
+    来源快照: v.来源快照,
+  }
+}
+
+export function initialVersion(生成模块: string, 来源快照: unknown = null): VersionProtocol {
+  return { 版本: 1, 父版本: null, 生成模块, 来源快照 }
+}
+
+export function bumpVersion(parentVersion: number, 生成模块: string, 来源快照: unknown = null): VersionProtocol {
+  return { 版本: parentVersion + 1, 父版本: parentVersion, 生成模块, 来源快照 }
+}

@@ -9,6 +9,7 @@ import type { ReferenceHost } from './reference/host'
  * - novel_update_contract: 安全更新作品契约分部（防 N1 抹除）；分部「已确认」时随确认产生 design: 提交
  * - novel_seed_min_design: 测试/走查专用（默认不注册，见 NOVEL_TEST_TOOL_NAMES）：注入占位设计骨架；成功后整批一次 design: 提交
  * - novel_get_story_status: 获取全书/章节真源推导状态（N4）
+ * - novel_check_book / novel_begin_chapter: 主动只读检查 / 新章书级边界核对，不写入或迁移
  * - novel_select_book: 显式切换当前会话正在写的书
  * - novel_prepare_pack: 组装待定稿包七件（定稿准备，呈作者裁决前）
  * - novel_settle_chapter: 作者批准后定稿原子沉淀（ch: 单次 Git 提交，不变量 1/6）
@@ -27,10 +28,13 @@ import type { ReferenceHost } from './reference/host'
  * - novel_editor_suggest: 回复书房编辑器请求，只把结果交回编辑器，不写文件
  *
  * 提交点纪律（拍板 1/7）：提交由写入器服务（受信代码）执行，模型不碰 git；
- * 裁决点仍只有定稿入档与吃书补偿，设计侧确认走 design:（幂等可重放）。
+ * 定稿入档与吃书补偿沿原裁决；独立书仓升级批准绑定精确计划，设计侧确认走 design:。
  */
 
 import { captureApprovalFiles } from './approval-snapshot'
+import { readStoryStatus } from './story-status'
+import { MAINTENANCE_OUTPUT, MAINTENANCE_PARAMETERS } from './maintenance-output'
+import { createBookUpgradeTools } from './book-upgrade-tools'
 import { failureFrom, expectedFailure, FAILURE_FIELDS, normalizeFailure, toolFailure } from './tool-failure'
 import * as fs from 'node:fs'
 import * as nodePath from 'node:path'
@@ -41,7 +45,6 @@ import { acceptEditorSuggestion, type EditorRequestHub } from './study/editor-re
 import {
   activeChapterLine,
   assertWritableTargets,
-  diagnoseBookRuntime,
   applyVersionFields,
   archiveRetconRequest,
   bumpVersion,
@@ -51,13 +54,14 @@ import {
   commitConfirmed,
   confirmOutline,
   createBook,
-  deriveDesign,
-  listResumable,
+  inspectBookDocuments,
+  inspectChapterOpening,
+  type BookInspection,
+  type ChapterOpeningInspection,
   listAuthorMemory,
   listBookMemoryEntries,
   writeBookMemory,
   authorMemoryWriteRoot,
-  listConfirmedEmpty,
   parseWindow,
   paths,
   preparePack,
@@ -66,8 +70,6 @@ import {
   reconcileLedger,
   renderBookProgress,
   reportDraftReadiness,
-  renderStatusCard,
-  scanDesign,
   scanDesignDetail,
   selectCurrentVolume,
   searchFinalized,
@@ -82,6 +84,10 @@ import {
   writeCandidate,
   prepareContract,
   prepareEntry,
+  WORLDBOOK_INPUT_FIELDS,
+  WORLDBOOK_NATURES,
+  WORLDBOOK_STATES,
+  type WorldbookEntryInput,
   ensureModulesDeclared,
   preparePlanTimeline,
   prepareRecentWindow,
@@ -219,6 +225,15 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
     const bookRoot = deps.bookRootOfBookId(bookId, sessionContext?.agent)
     if (!bookRoot) return { ok: false, reason: `书id不存在或不唯一，未能定位书仓路径（bookId: ${bookId}）——若在工作台多工作区环境，请确认会话已附上书所在的工作范围` }
     return { ok: true, bookRoot }
+  }
+
+  const resolveInspectionBook = (args: Record<string, unknown>, sessionContext?: ToolExecContext) => {
+    if (sessionContext?.signal?.aborted) return cancelledInspection()
+    const errors = validateJsonSchemaValue(MAINTENANCE_PARAMETERS, args)
+    if (errors.length > 0 || typeof args['bookId'] !== 'string' || args['bookId'].trim() === '') {
+      return toolFailure('invalid-argument', '检查只接受非空 bookId，不接受路径、章号、批准或迁移参数。')
+    }
+    try { return resolveBook(args, sessionContext) } catch (error) { return failureFrom(error, '书仓身份无法核实：') }
   }
 
   /** 章键参数校验（真机 D-004：漏传 卷 时 NaN 路径把错误报成「无待审稿」）。 */
@@ -527,29 +542,68 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
         // resolveBook 已校验 bookId 非空。
         const bookId = String(args['bookId']).trim()
         try {
-          // 两段返回(设计面 + 章节面),均为 R1 事实清单形状:逐项事实 + 可选建议(无权威,判断归主 Agent)
-          // 设计面事实按当前卷选择器取卷(任务21, B3):active 取该卷;planning 检查规划目标卷;empty 默认卷1
-          const selection = selectCurrentVolume(bookRoot)
-          const derived = deriveDesign(scanDesign(bookRoot, selection.kind === 'active' ? selection.卷 : selection.kind === 'planning' ? selection.规划卷 : 1))
-          // 原状态标注保留；必要内容问题已参与建议，全部空分部另列供作者核对。
-          const 已确认无内容 = listConfirmedEmpty(scanDesignDetail(bookRoot))
-          const design = 已确认无内容.length === 0 ? derived : { ...derived, 已确认无内容 }
-          const resumable = listResumable(bookRoot)
-          const chapters = resumable.map((r) => ({
-            key: r.key,
-            建议: r.derived.建议,
-            事实项: r.derived.事实项,
-            叠加标记: r.derived.叠加标记,
-            statusCard: renderStatusCard(bookRoot, r.key),
-            ...(r.facts.审核记录哈希 === undefined ? {} : { 审核记录哈希: r.facts.审核记录哈希 }),
-          }))
-          const 书仓诊断 = diagnoseBookRuntime(bookRoot)
-          return { ok: true, bookId, design, chapters, ...(书仓诊断.length === 0 ? {} : { 书仓诊断 }) }
+          return { ok: true, bookId, ...readStoryStatus(bookRoot) }
         } catch (err) {
           return failureFrom(err, `推导状态失败：`)
         }
       },
     },
+    {
+      name: 'novel_check_book',
+      description: '只读检查指定书仓，返回格式、问题位置及实际受检和未检范围。可用于主动核对，不要求开始新章；不修改文件、不恢复事务、不生成迁移计划。',
+      parameters: MAINTENANCE_PARAMETERS,
+      output: MAINTENANCE_OUTPUT,
+      execute: (args, sessionContext) => {
+        const book = resolveInspectionBook(args, sessionContext)
+        if (!book.ok) return book
+        if (sessionContext?.signal?.aborted) return cancelledInspection()
+        const bookId = String(args['bookId']).trim()
+        const 书仓检查 = readBookInspection(book.bookRoot)
+        if (sessionContext?.signal?.aborted) return { ...cancelledInspection(), bookId, 书仓检查 }
+        return { ok: true, bookId, 书仓检查, 待核对: inspectionNotes(书仓检查), message: '只读检查已返回。未修改书仓，也未生成迁移计划。' }
+      },
+    },
+    {
+      name: 'novel_begin_chapter',
+      description: '作者明确开始新章时，替换原状态查询，不再加调状态工具。一次返回状态与书级开章核对；边界核实后才检查书仓。未收尾或无法核实时转恢复核对，不执行全仓检查。不指定或创建章节，不写文件，也不批准开写。恢复、改稿及普通查询仍用 novel_get_story_status。',
+      parameters: MAINTENANCE_PARAMETERS,
+      output: MAINTENANCE_OUTPUT,
+      execute: (args, sessionContext) => {
+        const book = resolveInspectionBook(args, sessionContext)
+        if (!book.ok) return book
+        if (sessionContext?.signal?.aborted) return cancelledInspection()
+        const bookId = String(args['bookId']).trim()
+        let 开章核对 = readOpeningInspection(book.bookRoot)
+        if (sessionContext?.signal?.aborted) return { ...cancelledInspection(), bookId, 开章核对 }
+        const 状态读取 = readStoryStatusSafely(book.bookRoot)
+        if (sessionContext?.signal?.aborted) return { ...cancelledInspection(), bookId, 开章核对, 状态读取 }
+        const 书仓检查: BookInspection | InspectionUnavailable = 开章核对.状态 === '边界已核对'
+          ? readBookInspection(book.bookRoot)
+          : { 状态: '未检查', 原因: '开章边界尚未核实，未执行全仓检查。先恢复或核对已有稿件；主动查格式可用 novel_check_book。' }
+        if (sessionContext?.signal?.aborted) return { ...cancelledInspection(), bookId, 开章核对, 状态读取, 书仓检查 }
+        // Both scans must refer to unchanged opening evidence, not two unrelated stable snapshots.
+        if (开章核对.状态 === '边界已核对') {
+          const latest = readOpeningInspection(book.bookRoot)
+          if (latest.状态 !== '边界已核对') 开章核对 = latest
+          else if (!开章核对.快照.稳定 || !latest.快照.稳定 || 开章核对.快照.指纹 !== latest.快照.指纹) {
+            开章核对 = {
+              ...latest, 状态: '无法核实',
+              问题: [...latest.问题, { 代码: 'opening-snapshot-changed', 路径: '', 说明: '检查期间开章相关证据发生变化，请重新核对。' }],
+              快照: { ...latest.快照, 稳定: false },
+            }
+          } else 开章核对 = latest
+        }
+        if (sessionContext?.signal?.aborted) return { ...cancelledInspection(), bookId, 开章核对, 状态读取, 书仓检查 }
+        const 待核对 = [
+          ...(状态读取.ok ? [] : [状态读取.reason]),
+          ...('原因' in 开章核对 ? [开章核对.原因] : 开章核对.问题.map(issue => issue.说明)),
+          ...(开章核对.状态 === '边界已核对' ? [] : [开章核对.状态]),
+          ...inspectionNotes(书仓检查),
+        ]
+        return { ok: true, bookId, 状态读取, 开章核对, 书仓检查, 待核对: [...new Set(待核对)], message: '只读开章核对已返回。不代表章节已开始，也不代替作者批准。' }
+      },
+    },
+    ...createBookUpgradeTools(deps),
     {
       name: 'novel_search_finalized',
       description: '检索指定书的已定稿正文。关键词与已启用嵌入服务融合召回；返回章节、路径、行号、版本和哈希。结果仅供定位，必须原生 read 核对原文后才能引用；无提供方或接口失败时明确返回关键词模式。',
@@ -1049,22 +1103,23 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
     },
     {
       name: 'novel_confirm_worldbook_entry',
-      description: '写入/确认世界书条目（真源）。随确认产生 design: 提交；提案批次整批文件经「批次文件」一并入提交。',
+      description: '新建/确认世界书计划条目（真源），或更新其计划首段与明确字段；省略保留旧值和追加事实。事实由定稿入档写入，修改走更正/吃书。随确认产生 design: 提交；提案批次整批文件经「批次文件」一并入提交。',
       parameters: {
         type: 'object',
         properties: {
           bookId: { type: 'string', description: '书id（必填）' },
           模块: { type: 'string', description: '世界书模块名（如 人物档案）' },
           名称: { type: 'string', description: '条目名（如 主角）' },
-          类型: { type: 'string', description: '条目类型（如 人物/规则/地点）' },
-          性质: { type: 'string', description: '计划/已成事实' },
-          状态: { type: 'string', description: '状态取自计划族词表（如 已确认）' },
-          来源: { type: 'string', description: '来源（如 对谈共创 或 来源引用行）' },
-          正文: { type: 'string', description: '条目正文（可选）' },
+          类型: { type: 'string', description: WORLDBOOK_INPUT_FIELDS.类型.description },
+          性质: { type: 'string', enum: [...WORLDBOOK_NATURES], description: WORLDBOOK_INPUT_FIELDS.性质.description },
+          状态: { type: 'string', enum: [...WORLDBOOK_STATES], description: WORLDBOOK_INPUT_FIELDS.状态.description },
+          来源: { type: 'string', description: WORLDBOOK_INPUT_FIELDS.来源.description },
+          别名: { type: 'string', description: WORLDBOOK_INPUT_FIELDS.别名.description },
+          正文: { type: 'string', description: WORLDBOOK_INPUT_FIELDS.正文.description },
           summary: { type: 'string', description: '提交摘要（可选）' },
           批次文件: { type: 'array', items: { type: 'string' }, description: '同批整改的受影响未定稿下游文件' },
         },
-        required: ['bookId', '模块', '名称', '类型', '性质', '状态', '来源'],
+        required: ['bookId', '模块', '名称'],
       },
       output: {
         schema: {
@@ -1086,13 +1141,10 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
         const 模块 = String(args['模块']).trim()
         const 名称 = String(args['名称']).trim()
         try {
-          const op = prepareEntry(模块, 名称, {
-            类型: String(args['类型']).trim(),
-            性质: String(args['性质']).trim(),
-            状态: String(args['状态']).trim(),
-            来源: String(args['来源']).trim(),
-            正文: args['正文'] === undefined ? undefined : String(args['正文']),
-          })
+          // Core validates raw JSON values; do not turn null, arrays or omissions into text.
+          const fields = Object.fromEntries(Object.keys(WORLDBOOK_INPUT_FIELDS)
+            .filter(key => Object.hasOwn(args, key)).map(key => [key, args[key]])) as WorldbookEntryInput
+          const op = prepareEntry(book.bookRoot, 模块, 名称, fields)
           await writeNative(book.bookRoot, op, sessionContext)
           ensureModulesDeclared(book.bookRoot, [模块])
           return finishDesignCommit(book.bookRoot, [op.relPath, '世界书/模块声明.md'], args, `世界书条目·${名称}`, null, sessionContext)
@@ -1143,10 +1195,10 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
             const 正文 = String(args['正文'])
             const gaps = volumeOutlineGaps(正文)
             if (gaps.length > 0) return { ok: false, reason: gaps.join(';'), gaps }
-            await writeNative(book.bookRoot, prepareVolumeOutline(卷, 正文), sessionContext)
+            await writeNative(book.bookRoot, prepareVolumeOutline(book.bookRoot, 卷, 正文), sessionContext)
           }
           else if (目标 === '卷摘要') await writeNative(book.bookRoot, prepareVolumeSummary(book.bookRoot, 卷, String(args['正文'])), sessionContext)
-          else await writeNative(book.bookRoot, preparePlanTimeline(卷, String(args['正文'])), sessionContext)
+          else await writeNative(book.bookRoot, preparePlanTimeline(book.bookRoot, 卷, String(args['正文'])), sessionContext)
           return finishDesignCommit(book.bookRoot, [rel], args, `${目标}·卷${String(卷).padStart(2, '0')}`, null, sessionContext)
         } catch (err) {
           return failureFrom(err, `确认${目标}失败：`)
@@ -2088,6 +2140,34 @@ ${摘要现文}`,
       } catch (error) { return failed(error) }
     },
   }))
+}
+
+type InspectionUnavailable = { readonly 状态: '未检查' | '部分失败'; readonly 原因: string }
+type OpeningUnavailable = { readonly 状态: '无法核实'; readonly 原因: string }
+
+function cancelledInspection() {
+  return toolFailure('author-cancelled', '本次检查已取消，未继续读取书仓。', '若仍需检查，请重新发起本次请求。')
+}
+
+function readStoryStatusSafely(root: string) {
+  try { return { ok: true as const, ...readStoryStatus(root) } } catch (error) { return failureFrom(error, '推导状态失败：') }
+}
+
+function readOpeningInspection(root: string): ChapterOpeningInspection | OpeningUnavailable {
+  try { return inspectChapterOpening(root) } catch (error) { return { 状态: '无法核实', 原因: failureFrom(error, '开章核对失败：').reason } }
+}
+
+function readBookInspection(root: string): BookInspection | InspectionUnavailable {
+  try { return inspectBookDocuments(root) } catch (error) { return { 状态: '部分失败', 原因: failureFrom(error, '书仓检查失败：').reason } }
+}
+
+function inspectionNotes(result: BookInspection | InspectionUnavailable): string[] {
+  if ('原因' in result) return [result.原因]
+  return [...new Set([
+    ...result.问题.map(issue => issue.说明),
+    ...result.未检范围.map(item => `${item.路径}：${item.原因}`),
+    ...(result.结论 === '未发现已知问题' && result.状态 === '已检查' && result.快照.稳定 ? [] : [result.结论]),
+  ])]
 }
 
 function withFailureFields(output: ToolOutputDefinition): ToolOutputDefinition {

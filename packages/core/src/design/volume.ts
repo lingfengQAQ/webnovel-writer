@@ -40,12 +40,12 @@ export function volumeOutlineGaps(body: string): string[] {
 }
 
 function writeVolumeOutlineLocked(bookRoot: string, 卷: number, body: string): void {
-  const op = prepareVolumeOutline(卷, body)
+  const op = prepareVolumeOutline(bookRoot, 卷, body)
   writeFileAtomic(bookRoot, op.relPath, op.content)
 }
 
-export function prepareVolumeOutline(卷: number, body: string): FileOp {
-  return { relPath: paths.卷纲(卷), content: body.endsWith('\n') ? body : `${body}\n` }
+export function prepareVolumeOutline(bookRoot: string, 卷: number, body: string): FileOp & { result: DesignWriteResult } {
+  return prepareDesignDoc(bookRoot, paths.卷纲(卷), body, '卷纲确认')
 }
 
 export const writeVolumeOutline = bookWriter(writeVolumeOutlineLocked)
@@ -60,12 +60,12 @@ export function prepareVolumeSummary(bookRoot: string, 卷: number, body: string
 }
 
 function writePlanTimelineLocked(bookRoot: string, 卷: number, body: string): void {
-  const op = preparePlanTimeline(卷, body)
+  const op = preparePlanTimeline(bookRoot, 卷, body)
   writeFileAtomic(bookRoot, op.relPath, op.content)
 }
 
-export function preparePlanTimeline(卷: number, body: string): FileOp {
-  return { relPath: paths.计划时间线(卷), content: body.endsWith('\n') ? body : `${body}\n` }
+export function preparePlanTimeline(bookRoot: string, 卷: number, body: string): FileOp & { result: DesignWriteResult } {
+  return prepareDesignDoc(bookRoot, paths.计划时间线(卷), body, '计划时间线确认')
 }
 
 export const writePlanTimeline = bookWriter(writePlanTimelineLocked)

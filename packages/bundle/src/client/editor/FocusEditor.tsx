@@ -5,12 +5,14 @@ import { EditorView, drawSelection, keymap } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, redo, redoDepth, selectAll, undo, undoDepth } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { closeSearchPanel, openSearchPanel, search } from '@codemirror/search'
+import { Input, StateDot, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
-  ALargeSmall, ArrowDownToLine, ArrowUp, Bold, Check, ClipboardPaste, Copy, Ellipsis, Feather, FoldVertical,
-  GitCompareArrows, Heading1, Heading2, Heading3, Italic, List, ListTree, LoaderCircle, MessageSquareQuote,
-  PenLine, Pilcrow, Redo2, RotateCw, Save, ScanEye, Scissors, Search, SeparatorHorizontal, Sparkles,
-  TextQuote, TextSelect, TriangleAlert, Undo2, UnfoldVertical, X, type LucideIcon,
-} from 'lucide-react'
+  IconBlockquote, IconBold, IconCheck, IconClose, IconCompare, IconCondense, IconContinue, IconCopy, IconCut, IconHeading1,
+  IconHeading2, IconHeading3, IconItalic, IconLengthen, IconList, IconLoadDisk, IconMore, IconOutline, IconParagraph, IconPaste,
+  IconPolish, IconQuote, IconRedo, IconRefresh, IconReview, IconSave, IconSceneBreak, IconSearch, IconSelectAll, IconSend,
+  IconSparkle, IconTypography, IconUndo, IconWarning, type Icon,
+} from '../icons'
+import { HintTooltip } from '../tooltip'
 import type { BufferState, EditorStore } from '../store'
 import type { EditorActions } from '../editor'
 import type { EditorMemory } from './memory'
@@ -27,7 +29,6 @@ import { ContextMenu, type MenuSection } from './Menu'
 import { DEFAULT_TYPOGRAPHY, FindPanel, OutlinePanel, TypePanel, TYPE_LIMITS, type Typography } from './panels'
 import { TooltipLayer } from './Tooltip'
 
-type Icon = LucideIcon
 interface Anchor { top: number; bottom: number; center: number }
 type Panel = null | 'find' | 'replace' | 'type' | 'outline'
 
@@ -77,8 +78,8 @@ function Anchored({ anchor, bounds, prefer, className, children, gap = 8, ...res
 function Tool({ icon: IconComponent, tip, onClick, agent, danger, disabled }: {
   icon: Icon; tip: string; onClick: () => void; agent?: boolean; danger?: boolean; disabled?: boolean
 }) {
-  return <button type="button" className={'ed-icon' + (agent ? ' is-agent' : '') + (danger ? ' is-danger' : '')} aria-label={tip.split(' · ')[0]} data-tip={tip} disabled={disabled}
-    onMouseDown={event => event.preventDefault()} onClick={onClick}><IconComponent size={16} strokeWidth={1.75} /></button>
+  return <HintTooltip tip={tip}><button type="button" className={'ed-icon' + (agent ? ' is-agent' : '') + (danger ? ' is-danger' : '')} aria-label={tip.split(' · ')[0]} disabled={disabled}
+    onMouseDown={event => event.preventDefault()} onClick={onClick}><IconComponent size={16} /></button></HintTooltip>
 }
 
 export function FocusEditor({ identity, buffer, store, sessionId, bufferKey, memory, actions, requests, plainText, notice }: {
@@ -127,6 +128,12 @@ export function FocusEditor({ identity, buffer, store, sessionId, bufferKey, mem
     if (!next) return
     draining.current = true
     setToast({ text: next, seq: ++toastSeq.current })
+  }, [])
+  // DSH Toast reports when its hold and fade are over; the next queued notice follows it.
+  const nextToast = useCallback(() => {
+    const next = queueRef.current.shift()
+    if (next) setToast({ text: next, seq: ++toastSeq.current })
+    else { draining.current = false; setToast(null) }
   }, [])
 
   const readOnly = !!buffer.document.readOnly
@@ -396,6 +403,15 @@ export function FocusEditor({ identity, buffer, store, sessionId, bufferKey, mem
   }, [readOnly, readOnlyCompartment])
 
   useEffect(() => {
+    const view = viewRef.current, location = buffer.location
+    if (!view || !location || location.from < 0 || location.hash !== buffer.document.hash
+      || view.state.doc.toString() !== buffer.document.body || location.to > view.state.doc.length
+      || view.state.sliceDoc(location.from, location.to) !== location.quote) return
+    view.dispatch({ selection: { anchor: location.from, head: location.to }, effects: EditorView.scrollIntoView(location.from, { y: 'center' }) })
+    view.focus()
+  }, [buffer.location, buffer.document])
+
+  useEffect(() => {
     const view = viewRef.current
     if (!view) return
     const diskBody = compareDisk ? buffer.disk?.body : undefined
@@ -411,15 +427,6 @@ export function FocusEditor({ identity, buffer, store, sessionId, bufferKey, mem
     const timer = window.setTimeout(() => setConfirmLoad(false), 3000)
     return () => window.clearTimeout(timer)
   }, [confirmLoad])
-  useEffect(() => {
-    if (!toast) return
-    const timer = window.setTimeout(() => {
-      const next = queueRef.current.shift()
-      if (next) setToast({ text: next, seq: ++toastSeq.current })
-      else { draining.current = false; setToast(null) }
-    }, 2200)
-    return () => window.clearTimeout(timer)
-  }, [toast])
   useEffect(() => {
     try { localStorage.setItem(TYPE_KEY, JSON.stringify(typography)) } catch { /* private mode */ }
     viewRef.current?.requestMeasure()
@@ -463,7 +470,7 @@ export function FocusEditor({ identity, buffer, store, sessionId, bufferKey, mem
       if (!settled) claimed.undo()
     }
   }, [buffer.saved, memory, pushToast])
-  const noticeSeen = useRef(notice)
+  const noticeSeen = useRef<string>()
   useEffect(() => {
     if (notice && notice !== noticeSeen.current && notice !== '文档已保存' && notice !== '文档没有变化') pushToast(notice)
     noticeSeen.current = notice
@@ -507,41 +514,41 @@ export function FocusEditor({ identity, buffer, store, sessionId, bufferKey, mem
   const selected = state && sel ? state.sliceDoc(sel.from, sel.to) : ''
   const sections: MenuSection[] = !menu || !state ? [] : [
     { id: 'edit', row: true, items: [
-      { id: 'cut', icon: Scissors, label: '剪切', shortcut: 'Ctrl X', disabled: readOnly || !selected, run: () => void clipboard('cut') },
-      { id: 'copy', icon: Copy, label: '复制', shortcut: 'Ctrl C', disabled: !selected, run: () => void clipboard('copy') },
-      { id: 'paste', icon: ClipboardPaste, label: '粘贴', shortcut: 'Ctrl V', disabled: readOnly, run: () => void clipboard('paste') },
-      { id: 'all', icon: TextSelect, label: '全选', shortcut: 'Ctrl A', run: run(selectAll) },
-      { id: 'undo', icon: Undo2, label: '撤销', shortcut: 'Ctrl Z', disabled: readOnly || !undoDepth(state), run: run(undo) },
-      { id: 'redo', icon: Redo2, label: '重做', shortcut: 'Ctrl Shift Z', disabled: readOnly || !redoDepth(state), run: run(redo) },
-      { id: 'save', icon: Save, label: dirty ? '保存' : '已保存', shortcut: 'Ctrl S', disabled: readOnly || buffer.saving || !dirty, run: save },
+      { id: 'cut', icon: IconCut, label: '剪切', shortcut: 'Ctrl X', disabled: readOnly || !selected, run: () => void clipboard('cut') },
+      { id: 'copy', icon: IconCopy, label: '复制', shortcut: 'Ctrl C', disabled: !selected, run: () => void clipboard('copy') },
+      { id: 'paste', icon: IconPaste, label: '粘贴', shortcut: 'Ctrl V', disabled: readOnly, run: () => void clipboard('paste') },
+      { id: 'all', icon: IconSelectAll, label: '全选', shortcut: 'Ctrl A', run: run(selectAll) },
+      { id: 'undo', icon: IconUndo, label: '撤销', shortcut: 'Ctrl Z', disabled: readOnly || !undoDepth(state), run: run(undo) },
+      { id: 'redo', icon: IconRedo, label: '重做', shortcut: 'Ctrl Shift Z', disabled: readOnly || !redoDepth(state), run: run(redo) },
+      { id: 'save', icon: IconSave, label: dirty ? '保存' : '已保存', shortcut: 'Ctrl S', disabled: readOnly || buffer.saving || !dirty, run: save },
     ] },
     { id: 'agent', items: [
       ...(!readOnly ? [
-        { id: 'polish', icon: Feather, label: '润色', agent: true, run: () => void ask('polish') },
-        { id: 'expand', icon: UnfoldVertical, label: '扩写', agent: true, run: () => void ask('expand') },
-        { id: 'condense', icon: FoldVertical, label: '精简', agent: true, run: () => void ask('condense') },
-        { id: 'continue', icon: PenLine, label: '从这里续写', agent: true, run: () => void ask('continue') },
-        { id: 'custom', icon: Sparkles, label: '按我的要求改…', shortcut: 'Ctrl K', agent: true, run: openPrompt },
+        { id: 'polish', icon: IconPolish, label: '润色', agent: true, run: () => void ask('polish') },
+        { id: 'expand', icon: IconLengthen, label: '扩写', agent: true, run: () => void ask('expand') },
+        { id: 'condense', icon: IconCondense, label: '精简', agent: true, run: () => void ask('condense') },
+        { id: 'continue', icon: IconContinue, label: '从这里续写', agent: true, run: () => void ask('continue') },
+        { id: 'custom', icon: IconSparkle, label: '按我的要求改…', shortcut: 'Ctrl K', agent: true, run: openPrompt },
       ] : []),
-      { id: 'review', icon: ScanEye, label: '审读', agent: true, run: () => void ask('review') },
-      { id: 'quote', icon: MessageSquareQuote, label: '引用到对话', run: quote },
+      { id: 'review', icon: IconReview, label: '审读', agent: true, run: () => void ask('review') },
+      { id: 'quote', icon: IconQuote, label: '引用到对话', run: quote },
     ] },
     { id: 'tools', items: [
-      { id: 'format', icon: Pilcrow, label: '段落格式', disabled: readOnly, submenu: [
-        { id: 'h1', icon: Heading1, label: '章标题', shortcut: 'Ctrl 1', run: run(viewFor => setLineKind('h1')(viewFor)) },
-        { id: 'h2', icon: Heading2, label: '小节标题', shortcut: 'Ctrl 2', run: run(viewFor => setLineKind('h2')(viewFor)) },
-        { id: 'h3', icon: Heading3, label: '三级标题', shortcut: 'Ctrl 3', run: run(viewFor => setLineKind('h3')(viewFor)) },
-        { id: 'p', icon: Pilcrow, label: '正文', shortcut: 'Ctrl 0', run: run(viewFor => setLineKind('p')(viewFor)) },
-        { id: 'quote-block', icon: TextQuote, label: '引文', run: run(viewFor => setLineKind('quote')(viewFor)) },
-        { id: 'list', icon: List, label: '列表', run: run(viewFor => setLineKind('list')(viewFor)) },
-        { id: 'rule', icon: SeparatorHorizontal, label: '场景分隔', run: run(insertRule) },
-        { id: 'bold', icon: Bold, label: '加粗', shortcut: 'Ctrl B', disabled: !selected, run: run(viewFor => toggleWrap('**')(viewFor)) },
-        { id: 'italic', icon: Italic, label: '楷体强调', shortcut: 'Ctrl I', disabled: !selected, run: run(viewFor => toggleWrap('*')(viewFor)) },
+      { id: 'format', icon: IconParagraph, label: '段落格式', disabled: readOnly, submenu: [
+        { id: 'h1', icon: IconHeading1, label: '章标题', shortcut: 'Ctrl 1', run: run(viewFor => setLineKind('h1')(viewFor)) },
+        { id: 'h2', icon: IconHeading2, label: '小节标题', shortcut: 'Ctrl 2', run: run(viewFor => setLineKind('h2')(viewFor)) },
+        { id: 'h3', icon: IconHeading3, label: '三级标题', shortcut: 'Ctrl 3', run: run(viewFor => setLineKind('h3')(viewFor)) },
+        { id: 'p', icon: IconParagraph, label: '正文', shortcut: 'Ctrl 0', run: run(viewFor => setLineKind('p')(viewFor)) },
+        { id: 'quote-block', icon: IconBlockquote, label: '引文', run: run(viewFor => setLineKind('quote')(viewFor)) },
+        { id: 'list', icon: IconList, label: '列表', run: run(viewFor => setLineKind('list')(viewFor)) },
+        { id: 'rule', icon: IconSceneBreak, label: '场景分隔', run: run(insertRule) },
+        { id: 'bold', icon: IconBold, label: '加粗', shortcut: 'Ctrl B', disabled: !selected, run: run(viewFor => toggleWrap('**')(viewFor)) },
+        { id: 'italic', icon: IconItalic, label: '楷体强调', shortcut: 'Ctrl I', disabled: !selected, run: run(viewFor => toggleWrap('*')(viewFor)) },
       ] },
-      { id: 'find', icon: Search, label: '查找替换', shortcut: 'Ctrl F', run: () => openPanel('find') },
-      { id: 'outline', icon: ListTree, label: '大纲', shortcut: 'Ctrl Shift O', disabled: plainText, run: () => openPanel('outline') },
-      { id: 'type', icon: ALargeSmall, label: '排版', run: () => openPanel('type') },
-      { id: 'changes', icon: GitCompareArrows, label: '标出未保存改动', checked: showChanges, disabled: readOnly || (!dirty && !showChanges), run: () => setShowChanges(value => !value) },
+      { id: 'find', icon: IconSearch, label: '查找替换', shortcut: 'Ctrl F', run: () => openPanel('find') },
+      { id: 'outline', icon: IconOutline, label: '大纲', shortcut: 'Ctrl Shift O', disabled: plainText, run: () => openPanel('outline') },
+      { id: 'type', icon: IconTypography, label: '排版', run: () => openPanel('type') },
+      { id: 'changes', icon: IconCompare, label: '标出未保存改动', checked: showChanges, disabled: readOnly || (!dirty && !showChanges), run: () => setShowChanges(value => !value) },
     ] },
   ]
   const header = menu && state ? `${selected ? `选中 ${countChars(selected)} 字` : '当前段落'} · 全文 ${countChars(state.doc.toString()).toLocaleString()} 字` : ''
@@ -574,70 +581,74 @@ export function FocusEditor({ identity, buffer, store, sessionId, bufferKey, mem
       else if (action === 'comment-open') setComment(current => current === id ? null : id)
     }}>
     <TooltipLayer />
+    {buffer.location && buffer.location.from < 0 ? <section className="ed-source-fields" aria-label="来源字段">
+      <strong>来源字段 · 第 {buffer.location.startLine}–{buffer.location.endLine} 行</strong>
+      <pre className="ed-source-quote">{buffer.location.quote}</pre>
+      <Tool icon={IconClose} tip="收起来源字段" onClick={() => store.updateBuffer(sessionId, bufferKey, { location: undefined })} />
+    </section> : null}
     <div ref={mountRef} className="ed-mount" />
     {buffer.disk && <div className="ed-float ed-attention" role="alert">
       <div className="ed-attention-row">
-        <TriangleAlert size={16} className="ed-attention-icon" />
-        <span>磁盘上的这份文档被改动了，你未保存的编辑都还在。</span>
-        <Tool icon={GitCompareArrows} tip={compareDisk ? '收起差异' : '在正文中标出与磁盘版本的差异'} onClick={() => setCompareDisk(value => !value)} />
-        <Tool icon={ArrowDownToLine} danger={confirmLoad} tip={confirmLoad ? '再点一次：放弃我的编辑，载入磁盘版本' : '载入磁盘版本（放弃我的编辑）'} onClick={() => {
+        <IconWarning size={16} className="ed-attention-icon" />
+        <span className="ed-attention-text">磁盘上的这份文档被改动了，你未保存的编辑都还在。</span>
+        <Tool icon={IconCompare} tip={compareDisk ? '收起差异' : '在正文中标出与磁盘版本的差异'} onClick={() => setCompareDisk(value => !value)} />
+        <Tool icon={IconLoadDisk} danger={confirmLoad} tip={confirmLoad ? '再点一次：放弃我的编辑，载入磁盘版本' : '载入磁盘版本（放弃我的编辑）'} onClick={() => {
           if (!confirmLoad) { setConfirmLoad(true); return }
           loadHistory.current = true
           store.useDisk(sessionId, bufferKey, false)
           setConfirmLoad(false)
         }} />
-        <Tool icon={Check} tip="已比较，保留我的编辑" onClick={() => {
+        <Tool icon={IconCheck} tip="已比较，保留我的编辑" onClick={() => {
           store.useDisk(sessionId, bufferKey, true)
           pushToast('已保留你的编辑，保存时以磁盘新版本为基线')
         }} />
       </div>
       {compareDisk && <div className="ed-attention-legend">
-        <span className="cm-chg-ins">只在你的版本里</span>
-        <span className="cm-chg-del">只在磁盘版本里</span>
+        <span className="ed-attention-key cm-chg-ins">只在你的版本里</span>
+        <span className="ed-attention-key cm-chg-del">只在磁盘版本里</span>
       </div>}
     </div>}
     {showFailure && <div className="ed-float ed-attention" role="alert">
       <div className="ed-attention-row">
-        <TriangleAlert size={16} className="ed-attention-icon" />
-        <span>{failureText.join(' ')}</span>
-        {buffer.error && <Tool icon={RotateCw} tip="重试保存" disabled={buffer.saving || readOnly} onClick={() => void store.save(sessionId, bufferKey)} />}
-        {buffer.errorCode === 'conflict' && <Tool icon={GitCompareArrows} tip="比较磁盘版本" disabled={buffer.saving} onClick={() => void store.compare(sessionId, bufferKey)} />}
-        {buffer.saved?.commit === 'failed' && <Tool icon={RotateCw} tip="重试提交" disabled={buffer.saving} onClick={() => void store.retry(sessionId, bufferKey, 'retry-commit')} />}
-        {buffer.saved?.notification === 'failed' && <Tool icon={RotateCw} tip="重试通知" disabled={buffer.saving} onClick={() => void store.retry(sessionId, bufferKey, 'notify')} />}
-        <Tool icon={X} tip="关闭" onClick={() => setFailureHidden(failureKey)} />
+        <IconWarning size={16} className="ed-attention-icon" />
+        <span className="ed-attention-text">{failureText.join(' ')}</span>
+        {buffer.error && <Tool icon={IconRefresh} tip="重试保存" disabled={buffer.saving || readOnly} onClick={() => void store.save(sessionId, bufferKey)} />}
+        {buffer.errorCode === 'conflict' && <Tool icon={IconCompare} tip="比较磁盘版本" disabled={buffer.saving} onClick={() => void store.compare(sessionId, bufferKey)} />}
+        {buffer.saved?.commit === 'failed' && <Tool icon={IconRefresh} tip="重试提交" disabled={buffer.saving} onClick={() => void store.retry(sessionId, bufferKey, 'retry-commit')} />}
+        {buffer.saved?.notification === 'failed' && <Tool icon={IconRefresh} tip="重试通知" disabled={buffer.saving} onClick={() => void store.retry(sessionId, bufferKey, 'notify')} />}
+        <Tool icon={IconClose} tip="关闭" onClick={() => setFailureHidden(failureKey)} />
       </div>
     </div>}
     {showReadonly && <div className="ed-float ed-attention" role="status">
       <div className="ed-attention-row">
-        <TriangleAlert size={16} className="ed-attention-icon" />
-        <span>{buffer.document.readOnly}</span>
-        <Tool icon={X} tip="关闭" onClick={() => { dismissedReadonly.add(identity); setReadonlyClosed(true) }} />
+        <IconWarning size={16} className="ed-attention-icon" />
+        <span className="ed-attention-text">{buffer.document.readOnly}</span>
+        <Tool icon={IconClose} tip="关闭" onClick={() => { dismissedReadonly.add(identity); setReadonlyClosed(true) }} />
       </div>
     </div>}
     {bubble && <Anchored anchor={bubble} bounds={bounds} prefer="above" className="ed-float ed-bubble" role="toolbar" aria-label="选区操作" onMouseDown={event => event.preventDefault()}>
       <div className="ed-group is-agent">
         {!readOnly && <>
-          <Tool agent icon={Feather} tip="让主控润色" onClick={() => void ask('polish')} />
-          <Tool agent icon={UnfoldVertical} tip="让主控扩写" onClick={() => void ask('expand')} />
-          <Tool agent icon={FoldVertical} tip="让主控精简" onClick={() => void ask('condense')} />
+          <Tool agent icon={IconPolish} tip="让主控润色" onClick={() => void ask('polish')} />
+          <Tool agent icon={IconLengthen} tip="让主控扩写" onClick={() => void ask('expand')} />
+          <Tool agent icon={IconCondense} tip="让主控精简" onClick={() => void ask('condense')} />
         </>}
-        <Tool agent icon={ScanEye} tip="让主控审读" onClick={() => void ask('review')} />
-        {!readOnly && <Tool agent icon={Sparkles} tip="按我的要求改 · Ctrl K" onClick={openPrompt} />}
+        <Tool agent icon={IconReview} tip="让主控审读" onClick={() => void ask('review')} />
+        {!readOnly && <Tool agent icon={IconSparkle} tip="按我的要求改 · Ctrl K" onClick={openPrompt} />}
       </div>
       <span className="ed-sep" />
-      <Tool icon={MessageSquareQuote} tip="引用到对话" onClick={quote} />
+      <Tool icon={IconQuote} tip="引用到对话" onClick={quote} />
       {!narrow && !readOnly && <>
         <span className="ed-sep" />
-        <Tool icon={Bold} tip="加粗 · Ctrl B" onClick={run(viewFor => toggleWrap('**')(viewFor))} />
-        <Tool icon={Italic} tip="楷体强调 · Ctrl I" onClick={run(viewFor => toggleWrap('*')(viewFor))} />
+        <Tool icon={IconBold} tip="加粗 · Ctrl B" onClick={run(viewFor => toggleWrap('**')(viewFor))} />
+        <Tool icon={IconItalic} tip="楷体强调 · Ctrl I" onClick={run(viewFor => toggleWrap('*')(viewFor))} />
       </>}
-      <Tool icon={Ellipsis} tip="更多 · 右键" onClick={() => { setPanel(null); setPrompt(null); setMenu({ x: bubble.center - 110, y: bubble.bottom + 6 }) }} />
+      <Tool icon={IconMore} tip="更多 · 右键" onClick={() => { setPanel(null); setPrompt(null); setMenu({ x: bubble.center - 110, y: bubble.bottom + 6 }) }} />
     </Anchored>}
-    {spark && <button type="button" className="ed-spark" style={{ left: spark.left, top: spark.top }} aria-label="让主控从这里续写" data-tip="让主控从这里续写 · Ctrl K"
-      onMouseDown={event => event.preventDefault()} onClick={openPrompt}><Sparkles size={14} strokeWidth={1.75} /></button>}
+    {spark && <HintTooltip tip="让主控从这里续写 · Ctrl K"><button type="button" className="ed-spark" style={{ left: spark.left, top: spark.top }} aria-label="让主控从这里续写"
+      onMouseDown={event => event.preventDefault()} onClick={openPrompt}><IconSparkle size={14} /></button></HintTooltip>}
     {prompt && promptAnchor && <Anchored anchor={promptAnchor} bounds={bounds} prefer="below" className="ed-float ed-prompt" role="dialog" aria-label="交给主控">
-      <Sparkles size={16} className="ed-prompt-lead" aria-hidden="true" />
-      <input autoFocus value={promptText} aria-label="给主控的要求"
+      <Input className="ed-prompt-input" icon={<IconSparkle size={14} className="ed-prompt-lead" />} autoFocus value={promptText} aria-label="给主控的要求"
         placeholder={prompt.mode === 'continue' ? '后文想怎么走？留空直接续写' : '告诉主控怎么改这段'}
         onChange={event => setPromptText(event.target.value)}
         onKeyDown={event => {
@@ -645,13 +656,13 @@ export function FocusEditor({ identity, buffer, store, sessionId, bufferKey, mem
           else if (event.key === 'Escape') { event.preventDefault(); setPrompt(null); viewRef.current?.focus() }
         }}
         onBlur={() => window.setTimeout(() => { if (!rootRef.current?.querySelector('.ed-prompt:focus-within')) setPrompt(null) }, 120)} />
-      <button type="button" className="ed-icon is-send" aria-label="发送给主控" data-tip="发送给主控 · Enter"
-        disabled={prompt.mode === 'edit' && !promptText.trim()} onMouseDown={event => event.preventDefault()} onClick={submitPrompt}><ArrowUp size={16} /></button>
+      <HintTooltip tip="发送给主控 · Enter"><button type="button" className="ed-icon is-send" aria-label="发送给主控"
+        disabled={prompt.mode === 'edit' && !promptText.trim()} onMouseDown={event => event.preventDefault()} onClick={submitPrompt}><IconSend size={16} /></button></HintTooltip>
     </Anchored>}
     {openComment && commentAnchor && <Anchored anchor={commentAnchor} bounds={bounds} prefer="below" className="ed-float ed-note" role="dialog" aria-label="审读批注">
       <p>{openComment.note}</p>
       <div className="ed-note-actions">
-        {!readOnly && <Tool agent icon={Feather} tip="按这条批注修改" onClick={() => {
+        {!readOnly && <Tool agent icon={IconPolish} tip="按这条批注修改" onClick={() => {
           const current = viewRef.current
           if (!current) return
           const line = current.state.doc.lineAt(openComment.from)
@@ -659,14 +670,14 @@ export function FocusEditor({ identity, buffer, store, sessionId, bufferKey, mem
           setComment(null)
           void ask('custom', '按审读意见修改：' + openComment.note, { from: line.from + (LINE_PREFIX.exec(line.text)?.[0].length ?? 0), to: line.to })
         }} />}
-        <Tool icon={MessageSquareQuote} tip="带着批注去对话里讨论" onClick={() => {
+        <Tool icon={IconQuote} tip="带着批注去对话里讨论" onClick={() => {
           const current = viewRef.current
           if (!current) return
           const line = current.state.doc.lineAt(openComment.from)
           actions.quote(sessionId, { text: line.text + '\n\n审读批注：' + openComment.note, line: line.number })
           pushToast('已放进对话输入框，等你发送')
         }} />
-        <Tool icon={Check} tip="知道了，移除批注" onClick={() => { viewRef.current?.dispatch({ effects: removeItems.of([openComment.id]) }); setComment(null) }} />
+        <Tool icon={IconCheck} tip="知道了，移除批注" onClick={() => { viewRef.current?.dispatch({ effects: removeItems.of([openComment.id]) }); setComment(null) }} />
       </div>
     </Anchored>}
     {menu && <ContextMenu x={menu.x} y={menu.y} bounds={bounds} sections={sections} header={header}
@@ -681,12 +692,13 @@ export function FocusEditor({ identity, buffer, store, sessionId, bufferKey, mem
       current.focus()
       setPanel(null)
     }} />}
-    {(pendingCount || readyCount || noteCount) ? <button type="button" className="ed-float ed-collab-pill" onMouseDown={event => event.preventDefault()} onClick={() => jump(1)}
-      aria-label="跳到下一条主控建议" data-tip={`${pendingCount ? pendingCount + ' 条处理中 ' : ''}${readyCount ? readyCount + ' 条建议待定 ' : ''}${noteCount ? noteCount + ' 条批注 ' : ''}· Alt ]`}>
-      {pendingCount ? <span><LoaderCircle size={14} className="ed-spin" />{pendingCount}</span> : null}
-      {readyCount ? <span className="is-ready"><Sparkles size={14} />{readyCount}</span> : null}
-      {noteCount ? <span className="is-note"><ScanEye size={14} />{noteCount}</span> : null}
-    </button> : null}
-    {toast && <div key={toast.seq} className="ed-toast" role="status">{toast.text}</div>}
+    {(pendingCount || readyCount || noteCount) ? <HintTooltip tip={`${pendingCount ? pendingCount + ' 条处理中 ' : ''}${readyCount ? readyCount + ' 条建议待定 ' : ''}${noteCount ? noteCount + ' 条批注 ' : ''}· Alt ]`}>
+      <button type="button" className="ed-float ed-collab-pill" onMouseDown={event => event.preventDefault()} onClick={() => jump(1)} aria-label="跳到下一条主控建议">
+        {pendingCount ? <span className="ed-collab-count"><StateDot state="ongoing" />{pendingCount}</span> : null}
+        {readyCount ? <span className="ed-collab-count is-ready"><IconSparkle size={14} />{readyCount}</span> : null}
+        {noteCount ? <span className="ed-collab-count is-note"><IconReview size={14} />{noteCount}</span> : null}
+      </button>
+    </HintTooltip> : null}
+    {toast && <Toast key={toast.seq} text={toast.text} holdMs={1200} anchor={rootRef.current} onDone={nextToast} />}
   </div>
 }

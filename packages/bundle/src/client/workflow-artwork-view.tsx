@@ -1,7 +1,10 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { Expand, Focus, Minus, Network, Plus } from 'lucide-react'
+import { Button, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import { artworkEdges, artworkNodes, artworkSvg, artworkViewBox } from './workflow-artwork'
+import { IconFitView, IconFullscreen, IconMinus, IconPlus, IconRelations } from './icons'
+import { HintTooltip } from './tooltip'
 import type { NodeActivity, WorkflowNodeId } from './workflow-display'
+import { useVisualExpansion } from './visual-expansion'
 
 interface Camera { x: number; y: number; w: number; h: number }
 const initial: Camera = { x: artworkViewBox[0], y: artworkViewBox[1], w: artworkViewBox[2], h: artworkViewBox[3] }
@@ -18,10 +21,11 @@ export function ArchifyWorkflow({ activities, selected, focus, onSelect, finaliz
   const prefix = useId().replace(/:/g, '')
   // Static, reviewed build-time SVG only; no API text ever enters this HTML sink.
   const markup = useMemo(() => ({ __html: scopeArtworkSvg(prefix) }), [prefix])
-  const [camera, setCamera] = useState(initial), [full, setFull] = useState(false), [related, setRelated] = useState(false), [error, setError] = useState('')
+  const [camera, setCamera] = useState(initial), [related, setRelated] = useState(false)
   const drag = useRef<{ clientX: number; clientY: number; camera: Camera }>()
   const cameraRef = useRef(camera); cameraRef.current = camera
   const fullscreenRoot = () => root.current?.closest<HTMLElement>('.nw-flow-explorer') ?? root.current
+  const { expanded: full, toggle: toggleExpanded } = useVisualExpansion(fullscreenRoot)
   const nearby = useMemo(() => new Set([selected, ...artworkEdges.flatMap(e => e.from === selected ? [e.to] : e.to === selected ? [e.from] : [])]), [selected])
 
   useEffect(() => {
@@ -60,10 +64,8 @@ export function ArchifyWorkflow({ activities, selected, focus, onSelect, finaliz
         return { x: p.x - (p.x - c.x) * ratio, y: p.y - (p.y - c.y) * ratio, w, h: c.h * ratio }
       })
     }
-    const changed = () => setFull(document.fullscreenElement === fullscreenRoot())
     element.addEventListener('wheel', wheel, { passive: false })
-    document.addEventListener('fullscreenchange', changed)
-    return () => { element.removeEventListener('wheel', wheel); document.removeEventListener('fullscreenchange', changed) }
+    return () => { element.removeEventListener('wheel', wheel) }
   }, [])
   const select = (target: EventTarget | null) => {
     const id = target instanceof Element ? target.closest<SVGGElement>('g[data-node-id]')?.dataset.nodeId : undefined
@@ -71,13 +73,13 @@ export function ArchifyWorkflow({ activities, selected, focus, onSelect, finaliz
   }
   return <div ref={root} className="nw-archify">
     <div className="nw-map-tools">
-      <button type="button" aria-label="缩小" onClick={() => zoom(1.2)}><Minus size={15} /></button>
-      <button type="button" aria-label="放大" onClick={() => zoom(1 / 1.2)}><Plus size={15} /></button>
-      <button type="button" onClick={() => setCamera(initial)}><Focus size={15} />查看全图</button>
-      <button type="button" disabled={!selected} aria-pressed={related} onClick={() => setRelated(!related)}><Network size={15} />查看关联</button>
-      <button type="button" onClick={() => { setError(''); void (full ? document.exitFullscreen() : fullscreenRoot()?.requestFullscreen())?.catch(() => setError('暂时无法全屏')) }}><Expand size={15} />{full ? '退出全屏' : '全屏'}</button>
+      <HintTooltip tip="缩小 · -"><button type="button" className="nw-icon" aria-label="缩小" onClick={() => zoom(1.2)}><IconMinus size={16} /></button></HintTooltip>
+      <HintTooltip tip="放大 · +"><button type="button" className="nw-icon" aria-label="放大" onClick={() => zoom(1 / 1.2)}><IconPlus size={16} /></button></HintTooltip>
+      <Button variant="ghost" size="sm" icon={<IconFitView size={14} />} onClick={() => setCamera(initial)}>查看全图</Button>
+      <Pill className="nw-map-pill" active={related} disabled={!selected} aria-pressed={related} onClick={() => setRelated(!related)}><IconRelations size={14} />查看关联</Pill>
+      <Button data-visual-expand="" variant="ghost" size="sm" icon={<IconFullscreen size={14} />} onClick={toggleExpanded}>{full ? '退出全屏' : '全屏'}</Button>
     </div>
-    <svg ref={svg} viewBox={[camera.x, camera.y, camera.w, camera.h].join(' ')} role="group" aria-label="写作流程图" tabIndex={0}
+    <svg ref={svg} className="nw-archify-canvas" viewBox={[camera.x, camera.y, camera.w, camera.h].join(' ')} role="group" aria-label="写作流程图" tabIndex={0}
       onClick={e => select(e.target)}
       onKeyDown={e => {
         if (e.key === 'Enter' || e.key === ' ') { if (e.target !== e.currentTarget) { e.preventDefault(); select(e.target) }; return }
@@ -109,6 +111,5 @@ export function ArchifyWorkflow({ activities, selected, focus, onSelect, finaliz
         </g>
       })}</g>
     </svg>
-    {error ? <p className="nw-viz-note" role="status">{error}</p> : null}
   </div>
 }

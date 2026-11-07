@@ -8,7 +8,7 @@ const runtime = JSON.parse(fs.readFileSync(runtimePath, 'utf8').replace(/^\uFEFF
 const evidence = path.dirname(runtimePath)
 const { chromium } = await import(pathToFileURL(path.join(process.env.WEBNOVEL_PLAYWRIGHT, 'index.mjs')).href)
 const browser = await chromium.launch({ headless: true, executablePath: process.env.WEBNOVEL_CHROMIUM })
-const context = await browser.newContext({ viewport: { width: 1440, height: 960 } })
+const context = await browser.newContext({ viewport: { width: 1440, height: 960 }, permissions: ['clipboard-read', 'clipboard-write'] })
 const page = await context.newPage()
 const captureScreen = page.screenshot.bind(page)
 page.screenshot = async options => {
@@ -193,7 +193,8 @@ async function waitForEditorToast(page, pattern, timeout = 15000) {
   const source = pattern instanceof RegExp ? pattern.source : pattern
   const flags = pattern instanceof RegExp ? pattern.flags : ''
   await page.waitForFunction(({ source, flags }) => {
-    const text = document.querySelector('.nw-focus .ed-toast')?.textContent ?? ''
+    // DSH Toast portals its banner to the body.
+    const text = [...document.querySelectorAll('body > [role="alert"]')].map(node => node.textContent ?? '').join('\n')
     return new RegExp(source, flags).test(text)
   }, { source, flags }, { timeout })
 }
@@ -307,7 +308,12 @@ try {
     await openEditorMenu(page, false, true)
     await page.getByRole('menuitem', { name: '引用到对话', exact: true }).click()
     const composer = page.locator('[contenteditable="true"]:not([aria-label="文档正文"])').filter({ visible: true }).first()
-    const quote = await composer.innerText()
+    assert.equal(await composer.locator('[data-composer-chip="webnovel-quote"]').count(), 1)
+    assert.ok(!(await composer.innerText()).includes('%20'))
+    await composer.focus()
+    await page.keyboard.press('Control+a')
+    await page.keyboard.press('Control+c')
+    const quote = await page.evaluate(() => navigator.clipboard.readText())
     assert.ok(quote.includes('【书房原文引用】') && quote.includes('acceptance-a'))
     assert.ok(quote.includes(selection.trim().split('\n').filter(Boolean).at(-1)))
     assert.ok(quote.length > 1500)
@@ -315,7 +321,9 @@ try {
     await composer.fill('')
     await page.getByRole('button', { name: '知识库', exact: true }).click()
     await page.getByRole('button', { name: '写作笔记.md', exact: true }).click()
-    const sharedEditor = page.getByRole('textbox', { name: '文档正文', exact: true })
+    // Opening is asynchronous: wait for the shared note's text, or the keys land in 稿1.md.
+    const sharedEditor = page.getByRole('textbox', { name: '文档正文', exact: true }).filter({ hasText: '共享资料的原始内容' })
+    await sharedEditor.waitFor()
     await sharedEditor.click()
     await page.keyboard.press('Control+End')
     const marker = '浏览器保存验收 ' + Date.now()
@@ -335,7 +343,8 @@ try {
     await native.getByRole('button', { name: '在“S5 空工作范围”中新建会话', exact: true }).click()
     await page.getByRole('tab', { name: '书房', exact: true }).click()
     await page.getByText(/当前工作范围还没有作品/).waitFor()
-    assert.equal(await page.getByRole('tab', { name: '写作笔记.md', exact: true }).count(), 0)
+    // Tab names include the nested close button, so an exact name would never match.
+    assert.equal(await page.getByRole('tab', { name: /写作笔记\.md/ }).count(), 0)
     await page.getByRole('tab', { name: '工作区', exact: true }).click()
     await native.getByText('S5 书房验收', { exact: true }).click()
     await page.getByRole('tab', { name: '书房', exact: true }).click()
@@ -366,7 +375,7 @@ try {
     await page.setViewportSize({ width: 1440, height: 960 })
     await settleLayout()
     await page.getByRole('tab', { name: '可视化', exact: true }).click()
-    await page.getByRole('button', { name: '章节进度', exact: true }).click()
+    await page.getByRole('tab', { name: '章节进度', exact: true }).click()
     await page.getByRole('heading', { name: '章节进度' }).waitFor()
     await page.locator('.nw-chapter-line').first().waitFor()
     await page.screenshot({ path: path.join(evidence, 'study-chapters.png'), fullPage: true })

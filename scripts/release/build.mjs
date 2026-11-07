@@ -60,6 +60,7 @@ const assets = fs.readdirSync(output).filter(file => fs.statSync(path.join(outpu
 const manifest = { schemaVersion: 1, ...info, publicCommit: git(['rev-parse', 'HEAD']), node: process.version,
   pnpm: JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).packageManager.split('@').pop(),
   dsh: JSON.parse(fs.readFileSync(path.join(root, 'dsh-baseline.json'), 'utf8')).registry.version,
+  dshCompatibility: JSON.parse(fs.readFileSync(path.join(root, 'dsh-baseline.json'), 'utf8')).compatibility.range,
   optionalPackages: [
     { name: embedding.name, version: embedding.version, tarball: embeddingTarball },
     { name: meta.name, version: meta.version, tarball: metaTarball },

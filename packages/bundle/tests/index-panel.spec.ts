@@ -55,7 +55,9 @@ async function mount(installed = sidebar(), sessionId = 'session-a') {
 function text(node: ReactTestInstance): string { return node.children.map(child => typeof child === 'string' ? child : text(child)).join('') }
 const update = (renderer: ReactTestRenderer) => renderer.root.findAllByType('button').find(button => text(button) === '立即更新')!
 async function choose(renderer: ReactTestRenderer, space: string) {
-  await act(async () => { renderer.root.findByProps({ 'aria-label': '选择索引作品' }).props.onChange({ target: { value: space } }) })
+  const buttons = () => renderer.root.findAllByType('button')
+  await act(async () => { buttons().find(button => String(button.props['aria-label'] ?? '').startsWith('选择索引作品'))!.props.onClick() })
+  await act(async () => { buttons().find(button => button.props.role === 'menuitem' && text(button) === space)!.props.onClick() })
 }
 async function run(renderer: ReactTestRenderer) { await act(async () => { update(renderer).props.onClick() }) }
 

@@ -2,17 +2,27 @@
   "schemaVersion": 1,
   "repository": "https://github.com/deepseek-ai/deepseek-harness",
   "source": {
-    "tag": "dsh-v0.2.1-rc.3",
-    "commit": "1f81c047fc48fa190a683e469daa699857e9afe8",
-    "version": "0.2.1-rc.3",
+    "tag": "dsh-v0.2.2-rc.1",
+    "commit": "66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db",
+    "version": "0.2.2-rc.1",
     "sessionFormat": 4,
-    "publishedAt": "2026-10-23T15:26:39Z"
+    "publishedAt": "2026-11-04T13:07:14Z"
   },
   "registry": {
-    "version": "0.2.1-rc.3",
+    "version": "0.2.2-rc.1",
     "sessionFormat": 4,
-    "checkedAt": "2026-10-24",
+    "checkedAt": "2026-11-06",
     "sourceVersionPublished": true,
-    "sourceDistTag": "next"
+    "sourceDistTag": "latest"
+  },
+  "compatibility": {
+    "range": ">=0.2.2-rc.1 <0.3.0-0",
+    "minimum": "0.2.2-rc.1",
+    "nodeRange": ">=24.9.0",
+    "policy": "Allow compatible releases in the 0.2 series from the validated minimum; retest each adopted baseline.",
+    "testedVersions": [
+      "0.2.2-rc.1"
+    ],
+    "cordisRange": "^4.1.0"
   }
 }

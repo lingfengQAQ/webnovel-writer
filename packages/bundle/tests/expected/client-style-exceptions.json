@@ -1,0 +1,20 @@
+{
+  "packages/bundle/src/client/editor/editor.css": {
+    ".webnovel .nw-focus .cm-collab-pending: animation: ed-sweep 1.8s ease-in-out infinite": "等待主控回复时的循环扫光；DSH 只为单次过渡提供时长 token，减少动态效果时关闭",
+    ".webnovel .nw-focus .cm-collab-spinner .cm-icon: animation: ed-spin 1s linear infinite": "处理中的循环转圈（CodeMirror 部件里的 HTML，不能用 React 的 StateDot）；减少动态效果时关闭",
+    ".webnovel .nw-focus .is-queued .cm-collab-spinner .cm-icon: animation-duration: 2.4s": "排队状态放慢转圈以区别于处理中，同属循环动画"
+  },
+  "packages/bundle/src/client/layout-swap.css": {
+    "html[data-webnovel-swap] div:has(> [data-rightbar-col]):not([data-rightbar-collapsed]):not([data-rightbar-fullscreen]) > div:has(+ [data-rightbar-col]): element: html[data-webnovel-swap] div:has(> [data-rightbar-col]):not([data-rightbar-collapsed]):not([data-rightbar-fullscreen]) > div:has(+ [data-rightbar-col])": "两栏互换只能按 DSH 外壳的网格结构选中中栏，外壳节点没有类名；规则只在互换开启时生效，不会落到原语上",
+    "html[data-webnovel-swap][data-windows-titlebar] div:has(> [data-rightbar-col]):not([data-rightbar-collapsed]):not([data-rightbar-fullscreen]) > div:has(+ [data-rightbar-col]): element: html[data-webnovel-swap][data-windows-titlebar] div:has(> [data-rightbar-col]):not([data-rightbar-collapsed]):not([data-rightbar-fullscreen]) > div:has(+ [data-rightbar-col])": "同上，Windows 标题栏下的中栏圆角"
+  },
+  "packages/bundle/src/client/styles.css": {
+    ".nw-native-workspaces>*: element: .nw-native-workspaces>*": "工作区标签里渲染的是 DSH 原生工作区侧栏的插槽根节点，没有类名可选；只给它补满高所需的 flex 尺寸",
+    ".nw-tree-skeleton-line::before: animation: nw-shimmer 1.3s linear infinite": "文件树加载骨架的循环闪光；减少动态效果时关闭"
+  },
+  "packages/bundle/src/client/workflow-artwork.css": {
+    ".nw-archify .semantic-sigil>*: element: .nw-archify .semantic-sigil>*": "构建期生成的静态流程图 SVG 图元（Archify），只含 path/circle 等，不会有原语",
+    ".nw-archify [data-run-state=running]>rect:not(.c-mask): animation: nw-live 2s ease-in-out infinite": "运行中节点的循环脉冲，与徽标文字同时出现；减少动态效果时关闭",
+    ".nw-archify-badge text: font-size: 8px": "SVG 徽标文字，随画布缩放，字号由 workflow-artwork-view.tsx 的徽标几何固定"
+  }
+}

@@ -13,6 +13,7 @@
 import { afterAll, describe, expect, it } from 'vitest'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { ToolRuntime, type ToolRuntime as ToolRuntimeType } from '@deepseek-ai/dsh-tools'
+import * as nativeExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { SystemPrompt } from '@deepseek-ai/dsh-system-prompt'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import * as fs from 'node:fs'
@@ -137,13 +138,12 @@ function schemasOf(tools: ToolRuntimeType, agent: TestAgent): string[] {
 }
 
 async function execTool(tools: ToolRuntimeType, agent: TestAgent, name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
-  return tools.execute({
-    callId: `call-${Math.random().toString(36).slice(2)}`,
-    name,
-    arguments: args,
+  const result = await tools.execute({
+    calls: [{ type: 'tool-call', id: `call-${Math.random().toString(36).slice(2)}`, name, arguments: JSON.stringify(args) }],
     agent,
     signal: signal ?? new AbortController().signal,
   } as never)
+  return result.results[0]!.result
 }
 
 const approveAnswer = (): { answers: Array<{ id: string; selected: string[] }> } => ({ answers: [{ id: '定稿入档', selected: ['批准'] }] })
@@ -155,6 +155,7 @@ describe('dsh 运行时对齐:主 Agent scoped 工具面', () => {
     const root = new Context()
     await root.plugin(SystemPrompt)
     await root.plugin(ToolRuntime)
+    await root.plugin(nativeExecutor)
 
     const main = makeAgent(root, 'main-1', { cwd: ws })
     // 不装机的外部 scope:与 main 无父子链、也不在 agents.list 里——
@@ -176,6 +177,7 @@ describe('dsh 运行时对齐:主 Agent scoped 工具面', () => {
     const root = new Context()
     await root.plugin(SystemPrompt)
     await root.plugin(ToolRuntime)
+    await root.plugin(nativeExecutor)
 
     const main = makeAgent(root, 'main-2', { cwd: ws })
     const sub = makeAgent(root, 'sub-2', { parent: main.agent, origin: 'subagent', cwd: ws })
@@ -213,6 +215,7 @@ describe('dsh 运行时对齐:ToolRunContext 透传与作者裁决', () => {
     const root = new Context()
     await root.plugin(SystemPrompt)
     await root.plugin(ToolRuntime)
+    await root.plugin(nativeExecutor)
 
     const main = makeAgent(root, 'main-3', { cwd: ws })
     const { unload, uq } = await loadBundle(root, ws, [main.agent])
@@ -244,6 +247,7 @@ describe('dsh 运行时对齐:ToolRunContext 透传与作者裁决', () => {
     const root = new Context()
     await root.plugin(SystemPrompt)
     await root.plugin(ToolRuntime)
+    await root.plugin(nativeExecutor)
 
     const main = makeAgent(root, 'main-4', { cwd: ws })
     const { unload, uq } = await loadBundle(root, ws, [main.agent])
@@ -269,6 +273,7 @@ describe('dsh 运行时对齐:子 Agent 审批策略与卸载重载等价性', (
     const root = new Context()
     await root.plugin(SystemPrompt)
     await root.plugin(ToolRuntime)
+    await root.plugin(nativeExecutor)
 
     const main = makeAgent(root, 'main-5', { cwd: ws })
     const sub = makeAgent(root, 'sub-5', { parent: main.agent, origin: 'subagent', cwd: ws })

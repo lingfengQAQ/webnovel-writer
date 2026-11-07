@@ -80,7 +80,7 @@ export function createReferenceTools(deps: Deps): NovelToolDefinition[] {
   }
   function guardedRunner(workspace: string, sourceId: string, exec?: ToolExecContext): ModelRunner {
     const { runtime, agent } = host(exec), runner = runtime.runner(agent)
-    return { route: () => runner.route(), maxInputChars: () => runner.maxInputChars(), run: async (input, signal) => {
+    return { route: () => runner.route(), run: async (input, signal) => {
       const fresh = async () => { if ((await checkOriginal(workspace, sourceId, { ...exec, signal })).changed) throw new ReferenceError('source-changed', '原文件已变化，请对该 sourceId 重新导入；旧分析已待复核') }
       await fresh(); const response = await runner.run(input, signal); await fresh(); return response
     } }

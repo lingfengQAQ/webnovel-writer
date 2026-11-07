@@ -1,14 +1,16 @@
 # 鲸鱼娘桌宠
 
+Scriptor 8.4.0 适配 DSH 0.2.2-rc.1。安装范围为 `>=0.2.2-rc.1 <0.3.0-0`，Node最低24.9；实际验证按具体版本记录。
+
 [产品主页](https://lingfengqaq.github.io/webnovel-writer/) · [安装教程](https://lingfengqaq.github.io/webnovel-writer/docs/install.html)
 
 独立 DSH 插件，在窗口内陪你写作。可单独安装，也可与 DSH Scriptor 小说插件一起使用。
 
-8.3.2 为同批兼容发行，桌宠功能没有新增变化。桌宠独立可选，不包含在 full 中；未使用桌宠的用户无需因主包升级而安装它。
+8.4.0 为同批兼容发行，桌宠功能没有新增变化。桌宠独立可选，不包含在 full 中；未使用桌宠的用户无需因主包升级而安装它。
 
 ## 安装
 
-配套 DSH 0.2.1-rc.3。在 DSH 侧栏“插件 → 添加插件”输入 `@linfengqaqtat/dsh-scriptor-companion@8.3.2`，核对预览后安装，按提示启用或重启。
+配套 DSH 0.2.2-rc.1。在 DSH 侧栏“插件 → 添加插件”输入 `@linfengqaqtat/dsh-scriptor-companion@8.4.0`，核对预览后安装，按提示启用或重启。
 
 安装包携带全部运行素材，无需 Dola 网络连接、Python、FFmpeg 或额外模型配置。桌宠仍在 DSH 窗口内显示，不是 Windows 全局悬浮窗。旧 @linfengqaqtat/dsh-whale-companion 先撤销安装入口，不要与新包同时启用；详见 [安装与迁移](https://github.com/lingfengQAQ/webnovel-writer/blob/v8/docs/user/install.md)。
 

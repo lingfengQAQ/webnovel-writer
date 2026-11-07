@@ -169,7 +169,10 @@ export async function checkDraftLength({ root, book, workspace, ctx, service, ch
         } catch (error) { return { logs: [], error: { kind: 'exception', message: String(error) } } }
       },
     })
-    const offMode = child.agent.ctx.get('tools').presentAs('ptc')
+    const { PtcExecutor } = await import(host ? pathToFileURL(host.entry('@deepseek-ai/dsh-tool-executor-ptc')).href : '@deepseek-ai/dsh-tool-executor-ptc')
+    const mode = child.agent.ctx.inject(['tools', 'systemPrompt', 'ptcRuntime'], scope => {
+      scope.tools.setExecutor(new PtcExecutor(scope))
+    })
     try {
       const countBefore = receipts(seen.at(-1)).length
       const args = { file_path: path.join(directory, '稿5.md'), content: '甲乙𠮷' }
@@ -178,7 +181,7 @@ export async function checkDraftLength({ root, book, workspace, ctx, service, ch
       await complete(ctx, child.agent, '通过 PTC 保存一次。')
       assert.equal(steps.length, 0)
       report.draftLength.ptcReceivedOnce = true
-    } finally { offMode() }
+    } finally { await mode.dispose() }
   })
   await check('统计监听卸载重载工具重启与会话恢复', async () => {
     await toggle('webnovel', true)

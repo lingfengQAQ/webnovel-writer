@@ -20,7 +20,7 @@ function mkRoot(): string {
     fs.writeFileSync(path.join(root, '账本', `${name}.md`), `# ${name}\n既有条目\n`, 'utf-8')
   }
   for (const name of ['文风', '决策', '对话', '灵感']) {
-    fs.writeFileSync(path.join(root, '本书记忆', `${name}.md`), `# ${name}\n既有记忆\n`, 'utf-8')
+    fs.writeFileSync(path.join(root, '本书记忆', `${name}.md`), `# ${name}\n`, 'utf-8')
   }
   return root
 }
@@ -149,7 +149,8 @@ describe('定稿沉淀', () => {
       const timeline = ledger.entries.find((entry) => entry.分类 === '时间线' && entry.名称 === '城门异响')
       expect(timeline?.字段['章号']).toBe('第0001章')
       expect(timeline?.字段['来源']).toBe('定稿/卷01/0001-开篇任务.md')
-      expect(timeline?.正文).toContain('发现异常')
+      expect(timeline?.字段['事件']).toContain('发现异常')
+      expect(timeline?.字段['时点']).toBe('未知')
     }
     const log = spawnSync('git', ['log', '-1', '--pretty=%s'], { cwd: root, encoding: 'utf-8', windowsHide: true })
     expect(log.stdout.trim()).toBe('ch: 开篇任务入档')

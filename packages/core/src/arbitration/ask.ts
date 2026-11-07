@@ -48,6 +48,8 @@ const KIND_FALLBACK_DETAIL: Record<IrreversibleKind, string> = {
   记忆入记: '本书记忆候选入记:入记后进入长期记忆,后续检索可见。',
   吃书补偿: '吃书补偿事件:已入档内容与后续设定冲突,以补偿方式收口。',
   规则来源声明: '规则来源声明:声明后作为裁决依据被引用。',
+  书仓升级: '按本次预览转换书仓格式；文件、格式标记和版本提交按同一计划核对。',
+  书仓升级续办: '核对指定维护操作的收据，仅恢复其中断批次或补办原批次提交。',
 }
 
 const KIND_QUESTION: Record<IrreversibleKind, string> = {
@@ -56,11 +58,13 @@ const KIND_QUESTION: Record<IrreversibleKind, string> = {
   记忆入记: '是否批准将本书记忆候选入记?',
   吃书补偿: '是否批准吃书补偿事件?',
   规则来源声明: '是否确认该规则来源声明?',
+  书仓升级: '是否批准这份书仓升级计划？',
+  书仓升级续办: '是否批准续办这次书仓升级？',
 }
 
 export function buildAskRequest(kind: IrreversibleKind, payload: ArbitrationPayload): AskRequest {
   const parts = [payload.范围, payload.摘要].filter((x): x is string => typeof x === 'string' && x.trim() !== '')
-  const detail = parts.length > 0 ? parts.join(' · ') : KIND_FALLBACK_DETAIL[kind]
+  const detail = parts.length > 0 ? parts.join(kind === '书仓升级' || kind === '书仓升级续办' ? '\n\n' : ' · ') : KIND_FALLBACK_DETAIL[kind]
   return {
     questions: [
       {
@@ -69,7 +73,7 @@ export function buildAskRequest(kind: IrreversibleKind, payload: ArbitrationPayl
         question: KIND_QUESTION[kind],
         detail,
         options: [
-          { label: APPROVE_LABEL, description: '不可逆动作生效' },
+          { label: APPROVE_LABEL, description: kind === '书仓升级' ? '只执行本次预览并核对提交' : kind === '书仓升级续办' ? '只续办列出的原维护操作' : '不可逆动作生效' },
           { label: REJECT_LABEL, description: '退回,不生效' },
         ],
         multiSelect: false,
