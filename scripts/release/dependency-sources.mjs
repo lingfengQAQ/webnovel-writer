@@ -23,9 +23,11 @@ async function download(url) {
 }
 
 /** Publish package distributions and pinned upstream sources, never local paths. */
-export async function collectDependencySources(root, output) {
+export async function collectDependencySources(root, output, { components: selected = ['bundle', 'embedding-provider'] } = {}) {
+  assert.ok(Array.isArray(selected) && selected.length && selected.every(name => ['bundle', 'embedding-provider'].includes(name)) && new Set(selected).size === selected.length,
+    'Select known, distinct release components for dependency sources')
   const components = new Map()
-  for (const pkg of ['bundle', 'embedding-provider']) {
+  for (const pkg of selected) {
     const entries = JSON.parse(fs.readFileSync(path.join(root, 'packages', pkg, 'lib/third-party-inputs.json'), 'utf8'))
     for (const entry of entries) components.set(`${entry.name}@${entry.version}`, entry)
   }

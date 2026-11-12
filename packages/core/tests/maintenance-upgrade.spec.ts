@@ -137,6 +137,21 @@ describe('whole-book maintenance preview and execution', { timeout: 90_000 }, ()
     expect(allBytes()).toEqual(before)
   })
 
+  // #213: an early block used to carry undefined-valued keys, which the host rejects as non-lossless JSON.
+  it.each([
+    ['an unreadable receipt directory throws mid-preview', () => put(`${UPGRADE_RECEIPT_DIR}/.DS_Store`, 'x'), 'UPGRADE_PREVIEW_FAILED', true],
+    ['the contract has no book identity', () => { put(paths.契约(), get(paths.契约()).replace(/^书id:.*\r?\n/m, '')); git('commit', '--quiet', '-am', 'fixture: no id') }, 'UPGRADE_BOOK_IDENTITY', false],
+  ] as const)('omits unavailable keys when %s', (_name, setup, code, identified) => {
+    init(); setup()
+    const before = allBytes(), result = previewBookUpgrade(root)
+    expect(result).toMatchObject({ ok: true, state: 'blocked', changes: [], issues: [expect.objectContaining({ 代码: code })] })
+    expect(JSON.parse(JSON.stringify(result))).toStrictEqual(result)
+    for (const key of ['fingerprint', 'inspectionBefore', 'inspectionAfter']) expect(result).not.toHaveProperty(key)
+    if (identified) expect(result).toMatchObject({ bookId: 'upgrade-fixture', baseHead: git('rev-parse', 'HEAD') })
+    else for (const key of ['bookId', 'baseHead']) expect(result).not.toHaveProperty(key)
+    expect(allBytes()).toEqual(before)
+  })
+
   it('deduplicates exact issues without merging different fields, lines or explanations', () => {
     const a = { 代码: 'DOCUMENT_INVALID', 路径: '账本/线索.md', 说明: '字段冲突', 字段: '状态', 行: 5 }
     const b = { ...a, 行: 15 }, c = { ...a, 字段: '来源' }, d = { ...a, 说明: '字段为空' }

@@ -54,9 +54,13 @@ export function prepareBookUpgrade(root: string, ownedOperation?: string): Prepa
   let inspectionBefore: BookInspection | undefined, inspectionAfter: BookInspection | undefined
   let expectedStaleIssues: readonly MaintenanceIssue[] = []
   let activeWork: ChapterOpeningInspection['在途项'] = []
+  // An early block has no identity, HEAD or inspections yet; omit those keys so the preview stays lossless JSON.
   const blocked = (): PreparedBookUpgrade => ({ preview: {
-    ok: true, state: 'blocked', ruleVersion: BOOK_UPGRADE_RULE_VERSION, bookId, baseHead,
-    changes: [], effects: [], issues: uniqueMaintenanceIssues([...errors, ...reader.issues]), inspectionBefore, inspectionAfter, expectedStaleIssues, activeWork, resumable: [...new Set(resumable)],
+    ok: true, state: 'blocked', ruleVersion: BOOK_UPGRADE_RULE_VERSION,
+    ...(bookId === undefined ? {} : { bookId }), ...(baseHead === undefined ? {} : { baseHead }),
+    changes: [], effects: [], issues: uniqueMaintenanceIssues([...errors, ...reader.issues]),
+    ...(inspectionBefore === undefined ? {} : { inspectionBefore }), ...(inspectionAfter === undefined ? {} : { inspectionAfter }),
+    expectedStaleIssues, activeWork, resumable: [...new Set(resumable)],
   } })
   try {
     const rootIdentity = upgradeRootIdentity(root)

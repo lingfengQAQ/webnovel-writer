@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import zlib from 'node:zlib'
 import { createHash } from 'node:crypto'
-import { verifyRegistrySources } from '../dependency-sources.mjs'
+import { collectDependencySources, verifyRegistrySources } from '../dependency-sources.mjs'
 
 test('registry source exception requires exact archive bytes and complete pinned TypeScript source', () => {
   const body = Buffer.from('export const original = true\n')
@@ -26,4 +26,38 @@ test('registry source exception requires exact archive bytes and complete pinned
     assert.throws(() => verifyRegistrySources(file, { ...pin, sourceFiles: 2 }), /file count mismatch/)
     assert.throws(() => verifyRegistrySources(file, { ...pin, sourceSha256: '0'.repeat(64) }), /content mismatch/)
   } finally { fs.unlinkSync(file); fs.rmdirSync(directory) }
+})
+
+test('dependency sources can select only the main bundle while the default retains both components', async t => {
+  const temporary = fs.realpathSync.native(os.tmpdir())
+  const root = fs.mkdtempSync(path.join(temporary, 'scriptor-selected-sources-'))
+  t.after(() => {
+    assert.ok(root.startsWith(path.join(temporary, 'scriptor-selected-sources-')))
+    const remove = directory => { for (const name of fs.readdirSync(directory)) { const file = path.join(directory, name); if (fs.lstatSync(file).isDirectory()) remove(file); else fs.unlinkSync(file) } fs.rmdirSync(directory) }
+    remove(root)
+  })
+  const bundle = path.join(root, 'packages/bundle/lib'), embedding = path.join(root, 'packages/embedding-provider/lib')
+  fs.mkdirSync(bundle, { recursive: true })
+  fs.writeFileSync(path.join(bundle, 'third-party-inputs.json'), JSON.stringify([{ name: 'bundle-fixture', version: '1.0.0', license: 'MIT' }]))
+  const archive = Buffer.from('fixture registry distribution'), upstream = Buffer.from('fixture upstream source')
+  const requested = []
+  t.mock.method(globalThis, 'fetch', async input => {
+    const url = String(input); requested.push(url)
+    if (url.endsWith('.tgz')) return new Response(archive)
+    if (url.startsWith('https://codeload.github.com/')) return new Response(upstream)
+    const name = decodeURIComponent(url.split('/').at(-2))
+    return Response.json({ repository: `https://github.com/fixture/${name}`, gitHead: 'a'.repeat(40),
+      dist: { tarball: `https://registry.npmjs.org/${name}/-/${name}-1.0.0.tgz`, integrity: `sha512-${createHash('sha512').update(archive).digest('base64')}` } })
+  })
+  const mainOutput = path.join(root, 'main-output'); fs.mkdirSync(mainOutput)
+  assert.deepEqual((await collectDependencySources(root, mainOutput, { components: ['bundle'] })).map(item => item.name), ['bundle-fixture'])
+  assert.equal(fs.existsSync(embedding), false)
+  assert.equal(requested.some(url => url.includes('embedding-fixture')), false)
+  assert.ok(fs.statSync(path.join(mainOutput, 'third-party-sources.tar.gz')).size > 0)
+  fs.mkdirSync(embedding, { recursive: true })
+  fs.writeFileSync(path.join(embedding, 'third-party-inputs.json'), JSON.stringify([{ name: 'embedding-fixture', version: '1.0.0', license: 'MIT' }]))
+  const defaultOutput = path.join(root, 'default-output'); fs.mkdirSync(defaultOutput)
+  assert.deepEqual((await collectDependencySources(root, defaultOutput)).map(item => item.name), ['bundle-fixture', 'embedding-fixture'])
+  await assert.rejects(collectDependencySources(root, path.join(root, 'invalid-output'), { components: ['../outside'] }), /known, distinct release components/)
+  assert.equal(fs.existsSync(path.join(root, 'invalid-output')), false)
 })

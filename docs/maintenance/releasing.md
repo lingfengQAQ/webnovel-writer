@@ -10,13 +10,28 @@
 
 主包 `packages/bundle/package.json` 是安装包版本真源，根 workspace 同步该版本。`pnpm check:version` 核对 CHANGELOG；发行时 `RELEASE_TAG` 必须等于 `scriptor-v<version>`。
 
-- 从 8.0.0 起仅发布正式 SemVer，兼容修复递增 patch，功能更新递增 minor；每份公开安装包版本唯一。
+- 从 8.0.0 起 npm 发行使用正式 SemVer，兼容修复递增 patch，功能更新递增 minor；每份公开安装包版本唯一。下述 GitHub 单主包测试版使用独立通道。
 - 兼容修复递增 patch；0.x 的新增能力/不兼容变化递增 minor，并说明迁移影响。
 - 1.x 后按 SemVer 承诺：破坏兼容递增 major，兼容功能 minor，修复 patch。
 - 纯文档修改不必发包。内部 workspace 包不独立发版。当前发行器要求主包、full、检索、桌宠四包同版；每次发布逐组件注明实际变化，无功能变化的组件标为兼容发行。安装仍可选，用户无需为主包升级新增不使用的组件；推荐组合是经过本批验证的同版本。
 - 若未来改为组件独立发版，须同时修改 version/build/publish、manifest、full 的精确依赖、同版本原件复用和兼容安装矩阵；不能只改版本号或文案。本次 8.2.0 保留现有四包同版机制。
 
 tag、CHANGELOG、包版本和附件必须对应。不得替换已发布同版本的字节；有错误就发布新版本。源码/打包位级可复现未作保证，验收和上传必须使用同一份生成的 tgz。
+
+## 小范围 GitHub 测试版
+
+定向复测已合入修复时，可以仅提供主插件的 `X.Y.Z-preview.N` 测试包，不发布 npm。源码中的正式版本、四包依赖和正式安装教程保持同一稳定基线；`build-test.mjs` 在源码外的临时目录按公开配方派生主包版本，并把 `publishConfig.tag` 设为 `preview`。清单明确区分 `sourceVersion`、测试版本与公开提交，源码附件包含构建配方。
+
+```text
+pnpm exec node scripts/release/build-test.mjs --version 8.4.1-preview.1 --out <新的空目录>
+node scripts/release/install-smoke.mjs <同一测试主包.tgz>
+```
+
+构建入口只接受干净的公开源码，复用主包构建、`pack-check <tgz> --github-test`、八个独立技能入口及对应第三方源码收集。普通 `pack-check` 和正式发布器仍只接受正式通道。测试包须通过源码外主包安装、真实 Loader、卸载重装与目标缺陷的实际包诊断；不需要模型服务或真实作品。
+
+测试标签使用 `scriptor-test-v<测试版本>`，绑定已接受的公开 v8 提交。它不触发 `scriptor-v*` 的四包正式工作流。人工上传已经验证的同一份主包、公开源码、第三方源码、构建配方、版本清单及 SHA256SUMS，以 GitHub `prerelease=true`、`latest=false` 发布。不要对测试标签调用正式 npm 工作流，也不要重新打包覆盖已上传原件。
+
+测试说明需写明修复范围、适用 DSH 基线、安装方法与尚未验证的环境。安装新包不会自动批准书仓迁移；预览输出可读不等于真实作品已通过全部升级条件。
 
 ## 发版前
 

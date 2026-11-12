@@ -147,6 +147,17 @@ test('publish contract rejects private, lifecycle hooks, local dependencies and 
     assert.throws(() => checkPublishableManifest({ ...base, ...change }))
   }
 })
+test('GitHub test validation is explicit, main-only and cannot relax the stable publish contract', () => {
+  const candidate = { name: '@linfengqaqtat/dsh-scriptor', version: '8.4.1-preview.1', engines,
+    publishConfig: { ...publishConfig, tag: 'preview' } }
+  checkPublishableManifest(candidate, { channel: 'github-test' })
+  assert.throws(() => checkPublishableManifest(candidate))
+  assert.throws(() => checkPublishableManifest(candidate, { channel: 'unknown' }))
+  for (const change of [{ name: '@linfengqaqtat/dsh-scriptor-full' }, { version: '8.4.1' }, { version: '8.4.1-preview.01' },
+    { publishConfig }, { private: true }, { scripts: { prepare: 'arbitrary-command' } }, { dependencies: { local: 'file:../local' } }]) {
+    assert.throws(() => checkPublishableManifest({ ...candidate, ...change }, { channel: 'github-test' }))
+  }
+})
 test('full package requires exact dependencies and a DSH bundle declaration', () => fixture(({ directory, packages }) => {
   const filename = path.join(directory, packages[2].tarball)
   checkMetaPackage(filename, version, version)
