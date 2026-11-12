@@ -41,11 +41,16 @@ export function packageFiles(filename) {
   return files
 }
 
-export function checkPublishableManifest(manifest) {
+export function checkPublishableManifest(manifest, { channel = 'stable' } = {}) {
+  assert.ok(['stable', 'github-test'].includes(channel), 'Unknown package validation channel')
   checkDshCompatibility(manifest)
   assert.notEqual(manifest.private, true, 'Release packages must not be private')
   assert.equal(manifest.publishConfig?.access, 'public')
-  assert.equal(manifest.publishConfig?.tag, 'latest')
+  if (channel === 'github-test') {
+    assert.equal(manifest.name, '@linfengqaqtat/dsh-scriptor', 'GitHub test builds contain only the main plugin')
+    assert.match(manifest.version ?? '', /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)-preview\.[1-9]\d*$/, 'GitHub test builds require a numbered preview version')
+  }
+  assert.equal(manifest.publishConfig?.tag, channel === 'github-test' ? 'preview' : 'latest')
   assert.equal(manifest.publishConfig?.registry, 'https://registry.npmjs.org/')
   for (const hook of ['preinstall', 'install', 'postinstall', 'prepare', 'prepublishOnly', 'prepack', 'postpack', 'publish', 'postpublish']) {
     assert.equal(manifest.scripts?.[hook], undefined, `Release packages must not run ${hook}`)

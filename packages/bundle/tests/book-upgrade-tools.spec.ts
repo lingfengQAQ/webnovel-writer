@@ -5,6 +5,7 @@ import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { assertSupportedJsonSchema, validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
+import { isJsonValue } from '@deepseek-ai/dsh-util-values'
 import * as core from '@webnovel/core'
 import { removeSync } from '../../core/src/repo/remove'
 import { createNovelTools, type NovelToolsDeps, type ToolExecContext } from '../src/novel-tools'
@@ -117,6 +118,35 @@ describe('整仓升级工具的预览与批准', { timeout: 30_000 }, () => {
     })
     expect(await f.call('novel_apply_book_upgrade', { bookId: f.bookId, fingerprint: preview.fingerprint })).toMatchObject({ code: 'author-declined' })
     expect(bytes(f.bookRoot)).toEqual(before)
+  })
+
+  // #213：宿主按无损 JSON 快照工具结果，值为 undefined 的键会让整条结果被拒收，作者看不到阻断原因。
+  it.each([
+    ['预览中途抛错', (f: ReturnType<typeof fixture>) => {
+      const dir = path.join(f.bookRoot, '草稿区/.maintenance-receipts'); fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(path.join(dir, '.DS_Store'), 'x')
+    }, 'UPGRADE_PREVIEW_FAILED'],
+    ['契约缺书id', (f: ReturnType<typeof fixture>) => {
+      fs.writeFileSync(f.contract, fs.readFileSync(f.contract, 'utf8').replace(/^书id:.*\r?\n/m, ''))
+      git(f.bookRoot, 'commit', '--quiet', '-am', 'fixture: no id')
+    }, 'UPGRADE_BOOK_IDENTITY'],
+  ] as const)('提前阻断（%s）仍以无损 JSON 呈报阻断原因', async (_name, setup, code) => {
+    const f = fixture(); setup(f)
+    const before = bytes(f.bookRoot), preview = await f.call('novel_preview_book_upgrade')
+    expect(isJsonValue(preview), JSON.stringify(preview)).toBe(true)
+    expect(preview).toMatchObject({ ok: true, state: 'blocked', changes: [], issues: [expect.objectContaining({ 代码: code })] })
+    expect(preview).not.toHaveProperty('fingerprint')
+    expect(bytes(f.bookRoot)).toEqual(before); expect(f.ask).not.toHaveBeenCalled()
+  })
+
+  it('工具出口剔除值为 undefined 的键，未来同类遗漏也不会被宿主拒收', async () => {
+    const f = fixture()
+    vi.spyOn(core, 'previewBookUpgrade').mockReturnValue({ ok: true, state: 'blocked', ruleVersion: 2, bookId: undefined, baseHead: undefined, changes: [], effects: [],
+      issues: [{ 代码: 'UPGRADE_PREVIEW_FAILED', 路径: '.', 说明: '模拟阻断', 字段: undefined }], inspectionBefore: undefined, resumable: [] })
+    const preview = await f.call('novel_preview_book_upgrade')
+    expect(isJsonValue(preview), JSON.stringify(preview)).toBe(true)
+    expect(preview).toStrictEqual({ maintenance: 'book-upgrade', ok: true, state: 'blocked', ruleVersion: 2, changes: [], effects: [],
+      issues: [{ 代码: 'UPGRADE_PREVIEW_FAILED', 路径: '.', 说明: '模拟阻断' }], resumable: [], message: expect.any(String) })
   })
 
   it('未变化和过期指纹不发起作者问答', async () => {

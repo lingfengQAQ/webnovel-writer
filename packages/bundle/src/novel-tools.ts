@@ -36,6 +36,7 @@ import { readStoryStatus } from './story-status'
 import { MAINTENANCE_OUTPUT, MAINTENANCE_PARAMETERS } from './maintenance-output'
 import { createBookUpgradeTools } from './book-upgrade-tools'
 import { failureFrom, expectedFailure, FAILURE_FIELDS, normalizeFailure, toolFailure } from './tool-failure'
+import { omitUndefinedFields } from './tool-json'
 import * as fs from 'node:fs'
 import * as nodePath from 'node:path'
 import type { ToolOutputDefinition } from '@deepseek-ai/dsh-tools'
@@ -2122,6 +2123,8 @@ ${摘要现文}`,
     }
   })
   // Every failure carries code and next so the main Agent can choose its next step.
+  // Results also leave without undefined-valued keys, which the host rejects as non-lossless JSON.
+  const finish = (result: unknown) => omitUndefinedFields(normalizeFailure(result))
   return guarded.map((tool) => ({
     ...tool,
     output: withFailureFields(tool.output),
@@ -2134,9 +2137,9 @@ ${摘要现文}`,
       try {
         const result = tool.execute(args, sessionContext)
         if (result !== null && typeof result === 'object' && typeof (result as PromiseLike<unknown>).then === 'function') {
-          return Promise.resolve(result).then(normalizeFailure, failed)
+          return Promise.resolve(result).then(finish, failed)
         }
-        return normalizeFailure(result)
+        return finish(result)
       } catch (error) { return failed(error) }
     },
   }))
