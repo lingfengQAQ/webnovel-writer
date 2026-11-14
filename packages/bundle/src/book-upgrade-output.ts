@@ -29,6 +29,7 @@ const properties = {
   activeWork: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { 路径: text, 种类: text, 说明: text }, required: ['路径', '种类', '说明'] } },
   effects: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { path: text, sources: texts, reason: text }, required: ['path', 'sources', 'reason'] } },
   issues: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { 代码: text, 路径: text, 说明: text, 字段: text, 行: { type: 'integer' }, 来源形态: text }, required: ['代码', '路径', '说明'] } },
+  notices: { type: 'array', description: '单独呈报的留档提示，不构成执行阻断', items: { type: 'object', additionalProperties: false, properties: { 代码: text, 路径: text, 说明: text, 字段: text, 行: { type: 'integer' }, 来源形态: text }, required: ['代码', '路径', '说明'] } },
   inspectionBefore: { ...BOOK_INSPECTION_OUTPUT_SCHEMA, description: '当前原书的只读检查；旧格式问题保留在这里' },
   inspectionAfter: { ...BOOK_INSPECTION_OUTPUT_SCHEMA, description: '拟写字节的内存检查，不代表已写入或原书当前健康' },
   expectedStaleIssues: { type: 'array', description: '仅本计划造成的预期材料过期；仍列在检查后态，不计为执行阻断', items: { type: 'object', additionalProperties: false, properties: { 代码: text, 路径: text, 说明: text, 字段: text, 行: { type: 'integer' }, 来源形态: text }, required: ['代码', '路径', '说明'] } },

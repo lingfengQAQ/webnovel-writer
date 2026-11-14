@@ -1,4 +1,4 @@
-import { isWritingAgent } from '../agent-mode'
+import { isLiveMainAgent, isWritingAgent } from '../agent-mode'
 import { AUTHOR_SAVE_SOURCE, EDITOR_REQUEST_SOURCE } from '../message-sources'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-connection'
@@ -10,7 +10,7 @@ import type { FileRef, StudySave } from './types'
 import { studyFileLink } from './links'
 import type { BookIndexManager } from '../indexing/manager'
 import type { IndexAction } from '@webnovel/core'
-import { WorkflowObserver, observeWorkflow, type WorkflowAgent, type WorkflowChildReader } from './workflow'
+import { WorkflowObserver, observeWorkflow, readWorkflowChild, resolveWorkflowChild, type WorkflowAgent, type WorkflowChildReader, type WorkflowChildResolver } from './workflow'
 import {
   EDITOR_CONTEXT_LIMIT, EDITOR_ENTRY_LIMIT, EDITOR_INSTRUCTION_LIMIT, EDITOR_INTENTS, EDITOR_REQUEST_ID, EDITOR_SELECTION_LIMIT,
   EditorRequestError, EditorRequestHub, requestMessage, textLength,
@@ -24,7 +24,7 @@ interface StudyAgent extends WorkflowAgent {
 }
 
 export interface StudyWebRuntime {
-  readonly agents: { get(id: string): StudyAgent | undefined; roots(): readonly StudyAgent[] }
+  readonly agents: { get(id: string): StudyAgent | undefined; roots?(): readonly StudyAgent[] }
 }
 
 export const STUDY_API_PATH = '/api/webnovel/study/'
@@ -210,7 +210,7 @@ function openEditorRequest(hub: EditorRequestHub, agent: StudyAgent, snapshot: E
   }
 }
 
-export function createStudyHandler(runtime: StudyWebRuntime, indexing?: BookIndexManager, workflow = new WorkflowObserver(), editorRequests = new EditorRequestHub(), writing: (agent: StudyAgent) => boolean = () => true, readChild?: WorkflowChildReader) {
+export function createStudyHandler(runtime: StudyWebRuntime, indexing?: BookIndexManager, workflow = new WorkflowObserver(), editorRequests = new EditorRequestHub(), writing: (agent: StudyAgent) => boolean = () => true, readChild?: WorkflowChildReader, resolveChild?: WorkflowChildResolver) {
   const delivered = new Map<string, StudyAgent>()
   return async (request: Request): Promise<Response> => {
     if (request.method !== 'POST' || request.headers.get('x-webnovel-request') !== '1') {
@@ -221,7 +221,7 @@ export function createStudyHandler(runtime: StudyWebRuntime, indexing?: BookInde
       request.signal.throwIfAborted()
       const sessionId = stringOf(input, 'sessionId')
       const agent = runtime.agents.get(sessionId)
-      if (!agent || !runtime.agents.roots().includes(agent)) throw new AuthorDocumentError('read-only', '请在当前主会话中打开书房')
+      if (!agent || agent.id !== sessionId || !isLiveMainAgent(agent, runtime.agents)) throw new AuthorDocumentError('read-only', '请在当前主会话中打开书房')
       const cwd = agent.session.header.cwd
       if (!cwd || !isFullyQualifiedPath(cwd)) throw new AuthorDocumentError('invalid-path', '当前会话没有有效工作范围')
       const service = new StudyService(cwd)
@@ -266,7 +266,7 @@ export function createStudyHandler(runtime: StudyWebRuntime, indexing?: BookInde
             typeof input['token'] === 'string' ? input['token'] : undefined)
           break
         }
-        case 'workflow': value = await workflow.readWithChildren(agent, service.indexBook(stringOf(input, 'space')).bookId, readChild, request.signal); break
+        case 'workflow': value = await workflow.readWithChildren(agent, service.indexBook(stringOf(input, 'space')).bookId, readChild, request.signal, resolveChild); break
         case 'save': {
           const ref = refOf(input)
           const current = service.read(ref).ref
@@ -332,27 +332,9 @@ export function attachStudyWeb(ctx: Context, indexing?: BookIndexManager, editor
   ctx.inject(['connection', 'agents'], scope => {
     const workflow = new WorkflowObserver()
     observeWorkflow(scope, workflow)
-    const readChild: WorkflowChildReader = async (childId, settledAt, signal) => {
-      const query = scope.get('sessionQuery')
-      if (!query) return undefined
-      const observation = await query.observeSession(childId as Parameters<typeof query.observeSession>[0], { signal, projectionMode: 'none' })
-      try {
-        const child = scope.agents.get(observation.header.id)
-        const events = observation.events
-        let checked = 0
-        for (let index = events.length - 1; index >= observation.inheritedEventCount && checked < 5000; index--) {
-          const event = events[index]!
-          checked++
-          if (settledAt !== undefined && event.time > settledAt) continue
-          if (event.type === 'turn/end') return { parentId: observation.header.parentSession, active: false,
-            ended: event.time, reason: typeof event.data.reason === 'string' ? event.data.reason : event.data.reason.kind }
-          if (event.type === 'turn/start') return { parentId: observation.header.parentSession,
-            active: observation.source === 'live' && child?.status === 'running', waiting: !!child && workflow.waiting(child) }
-        }
-        return { parentId: observation.header.parentSession, active: false }
-      } finally { observation[Symbol.dispose]() }
-    }
-    const handler = createStudyHandler(scope, indexing, workflow, editorRequests, agent => isWritingAgent(agent as { ctx?: unknown }), readChild)
+    const readChild: WorkflowChildReader = (childId, settledAt, signal) => readWorkflowChild(scope, workflow, childId, settledAt, signal)
+    const handler = createStudyHandler(scope, indexing, workflow, editorRequests, agent => isWritingAgent(agent as { ctx?: unknown }), readChild,
+      (agent, name, signal) => resolveWorkflowChild(scope, agent, name, signal))
     for (const method of METHODS) {
       scope.connection.fetch.register({ path: STUDY_API_PATH + method, methods: ['POST'], requestBody: 'streaming', fetch: handler })
     }

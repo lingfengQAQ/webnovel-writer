@@ -1,18 +1,20 @@
 # 维护者命令行安装与包名迁移
 
-新手使用 [DSH 插件管理页面](../user/install.md)。本页供维护已有 Web profile 或离线包的用户使用，配套 DSH 0.2.2-rc.1。
+本页命令使用8.4.1的精确npm版本。离线文件安装可将包标识替换为本版Release中已校验的 `.tgz` 路径。
+
+新手使用 [DSH 插件管理页面](../user/install.md)。本页供维护已有 Web profile 或离线包的用户使用，配套 DSH 0.2.2-rc.3。
 
 ```powershell
 dsh --profile scriptor --from-default-profile web --dump-config
-dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor@8.4.0
-dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-retrieval@8.4.0
-dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-companion@8.4.0
+dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor@8.4.1
+dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-retrieval@8.4.1
+dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-companion@8.4.1
 dsh --profile scriptor
 ```
 
 已有 profile 不再初始化。Desktop 使用自己的 desktop profile，不套用 Web 模板；优先在桌面插件页管理。
 
-完整版 @linfengqaqtat/dsh-scriptor-full@8.4.0 仅聚合主包与检索，不能与两个单独入口混装；桌宠独立可选。
+完整版使用 `@linfengqaqtat/dsh-scriptor-full@8.4.1`，与上面的写作、检索单装入口二选一。即使从本地full安装，两个依赖仍需从npm下载；桌宠独立可选。
 
 ## 旧包迁移
 

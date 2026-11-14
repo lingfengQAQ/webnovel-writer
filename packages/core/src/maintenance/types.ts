@@ -62,5 +62,7 @@ export interface BookInspection {
   readonly 未检范围: readonly UncheckedDocument[]
   readonly 类型覆盖: readonly DocumentTypeCoverage[]
   readonly 问题: readonly MaintenanceIssue[]
+  /** Informational evidence; these entries do not block inspection or an upgrade. */
+  readonly 提示?: readonly MaintenanceIssue[]
   readonly 快照: MaintenanceSnapshot
 }

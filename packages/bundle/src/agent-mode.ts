@@ -9,6 +9,17 @@ interface AgentContext {
   readonly ctx?: unknown
 }
 
+export interface MainAgentRegistry {
+  get(id: string): unknown
+  /** rc.1 exposes runtime ownership here; rc.3 uses ordinary live instances. */
+  roots?(): readonly unknown[]
+}
+
+export function isLiveMainAgent(agent: { readonly id: string; readonly session?: { readonly header?: { readonly origin?: string } } }, registry: MainAgentRegistry): boolean {
+  if (registry.get(agent.id) !== agent) return false
+  return typeof registry.roots === 'function' ? registry.roots().includes(agent) : agent.session?.header?.origin !== 'subagent'
+}
+
 /** Use the live preset binding; titles, cwd, and historical origin are not mode evidence. */
 export function writingCapabilityOf(agent: AgentContext | undefined): WritingCapability | undefined {
   try {

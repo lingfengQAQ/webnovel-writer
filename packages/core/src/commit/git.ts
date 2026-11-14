@@ -25,11 +25,12 @@ export interface GitCommandResult {
   readonly noChanges?: boolean
 }
 
-export function runGit(bookRoot: string, args: readonly string[], env?: NodeJS.ProcessEnv): GitCommandResult {
+export function runGit(bookRoot: string, args: readonly string[], env?: NodeJS.ProcessEnv, input?: string): GitCommandResult {
   const r = spawnSync('git', args, {
     cwd: bookRoot,
     encoding: 'utf-8',
     windowsHide: true,
+    ...(input === undefined ? {} : { input }),
     ...(env === undefined ? {} : { env: { ...process.env, ...env } }),
   })
   if (r.error) return { status: 1, stderr: r.error.message, stdout: '' }

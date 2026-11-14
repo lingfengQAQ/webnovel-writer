@@ -5,6 +5,7 @@ import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ClientHost, NativeEntry, WorkspaceProps } from '../src/client/host'
 import { createEditorStore } from '../src/client/store'
 import { installWorkspaceStudyTabs } from '../src/client/workspace-slots'
+import { WorkspaceStudyTabs } from '../src/client/browser'
 
 const workspace = 'sidebar.workspaces'
 const flow = `${workspace}.directoryFlow`
@@ -29,13 +30,17 @@ function fixture() {
     [leading]: { kind: 'list' as const, scope: 'root' as const },
     [hover]: { kind: 'list' as const, scope: 'root' as const },
   }
-  register({ name: workspace, children: nativeChildren }, (props: WorkspaceProps) => React.createElement(React.Fragment, null,
+  const nativeProps: WorkspaceProps[] = []
+  register({ name: workspace, children: nativeChildren }, (props: WorkspaceProps) => {
+    nativeProps.push(props)
+    return React.createElement(React.Fragment, null,
     props.renderSlot(flow, { open: false }),
     props.renderSlot(menu, owner, { hookContext }),
     props.renderSlot(actions, owner),
     props.renderSlot(leading, { sessionId: owner.sessionId }),
     props.renderSlot(hover, { sessionId: owner.sessionId }),
-  ))
+    )
+  })
   const offFlow = register({ name: flow }, Placeholder)
   const store = {}, inject = vi.fn(() => ({})), label = () => '重命名'
   register({ name: menu, id: 'rename', order: 200, locale: 'workspace', store, inject, label }, Placeholder)
@@ -47,10 +52,33 @@ function fixture() {
     inject(_name: string, callback: () => () => void) { dispose = callback() },
   } } as unknown as ClientHost
   installWorkspaceStudyTabs({ host, store: createEditorStore() })
-  return { core, register, dispose: () => dispose(), owner, hookContext, menuHooks, store, inject, label, offFlow }
+  return { core, register, dispose: () => dispose(), owner, hookContext, menuHooks, store, inject, label, offFlow, host, nativeProps }
 }
 
 describe('原生工作区子插槽转发（#178）', () => {
+  it('rc.3壳层注入的滚动钩子经书房包装完整到达原生工作区', () => {
+    const f = fixture(), bindScrollerRef = vi.fn(), useSectionScroller = () => ({ bindScrollerRef })
+    const snapshot = { byId: {} }
+    const host = { ...f.host, sessions: { list: { getSnapshot: () => snapshot, subscribe: () => () => {} }, scope: () => undefined } } as ClientHost
+    const Native = f.core.entries('webnovel.workspaces')[0]!.component as NativeEntry['component']
+    const renderSlot = vi.fn((_name: string, owner: object) => React.createElement(Native, { ...owner, useSessions: vi.fn(), renderSlot: () => null } as WorkspaceProps))
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() })
+    let rendered: ReturnType<typeof create> | undefined
+    try {
+      act(() => { rendered = create(React.createElement(WorkspaceStudyTabs, { wide: true, expandSidebar: vi.fn(), renderSlot,
+        useSessions: vi.fn(), useSectionScroller, host, store: createEditorStore() })) })
+      expect(f.nativeProps.at(-1)?.useSectionScroller).toBe(useSectionScroller)
+      expect(f.nativeProps.at(-1)?.wide).toBe(false)
+      const tabs = rendered!.root.findAllByProps({ role: 'tab' })
+      act(() => { tabs[0]!.props.onClick() })
+      expect(f.nativeProps.at(-1)?.wide).toBe(true)
+      const scroller = {} as HTMLElement
+      f.nativeProps.at(-1)!.useSectionScroller!().bindScrollerRef(scroller)
+      expect(bindScrollerRef).toHaveBeenCalledWith(scroller)
+      act(() => { tabs[1]!.props.onClick() })
+      expect(f.nativeProps.at(-1)?.wide).toBe(false)
+    } finally { if (rendered) act(() => rendered!.unmount()); f.dispose(); vi.unstubAllGlobals() }
+  })
   it('分别渲染目录、菜单、行内操作和装饰，原样传递菜单上下文', () => {
     const f = fixture()
     const entry = f.core.entries('webnovel.workspaces')[0] as unknown as NativeEntry

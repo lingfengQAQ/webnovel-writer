@@ -6,21 +6,22 @@ import { createPresetAgent, resumePresetAgent } from './preset-agents.mjs'
 
 const labels = { drafting: '正文起草', polish: '润色', revision: '改稿', review: '审读', settle: '沉淀对账' }
 export async function checkWorkerPolicy({ root, book, workspace, ctx, service, check, report, host, execute, toggle, settingsProfile, toolCatalog }) {
-  const { LlmAdapter } = await import(host === undefined ? '@deepseek-ai/dsh-llm' : pathToFileURL(host.entry('@deepseek-ai/dsh-llm')).href)
-  const { WorkflowObserver, observeWorkflow } = await import(pathToFileURL(path.join(root, 'workflow-observer.mjs')).href)
+  const { LlmAdapter, createUserMessage } = await import(host === undefined ? '@deepseek-ai/dsh-llm' : pathToFileURL(host.entry('@deepseek-ai/dsh-llm')).href)
+  const { WorkflowObserver, observeWorkflow, resolveWorkflowChild } = await import(pathToFileURL(path.join(root, 'workflow-observer.mjs')).href)
   const workflow = new WorkflowObserver()
   observeWorkflow(ctx, workflow)
   const cases = new Map()
   const parentNotices = new Map()
   let serial = 0
   let shells = 0
+  let pendingRootCall
   const offShell = service('tools').register({ name: 'pwsh', description: 'Safe fixture, no real shell',
     parameters: { type: 'object', properties: {} },
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
     execute: () => { shells++; return 'fixture shell'; } })
-  const call = (name, args) => [{ type: 'block-start', index: 0, blockType: 'tool-call' },
-    { type: 'tool-call-delta', index: 0, id: 'worker-call', name, argumentsDelta: JSON.stringify(args) },
-    { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'worker-call', name, arguments: JSON.stringify(args) } },
+  const call = (name, args, id = 'worker-call') => [{ type: 'block-start', index: 0, blockType: 'tool-call' },
+    { type: 'tool-call-delta', index: 0, id, name, argumentsDelta: JSON.stringify(args) },
+    { type: 'block-end', index: 0, block: { type: 'tool-call', id, name, arguments: JSON.stringify(args) } },
     { type: 'finish', reason: { kind: 'tool-calls' } }]
   const done = [{ type: 'block-start', index: 0, blockType: 'text' }, { type: 'text-delta', index: 0, text: '完成' },
     { type: 'block-end', index: 0, block: { type: 'text', text: '完成' } }, { type: 'finish', reason: { kind: 'stop' } }]
@@ -31,6 +32,7 @@ export async function checkWorkerPolicy({ root, book, workspace, ctx, service, c
     assert.equal(system.includes('写作子代理执行规约'), test.role !== undefined)
     for (const [role, label] of Object.entries(labels)) assert.equal(system.includes(`【当前角色：${label}】`), test.role === role)
     assert.equal(system.includes('最多一次篇幅调整'), test.role === 'drafting')
+    assert.equal(system.includes('身份: { 卷: <当前卷号>, 章: <当前章号>, 章名: "<当前章名>" }'), test.role === 'drafting' || test.role === 'polish')
     if (test.role) {
       assert.ok(system.includes('字数未核验'))
       for (const name of ['pwsh', 'bash', 'run_code', 'subagent']) assert.equal(options.tools.some(tool => tool.name === name), false)
@@ -44,7 +46,9 @@ export async function checkWorkerPolicy({ root, book, workspace, ctx, service, c
         for (const message of options.messages) {
           if (message.source?.kind === 'subagent-settled') parentNotices.set(message.source.senderSessionId, textOf(message))
         }
-        yield* done
+        const next = pendingRootCall
+        pendingRootCall = undefined
+        yield* next ? call(next.name, next.args, next.id) : done
         return
       }
       const task = options.messages.find(message => message.role === 'user' && /\[probe:/.test(textOf(message)))
@@ -63,7 +67,12 @@ export async function checkWorkerPolicy({ root, book, workspace, ctx, service, c
       } else {
         const result = options.messages.filter(message => message.role === 'tool').at(-1)
         assert.equal(result.isError, Boolean(readOnly(test.role)))
-        if (test.role && !readOnly(test.role)) assert.ok(options.messages.some(message => message.source?.kind === 'plugin:webnovel-draft-length'))
+        if (test.role && !readOnly(test.role)) {
+          const feedback = options.messages.find(message => message.source?.kind === 'plugin:webnovel-draft-length')
+          assert.ok(feedback)
+          // This fixture intentionally omits identity: the actual writing child must see the diagnostic.
+          assert.deepEqual(JSON.parse(textOf(feedback).split('\n')[1]).身份检查.状态, '需核对')
+        }
         for (const chunk of done) yield chunk
       }
     }
@@ -74,6 +83,20 @@ export async function checkWorkerPolicy({ root, book, workspace, ctx, service, c
   const workflowLog = []
   const workflowAgent = { get status() { return main.agent.status }, session: { header: main.agent.session.header,
     get seq() { return workflowLog.length }, eventAt: index => workflowLog[index] } }
+  const readWorkflow = (target = workflowAgent) => workflow.readWithChildren(target, 'worker-fixture-book', undefined, undefined,
+    (_parent, name, signal) => resolveWorkflowChild(ctx, main.agent, name, signal))
+  const driveParent = () => new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { off(); reject(new Error('native delegation turn timed out')) }, 10000)
+    const off = ctx.on('agent/status', ({ agent, status }) => {
+      if (agent !== main.agent || status !== 'idle') return
+      clearTimeout(timer); off(); resolve()
+    })
+    main.agent.followup(createUserMessage({ content: [{ type: 'text', text: '执行本次受控委派。' }], source: { kind: 'user' } }))
+  })
+  const waitForWork = () => {
+    const runtime = service('subagents')
+    return typeof runtime.waitForTreeWork === 'function' ? runtime.waitForTreeWork(main.agent) : runtime.waitForChildren(main.agent)
+  }
   const novelNames = () => service('tools').schemas(main.agent).map(tool => tool.name).filter(name => name.startsWith('novel_')).sort()
   const startCase = async (role, options = {}) => {
     const key = String(++serial)
@@ -84,19 +107,45 @@ export async function checkWorkerPolicy({ root, book, workspace, ctx, service, c
       ...(role ? { role, bookId: 'worker-fixture-book', chapter: 3 } : {}), description: '起草润色审读研究（标题不决定权限）',
       prompt: `[probe:${key}] 检查工具可用性并返回。`, ...(options.preset ? { agent_preset: options.preset } : {}),
     }
-    // Explicit parent call records; activation events themselves come from the real DSH runtime.
     test.callId = `workflow-${key}`
+    if (options.protocol) {
+      const before = main.agent.session.seq
+      pendingRootCall = options.protocol === 'native'
+        ? { id: test.callId, name: 'novel_delegate', args }
+        : { id: test.callId, name: 'run_code', args: { code: `return await tools.novel_delegate(${JSON.stringify(args)})`, description: '受控PTC委派' } }
+      await driveParent()
+      const trace = main.agent.session.snapshotEvents().slice(before)
+      const event = trace.find(event => options.protocol === 'native'
+        ? event.type === 'tool/result' && event.data.message.toolCallId === test.callId
+        : event.type === 'tool/ptc-dispatch' && event.data.name === 'novel_delegate')
+      assert.ok(event, `missing real ${options.protocol} receipt`)
+      const result = options.protocol === 'native' ? event.data.message : event.data
+      assert.equal(result.isError, false)
+      assert.match(result.content[0]?.text, /^started subagent /)
+      assert.equal(event.data.meta?.kind, 'activation')
+      test.childId = event.data.meta.subagentId ?? await resolveWorkflowChild(ctx, main.agent, event.data.meta.name)
+      test.callId = options.protocol === 'native' ? test.callId : event.data.subCallId
+      assert.equal(typeof test.childId, 'string')
+      return test
+    }
+    // Non-driving calls use explicit parent records with the unmodified native
+    // content/meta. The separate protocol checks below read actual AgentLoop logs.
     workflowLog.push({ type: 'tool/call', time: Date.now(), data: { callId: test.callId, name: role ? 'novel_delegate' : 'subagent', arguments: JSON.stringify(args) } })
     const result = await execute(main.agent, role ? 'novel_delegate' : 'subagent', args)
-    workflowLog.push({ type: 'tool/result', time: Date.now(), data: { message: { role: 'tool', toolCallId: test.callId, content: [{ type: 'text', text: JSON.stringify(result.value) }] } } })
+    workflowLog.push({ type: 'tool/result', time: Date.now(), data: {
+      message: { role: 'tool', toolCallId: test.callId, content: result.content, isError: result.isError },
+      ...(result.meta === undefined ? {} : { meta: result.meta }),
+    } })
     assert.equal(result.isError, false, JSON.stringify(result))
     assert.equal(result.value.kind, 'activation')
-    test.childId = result.value.subagentId
+    assert.match(result.content[0]?.text, /^started subagent /)
+    assert.throws(() => JSON.parse(result.content[0]?.text), 'native rendering must not be replaced with synthetic JSON')
+    test.childId = result.value.subagentId ?? await resolveWorkflowChild(ctx, main.agent, result.value.name)
     assert.equal(typeof test.childId, 'string')
     return test
   }
   const finishCase = async test => {
-    await service('subagents').waitForChildren(main.agent)
+    await waitForWork()
     await main.agent.whenIdle()
     assert.equal(test.requests, test.fail ? 1 : 2)
     assert.ok(parentNotices.has(test.childId), 'the parent must receive the final completion notice')
@@ -104,7 +153,7 @@ export async function checkWorkerPolicy({ root, book, workspace, ctx, service, c
     else assert.match(parentNotices.get(test.childId), /完成/)
     assert.equal(service('agents').get(test.childId), undefined, 'settled children release their live Agent')
     const { role } = test
-    if (role) assert.equal(workflow.read(workflowAgent, 'worker-fixture-book').calls.find(call => call.id === test.callId)?.state, test.fail ? 'error' : 'success')
+    if (role) assert.equal((await readWorkflow(test.protocol ? main.agent : workflowAgent)).calls.find(call => call.id === test.callId)?.state, test.fail ? 'error' : 'success')
     assert.equal(fs.existsSync(test.file), Boolean(role && !readOnly(role)))
     return test
   }
@@ -112,9 +161,9 @@ export async function checkWorkerPolicy({ root, book, workspace, ctx, service, c
   try {
     await check('原生委派按显式角色隔离规则与执行权限', async () => {
       assert.deepEqual(novelNames(), [...toolCatalog.production].sort())
-      assert.equal(toolCatalog.business.length, 36)
+      assert.equal(toolCatalog.business.length, 38)
       assert.equal(toolCatalog.conditional.length, 1)
-      assert.equal(new Set(toolCatalog.production).size, 37)
+      assert.equal(new Set(toolCatalog.production).size, 39)
       for (const role of Object.keys(labels)) await runCase(role)
       await runCase(undefined)
       // Same parent, overlapping starts: one role must not leak into its sibling.
@@ -126,12 +175,12 @@ export async function checkWorkerPolicy({ root, book, workspace, ctx, service, c
       await runCase('review', { fail: true })
       const cancelled = await startCase('drafting', { hold: true })
       await cancelled.entered.promise
-      assert.equal(workflow.read(workflowAgent, 'worker-fixture-book').calls.find(call => call.id === cancelled.callId)?.state, 'running')
+      assert.equal((await readWorkflow()).calls.find(call => call.id === cancelled.callId)?.state, 'running')
       service('subagents').interrupt(cancelled.childId, { kind: 'ancestor', agent: main.agent })
       cancelled.release.resolve()
-      await service('subagents').waitForChildren(main.agent)
+      await waitForWork()
       await main.agent.whenIdle()
-      assert.equal(workflow.read(workflowAgent, 'worker-fixture-book').calls.find(call => call.id === cancelled.callId)?.state, 'stopped')
+      assert.equal((await readWorkflow()).calls.find(call => call.id === cancelled.callId)?.state, 'stopped')
       assert.equal(fs.existsSync(cancelled.file), false)
       assert.match(parentNotices.get(cancelled.childId), /was stopped before it finished/)
       assert.equal((await execute(main.agent, 'pwsh', {})).isError, false)
@@ -143,6 +192,40 @@ export async function checkWorkerPolicy({ root, book, workspace, ctx, service, c
       report.workerPolicy = { explicitRoles: 5, ordinaryUnchanged: true, concurrentSiblings: true, nativeSchemaPreserved: true,
         independentPreset: true, explicitBookChapterPreserved: true, nativeWorkflowLifecycle: true, activationThenCompletion: true, failedCompletion: true, cancelledWithoutWrite: true,
         tools: { business: toolCatalog.business.length, conditional: toolCatalog.conditional.length, registered: novelNames().length } }
+    })
+    await check('真实AgentLoop与PTC日志保留委派文本、元数据和独立生命周期', async () => {
+      const native = await startCase('review', { hold: true, protocol: 'native' })
+      await native.entered.promise
+      assert.equal((await readWorkflow(main.agent)).calls.find(call => call.id === native.callId)?.state, 'running')
+      native.release.resolve(); await finishCase(native)
+      // As in the existing PTC host probe, only the program sandbox is controlled.
+      // Registry dispatch, durable events, child creation and policies are native.
+      ctx.provide('ptcRuntime', {
+        language: 'typescript', isolation: 'in-process-fixture', executionInstructions: '',
+        resolve: request => ({ ...request, cwd: request.cwd ?? workspace, timeoutMs: null }),
+        async run(spec) {
+          const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
+          try {
+            const value = await new AsyncFunction(...spec.bindings.map(binding => binding.global), spec.program)(...spec.bindings.map(binding => binding.functions))
+            return { logs: [], ...(value === undefined ? {} : { value }) }
+          } catch (error) { return { logs: [], error: { kind: 'exception', message: String(error) } } }
+        },
+      })
+      const { PtcExecutor } = await import(host ? pathToFileURL(host.entry('@deepseek-ai/dsh-tool-executor-ptc')).href : '@deepseek-ai/dsh-tool-executor-ptc')
+      const mode = main.agent.ctx.inject(['tools', 'systemPrompt', 'ptcRuntime'], scope => { scope.tools.setExecutor(new PtcExecutor(scope)) })
+      try {
+        const ptc = await startCase('review', { hold: true, protocol: 'ptc' })
+        await ptc.entered.promise
+        assert.equal((await readWorkflow(main.agent)).calls.find(call => call.id === ptc.callId)?.state, 'running')
+        ptc.release.resolve(); await finishCase(ptc)
+      } finally {
+        await mode.dispose()
+        // Executor teardown intentionally leaves an unavailable selection;
+        // the fixture explicitly returns this parent to native execution.
+        const { NativeToolExecutor } = await import(host ? pathToFileURL(host.entry('@deepseek-ai/dsh-tool-executor-native')).href : '@deepseek-ai/dsh-tool-executor-native')
+        main.agent.ctx.get('tools').setExecutor(new NativeToolExecutor(main.agent.ctx))
+      }
+      report.workerPolicy.nativeDurableReceipts = { native: true, ptc: true, renderedTextPreserved: true }
     })
     await check('委派工具随原生入口和插件装卸且角色可恢复', async () => {
       await toggle('subagent-tool', true)

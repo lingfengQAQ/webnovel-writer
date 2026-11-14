@@ -2,18 +2,33 @@
   "schemaVersion": 1,
   "repository": "https://github.com/deepseek-ai/deepseek-harness",
   "source": {
-    "tag": "dsh-v0.2.2-rc.1",
-    "commit": "66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db",
-    "version": "0.2.2-rc.1",
+    "tag": "dsh-v0.2.2-rc.3",
+    "commit": "38a6a5c965aa99ab525161efb7cc5cf1fe62fced",
+    "version": "0.2.2-rc.3",
     "sessionFormat": 4,
-    "publishedAt": "2026-11-04T13:07:14Z"
+    "publishedAt": "2026-11-13T07:56:55Z"
   },
+  "validationSources": [
+    {
+      "tag": "dsh-v0.2.2-rc.1",
+      "commit": "66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db",
+      "version": "0.2.2-rc.1",
+      "sessionFormat": 4
+    },
+    {
+      "tag": "dsh-v0.2.2-rc.3",
+      "commit": "38a6a5c965aa99ab525161efb7cc5cf1fe62fced",
+      "version": "0.2.2-rc.3",
+      "sessionFormat": 4
+    }
+  ],
   "registry": {
-    "version": "0.2.2-rc.1",
+    "version": "0.2.2-rc.3",
     "sessionFormat": 4,
-    "checkedAt": "2026-11-06",
+    "checkedAt": "2026-11-14",
     "sourceVersionPublished": true,
-    "sourceDistTag": "latest"
+    "sourceDistTag": "next",
+    "distTags": { "latest": "0.2.2-rc.1", "next": "0.2.2-rc.3" }
   },
   "compatibility": {
     "range": ">=0.2.2-rc.1 <0.3.0-0",
@@ -21,7 +36,8 @@
     "nodeRange": ">=24.9.0",
     "policy": "Allow compatible releases in the 0.2 series from the validated minimum; retest each adopted baseline.",
     "testedVersions": [
-      "0.2.2-rc.1"
+      "0.2.2-rc.1",
+      "0.2.2-rc.3"
     ],
     "cordisRange": "^4.1.0"
   }

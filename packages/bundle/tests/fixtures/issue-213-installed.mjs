@@ -112,7 +112,7 @@ function syntheticBook(name, bookId, unknownReceipt) {
   if (unknownReceipt) {
     const directory = path.join(root, '草稿区', '.maintenance-receipts')
     fs.mkdirSync(directory, { recursive: true })
-    fs.writeFileSync(path.join(directory, '.DS_Store'), 'synthetic unknown receipt entry\n')
+    fs.writeFileSync(path.join(directory, 'unexpected.txt'), 'synthetic unknown receipt entry\n')
   }
   assert.equal(git('status', '--porcelain=v1'), '')
   return { root, bookId, head }

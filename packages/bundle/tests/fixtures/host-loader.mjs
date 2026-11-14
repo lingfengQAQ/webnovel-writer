@@ -1,4 +1,4 @@
-import { createPresetAgent, resumePresetAgent } from './preset-agents.mjs'
+import { createPresetAgent, resumePresetAgent, mainAgents } from './preset-agents.mjs'
 import { createSettingsProfile } from './settings-profile.mjs'
 import assert from 'node:assert/strict'
 import * as fs from 'node:fs'
@@ -63,6 +63,7 @@ const profile = [
   ...(process.argv[4] === 'worker-policy' ? [
     { id: 'subagents', name: '@deepseek-ai/dsh-subagent' },
     { id: 'spawn', name: '@deepseek-ai/dsh-subagent-spawn-in-process' },
+    { id: 'session-query', name: '@deepseek-ai/dsh-session-query' },
     { id: 'subagent-tool', name: '@deepseek-ai/dsh-tool-subagent', config: {
       provider: 'spawn', toolName: 'subagent', allowedAgentPresets: ['standard'],
     } },
@@ -179,7 +180,7 @@ try {
   const child = (await createPresetAgent(main.ctx.get('agents'), {
     parentAgent: main, sessionId: 'loader-child', meta: { cwd: workspace, origin: 'subagent', parentSession: main.id, delegationDepth: 1 },
   })).agent
-  report.identities = { main: main.id, child: child.id, sessionFormat: main.session.header.version, runtimeRoots: service('agents').roots().map(agent => agent.id) }
+  report.identities = { main: main.id, child: child.id, sessionFormat: main.session.header.version, runtimeRoots: mainAgents(service('agents')).map(agent => agent.id) }
 
   await check('写作模式与普通模式并存且普通文件遵循宿主路径', async () => {
     const ordinaryCwd = path.join(root, 'ordinary-workspace')
@@ -261,6 +262,8 @@ try {
     await assert.rejects(service('userQuestions').ask({ agent: child, questions: [{ id: 'test', question: '继续？' }] }), { code: 'DELEGATED_CALLER' })
   })
   await check('作者裁决与本次调用绑定', async () => {
+    const core = await import(pathToFileURL(path.join(root, 'native-write-core.mjs')).href)
+    core.settlementPack(book, 'loader-book', { 卷: 1, 章: 1, 章名: '开篇' })
     let seen
     const off = ctx.on('user-questions/request', async request => {
       seen = request
@@ -328,14 +331,17 @@ try {
     assert.deepEqual(schemas(child), [])
     assert.deepEqual(await presentation(main), prompt)
   })
-  await check('运行时归属优先于历史 origin', async () => {
+  await check('当前宿主的主控与委派身份边界', async () => {
     const unmarked = await createPresetAgent(main.ctx.get('agents'), { parentAgent: main, sessionId: 'loader-unmarked-child', meta: { cwd: workspace } })
     const restoredRoot = await createPresetAgent(service('agents'), { sessionId: 'loader-lineage-root', meta: { cwd: workspace, origin: 'subagent', parentSession: main.id } })
+    const ordinaryFork = await createPresetAgent(service('agents'), { sessionId: 'loader-ordinary-fork', meta: { cwd: workspace, parentSession: main.id } })
     try {
-      assert.ok(!service('agents').roots().includes(unmarked.agent))
-      assert.ok(service('agents').roots().includes(restoredRoot.agent))
+      const legacyOwner = typeof service('agents').roots === 'function'
+      assert.ok(!mainAgents(service('agents')).includes(unmarked.agent))
+      assert.equal(mainAgents(service('agents')).includes(restoredRoot.agent), legacyOwner)
       assert.deepEqual(schemas(unmarked.agent), [])
-      assert.equal(schemas(restoredRoot.agent).length, toolCatalog.business.length)
+      assert.equal(schemas(restoredRoot.agent).length, legacyOwner ? toolCatalog.business.length : 0)
+      assert.equal(schemas(ordinaryFork.agent).length, toolCatalog.business.length)
       assert.equal(service('approval').overrideOf(unmarked.agent.session), undefined)
       assert.equal((await presentation(unmarked.agent)).worker.length, 0)
       assert.equal((await presentation(restoredRoot.agent)).worker.length, 0)
@@ -343,6 +349,7 @@ try {
     } finally {
       await unmarked.dispose()
       await restoredRoot.dispose()
+      await ordinaryFork.dispose()
     }
   })
   await check('同一会话恢复后重新装机', async () => {

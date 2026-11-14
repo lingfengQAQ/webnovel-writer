@@ -35,6 +35,7 @@ import { captureApprovalFiles } from './approval-snapshot'
 import { readStoryStatus } from './story-status'
 import { MAINTENANCE_OUTPUT, MAINTENANCE_PARAMETERS } from './maintenance-output'
 import { createBookUpgradeTools } from './book-upgrade-tools'
+import { createDraftRetentionTools, preparedDraftRetention, retentionReviewJson } from './draft-retention-tools'
 import { failureFrom, expectedFailure, FAILURE_FIELDS, normalizeFailure, toolFailure } from './tool-failure'
 import { omitUndefinedFields } from './tool-json'
 import * as fs from 'node:fs'
@@ -112,6 +113,7 @@ import {
   type ContractPartState,
   type 处置状态,
   askAuthor,
+  verifyDraftRetention,
   type AskFn,
 } from '@webnovel/core'
 import { writeSettlementDecision } from '@webnovel/core'
@@ -605,6 +607,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
       },
     },
     ...createBookUpgradeTools(deps),
+    ...createDraftRetentionTools(deps),
     {
       name: 'novel_search_finalized',
       description: '检索指定书的已定稿正文。关键词与已启用嵌入服务融合召回；返回章节、路径、行号、版本和哈希。结果仅供定位，必须原生 read 核对原文后才能引用；无提供方或接口失败时明确返回关键词模式。',
@@ -790,7 +793,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
     },
     {
       name: 'novel_settle_chapter',
-      description: '定稿原子沉淀：将作者已批准的待定稿包按清单原子写入并做单次 Git 提交（ch:）。⚠️ 仅在作者明确批准定稿裁决后调用，未获批准严禁入档。',
+      description: '完整呈报本章后请求定稿裁决。工具先核对待定稿包及来源稿、留档清单，在同一次作者问答中确认；批准后复验原内容，原子写入并做单次 Git 提交（ch:）。留档中的半稿和未选稿保持原样，后来新增或变化的稿件仍须核对。',
       parameters: {
         type: 'object',
         properties: {
@@ -822,10 +825,22 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
         const keyResult = chapterKeyOf(args)
         if (!keyResult.ok) return keyResult
         const key = keyResult.key
+        args = structuredClone(args)
+        if (sessionContext?.signal?.aborted) return toolFailure('author-cancelled', '本次定稿裁决已取消，没有继续写入')
         const approvalFiles = [paths.待定稿包目录(key.卷, key.章名), paths.契约()]
         const before = captureApprovalFiles(bookRoot, approvalFiles, args)
         if (!before.ok) return before
-        const decision = await askAuthor(deps.askFn, '定稿入档', { 范围: `卷${key.卷.toString().padStart(2, '0')}/${key.章名}` }, { agent: sessionContext?.agent, signal: sessionContext?.signal })
+        const retention = preparedDraftRetention(bookRoot, String(args['bookId']).trim(), key)
+        if (!retention.ok) return retention
+        const captured = captureApprovalFiles(bookRoot, approvalFiles, args)
+        if (!captured.ok || captured.fingerprint !== before.fingerprint) return toolFailure('approval-stale', '读取定稿裁决内容期间待定稿包已变化，请重新准备并呈报')
+        const decision = await askAuthor(deps.askFn, '定稿入档', {
+          范围: `卷${key.卷.toString().padStart(2, '0')}/${key.章名}`,
+          摘要: retentionReviewJson({
+            章节: key, 来源稿: retention.manifest.sourceDraft, 草稿留档: retention.manifest.files,
+            同次确认: '本次定稿批准同时确认列出的草稿和起草暂存仅作本章历史留档。它们保留原样；确认后新增或修改的稿件仍须核对。',
+          }),
+        }, { agent: sessionContext?.agent, signal: sessionContext?.signal })
         if (!decision.ok) return notApproved(decision.reason)
         if (sessionContext?.signal?.aborted) return toolFailure('author-cancelled', '作者裁决已取消（会话已中止），没有做出决定，本次没有写入')
         // decision.ok 只表示答案有效;退回同样是有效答案,须按 决定 判。
@@ -833,9 +848,14 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
         return withBookWrite(bookRoot, () => {
           if (sessionContext?.signal?.aborted) return toolFailure('author-cancelled', '作者裁决已取消（会话已中止），没有做出决定，本次没有写入')
           const currentBook = resolveBook(args, sessionContext)
-        if (!currentBook.ok || currentBook.bookRoot !== bookRoot) return toolFailure('approval-stale', '等待作者裁决期间书id或归属已变化，本次没有写入', '调用 novel_select_book 核对书目，再重新呈报作者。')
-        const current = captureApprovalFiles(bookRoot, approvalFiles, args)
+          if (!currentBook.ok || currentBook.bookRoot !== bookRoot) return toolFailure('approval-stale', '等待作者裁决期间书id或归属已变化，本次没有写入', '调用 novel_select_book 核对书目，再重新呈报作者。')
+          const current = captureApprovalFiles(bookRoot, approvalFiles, args)
           if (!current.ok || current.fingerprint !== before.fingerprint) return toolFailure('approval-stale', '待定稿包在等待作者裁决期间已变化，旧批准不可使用')
+          if (裁决 === '已批准') {
+            // Only an approval relies on the frozen draft set; a rejection is still recorded if drafts moved meanwhile.
+            const retained = verifyDraftRetention(bookRoot, retention.manifest)
+            if (!retained.ok) return toolFailure('approval-stale', `草稿留档在等待作者裁决期间已变化，旧批准不可使用：${retained.issues.map(item => `${item.路径}：${item.说明}`).join('；')}`, '核对来源稿和目录后重新准备并呈报；不要改写原清单来沿用旧批准。')
+          }
           const decisionWrite = writeSettlementDecision(bookRoot, key, 裁决)
           if (裁决 !== '已批准') {
             // 驳回本身必须保留原有语义;清单缺失时无法落裁决,但不能把作者决定
@@ -851,7 +871,7 @@ export function createNovelTools(deps: NovelToolsDeps): NovelToolDefinition[] {
               settlement: { 章节: key, 批准: true, 裁决记录: `作者于 ${new Date().toISOString()} 批准定稿入档（kind=${decision.kind}, 决定=${decision.决定}）` },
               provenance: provenanceOf(sessionContext),
             })
-            if (!res.ok) return { ok: false, reason: res.reason }
+            if (!res.ok) return { ok: false, reason: res.reason, ...(res.next === undefined ? {} : { next: res.next }) }
             return { ok: true, message: `定稿沉淀完成（${res.message}），入档：${res.dests.join('、')}` }
           } catch (err) {
             return failureFrom(err, `定稿沉淀失败：`)

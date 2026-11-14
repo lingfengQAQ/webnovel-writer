@@ -8,6 +8,7 @@ export const novelToolTitles: Readonly<Record<string, string>> = {
   novel_get_story_status: '查看写作状态', novel_search_finalized: '检索定稿', novel_index_manage: '管理检索索引',
   novel_check_book: '检查书仓', novel_begin_chapter: '开章前核对',
   novel_preview_book_upgrade: '预览书仓升级', novel_apply_book_upgrade: '执行书仓升级', novel_resume_book_upgrade: '续办书仓升级',
+  novel_preview_draft_retention: '预览草稿留档', novel_confirm_draft_retention: '确认草稿留档',
   novel_prepare_pack: '准备定稿包', novel_settle_chapter: '定稿入档', novel_new_outline_draft: '准备大纲草案',
   novel_confirm_outline: '确认大纲', novel_update_skeleton: '更新故事骨架', novel_update_volume_layout: '更新分卷布局',
   novel_roll_window: '更新近期窗口', novel_confirm_worldbook_entry: '确认世界书', novel_confirm_volume_outline: '确认卷纲',
@@ -47,6 +48,7 @@ export function novelResultModel(props: ToolCallPhaseProps): NovelResultModel {
   try { value = JSON.parse(raw) } catch { return result }
   if (!object(value) || typeof value.ok !== 'boolean') return result
   if (value.maintenance === 'book-upgrade') return bookUpgradeResultModel(result, value)
+  if (value.maintenance === 'draft-retention') return draftRetentionResultModel(result, value)
   if (!value.ok || value.commitState === 'failed') return { ...result, state: 'error', label: '未完成', summary: text(value.reason) ?? text(value.message) ?? '本次操作未完成，请查看详情' }
   const facts: { label: string; value: string }[] = []
   if (value.scope === 'book' || value.scope === 'author') facts.push({ label: '记忆归属', value: value.scope === 'book' ? '本书' : '作者' })
@@ -61,6 +63,8 @@ export function novelResultModel(props: ToolCallPhaseProps): NovelResultModel {
   if (inspection && text(inspection.状态)) facts.push({ label: '书仓检查', value: inspection.状态 as string })
   if (inspection && text(inspection.结论)) facts.push({ label: '受检结论', value: inspection.结论 as string })
   if (inspection && Array.isArray(inspection.未检范围)) facts.push({ label: '未检项', value: String(inspection.未检范围.length) })
+  if (opening && Array.isArray(opening.提示) && opening.提示.length) facts.push({ label: '开章留档提示', value: String(opening.提示.length) })
+  if (inspection && Array.isArray(inspection.提示) && inspection.提示.length) facts.push({ label: '书仓留档提示', value: String(inspection.提示.length) })
   pending ||= maintenanceNeedsAttention(value)
   if (typeof value.verifiedBatches === 'number') facts.push({ label: '已校验批次', value: String(value.verifiedBatches) })
   if (typeof value.fullBookComplete === 'boolean') facts.push({ label: '报告范围', value: value.fullBookComplete ? '全书可读正文' : '局部拆解' })
@@ -101,7 +105,7 @@ function bookUpgradeResultModel(base: NovelResultModel, value: Record<string, un
   for (const [key, label] of [['bookId', '书 ID'], ['operationId', '操作编号'], ['commit', '提交']] as const) {
     if (text(value[key])) facts.push({ label, value: value[key] as string })
   }
-  for (const [key, label] of [['activeWork', '保留未完工件'], ['changes', '拟变更文件'], ['effects', '受影响工件'], ['issues', '阻断项'], ['paths', '原批次文件']] as const) {
+  for (const [key, label] of [['activeWork', '保留未完工件'], ['changes', '拟变更文件'], ['effects', '受影响工件'], ['issues', '阻断项'], ['notices', '留档提示'], ['paths', '原批次文件']] as const) {
     if (Array.isArray(value[key])) facts.push({ label, value: String(value[key].length) })
   }
   const state = text(value.state)
@@ -114,6 +118,31 @@ function bookUpgradeResultModel(base: NovelResultModel, value: Record<string, un
     'already-committed': { state: 'success', label: '已核实原提交', summary: '原升级已有可信提交，本次没有重复写入。' },
     recovered: { state: 'attention', label: '已恢复，待重新预览', summary: '原中断批次已恢复。继续升级前需重新预览并请求作者批准。' },
     'written-pending-commit': { state: 'error', label: '已写待提交', summary: '文件已写入，提交尚未完成。请按原操作编号续办。' },
+  }
+  return state !== undefined && labels[state] ? { ...base, facts, ...labels[state]! } : { ...base, facts }
+}
+
+function draftRetentionResultModel(base: NovelResultModel, value: Record<string, unknown>): NovelResultModel {
+  const facts: { label: string; value: string }[] = []
+  for (const [key, label] of [['bookId', '书 ID'], ['operationId', '操作编号'], ['commit', '提交']] as const) {
+    if (text(value[key])) facts.push({ label, value: value[key] as string })
+  }
+  if (object(value.chapter) && text(value.chapter.章名)) facts.push({ label: '章节', value: String(value.chapter.章名) })
+  if (object(value.manifest)) {
+    if (text(value.manifest.sourceDraft)) facts.push({ label: '来源稿', value: value.manifest.sourceDraft as string })
+    if (Array.isArray(value.manifest.files)) facts.push({ label: '留档工件', value: String(value.manifest.files.length) })
+  }
+  for (const [key, label] of [['issues', '阻断项'], ['notices', '留档提示']] as const) {
+    if (Array.isArray(value[key])) facts.push({ label, value: String(value[key].length) })
+  }
+  const state = text(value.state)
+  if (!value.ok) return { ...base, facts, state: 'error', label: state === 'written-pending-commit' ? '已写待提交' : '未完成', summary: text(value.reason) ?? '本次留档确认未完成，请核对当前证据。' }
+  const labels: Readonly<Record<string, { state: NovelResultModel['state']; label: string; summary: string }>> = {
+    ready: { state: 'attention', label: value.action === 'resume' ? '待批准续办' : '待确认留档', summary: '本次清单已列出，等待作者确认当前这些工件仅作本章历史留档。' },
+    unchanged: { state: 'success', label: '已有留档证据', summary: '本章留档证据已核实，无须重复确认或新增提交。' },
+    committed: { state: 'success', label: '留档确认已提交', summary: '本章当前留档清单与定稿元数据已提交。' },
+    'already-committed': { state: 'success', label: '已核实原提交', summary: '原留档已有可信提交，本次没有重复写入。' },
+    'written-pending-commit': { state: 'error', label: '已写待提交', summary: '留档确认已写入，提交尚未完成。重新预览后续办原操作。' },
   }
   return state !== undefined && labels[state] ? { ...base, facts, ...labels[state]! } : { ...base, facts }
 }

@@ -167,6 +167,8 @@ try {
   // Hint tooltip: keyboard focus shows it, Escape puts it away, moving to another control and back shows it again.
   await page.getByRole('button', { name: /^选择可视化作品/ }).focus()
   await page.keyboard.press('Tab')
+  assert.equal(await focusedLabel(), '打开视图设置')
+  await page.keyboard.press('Tab')
   assert.equal(await focusedLabel(), '刷新作品视图')
   const tip = page.getByRole('tooltip').filter({ hasText: '刷新作品视图' })
   await tip.waitFor()
@@ -181,17 +183,18 @@ try {
 
   // View switch is DSH SegmentedControl: arrows select and move focus, the panel follows the selected tab.
   const views = page.getByRole('tablist', { name: '可视化视图' })
-  await views.getByRole('tab', { name: '写作流程', exact: true }).focus()
-  await page.keyboard.press('ArrowRight')
-  await page.getByRole('heading', { name: '人物关系', exact: true }).waitFor()
-  const graphTab = views.getByRole('tab', { name: '人物关系', exact: true })
+  await views.getByRole('tab', { name: '进度', exact: true }).focus()
+  await page.keyboard.press('ArrowLeft')
+  await page.locator('.nw-reader[aria-busy="false"] .nw-g6-map[data-ready="true"]').waitFor()
+  const graphTab = views.getByRole('tab', { name: '关系', exact: true })
   assert.equal(await graphTab.getAttribute('aria-selected'), 'true')
-  assert.equal(await focusedLabel(), '人物关系')
+  assert.equal(await focusedLabel(), '关系')
   assert.equal(await page.locator(`[id="${await graphTab.getAttribute('aria-controls')}"]`).count(), 1)
   report.checks.segmentedControl = true
 
   // Checkbox: Space toggles the graph filter and back.
-  const plans = page.getByRole('checkbox', { name: '包括计划', exact: true })
+  await page.getByText('阅读范围', { exact: true }).click()
+  const plans = page.getByRole('checkbox', { name: '包括计划资料', exact: true })
   await plans.waitFor()
   const planned = await plans.isChecked()
   await plans.focus()
@@ -201,7 +204,7 @@ try {
   await page.waitForFunction(value => document.querySelector('input[type=checkbox]:focus')?.checked === value, planned)
   report.checks.checkbox = true
   await leaks('visual-graph')
-  await views.getByRole('tab', { name: '章节进度', exact: true }).click()
+  await views.getByRole('tab', { name: '进度', exact: true }).click()
   await page.getByRole('heading', { name: '章节进度', exact: true }).waitFor()
   await page.locator('.nw-chapter-line').first().waitFor()
   await leaks('visual-chapters')
@@ -271,8 +274,8 @@ try {
   await page.keyboard.press('Escape')
   await leaks('dark-study-and-index')
   await openVisual()
-  await page.getByRole('tablist', { name: '可视化视图' }).getByRole('tab', { name: '人物关系', exact: true }).click()
-  await page.getByRole('heading', { name: '人物关系', exact: true }).waitFor()
+  await page.getByRole('tablist', { name: '可视化视图' }).getByRole('tab', { name: '关系', exact: true }).click()
+  await page.locator('.nw-reader[aria-busy="false"] .nw-g6-map[data-ready="true"]').waitFor()
   await shot('dark-visual-graph')
   await theme(false)
 

@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto'
 import type { ChapterKey } from '../derive/scan'
 import { normalizeChapterName } from '../derive/scan'
-import { ARCHIVE_RECEIPT_DIR, readArchiveReceipt, type ArchiveReceipt } from '../commit/receipt'
+import { receiptRelative, type ArchiveReceipt } from '../commit/receipt'
 import { parseDocument } from '../repo/frontmatter'
 import { draftLengthTarget } from '../repo/draft-length'
 import { splitCandidateFacts } from '../repo/drafts'
+import { assertDraftRetentionBinding, draftRetentionDigest, parseDraftRetention, verifyDraftRetention, type DraftRetentionManifest } from '../repo/draft-retention'
+import { addDraftRetentionAnchor } from '../repo/retention-anchor'
 import { paths, validateSegment } from '../repo/paths'
 import { parseMachineJson, MACHINE_SCHEMA_VERSION } from '../repo/schema'
 import { createReadonlyBookSnapshot, type ReadonlyBookSnapshot } from './snapshot'
@@ -13,11 +15,13 @@ import { uniqueMaintenanceIssues } from './types'
 import { OpeningCommitProof, openingDirtyPaths, readOpeningGitState } from './opening-git'
 import { inspectOpeningMaterials } from './opening-materials'
 import { listUpgradeReceipts, upgradeCommitted, upgradeReceiptPath, verifyUpgradeBook } from './upgrade-receipt'
+import { missingRetentionNotices, readArchiveReceiptsSnapshot, retentionReceiptAbsent, retentionReceiptAbsentNotice, trustedDraftRetention, verifyRetentionOrigin } from './retention-history'
 
 export interface ChapterOpeningInspection {
   readonly 状态: '边界已核对' | '需恢复' | '无法核实'
   readonly 规则版本: 1
   readonly 问题: readonly MaintenanceIssue[]
+  readonly 提示?: readonly MaintenanceIssue[]
   readonly 在途项: readonly { readonly 路径: string; readonly 种类: string; readonly 说明: string }[]
   readonly 前章?: ChapterKey
   readonly 快照: MaintenanceSnapshot
@@ -34,6 +38,8 @@ interface FinalizedChapter {
   closed: boolean
   receipts: ArchiveReceipt[]
   sourceVerified: boolean
+  retention?: DraftRetentionManifest
+  currentConfirmation?: boolean
 }
 
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -140,21 +146,20 @@ function inspectOrphanSummaries(reader: ReadonlyBookSnapshot, chapters: readonly
   }
 }
 
-function inspectReceipts(reader: ReadonlyBookSnapshot, proof: OpeningCommitProof | undefined, pending: ChapterOpeningInspection['在途项'][number][], uncommitted: Set<string>): ArchiveReceipt[] {
+function inspectReceipts(reader: ReadonlyBookSnapshot, proof: OpeningCommitProof | undefined, pending: ChapterOpeningInspection['在途项'][number][], uncommitted: Set<string>, all: ArchiveReceipt[] = []): ArchiveReceipt[] {
   const committed: ArchiveReceipt[] = []
-  for (const entry of reader.listDirectory(ARCHIVE_RECEIPT_DIR) ?? []) {
-    const relative = `${ARCHIVE_RECEIPT_DIR}/${entry.name}`
-    if (entry.kind !== 'file' || !/^[a-f0-9]{64}\.json$/.test(entry.name)) {
-      issue(reader, 'OPENING_RECEIPT_INVALID', relative, '归档收据名称或文件身份无法核实')
-      continue
-    }
-    if (reader.readFile(relative) === undefined) continue
+  const receipts = readArchiveReceiptsSnapshot(reader, 'OPENING_RECEIPT_INVALID')
+  all.push(...receipts)
+  for (const receipt of receipts) {
+    const relative = receiptRelative(receipt.scope)
     try {
-      const receipt = readArchiveReceipt(reader.root, entry.name.slice(0, -5))
-      if (receipt === undefined) throw new Error('归档收据在读取期间消失')
       for (const output of receipt.outputs) reader.readFile(output.relPath)
       if (proof === undefined) continue
-      if (proof.committed(receipt)) committed.push(receipt)
+      const commit = proof.receiptCommit(receipt)
+      if (commit !== undefined) {
+        if (receipt.schema === 3 && !verifyRetentionOrigin(proof, receipt, receipts, commit)) throw new Error('旧章留档确认之前的归档完成与来源关系无法核实')
+        committed.push(receipt)
+      }
       else {
         for (const output of receipt.outputs) uncommitted.add(output.relPath)
         pending.push({ 路径: relative, 种类: '归档尚未提交', 说明: '未找到包含整批精确输出的提交，请先核对原归档；本次没有补提交' })
@@ -166,12 +171,23 @@ function inspectReceipts(reader: ReadonlyBookSnapshot, proof: OpeningCommitProof
   return committed
 }
 
-function closeChapters(reader: ReadonlyBookSnapshot, chapters: FinalizedChapter[], receipts: readonly ArchiveReceipt[], proof: OpeningCommitProof | undefined, uncommitted: ReadonlySet<string>): void {
+function closeChapters(reader: ReadonlyBookSnapshot, chapters: FinalizedChapter[], receipts: readonly ArchiveReceipt[], proof: OpeningCommitProof | undefined, uncommitted: ReadonlySet<string>, bookId: string, notices: MaintenanceIssue[], allReceipts: readonly ArchiveReceipt[] = receipts): void {
   for (const chapter of chapters) {
     if (proof === undefined) continue
     try {
       chapter.receipts = receipts.filter(receipt => receipt.outputs.some(output => output.relPath === chapter.relative))
       chapter.closed = chapter.receipts.some(receipt => proof.currentOutputs(receipt, [chapter.relative, chapter.summary]))
+      const absent = retentionReceiptAbsent(chapter.relative, chapter.fields, allReceipts)
+      const retained = absent ? undefined : trustedDraftRetention(proof, chapter.key, chapter.text, bookId, receipts)
+      if (retained !== undefined) {
+        chapter.retention = retained.manifest
+        chapter.currentConfirmation = retained.currentConfirmation
+        chapter.closed ||= retained.currentConfirmation
+        const verification = verifyDraftRetention(reader.root, retained.manifest, { allowMissingRetained: true, reader })
+        reader.issues.push(...verification.issues)
+        notices.push(...missingRetentionNotices(verification.missingRetained, retained.manifest.sourceDraft))
+        chapter.sourceVerified = verification.ok
+      } else if (absent) notices.push(retentionReceiptAbsentNotice(chapter.relative))
       if (!chapter.closed && !uncommitted.has(chapter.relative) && chapter.strictIdentity && chapter.fields['状态'] === '已定稿'
         && typeof chapter.fields['版本'] === 'number' && positive(chapter.fields['版本'])
         && ['定稿入档', '吃书补偿'].includes(String(chapter.fields['生成模块']))) {
@@ -186,7 +202,7 @@ function closeChapters(reader: ReadonlyBookSnapshot, chapters: FinalizedChapter[
         })
       }
       if (!chapter.closed && !uncommitted.has(chapter.relative)) issue(reader, 'OPENING_ARCHIVE_UNPROVEN', chapter.relative, '没有与当前归档产物相符的整批提交证据，请核对历史；仅有定稿文件或提交标题不足以证明收尾')
-      if (chapter.closed && chapter.sourceDraft !== undefined) {
+      if (chapter.closed && chapter.sourceDraft !== undefined && chapter.retention === undefined) {
         const sourceText = reader.readFile(chapter.sourceDraft)
         const source = sourceText === undefined ? undefined : parseDocument(sourceText)
         if (source?.ok) {
@@ -224,6 +240,11 @@ function inspectDrafts(reader: ReadonlyBookSnapshot, chapters: readonly Finalize
       continue
     }
     const chapter = chapters.find(item => scope(item.key.卷, item.key.章名) === scope(identity.volume, identity.name))
+    if (chapter?.retention !== undefined) {
+      // The manifest verifier already checked every byte and member in this exact directory.
+      if (relative !== chapter.retention.directory) issue(reader, 'DRAFT_RETENTION_DIRECTORY_ALIAS', relative, '此草稿目录不在该章原留档清单中，不能以归一名称合并为历史留档')
+      continue
+    }
     const files = reader.listDirectory(relative) ?? []
     for (const entry of files) {
       const target = `${relative}/${entry.name}`
@@ -307,9 +328,19 @@ function inspectWorkArtifacts(reader: ReadonlyBookSnapshot, chapters: readonly F
           issue(reader, 'OPENING_PACKAGE_IDENTITY', relative, '待定稿包与历史归档目标不匹配，不能当作留档')
           continue
         }
+        const prepared = parseDocument(body)
+        if (Object.hasOwn(parsed.data, '草稿留档') || (prepared.ok && Object.hasOwn(prepared.data.fields, '草稿留档摘要'))) {
+          try { assertDraftRetentionBinding(body, parseDraftRetention(parsed.data['草稿留档'])) }
+          catch (error) { issue(reader, 'OPENING_PACKAGE_RETENTION', relative, error instanceof Error ? error.message : String(error)) }
+        }
         const matches = chapter.receipts.some(receipt => receipt.outputs.some(output => output.relPath === chapter.relative && output.sha256 === digest(body))
           && receipt.outputs.some(output => output.relPath === chapter.summary && output.sha256 === digest(summary)))
-        if (!matches && (body !== chapter.text || summary !== reader.readFile(chapter.summary))) issue(reader, 'OPENING_PACKAGE_CHANGED', relative, '待定稿包正文或摘要与可核实归档不一致，请核对原章')
+        let confirmedOriginal = false
+        if (!matches && chapter.currentConfirmation && chapter.retention !== undefined) {
+          try { confirmedOriginal = addDraftRetentionAnchor(body, draftRetentionDigest(chapter.retention)) === chapter.text && summary === reader.readFile(chapter.summary) }
+          catch { /* A different prepared package cannot be justified by the metadata-only confirmation. */ }
+        }
+        if (!matches && !confirmedOriginal && (body !== chapter.text || summary !== reader.readFile(chapter.summary))) issue(reader, 'OPENING_PACKAGE_CHANGED', relative, '待定稿包正文或摘要与可核实归档不一致，请核对原章')
       }
     }
   }
@@ -349,6 +380,7 @@ export function inspectChapterOpening(bookRoot: string): ChapterOpeningInspectio
 /** Internal composition keeps the same checks when the caller owns the write lock. */
 export function inspectChapterOpeningSnapshot(reader: ReadonlyBookSnapshot): ChapterOpeningInspection {
   const pending: ChapterOpeningInspection['在途项'][number][] = []
+  const notices: MaintenanceIssue[] = []
   const contract = reader.readFile(paths.契约())
   const parsed = contract === undefined ? undefined : parseDocument(contract)
   if (parsed === undefined || !parsed.ok || typeof parsed.data.fields['书id'] !== 'string' || parsed.data.fields['书id'].trim() === '') {
@@ -362,20 +394,21 @@ export function inspectChapterOpeningSnapshot(reader: ReadonlyBookSnapshot): Cha
   inspectOrphanSummaries(reader, chapters)
   const proof = before?.head === undefined ? undefined : new OpeningCommitProof(reader.root, before.head)
   const uncommitted = new Set<string>()
-  const receipts = inspectReceipts(reader, proof, pending, uncommitted)
+  const allReceipts: ArchiveReceipt[] = []
+  const receipts = inspectReceipts(reader, proof, pending, uncommitted, allReceipts)
   try {
     for (const receipt of listUpgradeReceipts(reader)) {
       verifyUpgradeBook(reader, receipt)
-      if (!upgradeCommitted(reader.root, receipt, before?.head)) pending.push({ 路径: upgradeReceiptPath(receipt.operationId), 种类: '维护尚未提交', 说明: '维护批次没有完整提交证明，请先按操作编号续办' })
+      if (before?.head !== undefined && !upgradeCommitted(reader.root, receipt, before.head)) pending.push({ 路径: upgradeReceiptPath(receipt.operationId), 种类: '维护尚未提交', 说明: '维护批次没有完整提交证明，请先按操作编号续办' })
     }
   } catch (error) {
     issue(reader, 'OPENING_UPGRADE_RECEIPT', '草稿区/.maintenance-receipts', error instanceof Error ? error.message : String(error))
   }
-  closeChapters(reader, chapters, receipts, proof, uncommitted)
+  closeChapters(reader, chapters, receipts, proof, uncommitted, parsed?.ok && typeof parsed.data.fields['书id'] === 'string' ? parsed.data.fields['书id'] : '', notices, allReceipts)
   inspectDrafts(reader, chapters, pending)
   inspectWorkArtifacts(reader, chapters, pending)
   inspectRetconPackages(reader, receipts, pending)
-  const after = readOpeningGitState(reader)
+  const after = before === undefined ? undefined : readOpeningGitState(reader)
   const gitChanged = JSON.stringify(before) !== JSON.stringify(after)
   if (gitChanged) issue(reader, 'OPENING_GIT_CHANGED', '.git', '检查期间版本库状态发生变化，请重新核对')
   const observed = reader.finish()
@@ -385,6 +418,7 @@ export function inspectChapterOpeningSnapshot(reader: ReadonlyBookSnapshot): Cha
     状态: !snapshot.稳定 || reader.issues.length > 0 ? '无法核实' : pending.length > 0 ? '需恢复' : '边界已核对',
     规则版本: 1,
     问题: uniqueMaintenanceIssues(reader.issues),
+    ...(notices.length ? { 提示: uniqueMaintenanceIssues(notices) } : {}),
     在途项: pending,
     ...(previous === undefined ? {} : { 前章: previous }),
     快照: snapshot,

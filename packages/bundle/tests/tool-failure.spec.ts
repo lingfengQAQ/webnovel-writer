@@ -23,6 +23,7 @@ describe('统一失败结构（PR-6）', () => {
       ['作者关闭了裁决窗口，没有做出决定', 'author-cancelled'],
       ['待定稿包在等待作者裁决期间已变化，旧批准不可使用', 'approval-stale'],
       ['定稿只增不改：目标已存在，但没有匹配的可信收据', 'source-conflict'],
+      ['归档写入前核对失败，本次没有写入：新归档须同时新建本章定稿与章摘要', 'source-conflict'],
       ['最小设计已写入但提交失败（重跑本工具即可补提交）', 'partial-commit'],
       ['卷必须是从 1 开始的正整数', 'invalid-argument'],
       ['书id不存在或不唯一', 'book-not-found'],

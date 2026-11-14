@@ -525,12 +525,12 @@ function renderHome(ctx, groups, guides) {
   <div class="section-inner">
     <h2 id="update-title">${esc(ctx.version)} 更新</h2>
     <div class="feature-grid feature-main">
-      <article class="feature"><h3>专用写作模式</h3><p>新建写作对话，再从原书仓继续。</p></article>
-      <article class="feature"><h3>保存后核对字数</h3><p>按实际稿件计数，对照契约篇幅。</p></article>
-      <article class="feature"><h3>记忆各有所属</h3><p>区分作者偏好与本书决定，防止重复覆盖。</p></article>
+      <article class="feature"><h3>升级诊断可读</h3><p>修复预览返回错误，保留阻断原因。</p></article>
+      <article class="feature"><h3>草稿留档可核对</h3><p>定稿时确认留档清单，旧章也可预览确认。</p></article>
+      <article class="feature"><h3>DSH rc.3 兼容</h3><p>修复侧栏滚动与委派进度，保留 rc.1 兼容。</p></article>
     </div>
-    <p>本版还改进书仓锁恢复、异常写入隔离与错误提示。检索和桌宠仅同步兼容版本。</p>
-    <p class="home-links"><a href="docs/upgrade-backup.html">升级到写作模式 →</a><a href="${esc(ctx.release)}">完整更新与下载 →</a></p>
+    <p>旧版本准备的待定稿包须重新准备并核对。检索和桌宠仅同步兼容版本。</p>
+    <p class="home-links"><a href="docs/upgrade-backup.html">升级与草稿留档 →</a><a href="${esc(ctx.release)}">完整更新与下载 →</a></p>
   </div>
 </section>
 

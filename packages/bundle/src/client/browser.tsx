@@ -66,7 +66,8 @@ function Book({ sessionId, book, store, host, initial }: { sessionId: string; bo
   </section>
 }
 
-function StudyBrowser({ sessionId, store, host, openIndex }: { sessionId: string; store: EditorStore; host: ClientHost; openIndex?: OpenIndex }) {
+function StudyBrowser({ sessionId, store, host, openIndex, useSectionScroller }: { sessionId: string; store: EditorStore; host: ClientHost; openIndex?: OpenIndex; useSectionScroller?: WorkspaceProps['useSectionScroller'] }) {
+  const sectionScroller = useSectionScroller?.()
   const state = useEditor(store, sessionId)
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState('')
@@ -81,7 +82,7 @@ function StudyBrowser({ sessionId, store, host, openIndex }: { sessionId: string
       <HintTooltip tip="刷新目录与已打开正文" side="bottom"><button type="button" className="nw-icon" aria-label="刷新书房" onClick={() => void store.refresh(sessionId)}><IconRefresh size={16} /></button></HintTooltip></div>
     {watchError ? <p className="nw-empty" role="status">{watchError}</p> : null}
     {state.error || shelf.error ? <p className="nw-error" role="alert">{state.error ?? shelf.error}</p> : null}
-    <div className="nw-shelf-scroll">
+    <div className="nw-shelf-scroll" ref={sectionScroller?.bindScrollerRef}>
       {shelf.loading && !shelf.value ? <p className="nw-empty">正在读取书房…</p> : null}
       {query.trim() ? <>
         {found.error ? <p className="nw-error" role="alert">{found.error}</p> : null}
@@ -103,7 +104,7 @@ function StudyBrowser({ sessionId, store, host, openIndex }: { sessionId: string
   </div>
 }
 
-export function WorkspaceStudyTabs({ wide, expandSidebar, renderSlot, host, store, openIndex }: WorkspaceProps & StudyUI) {
+export function WorkspaceStudyTabs({ wide, expandSidebar, renderSlot, useSectionScroller, host, store, openIndex }: WorkspaceProps & StudyUI) {
   const [tab, setTab] = useState<'workspace' | 'study'>('study')
   const sessionId = useSession(host)
   const id = useId()
@@ -113,11 +114,11 @@ export function WorkspaceStudyTabs({ wide, expandSidebar, renderSlot, host, stor
     { value: 'workspace' as const, id: id + 'workspace', panelId: id + 'workspace-panel', label: <><IconFolder size={14} />工作区</> },
     { value: 'study' as const, id: id + 'study', panelId: id + 'study-panel', label: <><IconBook size={14} />书房</> },
   ] as const
-  return <div className="webnovel nw-left">
+  return <div className="webnovel nw-left" data-section-scroller={useSectionScroller ? '' : undefined}>
     <SegmentedTabs className="nw-tabs" label="导航分类" items={tabs} value={tab} onChange={setTab} />
-    <div className="nw-native-workspaces" id={tabs[0].panelId} role="tabpanel" aria-labelledby={tabs[0].id} hidden={tab !== 'workspace'}>{renderSlot('webnovel.workspaces', { wide, expandSidebar })}</div>
+    <div className="nw-native-workspaces" id={tabs[0].panelId} role="tabpanel" aria-labelledby={tabs[0].id} hidden={tab !== 'workspace'}>{renderSlot('webnovel.workspaces', { wide: wide && tab === 'workspace', expandSidebar, ...(useSectionScroller ? { useSectionScroller } : {}) })}</div>
     {tab === 'study' ? <div className="nw-study-panel" id={tabs[1].panelId} role="tabpanel" aria-labelledby={tabs[1].id}>
-      {sessionId ? <StudyBrowser key={sessionId} sessionId={sessionId} store={store} host={host} openIndex={openIndex} /> : <p className="nw-empty">打开一个工作区会话后，即可浏览作品与共享资料。</p>}
+      {sessionId ? <StudyBrowser key={sessionId} sessionId={sessionId} store={store} host={host} openIndex={openIndex} useSectionScroller={useSectionScroller} /> : <p className="nw-empty">打开一个工作区会话后，即可浏览作品与共享资料。</p>}
     </div> : null}
   </div>
 }

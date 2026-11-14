@@ -8,9 +8,11 @@ import * as path from 'node:path'
 import type { ChapterKey } from '../derive/scan'
 import { writeBatchAtomic, type FileOp } from '../repo/atomic'
 import { parseDocument, serializeDocument } from '../repo/frontmatter'
-import { chapterNo, paths } from '../repo/paths'
+import { paths } from '../repo/paths'
 import { MACHINE_SCHEMA_VERSION, serializeMachineJson } from '../repo/schema'
 import { countPendingReviewDrafts, countProseText, findPendingReviewDraft, splitCandidateFacts } from '../repo/drafts'
+import { captureDraftRetention, draftRetentionDigest, verifyDraftRetention, type DraftRetentionManifest } from '../repo/draft-retention'
+import { createReadonlyBookSnapshot } from '../maintenance/snapshot'
 import { applyVersionFields, extractVersionFields, initialVersion } from '../provenance'
 import { parseOutline } from '../outline/parse'
 import { reconcileLedger } from '../ledger'
@@ -119,6 +121,31 @@ export function computePack(bookRoot: string, key: ChapterKey, 沉淀候选?: �
   if (pendingCount > 1) return { ok: false, dir, reason: `待审稿不唯一：${pendingCount}份` }
   if (pendingCount === 0 || pending === null) return { ok: false, dir, reason: '无待审稿' }
 
+  const identityReader = createReadonlyBookSnapshot(bookRoot)
+  let retention: DraftRetentionManifest | undefined
+  let sourceText = pending.text, sourceBody = pending.body
+  try {
+    const contractText = identityReader.readFile(paths.契约())
+    if (identityReader.issues.length) throw new Error(identityReader.issues.map(item => item.说明).join('；'))
+    const contract = contractText === undefined ? undefined : parseDocument(contractText)
+    if (contract && !contract.ok) throw new Error(`作品契约无法解析：${contract.detail}`)
+    // Low-level legacy callers without a book identity keep the old package shape.
+    // An invalid declared identity must not silently disable the new evidence.
+    if (contract?.ok && Object.hasOwn(contract.data.fields, '书id')) {
+      const bookId = contract.data.fields['书id']
+      if (typeof bookId !== 'string' || !bookId || bookId.trim() !== bookId || /[\x00-\x1f]/.test(bookId)) throw new Error('作品契约的已有书id无效，不能准备留档证据')
+      const captured = captureDraftRetention(bookRoot, { bookId, chapter: key, sourceDraft: pending.relPath })
+      if (captured.pendingDrafts.length !== 1 || captured.pendingDrafts[0] !== pending.relPath) throw new Error('草稿采集时待审稿已变化或不唯一，请重新核对')
+      const source = parseDocument(captured.sourceText)
+      if (!source.ok) throw new Error('留档来源稿无法解析')
+      retention = captured.manifest
+      sourceText = captured.sourceText
+      sourceBody = source.data.body
+    }
+  } catch (error) {
+    return { ok: false, dir, reason: error instanceof Error ? error.message : String(error) }
+  }
+
   let 记忆更新基线: Record<string, string> = {}
   if (沉淀候选 !== undefined) {
     try {
@@ -135,8 +162,8 @@ export function computePack(bookRoot: string, key: ChapterKey, 沉淀候选?: �
   const outlineDoc = confirmedOutlineText === null ? null : parseDocument(confirmedOutlineText)
   const outlineVersion = extractVersionFields(outlineDoc?.ok ? outlineDoc.data.fields : {}).版本
   const outlineRefs = outlineDoc?.ok ? parseOutline(confirmedOutlineText!).来源引用 : []
-  const rawBody = splitCandidateFacts(pending.body).prose.replace(/\r\n/g, '\n').replace(/\n+$/, '')
-  const { 字符数, 汉字数 } = countProseText(pending.body)
+  const rawBody = splitCandidateFacts(sourceBody).prose.replace(/\r\n/g, '\n').replace(/\n+$/, '')
+  const { 字符数, 汉字数 } = countProseText(sourceBody)
   const finalizedFields = applyVersionFields({
     身份: { 卷: key.卷, 章: key.章, 章名: key.章名 },
     状态: '已定稿',
@@ -148,6 +175,7 @@ export function computePack(bookRoot: string, key: ChapterKey, 沉淀候选?: �
     作用域: '本书',
     写入范围: [paths.定稿章(key.卷, key.章, key.章名)],
     恢复信息: { 可重跑: true, 来源草稿: pending.relPath },
+    ...(retention === undefined ? {} : { 草稿留档摘要: draftRetentionDigest(retention) }),
   }, initialVersion('定稿入档', { 来源草稿: pending.relPath, 来源细纲: confirmedOutlineRel }))
   const 正文 = serializeDocument(finalizedFields, rawBody)
   const 事实变更 = `# 事实变更\n\n${沉淀候选?.事实变更?.trim() || '（无事实变更）'}\n`
@@ -173,7 +201,7 @@ export function computePack(bookRoot: string, key: ChapterKey, 沉淀候选?: �
     '',
   ].join('\n')
 
-  const pendingDoc = parseDocument(pending.text)
+  const pendingDoc = parseDocument(sourceText)
   const 来源版本 = extractVersionFields(pendingDoc.ok ? pendingDoc.data.fields : {}).版本
   const dest正文 = paths.定稿章(key.卷, key.章, key.章名)
   const dest摘要 = paths.章摘要(key.卷, key.章, key.章名)
@@ -196,6 +224,7 @@ export function computePack(bookRoot: string, key: ChapterKey, 沉淀候选?: �
   const 清单 = serializeMachineJson({
     文件,
     工件,
+    ...(retention === undefined ? {} : { 草稿留档: retention }),
     ...(Object.keys(记忆更新基线).length ? { 记忆更新基线 } : {}),
     来源版本: 来源版本 ?? pending.relPath,
     校验: '通过',
@@ -206,6 +235,12 @@ export function computePack(bookRoot: string, key: ChapterKey, 沉淀候选?: �
     ...待定稿包七件.map((名) => ({ relPath: path.posix.join(dir, 名), content: contents[名] })),
     { relPath: path.posix.join(dir, '清单.json'), content: 清单 },
   ]
+  const identitySnapshot = identityReader.finish()
+  if (!identitySnapshot.稳定) return { ok: false, dir, reason: '准备期间作品契约或书身份发生变化，请重新准备' }
+  if (retention !== undefined) {
+    const verified = verifyDraftRetention(bookRoot, retention)
+    if (!verified.ok) return { ok: false, dir, reason: `准备期间草稿留档证据变化：${verified.issues.map(item => item.说明).join('；')}` }
+  }
   return { ok: true, dir, 文件: ops, files: ops.map((o) => o.relPath) }
 }
 

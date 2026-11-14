@@ -2,6 +2,7 @@
 export * from './repo/paths'
 export * from './repo/frontmatter'
 export * from './repo/draft-length'
+export * from './repo/draft-retention'
 export * from './repo/atomic'
 export * from './repo/transaction'
 export * from './repo/lock'

@@ -29,6 +29,8 @@ export interface WorkspaceProps {
   readonly expandSidebar: () => void
   readonly renderSlot: RenderSlot
   readonly useSessions: UseSessions
+  /** rc.3's sidebar declaration injects this per-render scroller capability. */
+  readonly useSectionScroller?: () => { readonly bindScrollerRef: (element: HTMLElement | null) => void }
 }
 
 export interface ClientHost {

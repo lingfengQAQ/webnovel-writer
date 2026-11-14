@@ -10,6 +10,7 @@ export const IRREVERSIBLE_KINDS = [
   '规则来源声明',
   '书仓升级',
   '书仓升级续办',
+  '草稿留档确认',
 ] as const
 
 export type IrreversibleKind = (typeof IRREVERSIBLE_KINDS)[number]

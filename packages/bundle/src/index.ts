@@ -23,7 +23,7 @@ import { attachFileGateToAgent } from './gates'
 import { attachDraftLengthFeedbackToAgent } from './draft-length-feedback'
 import { attachWorkerPolicyToAgent } from './worker-policy'
 import { attachWritingDelegationToAgent, writingRoleOf } from './writing-delegation'
-import { isWritingAgent, writingCapabilityOf, type WritingCapability } from './agent-mode'
+import { isLiveMainAgent, isWritingAgent, writingCapabilityOf, type MainAgentRegistry, type WritingCapability } from './agent-mode'
 import { uniqueBookRoot, scanBooks } from './bookshelf'
 import { attachStatusToAgent, type SystemPromptLike } from './status-context'
 import { canonicalizePath, isFullyQualifiedPath, isInsidePath } from '@webnovel/core'
@@ -312,15 +312,10 @@ function agentCtxGet<T>(agent: AgentLike | undefined, name: string): T | undefin
   return direct === undefined ? undefined : direct as T
 }
 
-/** 真实宿主按当前运行时归属判断，历史 origin 仅供缺少 registry 的兼容面使用。 */
+/** Exact live identity first, then the ownership contract exposed by this host. */
 function isMainAgent(agent: AgentLike): boolean {
-  const registry = agentCtxGet<{
-    get?(id: string): unknown
-    roots?(): readonly unknown[]
-  }>(agent, 'agents')
-  if (typeof registry?.get === 'function' && typeof registry.roots === 'function') {
-    return registry.get(agent.id) === agent && registry.roots().includes(agent)
-  }
+  const registry = agentCtxGet<MainAgentRegistry>(agent, 'agents')
+  if (typeof registry?.get === 'function') return isLiveMainAgent(agent, registry)
   return agent.session?.header?.origin !== 'subagent'
 }
 
@@ -405,9 +400,8 @@ export function apply(ctx: Context, entry?: ReturnType<typeof Config> | Webnovel
         ...[...installedAgents.values()].filter(agent => isMainAgent(agent) && isWritingAgent(agent)).flatMap(agent => { const root = agentWorkspaceRoot(agent); return root ? [root] : [] })]
     },
     notify: (book, notice) => {
-      const registry = typeof ctx.get === 'function' ? ctx.get('agents') as { get(id: string): unknown; roots(): readonly AgentLike[] } | undefined : undefined
-      const agent = registry?.roots().find(candidate => (candidate.id === notice.sessionId || candidate.session?.header?.id === notice.sessionId)
-        && registry.get(candidate.id) === candidate)
+      const registry = typeof ctx.get === 'function' ? ctx.get('agents') as { get(id: string): AgentLike | undefined } | undefined : undefined
+      const agent = notice.sessionId === undefined ? undefined : registry?.get(notice.sessionId)
       if (!agent || !isMainAgent(agent) || !isWritingAgent(agent) || !agent.session?.header || typeof (agent as { followup?: unknown }).followup !== 'function') return false
       if (bookRootOfBookIdFor(book.bookId, agent) !== book.root) return false
       return notifySaved(agent as Parameters<typeof notifySaved>[0], indexFailureMessage(book, notice)).notification === 'delivered'

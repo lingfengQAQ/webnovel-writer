@@ -23,7 +23,8 @@ import { 定位段小节, 单元字段 } from '../outline/template'
 import { parseMaterialManifest } from '../assembly/read'
 import { 材料包十段, sectionFileName } from '../assembly/sections'
 import { 待定稿包七件 } from '../prepare/pack'
-import { readArchiveReceipt } from '../commit/receipt'
+import { readArchiveReceipt, receiptRelative, type ArchiveReceipt } from '../commit/receipt'
+import { assertDraftRetentionBinding, parseDraftRetention, verifyDraftRetention } from '../repo/draft-retention'
 import { checkCommitPath } from '../commit/paths'
 import { readIndexState } from '../retrieval/state'
 import { readSceneRecords } from '../retrieval/scenes'
@@ -34,6 +35,7 @@ import { UPGRADE_RECEIPT_DIR } from './upgrade-reader'
 import type { BookInspection, DocumentInspection, DocumentTypeCoverage, MaintenanceIssue, UncheckedDocument } from './types'
 import { uniqueMaintenanceIssues } from './types'
 import { isUpgradeDraft, planDraftIdentity } from './upgrade-rule-draft'
+import { missingRetentionNotices, readArchiveReceiptsSnapshot, trustedDraftRetention, verifyRetentionOrigin, retentionReceiptAbsentNotice, retentionReceiptAbsent } from './retention-history'
 
 export const BOOK_INSPECTION_RULE_VERSION = 1
 const HASH = /^[a-f0-9]{64}$/
@@ -88,12 +90,14 @@ class Inspector {
   readonly reports: DocumentInspection[] = []
   readonly unchecked: UncheckedDocument[] = []
   readonly issues: MaintenanceIssue[]
+  readonly notices: MaintenanceIssue[] = []
   private readonly checkedPaths = new Set<string>()
   private readonly receiptPaths = new Set<string>()
   private gitRead = false
   private gitBefore: OpeningGitState | undefined
   private commitProof: OpeningCommitProof | undefined
   private historyUnknown = false
+  private archiveSet?: readonly ArchiveReceipt[]
   constructor(root: string, reader?: ReadonlyBookSnapshot) { this.reader = reader ?? createReadonlyBookSnapshot(root); this.issues = this.reader.issues }
 
   issue(relative: string, message: string, code = 'DOCUMENT_INVALID', extra: Partial<Pick<MaintenanceIssue, '字段' | '行' | '来源形态'>> = {}): void {
@@ -141,6 +145,46 @@ class Inspector {
       this.unknown(relative, ['I30'], '无法读取可信的版本库历史，未核实归档同批提交')
     }
     return this.commitProof
+  }
+
+  receipts(): readonly ArchiveReceipt[] {
+    this.archiveSet ??= readArchiveReceiptsSnapshot(this.reader)
+    return this.archiveSet
+  }
+
+  retentionChecks(): void {
+    const receipts = this.receipts()
+    const candidates = receipts.filter(receipt => receipt.schema === 3)
+    const targets = new Set(candidates.flatMap(receipt => receipt.outputs.filter(output => output.relPath.startsWith('定稿/')).map(output => output.relPath)))
+    for (const [relative, content] of this.files) {
+      if (!relative.startsWith('定稿/')) continue
+      const parsed = parseDocument(content)
+      if (parsed.ok && Object.hasOwn(parsed.data.fields, '草稿留档摘要')) targets.add(relative)
+    }
+    const contractText = this.files.get(paths.契约())
+    const contract = contractText === undefined ? undefined : parseDocument(contractText)
+    const bookId = contract?.ok && typeof contract.data.fields['书id'] === 'string' ? contract.data.fields['书id'] : ''
+    for (const relative of targets) {
+      try {
+        const named = /^定稿\/卷(\d+)\/(\d{4,})-(.+)\.md$/.exec(relative)
+        const text = this.reader.readFile(relative)
+        if (!named || text === undefined) throw new Error('留档证据对应的定稿身份或原文无法读取')
+        const relevant = candidates.find(receipt => receipt.outputs.some(output => output.relPath === relative))
+        // Receipts are local; a clone or cleaned draft area keeps only the committed digest (opening uses pre-retention rules).
+        if (!relevant) {
+          const final = parseDocument(text)
+          if (final.ok && retentionReceiptAbsent(relative, final.data.fields, receipts)) { this.notices.push(retentionReceiptAbsentNotice(relative)); continue }
+          throw new Error('定稿缺少有效草稿留档摘要，不能回退旧留档判定')
+        }
+        const proof = this.receiptHistory(receiptRelative(relevant.scope))
+        if (!proof) continue
+        const retained = trustedDraftRetention(proof, { 卷: Number(named[1]), 章: Number(named[2]), 章名: named[3]! }, text, bookId, receipts)
+        if (retained === undefined) throw new Error('留档摘要缺失，不能回退旧留档判断')
+        const verified = verifyDraftRetention(this.reader.root, retained.manifest, { allowMissingRetained: true, reader: this.reader })
+        this.issues.push(...verified.issues)
+        this.notices.push(...missingRetentionNotices(verified.missingRetained, retained.manifest.sourceDraft))
+      } catch (error) { this.issue(relative, error instanceof Error ? error.message : String(error), 'DRAFT_RETENTION_UNPROVEN') }
+    }
   }
 
   fields(relative: string, doc: Frontmatter): void {
@@ -349,7 +393,9 @@ class Inspector {
       const proof = this.receiptHistory(relative)
       if (!proof) return
       try {
-        if (!proof.committed(receipt)) this.issue(relative, '归档收据尚无可核实的同批提交，请核对待提交或中断情况；本次不补交', 'RECEIPT_PENDING_COMMIT')
+        const commit = proof.receiptCommit(receipt)
+        if (!commit) this.issue(relative, '归档收据尚无可核实的同批提交，请核对待提交或中断情况；本次不补交', 'RECEIPT_PENDING_COMMIT')
+        else if (receipt.schema === 3 && !verifyRetentionOrigin(proof, receipt, this.receipts(), commit)) this.issue(relative, '旧章留档确认之前的归档完成与来源关系无法核实', 'DRAFT_RETENTION_ORIGIN')
       } catch (error) {
         this.historyUnknown = true
         this.issue(relative, error instanceof Error ? error.message : String(error), 'RECEIPT_HISTORY_UNKNOWN')
@@ -376,6 +422,14 @@ class Inspector {
       for (const field of ['审稿哈希', '审读指纹']) if (data[field] !== undefined && !HASH.test(String(data[field]))) this.issue(relative, '审核证据哈希无效', 'DOCUMENT_INVALID', { 字段: field })
     } else if (unit === 'I24') this.materialManifest(relative, content)
     else if (unit === 'I26') {
+      const finalText = this.reader.readFile(`${path.posix.dirname(relative)}/正文.md`)
+      const final = finalText === undefined ? undefined : parseDocument(finalText)
+      if (Object.hasOwn(data, '草稿留档') || (final?.ok && Object.hasOwn(final.data.fields, '草稿留档摘要'))) {
+        try {
+          if (finalText === undefined) throw new Error('留档准备包缺少正文')
+          assertDraftRetentionBinding(finalText, parseDraftRetention(data['草稿留档']))
+        } catch (error) { this.issue(relative, error instanceof Error ? error.message : String(error), 'DRAFT_RETENTION_PACKAGE') }
+      }
       const outputs = data['文件'], artifacts = data['工件']
       if (!Array.isArray(outputs) || !outputs.length || !Array.isArray(artifacts)) { this.issue(relative, '准备包缺少文件或工件清单'); return }
       const names = new Set<string>()
@@ -489,6 +543,7 @@ class Inspector {
       if (future) this.unknown(relative, classifyDocumentPath(relative)?.units ?? [], '书仓格式尚未支持，未套用当前领域规则')
       else this.inspectFile(relative, content)
     }
+    if (!future) this.retentionChecks()
     const memoryHasContent = [...this.files].some(([relative, content]) => {
       if (!relative.startsWith('本书记忆/')) return false
       const parsed = parseDocument(content)
@@ -499,7 +554,7 @@ class Inspector {
     let gitChanged = false
     if (this.gitRead) {
       let after: OpeningGitState | undefined
-      try { after = readOpeningGitState(this.reader) }
+      try { if (this.gitBefore !== undefined) after = readOpeningGitState(this.reader) }
       catch (error) { this.issue('.git', error instanceof Error ? error.message : String(error), 'RECEIPT_HISTORY_UNKNOWN') }
       gitChanged = JSON.stringify(this.gitBefore) !== JSON.stringify(after)
       if (after?.head === undefined || gitChanged) this.historyUnknown = true
@@ -528,6 +583,7 @@ class Inspector {
       书仓格式: format, 规则版本: BOOK_INSPECTION_RULE_VERSION,
       受检范围: this.reports.map(report => report.文档类型.includes('I30') && report.结果 === '已检查' && this.unchecked.some(item => item.路径 === report.路径) ? { ...report, 结果: '部分检查' } : report),
       未检范围: this.unchecked, 类型覆盖: coverage, 问题: uniqueMaintenanceIssues(this.issues), 快照: snapshot,
+      ...(this.notices.length ? { 提示: uniqueMaintenanceIssues(this.notices) } : {}),
     }
   }
 }

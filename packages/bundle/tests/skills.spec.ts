@@ -51,6 +51,17 @@ function readFrontmatter(text: string): Record<string, unknown> {
 }
 
 describe('聚合 skills 体系（渐进式披露与 Subagent 协同）', () => {
+  it('起草与润色交接明确身份对象及来源，不让稿件版本冒充章号', () => {
+    for (const name of ['novel-drafting', 'novel-polish']) {
+      const text = readSkill(name)
+      expect(text).toContain('身份: { 卷: <当前卷号>, 章: <当前章号>, 章名: "<当前章名>" }')
+      expect(text).toContain('稿件版本不是章号')
+      expect(text).toContain('身份检查')
+      expect(text).toContain('主控')
+    }
+    expect(readSkill('novel-polish')).toContain('不把错误字段直接带入新稿')
+  })
+
   it('交付 12 份 SKILL.md，文件名一一对应', () => {
     for (const s of EXPECTED_SKILLS) {
       expect(fs.existsSync(skillPath(s.name)), `${s.name}/SKILL.md 应存在`).toBe(true)
@@ -202,7 +213,7 @@ describe('聚合 skills 体系（渐进式披露与 Subagent 协同）', () => {
     expect(warning).toContain('[!WARNING]')
     expect(warning).toContain('novel_settle_chapter')
     expect(warning).toContain('未获作者明确批准')
-    expect(warning).toContain('严禁调用')
+    expect(warning).toContain('严禁入档')
   })
 
   it('全面审读：含 8 维标准 + Subagent 派发指引 + 发现项规范', () => {

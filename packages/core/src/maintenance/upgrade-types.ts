@@ -42,6 +42,8 @@ export interface BookUpgradePreview {
   readonly resumable: readonly string[]
   /** Paused, structurally checked work retained by the upgrade; it is not declared closed. */
   readonly activeWork?: readonly { readonly 路径: string; readonly 种类: string; readonly 说明: string }[]
+  /** Separately reported retention notices (stably missing non-source archive copies); never execution blockers. */
+  readonly notices?: readonly MaintenanceIssue[]
 }
 
 export interface BookUpgradeContext {

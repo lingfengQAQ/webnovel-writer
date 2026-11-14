@@ -74,6 +74,21 @@ export function attachWritingDelegationToAgent(agent: AgentLike): (() => Promise
                 chapter: { type: 'integer', minimum: 1, description: '已明确的全书章号；仅用于任务归属' } },
               required: [...parameters.required ?? [], 'role'],
             },
+            output: {
+              ...current.output,
+              presentationMeta(args, value) {
+                const nativeMeta = current.output.presentationMeta?.(args, value)
+                // rc.1 renders a text receipt without metadata; rc.3 uses a name.
+                // Derive identity only from the validated value, never rendered prose.
+                if (value && typeof value === 'object' && !Array.isArray(value) && value.kind === 'activation') {
+                  const identity: Record<string, string> | undefined = typeof value.subagentId === 'string' && value.subagentId
+                    ? { subagentId: value.subagentId }
+                    : typeof value.name === 'string' && value.name ? { name: value.name } : undefined
+                  if (identity) return { ...(nativeMeta && typeof nativeMeta === 'object' && !Array.isArray(nativeMeta) ? nativeMeta : {}), kind: 'activation', ...identity }
+                }
+                return nativeMeta ?? null
+              },
+            },
             execute(args, exec) {
               const { role, bookId, chapter, ...task } = args as Record<string, unknown>
               if (!isRole(role) || typeof task['prompt'] !== 'string' || exec.agent !== agent) {

@@ -1,24 +1,24 @@
 # DSH Scriptor 完整版
 
-Scriptor 8.4.0 适配 DSH 0.2.2-rc.1。安装范围为 `>=0.2.2-rc.1 <0.3.0-0`，Node最低24.9；实际验证按具体版本记录。
+Scriptor 8.4.1 适配 DSH 0.2.2-rc.3。安装范围为 `>=0.2.2-rc.1 <0.3.0-0`，Node最低24.9；实际验证按具体版本记录。
 
 [产品主页](https://lingfengqaq.github.io/webnovel-writer/) · [安装教程](https://lingfengqaq.github.io/webnovel-writer/docs/install.html)
 
-> Scriptor 8.4.0 配套 **DSH 0.2.2-rc.1**。旧格式先备份并使用书仓维护预览，按明确批准执行升级。
+> Scriptor 8.4.1 配套 **DSH 0.2.2-rc.3**。旧格式先备份并使用书仓维护预览，按明确批准执行升级。
 
 `@linfengqaqtat/dsh-scriptor-full` 同时安装主插件和可选嵌入提供方，通过 DSH 组合配置各加载一份。
 
 ## 安装
 
-配套 DSH 0.2.2-rc.1。在 DSH 侧栏“插件 → 添加插件”输入 `@linfengqaqtat/dsh-scriptor-full@8.4.0`，核对预览并安装，按提示启用或重启。Desktop 自带运行时，不需要另装 Node/pnpm。
+配套 DSH 0.2.2-rc.3。在侧栏“插件 → 添加插件”输入 `@linfengqaqtat/dsh-scriptor-full@8.4.1`，核对后安装并应用变更。步骤见[安装教程](https://lingfengqaq.github.io/webnovel-writer/docs/install.html)。
 
-完整版绑定写作工作台和检索增强 8.4.0，不包含鲸鱼娘。它与分别安装写作/检索二选一，不要同时启用两个入口。旧版本先备份、卸载旧入口，再安装新版本，详见 [安装与迁移](https://github.com/lingfengQAQ/webnovel-writer/blob/v8/docs/user/install.md)。
+完整版绑定写作工作台和检索增强 8.4.1，不包含鲸鱼娘。它与分别安装写作/检索二选一，不要同时启用两个入口。旧版本先备份、卸载旧入口，再安装新版本，详见 [安装与迁移](https://github.com/lingfengQAQ/webnovel-writer/blob/v8/docs/user/install.md)。
 
 检索辅助功能默认关闭，需要自行配置模型和凭据；主聊天模型也由用户配置，包不包含模型额度。
 
 ## 更新与卸载
 
-8.4.0 配套 DSH 0.2.2-rc.1，加入千章关系星团、证据轨迹、原生设置与书仓维护。先升级宿主，再更新 full 并重启。旧格式须先备份、检查并预览整仓升级；安装本身不迁移作品。升级后新建 **写作模式** 对话，打开原工作区继续；旧对话不会自动迁移。旧项目须保留原契约内容，补充并确认“章节篇幅”后启用范围核对。操作见 [新编辑器教程](https://github.com/lingfengQAQ/webnovel-writer/blob/v8/docs/user/editor.md) 和 [旧项目升级指南](https://github.com/lingfengQAQ/webnovel-writer/blob/v8/docs/user/upgrade-backup.md)。检索增强增加独立图谱模型，需在插件页配置并按书启用。
+8.4.1修复升级预览、草稿身份与留档检查，以及DSH 0.2.2-rc.3的委派和侧栏兼容。旧版本准备的待定稿包须重新准备、重新核对。更新full会同步更新主包与检索，检索功能保持不变。旧格式先备份、检查并预览整仓升级；安装本身不迁移作品。操作见 [编辑器教程](https://github.com/lingfengQAQ/webnovel-writer/blob/v8/docs/user/editor.md) 和 [升级指南](https://github.com/lingfengQAQ/webnovel-writer/blob/v8/docs/user/upgrade-backup.md)。
 
 停止该 profile 的实例后，安装新精确版本并重启。卸载完整版：
 

@@ -4,6 +4,8 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { createNovelTools, type NovelToolsDeps } from '../src/novel-tools'
 import { APPROVE_LABEL, REJECT_LABEL, type AskRequest, type AskResponse } from '@webnovel/core'
+import { removeSync } from '../../core/src/repo/remove'
+import { settlementPack } from './fixtures/settlement-pack'
 
 const roots: string[] = []
 function mkWs(): string {
@@ -11,7 +13,7 @@ function mkWs(): string {
   roots.push(dir)
   return dir
 }
-afterAll(() => { for (const r of roots) { try { fs.rmSync(r, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }) } catch { /* Windows 句柄延迟释放 */ } } })
+afterAll(() => { for (const r of roots) removeSync(r) })
 
 const AGENT = { agent: { id: 'agent-1', session: { append: () => {} } } }
 const CONCEPT = {
@@ -32,6 +34,7 @@ async function setup(ask?: NovelToolsDeps['askFn']) {
     return (await tool.execute(args, AGENT)) as Record<string, unknown> & { ok: boolean }
   }
   const created = await call('novel_create_book', { bookName: '审批书', concept: CONCEPT }) as { bookId: string }
+  settlementPack(path.join(ws, '审批书'), created.bookId, KEY)
   return { call, bookId: created.bookId }
 }
 
@@ -52,7 +55,7 @@ describe('定稿沉淀:作者审批不可由模型自证（裁决 11/14）', () 
     expect(String(r.reason)).toContain('未获作者批准')
   })
 
-  it('作者批准:进入沉淀（无定稿包则由 archiveChapter fail-closed）', async () => {
+  it('作者批准:按实际定稿包进入沉淀', async () => {
     let seen: AskRequest | undefined
     const { call, bookId } = await setup(async (req): Promise<AskResponse> => {
       seen = req
@@ -61,8 +64,7 @@ describe('定稿沉淀:作者审批不可由模型自证（裁决 11/14）', () 
     const r = await call('novel_settle_chapter', { bookId, ...KEY })
     expect(seen, 'askFn 应被调用').toBeDefined()
     expect(seen!.questions[0]?.id).toBe('定稿入档')
-    expect(r.ok).toBe(false)
-    expect(String(r.reason)).not.toContain('裁决通道')
+    expect(r.ok, String(r.reason)).toBe(true)
   })
 
   it('模型无法用参数绕过:裁决记录 已不是入参', async () => {
