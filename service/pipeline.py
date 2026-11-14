@@ -1,0 +1,1052 @@
+# -*- coding: utf-8 -*-
+"""写章 pipeline：把上游 `/webnovel-write` 的 6 步流程落成服务端编排。
+
+与上游的对应关系：
+  Step 1 context-agent  → `_step_context`   （LLM 调用）
+  Step 2 起草           → `_step_draft`     （LLM 调用）
+  Step 3 审查           → `_step_review`    （LLM + review-pipeline）
+  Step 4 润色           → `_step_polish`    （LLM 调用）
+  Step 5 提交           → `_step_commit`    （data-agent + chapter-commit）
+  Step 6 备份           → `_step_backup`    （上游 backup）
+
+硬规则（来自上游 SKILL.md，不得放宽）：
+- 禁止跳步、伪造审查。
+- 审查只跑一轮；blocking issue 定点修复或交用户裁决后才进 Step 4/5。
+- 失败只补跑失败步骤，不回退。
+- 充分性闸门：正文非空、审查落库、anti_ai 通过、commit accepted、projection 全 done。
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import time
+from dataclasses import dataclass, field
+from enum import Enum
+from pathlib import Path
+from typing import Any, Awaitable, Callable, Dict, List, Optional
+
+from . import prompts
+from .config import Settings
+from .engine import Engine, EngineError
+from .llm import LLMClient, LLMError
+
+
+class Stage(str, Enum):
+    PREFLIGHT = "preflight"
+    CONTRACT = "contract"
+    CONTEXT = "context"
+    DRAFT = "draft"
+    REVIEW = "review"
+    POLISH = "polish"
+    DATA = "data"
+    COMMIT = "commit"
+    PROJECTION = "projection"
+    BACKUP = "backup"
+    DONE = "done"
+
+
+class PipelineError(RuntimeError):
+    """pipeline 在某个阶段失败。caller 可据 stage 决定续跑。"""
+
+    def __init__(self, message: str, stage: Stage, *, recoverable: bool = True) -> None:
+        super().__init__(message)
+        self.stage = stage
+        self.recoverable = recoverable
+
+
+@dataclass
+class StageEvent:
+    """进度事件。API 层把它转成 SSE。"""
+
+    stage: str
+    status: str  # running | ok | failed | skipped
+    message: str
+    detail: Dict[str, Any] = field(default_factory=dict)
+    duration_ms: int = 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "stage": self.stage,
+            "status": self.status,
+            "message": self.message,
+            "detail": self.detail,
+            "duration_ms": self.duration_ms,
+        }
+
+
+ProgressFn = Callable[[StageEvent], Awaitable[None]]
+
+
+@dataclass
+class WriteResult:
+    chapter: int
+    title: str
+    status: str  # completed | partial | needs_user_action | failed
+    chapter_file: str = ""
+    review_report: str = ""
+    commit_file: str = ""
+    projection_status: Dict[str, Any] = field(default_factory=dict)
+    backup_status: str = ""
+    problems: List[str] = field(default_factory=list)
+    auto_handled: List[str] = field(default_factory=list)
+    needs_user_action: List[str] = field(default_factory=list)
+    blocking_issues: List[Dict[str, Any]] = field(default_factory=list)
+    timings: Dict[str, int] = field(default_factory=dict)
+    final_report: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "chapter": self.chapter,
+            "title": self.title,
+            "status": self.status,
+            "chapter_file": self.chapter_file,
+            "review_report": self.review_report,
+            "commit_file": self.commit_file,
+            "projection_status": self.projection_status,
+            "backup_status": self.backup_status,
+            "problems": self.problems,
+            "auto_handled": self.auto_handled,
+            "needs_user_action": self.needs_user_action,
+            "blocking_issues": self.blocking_issues,
+            "timings": self.timings,
+            "final_report": self.final_report,
+        }
+
+
+class WritePipeline:
+    """一次写章运行。"""
+
+    def __init__(
+        self,
+        settings: Settings,
+        engine: Engine,
+        clients: Dict[str, LLMClient],
+        *,
+        mode: str = "default",
+        target_words: Optional[int] = None,
+        chapter_title: str = "",
+        chapter_goal: str = "",
+        genre: str = "",
+        progress: Optional[ProgressFn] = None,
+        stop_after_review: bool = False,
+        override_existing: bool = False,
+        accept_blocking: bool = False,
+    ) -> None:
+        self.settings = settings
+        self.engine = engine
+        self.clients = clients
+        self.mode = mode
+        self.target_words = target_words
+        self.chapter_title = chapter_title
+        self.chapter_goal = chapter_goal
+        self.genre = genre
+        self.progress = progress
+        self.stop_after_review = stop_after_review
+        self.override_existing = override_existing
+        # 显式接受阻断问题后继续（默认 False：阻断即停，等裁决）
+        self.accept_blocking = accept_blocking
+        self.result: Optional[WriteResult] = None
+        self._chapter_text: str = ""
+        self._task_brief: str = ""
+        self._review_json: Dict[str, Any] = {}
+        self._hard_failure: bool = False
+
+    # ---- 事件与计时 ----
+
+    async def _emit(self, stage: Stage, status: str, message: str,
+                    detail: Optional[Dict[str, Any]] = None,
+                    duration_ms: int = 0) -> None:
+        if self.progress is None:
+            return
+        await self.progress(StageEvent(
+            stage=stage.value, status=status, message=message,
+            detail=detail or {}, duration_ms=duration_ms,
+        ))
+
+    async def _timed(self, stage: Stage, message: str,
+                     fn: Callable[[], Awaitable[Any]]) -> Any:
+        await self._emit(stage, "running", message)
+        started = time.monotonic()
+        try:
+            value = await fn()
+        except (PipelineError, LLMError, EngineError):
+            elapsed = int((time.monotonic() - started) * 1000)
+            await self._emit(stage, "failed", f"{message} —— 失败", duration_ms=elapsed)
+            raise
+        elapsed = int((time.monotonic() - started) * 1000)
+        self._timings[stage.value] = elapsed
+        await self._emit(stage, "ok", message, duration_ms=elapsed)
+        return value
+
+    _timings: Dict[str, int]
+
+    def _client(self, role: str) -> LLMClient:
+        client = self.clients.get(role)
+        if client is None:
+            raise PipelineError(
+                f"角色 `{role}` 的 LLM 未配置（需要 base_url + model）。"
+                f"请通过 /api/config 或 .env 配置。",
+                Stage.PREFLIGHT, recoverable=False,
+            )
+        return client
+
+    # ---- 主流程 ----
+
+    # 可指定从哪里开始。用于：审查后裁决完继续、只补跑提交、只重写正文等。
+    RESUME_STAGES = (
+        "preflight", "contract", "context", "draft", "review",
+        "polish", "data", "commit", "backup",
+    )
+
+    async def run(self, chapter: int, from_stage: str = "preflight") -> WriteResult:
+        self.result = WriteResult(chapter=chapter, title=self.chapter_title, status="failed")
+        self._timings = {}
+        self._hard_failure = False
+        chapter = int(chapter)
+
+        start = from_stage if from_stage in self.RESUME_STAGES else "preflight"
+        if start != "preflight":
+            self.result.auto_handled.append(f"从 `{start}` 阶段续跑（跳过前面的阶段）")
+
+        async def _step(name: str, fn) -> None:
+            """按续跑位置决定跳过还是执行。"""
+            if self.RESUME_STAGES.index(name) < self.RESUME_STAGES.index(start):
+                return
+            await fn(chapter)
+
+        try:
+            await _step("preflight", self._step_preflight)
+            await _step("contract", self._step_contract)
+
+            # 续跑自 draft 及之后时，正文已在磁盘上，先读回来
+            await _step("context", self._step_context)
+            await _step("draft", self._step_draft)
+
+            # review 及之后需要正文在内存里
+            if self.RESUME_STAGES.index(start) > self.RESUME_STAGES.index("draft"):
+                if not self._chapter_text:
+                    existing = await asyncio.to_thread(self.engine.chapter_file, chapter)
+                    if existing is None:
+                        raise PipelineError(
+                            f"续跑自 `{start}`，但第 {chapter} 章正文不存在。"
+                            "请从 `draft` 或更早阶段重新开始。",
+                            Stage.DRAFT, recoverable=False,
+                        )
+                    self._chapter_text = existing.read_text(encoding="utf-8")
+                    self.result.chapter_file = str(existing)
+
+            review: Dict[str, Any] = {}
+            if self.RESUME_STAGES.index(start) <= self.RESUME_STAGES.index("review"):
+                review = await self._step_review(chapter)
+
+            if self.stop_after_review:
+                self.result.status = "partial"
+                self.result.needs_user_action.append("已按请求在审查后停止，等待裁决")
+                await self._finalize(chapter)
+                return self.result
+
+            # blocking issue 不自动放过，除非调用方显式接受
+            blocking_issues: List[Dict[str, Any]] = []
+            if review:
+                blocking_issues = [
+                    issue for issue in (review.get("issues") or [])
+                    if isinstance(issue, dict) and issue.get("blocking")
+                ]
+            else:
+                # 续跑自 review 之后：本次没跑审查，但 artifact 里可能仍有未裁决的
+                # 阻断项。必须读出来 —— 否则会一路走到 commit，被上游 precommit
+                # gate 拒绝，最终报成含糊的 failed，而不是让用户看到裁决入口。
+                blocking_issues = self._read_blocking_from_artifact()
+
+            if blocking_issues:
+                self.result.blocking_issues = blocking_issues
+                self._save_blocking_state(chapter)
+                if not self.accept_blocking:
+                    self.result.status = "needs_user_action"
+                    self.result.needs_user_action.append(
+                        f"存在 {len(blocking_issues)} 个阻断问题，需裁决后才能继续。"
+                        f"可用 POST /service/write/resume 带 from_stage=polish 并"
+                        f" accept_blocking=true 接受现状继续，或先手工修订正文后从 polish 续跑。"
+                    )
+                    await self._finalize(chapter)
+                    return self.result
+                # 接受：把裁决写进 artifact，否则上游 precommit gate 仍会拒绝
+                self._record_blocking_adjudication(
+                    chapter, reason="用户通过 accept_blocking 明确裁决接受"
+                )
+
+            await _step("polish", self._step_polish)
+            await _step("data", self._step_data)
+
+            # data 之后还有一类上游阻断：disambiguation_result 的 pending 项。
+            # 上游 artifact_validator 把它算作 blocker（artifact.pending_disambiguation），
+            # 若不管它，commit 会被 gate 拒绝并报成含糊的 failed。
+            if await self._handle_pending_disambiguation(chapter):
+                await self._finalize(chapter)
+                return self.result
+
+            await _step("commit", self._step_commit)
+            await _step("backup", self._step_backup)
+
+        except PipelineError as exc:
+            self._hard_failure = True
+            # 不覆盖已判定的 needs_user_action：例如 commit rejected 会先设好
+            # 该状态再抛异常，若这里无条件改成 failed，用户就看不到裁决入口了。
+            if self.result.status != "needs_user_action":
+                self.result.status = "failed"
+            self.result.problems.append(f"[{exc.stage.value}] {exc}")
+        except LLMError as exc:
+            self._hard_failure = True
+            if self.result.status != "needs_user_action":
+                self.result.status = "failed"
+            self.result.problems.append(f"LLM 调用失败：{exc}")
+        except EngineError as exc:
+            self._hard_failure = True
+            if self.result.status != "needs_user_action":
+                self.result.status = "failed"
+            self.result.problems.append(f"上游引擎失败：{exc}")
+        except Exception as exc:  # noqa: BLE001 - 兜底，避免 API 层 500 无信息
+            self._hard_failure = True
+            self.result.status = "failed"
+            self.result.problems.append(f"未预期错误：{type(exc).__name__}: {exc}")
+
+        await self._finalize(chapter)
+        return self.result
+
+    # ---- 各步骤 ----
+
+    async def _step_preflight(self, chapter: int) -> None:
+        async def _do() -> None:
+            report = await asyncio.to_thread(self.engine.preflight)
+            if not report.get("ok"):
+                failed = [
+                    item for item in (report.get("checks") or []) if not item.get("ok")
+                ]
+                names = ", ".join(str(item.get("name")) for item in failed)
+                raise PipelineError(
+                    f"预检未通过：{names}。detail: {report.get('project_root_error') or ''}",
+                    Stage.PREFLIGHT,
+                )
+            scan = await asyncio.to_thread(self.engine.placeholder_scan)
+            if isinstance(scan, dict) and scan.get("has_placeholders"):
+                raise PipelineError(
+                    "大纲/设定集仍存在未补齐占位符，无法开始写作（先补齐或运行 placeholder-scan 查看）",
+                    Stage.PREFLIGHT,
+                )
+
+        await self._timed(Stage.PREFLIGHT, "检查项目环境", _do)
+
+    async def _step_contract(self, chapter: int) -> None:
+        async def _do() -> None:
+            # genre 必须解析出来：上游 story-system 的题材路由是硬匹配，
+            # 空 genre 会直接拒绝生成合同，阻断整个写章链路。
+            genre = self.genre
+            if not genre:
+                genre = await asyncio.to_thread(self.engine.resolve_genre)
+                if genre:
+                    self.genre = genre
+                    self.result.auto_handled.append(
+                        f"已从 state.json 自动解析题材：{genre}"
+                    )
+            if not genre:
+                raise PipelineError(
+                    "无法确定题材（genre）。上游 story-system 需要中文题材名做路由匹配"
+                    "（如 玄幻 / 仙侠 / 规则怪谈）。请在请求中显式传入 genre，"
+                    "或先补齐 .webnovel/state.json 的题材配置。",
+                    Stage.CONTRACT, recoverable=False,
+                )
+
+            goal = self.chapter_goal
+            if not goal:
+                goal = await self._infer_chapter_goal(chapter)
+            if not goal:
+                raise PipelineError(
+                    f"无法确定第 {chapter} 章的目标（章纲缺失且未显式提供 chapter_goal）。"
+                    "请先运行 /webnovel-plan 生成章纲，或显式传入 chapter_goal。",
+                    Stage.CONTRACT,
+                )
+            res = await asyncio.to_thread(
+                self.engine.story_system, goal, genre, chapter, True
+            )
+            if not res.ok:
+                detail = (res.stderr or res.stdout).strip()
+                raise PipelineError(
+                    f"生成写作合同失败：{detail[:800]}", Stage.CONTRACT
+                )
+            gate = await asyncio.to_thread(self.engine.write_gate, chapter, "prewrite")
+            if not gate.get("ok", True):
+                raise PipelineError(
+                    f"prewrite gate 未通过：{json.dumps(gate, ensure_ascii=False)[:800]}",
+                    Stage.CONTRACT,
+                )
+
+        await self._timed(Stage.CONTRACT, "刷新本章写作合同", _do)
+
+    async def _infer_chapter_goal(self, chapter: int) -> str:
+        """优先从章纲文件推断目标；失败则从 state 的章节安排里找。"""
+        outline = None
+        try:
+            outline = await asyncio.to_thread(self.engine.chapter_outline, chapter)
+        except Exception:  # noqa: BLE001 - 章纲缺失属正常情况
+            outline = None
+        if outline:
+            # 取第一段有实质内容的行作为目标
+            for line in outline.splitlines():
+                stripped = line.strip().lstrip("#").strip()
+                if stripped and not stripped.startswith("---"):
+                    return stripped[:200]
+        return ""
+
+    async def _step_context(self, chapter: int) -> None:
+        async def _do() -> None:
+            client = self._client("context")
+            pack = await asyncio.to_thread(self.engine.load_context, chapter)
+            outline = await asyncio.to_thread(self.engine.chapter_outline, chapter)
+
+            entities = None
+            try:
+                entities = await asyncio.to_thread(self.engine.get_core_entities)
+            except EngineError:
+                self.result.auto_handled.append("实体索引读取失败，已跳过（不影响任务书主流程）")
+
+            prompt = prompts.build_context_prompt(
+                chapter, pack, outline, {"core_entities": entities} if entities else None
+            )
+            text = (await client.complete(
+                prompts.CONTEXT_SYSTEM, prompt, max_tokens=8192
+            )).text.strip()
+
+            if text.startswith("BLOCKER"):
+                raise PipelineError(
+                    f"写作任务书上下文不足：{text}", Stage.CONTEXT, recoverable=False
+                )
+            if len(text) < 200:
+                raise PipelineError(
+                    f"写作任务书过短（{len(text)} 字符），无法支撑起草", Stage.CONTEXT
+                )
+            self._task_brief = text
+
+        await self._timed(Stage.CONTEXT, "整理写作依据", _do)
+
+    async def _step_draft(self, chapter: int) -> None:
+        async def _do() -> None:
+            client = self._client("draft")
+            existing = await asyncio.to_thread(self.engine.chapter_file, chapter)
+            if existing is not None and not self.override_existing:
+                text = existing.read_text(encoding="utf-8")
+                if text.strip():
+                    self._chapter_text = text
+                    self.result.auto_handled.append(
+                        f"第 {chapter} 章正文已存在（{existing.name}），沿用现有正文，未覆盖"
+                    )
+                    self.result.chapter_file = str(existing)
+                    return
+
+            feedback: Optional[str] = None
+            last_error: Optional[str] = None
+            for attempt in range(max(1, self.settings.max_draft_retries + 1)):
+                prompt = prompts.build_draft_prompt(
+                    chapter, self._task_brief, self.target_words, feedback=feedback
+                )
+                text = (await client.complete(
+                    prompts.DRAFT_SYSTEM, prompt, max_tokens=16384
+                )).text.strip()
+                if len(text) >= 300:
+                    self._chapter_text = text
+                    break
+                last_error = f"第 {attempt + 1} 稿过短（{len(text)} 字符）"
+                feedback = last_error
+            else:
+                raise PipelineError(
+                    f"起草失败：{last_error}", Stage.DRAFT, recoverable=False
+                )
+
+            path = await asyncio.to_thread(
+                self.engine.write_chapter_file, chapter, self.chapter_title, self._chapter_text
+            )
+            self.result.chapter_file = str(path)
+
+        await self._timed(Stage.DRAFT, "起草正文", _do)
+
+    async def _step_review(self, chapter: int) -> Dict[str, Any]:
+        async def _do() -> Dict[str, Any]:
+            client = self._client("review")
+
+            state_changes = None
+            try:
+                state_changes = await asyncio.to_thread(self.engine.get_state_changes, 20)
+            except EngineError:
+                self.result.auto_handled.append("状态变更读取失败，审查降级为仅正文一致性检查")
+
+            pack = None
+            try:
+                pack = await asyncio.to_thread(self.engine.load_context, chapter)
+            except EngineError:
+                pass
+
+            context = {"recent_state_changes": state_changes, "story_context": pack}
+            prompt = prompts.build_review_prompt(chapter, self._chapter_text, context)
+
+            # 审查输出可能很长（多问题、逐维结论）。token 给小了会被截断成
+            # 半截 JSON，解析直接失败。所以给足额度，并在解析失败时降温度重试。
+            raw = await self._json_with_retry(
+                client, prompts.REVIEW_SYSTEM, prompt,
+                max_tokens=32768, temperature=0.1,
+                what="审查",
+            )
+            if not isinstance(raw, dict):
+                raise PipelineError(
+                    f"审查返回结构不是对象：{type(raw).__name__}", Stage.REVIEW
+                )
+
+            # 强制补齐计数一致性
+            issues = raw.get("issues")
+            issues = issues if isinstance(issues, list) else []
+            blocking = [i for i in issues if isinstance(i, dict) and i.get("blocking")]
+            raw["issues"] = issues
+            raw["issues_count"] = len(issues)
+            raw["blocking_count"] = len(blocking)
+            raw["has_blocking"] = bool(blocking)
+            raw.setdefault("chapter", chapter)
+            self._review_json = raw
+
+            tmp = await asyncio.to_thread(self.engine.write_tmp_json, "review_results.json", raw)
+
+            mode = self.mode
+            if mode != "minimal":
+                metrics_path = str(await asyncio.to_thread(
+                    lambda: self.engine.tmp_dir() / "review_metrics.json"
+                ))
+                report_rel = f"审查报告/第{chapter}章审查报告.md"
+                res = await asyncio.to_thread(
+                    self.engine.review_pipeline, chapter, str(tmp), metrics_path, report_rel
+                )
+                if not res.ok:
+                    self.result.problems.append(
+                        f"review-pipeline 失败：{res.stderr.strip()[:400]}"
+                    )
+                else:
+                    self.result.review_report = str(
+                        Path(self.engine.project_root) / report_rel
+                    )
+            else:
+                self.result.auto_handled.append("minimal 模式：已跳过 reviewer 与 review-pipeline")
+            return raw
+
+        return await self._timed(Stage.REVIEW, "写作检查", _do)
+
+    async def _step_polish(self, chapter: int) -> None:
+        if self.mode == "minimal":
+            await self._emit(Stage.POLISH, "skipped", "minimal 模式：跳过润色")
+            return
+
+        async def _do() -> None:
+            client = self._client("polish" if "polish" in self.clients else "draft")
+            non_blocking = [
+                issue for issue in (self._review_json.get("issues") or [])
+                if isinstance(issue, dict) and not issue.get("blocking")
+            ]
+            prompt = prompts.build_polish_prompt(
+                chapter, self._chapter_text, non_blocking or None
+            )
+            text = (await client.complete(
+                prompts.POLISH_SYSTEM, prompt, temperature=0.5, max_tokens=16384
+            )).text.strip()
+            if len(text) < 300:
+                self.result.problems.append("润色输出过短，已保留润色前正文")
+                return
+            # 事实保全检查：长度不应剧烈变化
+            ratio = len(text) / max(1, len(self._chapter_text))
+            if ratio < 0.6 or ratio > 1.6:
+                self.result.auto_handled.append(
+                    f"润色稿长度变化异常（{ratio:.2f}x），已保留原稿以避免事实漂移"
+                )
+                return
+            self._chapter_text = text
+            path = await asyncio.to_thread(
+                self.engine.write_chapter_file, chapter, self.chapter_title, self._chapter_text
+            )
+            self.result.chapter_file = str(path)
+
+        await self._timed(Stage.POLISH, "润色与 Anti-AI 终检", _do)
+
+    async def _json_with_retry(
+        self,
+        client: LLMClient,
+        system: str,
+        prompt: str,
+        *,
+        max_tokens: int,
+        temperature: float,
+        what: str,
+        stage: Stage = Stage.REVIEW,
+    ) -> Any:
+        """调 LLM 并解析 JSON，失败时降温度重试。
+
+        为什么需要：实测发现审查输出会因 token 不足被**截断成半截 JSON**，
+        解析必然失败。单次调用失败就丢掉整章太脆，所以：
+        - 给足 max_tokens
+        - 解析/调用失败时重试，并追加"只输出 JSON"的纠正提示
+        """
+        attempts = max(1, self.settings.max_draft_retries + 1)
+        last_error = ""
+        for attempt in range(attempts):
+            text_prompt = prompt
+            if attempt > 0:
+                text_prompt = (
+                    prompt
+                    + f"\n\n# 上次输出不合格（{last_error}）\n"
+                    "请严格只输出一个 JSON 对象，不要输出任何解释文字或 markdown 围栏。"
+                )
+            try:
+                return await client.complete_json(
+                    system, text_prompt,
+                    temperature=temperature if attempt == 0 else 0.0,
+                    max_tokens=max_tokens,
+                )
+            except LLMError as exc:
+                last_error = str(exc)[:200]
+        raise PipelineError(
+            f"{what}失败（已重试 {attempts} 次）：{last_error}",
+            stage,
+        )
+
+    async def _step_data(self, chapter: int) -> None:
+        async def _do() -> None:
+            client = self._client("data")
+            entity_context: Dict[str, Any] = {}
+            try:
+                entity_context["core_entities"] = await asyncio.to_thread(
+                    self.engine.get_core_entities
+                )
+                entity_context["recent_appearances"] = await asyncio.to_thread(
+                    self.engine.recent_appearances, 20
+                )
+            except EngineError:
+                self.result.auto_handled.append("实体索引读取失败，data-agent 以正文为准提取")
+
+            planned = None
+            try:
+                pack = await asyncio.to_thread(self.engine.load_context, chapter)
+                if isinstance(pack, dict):
+                    planned = pack.get("chapter_contract") or pack.get("story_contracts")
+            except EngineError:
+                pass
+
+            prompt = prompts.build_data_prompt(
+                chapter, self._chapter_text, entity_context, planned
+            )
+            raw = await self._json_with_retry(
+                client, prompts.DATA_SYSTEM, prompt,
+                max_tokens=32768, temperature=0.1, what="事实提取",
+                stage=Stage.DATA,
+            )
+            if not isinstance(raw, dict):
+                raise PipelineError("data-agent 返回结构不是对象", Stage.DATA)
+
+            fulfillment = raw.get("fulfillment_result")
+            disambiguation = raw.get("disambiguation_result")
+            extraction = raw.get("extraction_result")
+
+            missing = [
+                name for name, value in (
+                    ("fulfillment_result", fulfillment),
+                    ("disambiguation_result", disambiguation),
+                    ("extraction_result", extraction),
+                ) if not isinstance(value, dict)
+            ]
+            if missing:
+                raise PipelineError(
+                    f"data-agent 缺少必需 artifact：{', '.join(missing)}", Stage.DATA
+                )
+
+            # schema 底线校验：extraction_result 必须是直接放键，不能嵌套
+            required_keys = ("accepted_events", "state_deltas", "entity_deltas",
+                             "entities_appeared", "scenes", "summary_text")
+            absent = [key for key in required_keys if key not in extraction]
+            if absent:
+                self.result.problems.append(
+                    f"extraction_result 缺少字段（上游可能拒收）：{', '.join(absent)}"
+                )
+            for key in ("planned_nodes", "covered_nodes", "missed_nodes", "extra_nodes"):
+                if key not in fulfillment:
+                    fulfillment[key] = []
+            disambiguation.setdefault("pending", [])
+
+            await asyncio.to_thread(self.engine.write_tmp_json, "fulfillment_result.json", fulfillment)
+            await asyncio.to_thread(self.engine.write_tmp_json, "disambiguation_result.json", disambiguation)
+            await asyncio.to_thread(self.engine.write_tmp_json, "extraction_result.json", extraction)
+
+            if disambiguation.get("pending"):
+                self.result.needs_user_action.append(
+                    f"存在 {len(disambiguation['pending'])} 条待消歧实体"
+                )
+            if fulfillment.get("missed_nodes"):
+                self.result.problems.append(
+                    f"有 {len(fulfillment['missed_nodes'])} 个计划节点未覆盖"
+                )
+
+        await self._timed(Stage.DATA, "保存本章故事事实", _do)
+
+    async def _step_commit(self, chapter: int) -> None:
+        async def _do() -> None:
+            gate = await asyncio.to_thread(self.engine.write_gate, chapter, "precommit")
+            if not gate.get("ok", True):
+                raise PipelineError(
+                    f"precommit gate 未通过：{json.dumps(gate, ensure_ascii=False)[:800]}",
+                    Stage.COMMIT,
+                )
+
+            tmp = await asyncio.to_thread(self.engine.tmp_dir)
+            res = await asyncio.to_thread(
+                self.engine.chapter_commit,
+                chapter,
+                str(tmp / "review_results.json"),
+                str(tmp / "fulfillment_result.json"),
+                str(tmp / "disambiguation_result.json"),
+                str(tmp / "extraction_result.json"),
+            )
+            payload: Dict[str, Any] = {}
+            try:
+                payload = res.json() or {}
+            except EngineError:
+                payload = {}
+
+            commit_path = Path(self.engine.project_root) / ".story-system" / "commits" / f"chapter_{chapter:03d}.commit.json"
+            if commit_path.is_file():
+                self.result.commit_file = str(commit_path)
+
+            # commit 状态与投影状态以 commit 文件为真源（CLI stdout 不一定带这些字段）
+            commit_data: Dict[str, Any] = {}
+            if commit_path.is_file():
+                try:
+                    commit_data = json.loads(commit_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    commit_data = {}
+
+            commit_status = str(
+                (commit_data.get("meta") or {}).get("status")
+                or payload.get("status")
+                or ""
+            ).lower()
+
+            if commit_status == "rejected":
+                self.result.status = "needs_user_action"
+                self.result.needs_user_action.append(
+                    "CHAPTER_COMMIT 被拒（blocking 或 missed_nodes 非空），需处理后重跑提交"
+                )
+                raise PipelineError(
+                    f"chapter-commit rejected：{json.dumps(payload, ensure_ascii=False)[:600]}",
+                    Stage.COMMIT,
+                )
+            if not res.ok and not commit_path.is_file():
+                raise PipelineError(
+                    f"chapter-commit 失败（exit {res.returncode}）：{res.stderr.strip()[:600]}",
+                    Stage.COMMIT,
+                )
+
+            # 投影校验：取自 commit 文件
+            proj = commit_data.get("projection_status") or {}
+            if isinstance(proj, dict):
+                self.result.projection_status = proj
+                await self._handle_projection_status(chapter, proj)
+
+        await self._timed(Stage.COMMIT, "提交本章事实", _do)
+
+    async def _handle_projection_status(self, chapter: int, proj: Dict[str, Any]) -> None:
+        """判定投影结果，并解除会卡死后续章节的 phase 阻塞。
+
+        关键事实（实测确认）：上游 `project_phase.has_projection_blocker` 把任何
+        `failed:` / `pending` 投影状态视为阻塞，项目 phase 变成 `projection_failed`，
+        于是**后续每一章的 precommit gate 都会被拒绝** —— 第 1 章能过，第 2 章起全卡。
+
+        而 README 明确说不填 Embedding Key 也能用（退回 BM25）。所以未配 RAG 时的
+        vector 失败属设计内降级，要归一化为 `skipped`（上游自身在 not_required 时
+        也是 skipped），否则整本书写不下去。
+
+        注意：投影状态的**权威来源是 `.webnovel/projection_log.jsonl`**，
+        优先级高于 commit 文件，因此归一化必须同时改两处。
+        """
+        bad = {
+            key: value for key, value in proj.items()
+            if str(value).lower() not in ("done", "skipped")
+        }
+        if not bad:
+            return
+
+        rag_configured = bool(self.settings.embed_api_key and self.settings.embed_base_url)
+
+        # 未配 RAG 时的 vector 失败 → 归一化为 skipped，解除 phase 阻塞
+        if "vector" in bad and not rag_configured:
+            outcome = await asyncio.to_thread(
+                self.engine.normalize_vector_projection, chapter
+            )
+            if outcome.get("normalized"):
+                self.result.auto_handled.append(
+                    "向量投影已降级为 skipped（未配置 Embedding Key，检索退回 BM25 关键词模式；"
+                    "否则上游 phase 会变成 projection_failed，卡住后续所有章节的提交）"
+                )
+            else:
+                self.result.auto_handled.append(
+                    "向量投影不可用（未配置 Embedding Key，检索退回 BM25 关键词模式）"
+                )
+            bad.pop("vector", None)
+
+        # 以权威来源刷新一次状态
+        fresh = await asyncio.to_thread(self.engine.read_projection_status, chapter)
+        if fresh:
+            self.result.projection_status = fresh
+            bad = {
+                key: value for key, value in fresh.items()
+                if str(value).lower() not in ("done", "skipped")
+            }
+            if not bad:
+                return
+
+        if not bad:
+            return
+
+        self.result.auto_handled.append(
+            f"投影未完成 {bad}，已自动补跑 projections retry"
+        )
+        try:
+            retry = await asyncio.to_thread(self.engine.projections_retry, chapter)
+            retry_payload = retry.json() or {}
+        except Exception as exc:  # noqa: BLE001 - 补跑失败不应中断收尾
+            self.result.problems.append(f"投影补跑失败：{exc}")
+            return
+
+        retry_proj = self._read_projection_status(chapter, retry_payload)
+        if retry_proj:
+            self.result.projection_status = retry_proj
+            still_bad = {
+                key: value for key, value in retry_proj.items()
+                if str(value).lower() not in ("done", "skipped")
+            }
+            # 补跑后 vector 若仍失败且未配 RAG，再归一化一次
+            if still_bad.get("vector") and not rag_configured:
+                outcome = await asyncio.to_thread(
+                    self.engine.normalize_vector_projection, chapter
+                )
+                if outcome.get("normalized"):
+                    self.result.auto_handled.append("补跑后向量投影仍失败，已再次降级为 skipped")
+                    still_bad.pop("vector", None)
+                    self.result.projection_status = await asyncio.to_thread(
+                        self.engine.read_projection_status, chapter
+                    )
+            if still_bad:
+                self.result.problems.append(f"投影补跑后仍未完成：{still_bad}")
+
+    async def _step_backup(self, chapter: int) -> None:
+        async def _do() -> None:
+            title = self.chapter_title
+            if not title and self.result.chapter_file:
+                name = Path(self.result.chapter_file).stem
+                if "-" in name:
+                    title = name.split("-", 1)[1]
+            res = await asyncio.to_thread(self.engine.backup, chapter, title)
+            if res.ok:
+                self.result.backup_status = "done"
+            else:
+                self.result.backup_status = "failed"
+                self.result.problems.append(f"备份失败：{res.stderr.strip()[:300]}")
+
+        await self._timed(Stage.BACKUP, "备份本章", _do)
+
+    # ---- 收尾 ----
+
+    async def _handle_pending_disambiguation(self, chapter: int) -> bool:
+        """处理 data-agent 留下的 pending 消歧项。
+
+        上游把 `disambiguation_result.pending` 非空视为提交阻断
+        （artifact_validator._policy_issues → artifact.pending_disambiguation）。
+        所以这里要么让用户裁决，要么在 accept_blocking 下记录裁决后清空。
+
+        返回 True 表示应当停止（已置为 needs_user_action）。
+        """
+        path = self.engine.tmp_dir() / "disambiguation_result.json"
+        if not path.is_file():
+            return False
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        if not isinstance(data, dict):
+            return False
+        pending = data.get("pending")
+        if not isinstance(pending, list) or not pending:
+            return False
+
+        self.result.needs_user_action.append(
+            f"存在 {len(pending)} 条待消歧实体（会影响角色/关系/事件入库）"
+        )
+        if not self.accept_blocking:
+            self.result.status = "needs_user_action"
+            self._save_blocking_state(chapter)
+            return True
+
+        # 接受：保留原始 pending 供审计，再清空以通过 gate
+        data["adjudicated_pending"] = pending
+        data["pending"] = []
+        data["adjudication"] = {
+            "chapter": chapter,
+            "accepted_by": "service",
+            "reason": "用户通过 accept_blocking 明确裁决接受未消歧项",
+            "original_pending_count": len(pending),
+        }
+        try:
+            path.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+        except OSError:
+            self.result.problems.append("待消歧项裁决写入失败，提交可能被拒")
+            return False
+        self.result.auto_handled.append(
+            f"已裁决 {len(pending)} 条待消歧项（原始记录保留在 adjudicated_pending）"
+        )
+        return False
+
+    def _read_blocking_from_artifact(self) -> List[Dict[str, Any]]:
+        """从 review_results.json 读仍未裁决的阻断项。"""
+        tmp = self.engine.tmp_dir() / "review_results.json"
+        if not tmp.is_file():
+            return []
+        try:
+            data = json.loads(tmp.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return []
+        if not isinstance(data, dict):
+            return []
+        issues = data.get("issues")
+        issues = issues if isinstance(issues, list) else []
+        return [
+            issue for issue in issues
+            if isinstance(issue, dict) and issue.get("blocking")
+        ]
+
+    def _record_blocking_adjudication(self, chapter: int, reason: str) -> None:
+        """把用户裁决**写进审查 artifact**，而不是只记在内存里。
+
+        上游 `precommit` gate 直接读 `review_results.json` 的 `blocking_count`
+        （见 artifact_validator._policy_issues），所以只设一个内存标志位是没用的：
+        gate 照样会拒绝。要让裁决真正生效，必须：
+          1. 把每个 blocking issue 的 `blocking` 降为 false（上游按此计数）
+          2. 保留原始阻断记录到 `adjudicated_blocking_issues`，不丢失审计线索
+          3. 打上 `adjudication` 元信息，说明是谁在什么时候放行的
+        """
+        tmp = self.engine.tmp_dir() / "review_results.json"
+        if not tmp.is_file():
+            return
+        try:
+            data = json.loads(tmp.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        if not isinstance(data, dict):
+            return
+
+        issues = data.get("issues")
+        issues = issues if isinstance(issues, list) else []
+        adjudicated = [
+            issue for issue in issues
+            if isinstance(issue, dict) and issue.get("blocking")
+        ]
+        if not adjudicated:
+            return
+
+        # 保留原始阻断记录，再降级 blocking 标志
+        data["adjudicated_blocking_issues"] = adjudicated
+        for issue in adjudicated:
+            issue["blocking"] = False
+        data["issues_count"] = len(issues)
+        data["blocking_count"] = 0
+        data["has_blocking"] = False
+        data["adjudication"] = {
+            "chapter": chapter,
+            "accepted_by": "service",
+            "reason": reason,
+            "original_blocking_count": len(adjudicated),
+        }
+        data["summary"] = (
+            f"{len(issues)}个问题；用户已裁决接受 {len(adjudicated)} 个阻断项"
+        )
+        try:
+            tmp.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+        except OSError:
+            return
+        self.result.auto_handled.append(
+            f"已把用户裁决写入 review_results.json（{len(adjudicated)} 个阻断项降级，"
+            "原始记录保留在 adjudicated_blocking_issues）"
+        )
+
+    def _read_projection_status(self, chapter: int,
+                                payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """读投影状态。委托 engine（projection_log 优先，回退 commit 文件）。"""
+        if isinstance(payload, dict):
+            proj = payload.get("projection_status") or {}
+            if isinstance(proj, dict) and proj:
+                return proj
+        return self.engine.read_projection_status(chapter)
+
+    def _save_blocking_state(self, chapter: int) -> None:
+        """把阻断状态落盘，供用户查看与续跑判断。"""
+        try:
+            self.engine.write_tmp_json("blocking_state.json", {
+                "chapter": chapter,
+                "blocking_issues": self.result.blocking_issues,
+                "review_file": "review_results.json",
+                "resume_hint": (
+                    "修订正文后从 polish 续跑，或直接接受现状继续提交"
+                ),
+                "resume_options": [
+                    {"from_stage": "draft", "accept_blocking": False,
+                     "desc": "重新起草正文"},
+                    {"from_stage": "polish", "accept_blocking": True,
+                     "desc": "接受当前正文与阻断问题，继续润色→提交"},
+                    {"from_stage": "commit", "accept_blocking": True,
+                     "desc": "正文已自行改好，直接提交"},
+                ],
+            })
+        except Exception:  # noqa: BLE001 - 落盘失败不影响主流程
+            pass
+
+    async def _finalize(self, chapter: int) -> None:
+        assert self.result is not None
+        self.result.timings = dict(self._timings)
+
+        # 状态判定：产物为准，宁可保守，不可假报完成
+        if self.result.status != "needs_user_action":
+            committed = bool(self.result.commit_file)
+            if self._hard_failure and not committed:
+                self.result.status = "failed"
+            elif self.result.problems or not committed:
+                # 有产物但有问题 → partial；没有 commit 又没有明确失败 → partial
+                self.result.status = "partial" if self.result.chapter_file else "failed"
+            else:
+                self.result.status = "completed"
+
+        # 优先用上游的作者友好报告
+        try:
+            self.result.final_report = await asyncio.to_thread(
+                self.engine.user_report, "write", chapter
+            )
+        except Exception:  # noqa: BLE001 - 报告失败不影响主结果
+            self.result.final_report = ""
+
+        try:
+            await asyncio.to_thread(
+                self.engine.record_write_step,
+                chapter, "commit" if self.result.commit_file else "draft",
+                self.result.status, self.mode,
+                {"chapter": str(chapter)},
+                {"chapter_file": self.result.chapter_file},
+                self.result.problems, self.result.auto_handled,
+                self._timings.get("commit", 0),
+            )
+        except Exception:  # noqa: BLE001 - ledger 失败不阻塞
+            pass
+
+        await self._emit(Stage.DONE, "ok", f"写章流程结束：{self.result.status}",
+                         self.result.to_dict())

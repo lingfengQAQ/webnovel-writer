@@ -1,0 +1,3 @@
+name: 网文创作
+description: 长篇网文创作 Agent。挂载 webnovel MCP 工具，可建书、规划卷纲章纲、写作章节、五维事实审查、追踪伏笔与设定一致性，支持 200 万字量级连载。
+order: 3

@@ -1,0 +1,6 @@
+# 运行时配置（含 API 密钥明文），绝不入库
+storages/
+
+# Python 缓存
+__pycache__/
+*.pyc
