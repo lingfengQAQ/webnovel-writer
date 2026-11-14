@@ -31,7 +31,7 @@ export const BOOK_INSPECTION_OUTPUT_SCHEMA: JsonSchemaNode = {
         受检范围: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { 路径: text, 文档类型: texts, 检查: texts, 结果: { type: 'string', enum: ['已检查', '失败', '部分检查'] }, 说明: text }, required: ['路径', '文档类型', '检查', '结果'] } },
         未检范围: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { 路径: text, 文档类型: texts, 原因: text }, required: ['路径', '文档类型', '原因'] } },
         类型覆盖: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { 编号: text, 名称: text, 能力: { type: 'string', enum: ['结构检查', '部分结构检查', '未支持', '公共语法'] }, 检查: texts, 文件数: { type: 'integer' } }, required: ['编号', '名称', '能力', '检查', '文件数'] } },
-        问题: { type: 'array', items: issue }, 快照: snapshot,
+        问题: { type: 'array', items: issue }, 提示: { type: 'array', items: issue }, 快照: snapshot,
       },
       required: ['状态', '结论', '书仓格式', '规则版本', '受检范围', '未检范围', '类型覆盖', '问题', '快照'],
     },
@@ -45,6 +45,7 @@ const opening: JsonSchemaNode = {
       properties: {
         状态: { type: 'string', enum: ['边界已核对', '需恢复', '无法核实'] }, 规则版本: { type: 'integer', const: 1 },
         问题: { type: 'array', items: issue },
+        提示: { type: 'array', items: issue },
         在途项: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { 路径: text, 种类: text, 说明: text }, required: ['路径', '种类', '说明'] } },
         前章: { type: 'object', additionalProperties: false, properties: { 卷: { type: 'integer' }, 章: { type: 'integer' }, 章名: text }, required: ['卷', '章', '章名'] },
         快照: snapshot,

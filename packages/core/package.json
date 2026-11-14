@@ -14,7 +14,7 @@
     "test": "vitest --root ../.. run packages/core/tests"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-user-questions": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-user-questions": "0.2.2-rc.3",
     "@types/yauzl": "2.10.3",
     "@webnovel/drafting": "workspace:*",
     "@webnovel/polish": "workspace:*",

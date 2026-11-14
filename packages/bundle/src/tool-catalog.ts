@@ -12,6 +12,8 @@ export const NOVEL_TOOL_NAMES: readonly string[] = [
   'novel_preview_book_upgrade',
   'novel_apply_book_upgrade',
   'novel_resume_book_upgrade',
+  'novel_preview_draft_retention',
+  'novel_confirm_draft_retention',
   'novel_search_finalized',
   'novel_index_manage',
   'novel_prepare_pack',

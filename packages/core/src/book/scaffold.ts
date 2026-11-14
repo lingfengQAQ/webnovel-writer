@@ -77,7 +77,7 @@ export function scaffoldBookFiles(bookRoot: string, concept: Concept | string, o
   // 草稿区不入 git（拍板 1：草稿区永不入版本库）：目录结构由脚手架保证，不放 .gitkeep、
   // 由 .gitignore 排除——否则首提交把草稿区送进版本库，与 checkCommitPath 拒绝草稿区自相矛盾，
   // 且 git status 永久脏。定稿/卷01 在白名单内，保留 .gitkeep 让版本库记住目录。
-  fs.writeFileSync(path.join(bookRoot, '.gitignore'), `草稿区/\n${runtimeIgnoreLine()}\n`, 'utf-8')
+  fs.writeFileSync(path.join(bookRoot, '.gitignore'), `草稿区/\n${runtimeIgnoreLine()}\n.DS_Store\n`, 'utf-8')
 
   fs.mkdirSync(path.join(bookRoot, LAYOUT.定稿(1)), { recursive: true })
   const keep = path.join(bookRoot, LAYOUT.定稿(1), '.gitkeep')

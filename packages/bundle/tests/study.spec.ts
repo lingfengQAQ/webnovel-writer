@@ -107,6 +107,19 @@ async function serve(followup = vi.fn(), indexing?: BookIndexManager, editorRequ
 }
 
 describe('已通过宿主认证的书房 Fetch 保存和原生通知入口', () => {
+  it('rc.3没有roots时只接纳确切存活的普通会话，普通fork不按parentSession误拒', async () => {
+    const main = { id: 'main', session: { header: { cwd: root } }, followup: vi.fn() }
+    const child = { ...main, id: 'child', session: { header: { cwd: root, origin: 'subagent' } } }
+    const fork = { ...main, id: 'fork', session: { header: { cwd: root, parentSession: 'main' } } }
+    const agents = new Map([['main', main], ['child', child], ['fork', fork], ['alias', main]])
+    const handler = createStudyHandler({ agents: { get: id => agents.get(id) } })
+    for (const [sessionId, expected] of [['main', 200], ['fork', 200], ['child', 400], ['missing', 400], ['alias', 400]] as const) {
+      const response = await handler(new Request('http://127.0.0.1' + STUDY_API_PATH + 'shelf', { method: 'POST',
+        headers: { 'x-webnovel-request': '1', 'content-type': 'application/json' }, body: JSON.stringify({ sessionId }) }))
+      expect(response.status, sessionId).toBe(expected)
+    }
+    expect(main.followup).not.toHaveBeenCalled()
+  })
   it('#167 保存通知有核对完成条件，提交成功与失败不会混为补写设计', async () => {
     const { post, followup } = await serve()
     const ref = { space: 'book:fog', path: '作品契约/契约.md' }

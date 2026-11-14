@@ -2,7 +2,7 @@
 
 DSH 负责模型连接和凭据。本插件负责小说工作流。先把一个主聊天模型配置成功，再开始建书。嵌入、场景识别和重排都不是首次安装的前提。
 
-本页对应 Scriptor 8.4.0。插件偏好与检索入口位于插件页，已有配置和凭据保留；主聊天模型在“设置 → 模型”中配置。
+本页对应 Scriptor 8.4.1。插件偏好与检索入口位于插件页，已有配置和凭据保留；主聊天模型在“设置 → 模型”中配置。
 
 ## Scriptor 偏好
 
@@ -91,7 +91,7 @@ DSH 负责模型连接和凭据。本插件负责小说工作流。先把一个�
 使用主包安装方式时，可以单独添加嵌入提供方。完整版已经包含此包。
 
 ```powershell
-dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-retrieval@8.4.0
+dsh plugin --profile scriptor add @linfengqaqtat/dsh-scriptor-retrieval@8.4.1
 ```
 
 首次安装默认停用。

@@ -52,7 +52,7 @@ export function attachDraftLengthFeedbackToAgent(host: FeedbackHost, deps: Feedb
       const feedback = draftLengthFeedback(target, text, readChapterLength(book.root))
       const message = createUserMessage({
         source: { kind: DRAFT_LENGTH_SOURCE },
-        content: [{ type: 'text', text: `【草稿字数快照】\n${JSON.stringify({ 书id: book.bookId, ...feedback })}\n仅对应本次保存文本，不代表完整稿或审读通过；后续修改后需重新核验。` }],
+        content: [{ type: 'text', text: `【草稿字数快照】\n${JSON.stringify({ 书id: book.bookId, ...feedback })}\n仅对应本次保存文本，不代表完整稿或审读通过；后续修改后需重新核验。身份检查只核对格式与目录，不证明章号来源；有身份问题须交回主控核对。` }],
       })
       return { ...decision, additionalContexts: [...decision.additionalContexts ?? [], message] }
     } catch {

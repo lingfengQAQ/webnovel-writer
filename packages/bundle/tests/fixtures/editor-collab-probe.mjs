@@ -90,7 +90,7 @@ async function openSession() {
   }
   await page.getByRole('tab', { name: '工作区', exact: true }).click()
   await expandWorkspace('S5 临时验收书房')
-  await page.getByText('S5 书房验收', { exact: true }).click()
+  await page.getByText(/^(S5 书房验收|S6 后台索引验收)$/).first().click()
 }
 async function revealDrafts() {
   await page.getByRole('tab', { name: '书房', exact: true }).click()
@@ -252,7 +252,7 @@ try {
   }
   assert.ok(diskHits.length > 0)
   summary.disk.push({ marker: '（验收改写）', hits: diskHits })
-  const headers = page.getByRole('button', { name: /收到执行请求/ })
+  const headers = page.locator('[data-webnovel-save-notice] [data-disclosure-row]')
   await headers.last().waitFor({ timeout: 8000 })
   const noticeDeadline = Date.now() + 12000
   let notice = ''

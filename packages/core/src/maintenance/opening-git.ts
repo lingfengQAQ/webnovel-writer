@@ -1,12 +1,23 @@
 import path from 'node:path'
 import { runGit, type GitCommandResult } from '../commit/git'
 import { checkGitHealth } from '../commit/health'
-import type { ArchiveReceipt } from '../commit/receipt'
+import { archiveCommitMatches, type ArchiveReceipt } from '../commit/receipt'
 import { checkCommitRelPath } from '../commit/paths'
 import type { ReadonlyBookSnapshot } from './snapshot'
 
 const OBJECT_ID = /^[a-f0-9]{40,64}$/
 const pathIdentity = (value: string): string => process.platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value)
+
+/** Classify the fixed version probe without echoing arbitrary stderr, paths or configuration. */
+function capabilityFailure(result: GitCommandResult): string {
+  const option = /(?:unknown|unrecognized) (?:option|switch):?\s*['"]?(--[a-z-]+)/i.exec(result.stderr)?.[1]
+  if (option && ['--no-optional-locks', '--no-lazy-fetch', '--no-pager', '--literal-pathspecs'].includes(option)) {
+    return `Git 不支持安全参数 ${option}${option === '--no-lazy-fetch' ? '（上游 Git 2.45 起提供）' : ''}`
+  }
+  if (/\bspawn(?:Sync)? git ENOENT\b/.test(result.stderr)) return 'DSH 进程未找到 Git（ENOENT），请核对其 PATH'
+  if (/\bspawn(?:Sync)? git (?:EACCES|EPERM)\b/.test(result.stderr)) return 'DSH 进程没有执行 Git 的权限'
+  return `Git 安全参数探测失败（退出码 ${result.status}）`
+}
 
 export interface OpeningGitState {
   readonly head?: string
@@ -15,11 +26,11 @@ export interface OpeningGitState {
 }
 
 /** Only fixed read commands are used by the opening inspector. */
-export function openingGit(root: string, args: readonly string[]): GitCommandResult {
+export function openingGit(root: string, args: readonly string[], input?: string): GitCommandResult {
   // check-ignore accepts literal pathnames itself and rejects pathspec magic.
   return runGit(root, ['--no-optional-locks', '--no-lazy-fetch', '--no-pager', '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false', ...(args[0] === 'check-ignore' ? [] : ['--literal-pathspecs']), ...args], {
     GIT_OPTIONAL_LOCKS: '0', GIT_NO_LAZY_FETCH: '1', GIT_TERMINAL_PROMPT: '0',
-  })
+  }, input)
 }
 
 export function externalFilterPath(root: string, additionalPaths: readonly string[] = []): string | undefined {
@@ -56,7 +67,7 @@ export function readOpeningGitState(reader: ReadonlyBookSnapshot): OpeningGitSta
   else reader.listDirectory('.git')
   const capability = openingGit(reader.root, ['--version'])
   if (capability.status !== 0 || !/^git version /m.test(capability.stdout)) {
-    reader.issues.push({ 代码: 'OPENING_GIT_READONLY_UNAVAILABLE', 路径: '.git', 说明: '当前 Git 无法提供本次要求的安全只读能力，未尝试补取对象、升级 Git 或修改配置；请核对 Git 版本与可用参数' })
+    reader.issues.push({ 代码: 'OPENING_GIT_READONLY_UNAVAILABLE', 路径: '.git', 说明: `当前 Git 无法提供本次要求的安全只读能力：${capabilityFailure(capability)}。未尝试补取对象、升级 Git 或修改配置；请核对 DSH 实际使用的 Git 版本与可用参数。` })
     return undefined
   }
   const top = openingGit(reader.root, ['rev-parse', '--show-toplevel'])
@@ -93,15 +104,26 @@ export function openingDirtyPaths(state: OpeningGitState): string[] {
 }
 
 export class OpeningCommitProof {
-  private readonly trees = new Map<string, ReadonlyMap<string, { blob: string; regular: boolean }>>()
-  private readonly subjects = new Map<string, string>()
-  private readonly contents = new Map<string, string>()
-  private readonly ranges = new Map<string, readonly string[]>()
-  private readonly changes = new Map<string, readonly string[]>()
-  private readonly parents = new Map<string, readonly string[]>()
+  private readonly trees: Map<string, ReadonlyMap<string, { blob: string; regular: boolean }>>
+  private readonly subjects: Map<string, string>
+  private readonly contents: Map<string, string>
+  private readonly ranges: Map<string, readonly string[]>
+  private readonly changes: Map<string, readonly string[]>
+  private readonly lineage: Map<string, readonly string[]>
   private commits: string[] | undefined
 
-  constructor(private readonly root: string, private readonly head: string) {}
+  constructor(private readonly root: string, readonly head: string, shared?: OpeningCommitProof) {
+    this.trees = shared?.trees ?? new Map()
+    this.subjects = shared?.subjects ?? new Map()
+    this.contents = shared?.contents ?? new Map()
+    this.ranges = shared?.ranges ?? new Map()
+    this.changes = shared?.changes ?? new Map()
+    this.lineage = shared?.lineage ?? new Map()
+  }
+
+  atHead(head: string): OpeningCommitProof {
+    return head === this.head ? this : new OpeningCommitProof(this.root, head, this)
+  }
 
   private command(args: readonly string[]): string {
     const result = openingGit(this.root, args)
@@ -109,7 +131,7 @@ export class OpeningCommitProof {
     return result.stdout
   }
 
-  private text(blob: string): string {
+  text(blob: string): string {
     if (!this.contents.has(blob)) this.contents.set(blob, this.command(['cat-file', 'blob', blob]))
     return this.contents.get(blob)!
   }
@@ -144,7 +166,16 @@ export class OpeningCommitProof {
     return entry?.blob
   }
 
-  committed(receipt: ArchiveReceipt): boolean {
+  parents(commit: string): readonly string[] {
+    if (!this.lineage.has(commit)) {
+      const parts = this.command(['rev-list', '--parents', '-n', '1', commit]).trim().split(/\s+/)
+      if (parts[0] !== commit || parts.some(part => !OBJECT_ID.test(part))) throw new Error('归档提交父树证据无法核实')
+      this.lineage.set(commit, parts.slice(1))
+    }
+    return this.lineage.get(commit)!
+  }
+
+  receiptCommit(receipt: ArchiveReceipt): string | undefined {
     const range = receipt.baseHead === null ? this.head : `${receipt.baseHead}..${this.head}`
     if (!this.ranges.has(range)) {
       if (receipt.baseHead !== null) {
@@ -154,9 +185,13 @@ export class OpeningCommitProof {
       this.ranges.set(range, this.command(['rev-list', range]).trim().split('\n').filter(Boolean))
     }
     for (const commit of this.ranges.get(range)!) {
-      if (receipt.outputs.every(output => this.blob(commit, output.relPath) === output.gitBlob)) return true
+      if (archiveCommitMatches(receipt, commit, this)) return commit
     }
-    return false
+    return undefined
+  }
+
+  committed(receipt: ArchiveReceipt): boolean {
+    return this.receiptCommit(receipt) !== undefined
   }
 
   currentOutputs(receipt: ArchiveReceipt, required: readonly string[]): boolean {
@@ -176,7 +211,8 @@ export class OpeningCommitProof {
     return [...blobs].map(blob => this.text(blob))
   }
 
-  legacyPair(final: string, summary: string, supported: (finalText: string, summaryText: string) => boolean): boolean {
+  legacyPair(final: string, summary: string, supported: (finalText: string, summaryText: string) => boolean,
+    original: (finalText: string, summaryText: string) => boolean = supported): boolean {
     const finalBlob = this.blob(this.head, final)
     const summaryBlob = this.blob(this.head, summary)
     if (finalBlob === undefined || summaryBlob === undefined || !supported(this.text(finalBlob), this.text(summaryBlob))) return false
@@ -190,10 +226,9 @@ export class OpeningCommitProof {
       const hasFinal = this.blob(commit, final)
       const hasSummary = this.blob(commit, summary)
       if (subject.startsWith('ch:') && changes.includes(final) && changes.includes(summary) && hasFinal !== undefined && hasSummary !== undefined) {
-        if (!this.parents.has(commit)) this.parents.set(commit, this.command(['rev-list', '--parents', '-n', '1', commit]).trim().split(' ').slice(1))
-        const parents = this.parents.get(commit)!
+        const parents = this.parents(commit)
         if (parents.length <= 1 && parents.every(parent => this.blob(parent, final) === undefined && this.blob(parent, summary) === undefined)
-          && supported(this.text(hasFinal), this.text(hasSummary))) initialArchive = true
+          && original(this.text(hasFinal), this.text(hasSummary))) initialArchive = true
       }
       if (changes.includes(final) && hasFinal === finalBlob && hasSummary === summaryBlob) currentArchive = true
     }

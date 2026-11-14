@@ -489,6 +489,21 @@ describe('开章只读事实核对', () => {
     const result = checkedWithoutWrites(root)
     expect(result).toMatchObject({ 状态: '无法核实', 问题: expect.arrayContaining([expect.objectContaining({ 代码: 'OPENING_GIT_READONLY_UNAVAILABLE' })]) })
     expect(result.问题.some(item => item.代码 === 'OPENING_GIT_ROOT')).toBe(false)
+    expect(result.问题.find(item => item.代码 === 'OPENING_GIT_READONLY_UNAVAILABLE')?.说明).toContain('--no-lazy-fetch')
+  })
+
+  it.each([
+    ['spawnSync git ENOENT', 'ENOENT'],
+    ['spawnSync git EACCES', '没有执行 Git 的权限'],
+    ['fatal: private/path/secret-value', '退出码 129'],
+  ])('能力失败仅呈报安全分类，原始错误不泄漏：%s', (stderr, hint) => {
+    const root = book(), original = gitModule.runGit
+    vi.spyOn(gitModule, 'runGit').mockImplementation((directory, args, env) => args.includes('--version')
+      ? { status: 129, stdout: '', stderr }
+      : original(directory, args, env))
+    const result = checkedWithoutWrites(root)
+    expect(result.问题.find(item => item.代码 === 'OPENING_GIT_READONLY_UNAVAILABLE')?.说明).toContain(hint)
+    expect(JSON.stringify(result)).not.toContain('private/path/secret-value')
   })
 
   it('真实备料保存补充后完成归档，合法补充目录不被误判未知', () => {

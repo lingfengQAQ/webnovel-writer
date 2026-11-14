@@ -20,7 +20,7 @@ describe('不可逆清单(插件规格 §6)', () => {
   it('已有裁决与独立维护种类都在清单内且能生成提问', () => {
     expect([...IRREVERSIBLE_KINDS]).toEqual([
       '定稿入档', '世界书条目转正', '记忆入记', '吃书补偿', '规则来源声明',
-      '书仓升级', '书仓升级续办',
+      '书仓升级', '书仓升级续办', '草稿留档确认',
     ])
     for (const kind of IRREVERSIBLE_KINDS) {
       const req = buildAskRequest(kind, { 范围: '卷01/初见', 摘要: '测试' })
@@ -30,7 +30,7 @@ describe('不可逆清单(插件规格 §6)', () => {
     }
   })
   it('维护批准明确执行原计划，不借用文学事实生效文案', () => {
-    for (const kind of ['书仓升级', '书仓升级续办'] as const) {
+    for (const kind of ['书仓升级', '书仓升级续办', '草稿留档确认'] as const) {
       const question = buildAskRequest(kind, { 范围: '书甲', 摘要: '指纹 abc 与差异' }).questions[0]!
       expect(question.detail).toContain('指纹 abc 与差异')
       expect(question.detail).toBe('书甲\n\n指纹 abc 与差异')

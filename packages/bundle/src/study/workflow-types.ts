@@ -37,6 +37,9 @@ export interface WorkflowCall {
   summary: string
   failureCode?: string
   activationId?: string
+  activationName?: string
+  /** Receipt time bounds the initial activation; later resumes belong to other work. */
+  receiptAt?: number
   role?: string
   settledAt?: number
   /** This call's lifecycle is independent of the parent turn. */
@@ -57,7 +60,7 @@ export const isStoppedError = (error: unknown): boolean => ['interrupted', 'ABOR
 
 /** Request completion cannot cover an unchecked, partial or unstable maintenance result. */
 export function maintenanceNeedsAttention(value: Record<string, unknown>): boolean {
-  if (value.maintenance === 'book-upgrade') return !['committed', 'already-committed', 'unchanged'].includes(String(value.state))
+  if (value.maintenance === 'book-upgrade' || value.maintenance === 'draft-retention') return !['committed', 'already-committed', 'unchanged'].includes(String(value.state))
   if (!Object.hasOwn(value, '书仓检查') && !Object.hasOwn(value, '开章核对')) return false
   const inspection = recordOf(value.书仓检查)
   if (inspection.状态 !== '已检查' || inspection.结论 !== '未发现已知问题' || recordOf(inspection.快照).稳定 !== true) return true

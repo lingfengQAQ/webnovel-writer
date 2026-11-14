@@ -209,9 +209,10 @@ try {
   await stage('F11-index-control-cancellation-and-new-request', async () => {
     await page.getByRole('button', { name: '查看检索索引', exact: true }).click()
     await choose('选择索引作品', '验收作品甲')
-    const checkbox = page.getByRole('checkbox', { name: '提交后自动更新', exact: true })
-    await checkbox.waitFor()
-    assert.equal(await checkbox.isEnabled(), true)
+    // Automatic updates are now a plugin preference; exercise the current per-book control.
+    const update = page.getByRole('button', { name: /^立即(更新|重试)$/ })
+    await update.waitFor()
+    await until(() => update.isEnabled(), 'initial book control is usable')
     await page.route('**/api/webnovel/study/index-control', async route => {
       const payload = route.request().postDataJSON()
       let release
@@ -231,25 +232,25 @@ try {
         if (!entry.cancelled) throw error
       } finally { entry.completed = true }
     })
-    await checkbox.click()
+    await update.click()
     await until(() => held[0]?.responseReady, 'first real control completed behind delayed response')
-    assert.equal(await checkbox.isEnabled(), false)
+    assert.equal(await update.isEnabled(), false)
     held[0].cancelled = true
     await choose('选择索引作品', '验收作品乙')
-    await until(() => checkbox.isEnabled(), 'other book control is usable')
+    await until(() => update.isEnabled(), 'other book control is usable')
     await choose('选择索引作品', '验收作品甲')
-    await until(() => checkbox.isEnabled(), 'cancelled book control is usable on return')
-    await checkbox.click()
+    await until(() => update.isEnabled(), 'cancelled book control is usable on return')
+    await update.click()
     await until(() => held[1]?.responseReady, 'new real control completed behind delayed response')
-    assert.equal(await checkbox.isEnabled(), false)
+    assert.equal(await update.isEnabled(), false)
     held[0].release()
     await until(() => held[0].completed, 'old response transport settles')
     // Waiting one animation frame ensures any queued completion can render.
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
-    assert.equal(await checkbox.isEnabled(), false, 'old response must not release newer request busy state')
+    assert.equal(await update.isEnabled(), false, 'old response must not release newer request busy state')
     await screenshot('F11-new-control-still-busy')
     held[1].release()
-    await until(() => checkbox.isEnabled(), 'new request releases its own busy state')
+    await until(() => update.isEnabled(), 'new request releases its own busy state')
     assert.equal(report.controlRequests.length, 2)
     assert.equal(report.controlRequests.every(item => item.sessionId === 'webnovel-browser-acceptance' && item.space === 'book:acceptance-a'), true)
     report.F11 = { cancelledBookReusable: true, staleResponseKeptNewRequestBusy: true, newRequestReleased: true }

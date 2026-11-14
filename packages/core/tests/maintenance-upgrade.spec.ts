@@ -19,6 +19,7 @@ import { UPGRADE_RECEIPT_DIR } from '../src/maintenance/upgrade-reader'
 import { readUpgradeReceipt, serializeUpgradeReceipt, upgradeReceiptPath } from '../src/maintenance/upgrade-receipt'
 import { createReadonlyBookSnapshot } from '../src/maintenance/snapshot'
 import { uniqueMaintenanceIssues } from '../src/maintenance/types'
+import * as gitModule from '../src/commit/git'
 
 const fixtures = fileURLToPath(new URL('./fixtures/maintenance-upgrade/', import.meta.url))
 const temp = fs.realpathSync.native(os.tmpdir())
@@ -139,7 +140,7 @@ describe('whole-book maintenance preview and execution', { timeout: 90_000 }, ()
 
   // #213: an early block used to carry undefined-valued keys, which the host rejects as non-lossless JSON.
   it.each([
-    ['an unreadable receipt directory throws mid-preview', () => put(`${UPGRADE_RECEIPT_DIR}/.DS_Store`, 'x'), 'UPGRADE_PREVIEW_FAILED', true],
+    ['an unreadable receipt directory throws mid-preview', () => put(`${UPGRADE_RECEIPT_DIR}/unexpected.txt`, 'x'), 'UPGRADE_PREVIEW_FAILED', true],
     ['the contract has no book identity', () => { put(paths.契约(), get(paths.契约()).replace(/^书id:.*\r?\n/m, '')); git('commit', '--quiet', '-am', 'fixture: no id') }, 'UPGRADE_BOOK_IDENTITY', false],
   ] as const)('omits unavailable keys when %s', (_name, setup, code, identified) => {
     init(); setup()
@@ -149,6 +150,52 @@ describe('whole-book maintenance preview and execution', { timeout: 90_000 }, ()
     for (const key of ['fingerprint', 'inspectionBefore', 'inspectionAfter']) expect(result).not.toHaveProperty(key)
     if (identified) expect(result).toMatchObject({ bookId: 'upgrade-fixture', baseHead: git('rev-parse', 'HEAD') })
     else for (const key of ['bookId', 'baseHead']) expect(result).not.toHaveProperty(key)
+    expect(allBytes()).toEqual(before)
+  })
+
+  it('keeps independent document diagnostics when Git capability is unavailable, without cascading Git claims', () => {
+    init()
+    const draft = '草稿区/草稿/卷01-未完成/稿1.md'
+    put(draft, '---\n身份: 卷01-0001-未完成\n版本: 1\n---\n原文保留。\n')
+    const before = allBytes(), calls: string[][] = []
+    vi.spyOn(gitModule, 'runGit').mockImplementation((_directory, args) => {
+      calls.push([...args])
+      return { status: 129, stdout: '', stderr: 'unknown option: --no-lazy-fetch\nprivate diagnostic text' }
+    })
+    const result = previewBookUpgrade(root)
+    expect(result).toMatchObject({ state: 'blocked', changes: [], inspectionBefore: expect.any(Object), inspectionAfter: expect.any(Object) })
+    expect(result).not.toHaveProperty('baseHead')
+    expect(result).not.toHaveProperty('fingerprint')
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ 代码: 'OPENING_GIT_READONLY_UNAVAILABLE', 说明: expect.stringContaining('--no-lazy-fetch') }),
+      expect.objectContaining({ 代码: 'UPGRADE_RULE_UNSUPPORTED', 路径: draft }),
+    ]))
+    const codes = result.issues.map(item => item.代码)
+    for (const code of ['UPGRADE_GIT_CONFIG', 'UPGRADE_GIT_NOT_CLEAN', 'UPGRADE_GIT_HIDDEN_CHANGES', 'UPGRADE_GIT_ENTRY', 'UPGRADE_STALE', 'UPGRADE_PREVIEW_FAILED']) expect(codes).not.toContain(code)
+    expect(calls.length).toBeGreaterThan(0)
+    expect(calls.every(args => args.includes('--version') && args.includes('--no-lazy-fetch'))).toBe(true)
+    expect(JSON.stringify(result)).not.toContain('private diagnostic text')
+    expect(JSON.parse(JSON.stringify(result))).toStrictEqual(result)
+    expect(allBytes()).toEqual(before)
+  })
+
+  it('parses existing maintenance receipts without trying unavailable Git history', () => {
+    init(); const first = ready()
+    expect(apply(first.fingerprint).ok).toBe(true)
+    const draft = '草稿区/草稿/卷01-损坏/稿1.md'
+    put(draft, '---\n身份: [\n---\n合成坏元数据。\n')
+    const before = allBytes(), calls: string[][] = []
+    vi.spyOn(gitModule, 'runGit').mockImplementation((_directory, args) => {
+      calls.push([...args])
+      return { status: 1, stdout: '', stderr: 'spawnSync git ENOENT' }
+    })
+    const result = previewBookUpgrade(root)
+    expect(result.state).toBe('blocked')
+    expect(result.resumable).toEqual([])
+    expect(result.issues.some(item => item.代码 === 'OPENING_GIT_READONLY_UNAVAILABLE' && item.说明.includes('ENOENT'))).toBe(true)
+    expect(result.issues.some(item => item.路径 === draft)).toBe(true)
+    expect(result.issues.some(item => item.代码 === 'UPGRADE_PREVIEW_FAILED' || item.代码 === 'OPENING_UPGRADE_RECEIPT')).toBe(false)
+    expect(calls.every(args => args.includes('--version'))).toBe(true)
     expect(allBytes()).toEqual(before)
   })
 

@@ -40,7 +40,7 @@ async function openAcceptanceSession() {
   }
   await page.getByRole('tab', { name: '工作区', exact: true }).click()
   await expandWorkspace('S5 临时验收书房')
-  await page.getByText('S5 书房验收', { exact: true }).click()
+  await page.getByText(/^(S5 书房验收|S6 后台索引验收)$/).first().click()
 }
 
 async function waitForLayout() {
@@ -302,7 +302,7 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.hasAttribute('data-webnovel-swap')), true)
   await page.getByRole('tab', { name: '工作区', exact: true }).click()
   await expandWorkspace('S5 临时验收书房')
-  await page.getByText('S5 书房验收', { exact: true }).click()
+  await page.getByText(/^(S5 书房验收|S6 后台索引验收)$/).first().click()
   await swapButton().waitFor({ timeout: 8000 })
   checks.sessionSwitch = true
 

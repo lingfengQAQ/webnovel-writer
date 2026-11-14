@@ -75,11 +75,27 @@ export class ReadonlyBookSnapshot {
     } finally { fs.closeSync(fd) }
   }
 
+  /** Finder metadata is outside the book; only its exact, independent regular-file shape is ignored. */
+  private finderMetadata(relative: string, name: string): boolean {
+    if (name !== '.DS_Store') return false
+    const file = relative ? `${relative}/${name}` : name
+    try {
+      const target = this.target(file)
+      // Finder can remove its metadata between directory enumeration and this check.
+      if (target === undefined) return true
+      if (target.stat.isFile() && target.stat.nlink === 1) return true
+      throw new Error('Finder 元数据路径须为独立普通文件，不能是目录或硬链接')
+    } catch (error) {
+      this.problem(file, error)
+      return false
+    }
+  }
+
   private directory(relative: string): { digest: string; value?: readonly ReadonlyDirectoryEntry[] } {
     const target = this.target(relative)
     if (target === undefined) return { digest: 'missing' }
     if (!target.stat.isDirectory()) throw new Error('检查目标不是目录')
-    const entries = fs.readdirSync(target.absolute, { withFileTypes: true }).map(entry => ({
+    const entries = fs.readdirSync(target.absolute, { withFileTypes: true }).filter(entry => !this.finderMetadata(relative, entry.name)).map(entry => ({
       name: entry.name,
       kind: (entry.isFile() ? 'file' : entry.isDirectory() ? 'directory' : 'other') as ReadonlyDirectoryEntry['kind'],
     })).sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0)

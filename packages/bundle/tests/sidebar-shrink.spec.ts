@@ -6,9 +6,10 @@ const css = fs.readFileSync(path.resolve(import.meta.dirname, '../src/client/sty
 
 /** Extract one top-level rule body so a declaration cannot silently disappear. */
 function rule(selector: string): string {
-  const at = css.indexOf(selector + '{')
-  expect(at, `${selector} should exist in styles.css`).toBeGreaterThanOrEqual(0)
-  return css.slice(at + selector.length, css.indexOf('}', at))
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)
+  const match = Array.from(rules).find(([, selectors]) => selectors.trim() === selector)
+  expect(match, `${selector} should exist in styles.css`).toBeDefined()
+  return match![2]
 }
 
 describe('侧栏宿主插槽弹性', () => {

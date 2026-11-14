@@ -54,13 +54,14 @@ export function prepareBookUpgrade(root: string, ownedOperation?: string): Prepa
   let inspectionBefore: BookInspection | undefined, inspectionAfter: BookInspection | undefined
   let expectedStaleIssues: readonly MaintenanceIssue[] = []
   let activeWork: ChapterOpeningInspection['在途项'] = []
+  let notices: MaintenanceIssue[] = []
   // An early block has no identity, HEAD or inspections yet; omit those keys so the preview stays lossless JSON.
   const blocked = (): PreparedBookUpgrade => ({ preview: {
     ok: true, state: 'blocked', ruleVersion: BOOK_UPGRADE_RULE_VERSION,
     ...(bookId === undefined ? {} : { bookId }), ...(baseHead === undefined ? {} : { baseHead }),
     changes: [], effects: [], issues: uniqueMaintenanceIssues([...errors, ...reader.issues]),
     ...(inspectionBefore === undefined ? {} : { inspectionBefore }), ...(inspectionAfter === undefined ? {} : { inspectionAfter }),
-    expectedStaleIssues, activeWork, resumable: [...new Set(resumable)],
+    expectedStaleIssues, activeWork, ...(notices.length ? { notices } : {}), resumable: [...new Set(resumable)],
   } })
   try {
     const rootIdentity = upgradeRootIdentity(root)
@@ -72,15 +73,18 @@ export function prepareBookUpgrade(root: string, ownedOperation?: string): Prepa
     }
     bookId = contract.data.fields['书id']
     const git = readOpeningGitState(reader)
-    const config = openingGit(root, ['config', '--null', '--list', '--show-origin'])
-    if (config.status !== 0) errors.push(issue('UPGRADE_GIT_CONFIG', '.git/config', '无法核对 Git 配置快照'))
+    const config = git === undefined ? undefined : openingGit(root, ['config', '--null', '--list', '--show-origin'])
+    if (config !== undefined && config.status !== 0) errors.push(issue('UPGRADE_GIT_CONFIG', '.git/config', '无法核对 Git 配置快照'))
     baseHead = git?.head
-    if (!baseHead || git?.pending || git?.status !== '') errors.push(issue('UPGRADE_GIT_NOT_CLEAN', '.git', git?.pending ?? '首次升级要求整书版本库干净且有有效提交'))
-    const flags = openingGit(root, ['ls-files', '-v', '-z'])
-    if (flags.status !== 0 || flags.stdout.split('\0').filter(Boolean).some(row => /^[a-zS]/.test(row))) errors.push(issue('UPGRADE_GIT_HIDDEN_CHANGES', '.git/index', '索引含跳过检查标志或无法读取，不能证明工作树干净'))
-    const stages = openingGit(root, ['ls-files', '--stage', '-z'])
-    if (stages.status !== 0 || stages.stdout.split('\0').filter(Boolean).some(row => !/^100(?:644|755) [a-f0-9]+ 0\t/.test(row))) errors.push(issue('UPGRADE_GIT_ENTRY', '.git/index', '版本库含非普通文件或冲突条目，不能整仓升级'))
-    for (const receipt of listUpgradeReceipts(reader)) if (!upgradeCommitted(root, receipt, baseHead)) resumable.push(receipt.operationId)
+    if (git !== undefined) {
+      if (!baseHead || git.pending || git.status !== '') errors.push(issue('UPGRADE_GIT_NOT_CLEAN', '.git', git.pending ?? '首次升级要求整书版本库干净且有有效提交'))
+      const flags = openingGit(root, ['ls-files', '-v', '-z'])
+      if (flags.status !== 0 || flags.stdout.split('\0').filter(Boolean).some(row => /^[a-zS]/.test(row))) errors.push(issue('UPGRADE_GIT_HIDDEN_CHANGES', '.git/index', '索引含跳过检查标志或无法读取，不能证明工作树干净'))
+      const stages = openingGit(root, ['ls-files', '--stage', '-z'])
+      if (stages.status !== 0 || stages.stdout.split('\0').filter(Boolean).some(row => !/^100(?:644|755) [a-f0-9]+ 0\t/.test(row))) errors.push(issue('UPGRADE_GIT_ENTRY', '.git/index', '版本库含非普通文件或冲突条目，不能整仓升级'))
+    }
+    // Receipt structure is independent evidence; history needs a verified Git state.
+    for (const receipt of listUpgradeReceipts(reader)) if (baseHead !== undefined && !upgradeCommitted(root, receipt, baseHead)) resumable.push(receipt.operationId)
     for (const entry of reader.listDirectory('.webnovel/transactions') ?? []) {
       if (entry.kind !== 'directory') continue
       const manifest = reader.readFile(`.webnovel/transactions/${entry.name}/manifest.json`)
@@ -99,6 +103,7 @@ export function prepareBookUpgrade(root: string, ownedOperation?: string): Prepa
     const opening = inspectChapterOpeningSnapshot(openingReader)
     const pausedKinds = new Set(['草稿文件', '起草暂存', '材料包', '审核', '定稿准备'])
     activeWork = opening.在途项.filter(item => pausedKinds.has(item.种类))
+    notices = uniqueMaintenanceIssues([...notices, ...(opening.提示 ?? [])])
     errors.push(...opening.问题, ...opening.在途项.filter(item => !pausedKinds.has(item.种类)).map(item => issue('UPGRADE_NOT_CLOSED', item.路径, item.说明)))
     if (!opening.快照.稳定) errors.push(issue('UPGRADE_UNSTABLE', '.', '维护边界检查期间书仓发生变化'))
     const targets = new Set<string>()
@@ -109,7 +114,8 @@ export function prepareBookUpgrade(root: string, ownedOperation?: string): Prepa
       if ((!isUpgradeTarget(change.relPath) && !localDraft) || targets.has(key)) { errors.push(issue('UPGRADE_TARGET_INVALID', change.relPath, '规则目标不合法或重复')); continue }
       targets.add(key)
       if ((inventory.files.get(change.relPath) ?? null) !== change.before) errors.push(issue('UPGRADE_SOURCE_CHANGED', change.relPath, '规则原文与受检快照不一致'))
-      const tracked = proof?.blob(baseHead!, change.relPath)
+      if (proof === undefined) continue
+      const tracked = proof.blob(baseHead!, change.relPath)
       if (localDraft) {
         if (change.before === null || tracked !== undefined || openingGit(root, ['check-ignore', '--quiet', '--no-index', '--', change.relPath]).status !== 0) errors.push(issue('UPGRADE_DRAFT_NOT_LOCAL', change.relPath, '草稿须为已有且未跟踪的忽略文件，不能混入真源提交'))
         continue
@@ -127,27 +133,31 @@ export function prepareBookUpgrade(root: string, ownedOperation?: string): Prepa
     const targetReader = new UpgradeReader(root, overlay, ownedOperation)
     const inspection = inspectionAfter = inspectBookDocumentSnapshot(targetReader)
     const expectedStale = expectedStaleIssues = expectedUpgradeStaleness(inspectionBefore, inspection, effects)
+    notices = uniqueMaintenanceIssues([...notices, ...(inspection.提示 ?? [])])
     if (inspection.结论 !== '未发现已知问题' || inspection.状态 !== '已检查') errors.push(...inspection.问题.filter(problem => !expectedStale.includes(problem)),
       ...inspection.未检范围.map(item => issue('UPGRADE_UNCHECKED', item.路径, item.原因)))
     errors.push(...validateCurrentConsumers(afterFiles))
     if (!inspectionBefore.快照.稳定 || !inspection.快照.稳定) errors.push(issue('UPGRADE_UNSTABLE', '.', '原书或拟写结果检查期间书仓发生变化'))
-    const afterGit = readOpeningGitState(reader)
-    const configAfter = openingGit(root, ['config', '--null', '--list', '--show-origin'])
-    if (stableJson(afterGit) !== stableJson(git) || configAfter.status !== 0 || configAfter.stdout !== config.stdout || !reader.finish().稳定) errors.push(issue('UPGRADE_STALE', '.', '预览期间文件、目录或 Git 证据变化，请重新预览'))
+    const afterGit = git === undefined ? undefined : readOpeningGitState(reader)
+    const configAfter = config?.status === 0 && afterGit !== undefined ? openingGit(root, ['config', '--null', '--list', '--show-origin']) : undefined
+    const gitChanged = git !== undefined && stableJson(afterGit) !== stableJson(git)
+    const configChanged = config?.status === 0 && (configAfter?.status !== 0 || configAfter.stdout !== config.stdout)
+    const originalFinal = reader.finish()
+    if (gitChanged || configChanged || originalFinal.变更.length > 0) errors.push(issue('UPGRADE_STALE', '.', '预览期间文件、目录或 Git 证据变化，请重新预览'))
     // Receipt and supplemental evidence read only by an inspection must remain stable too.
     const sourceFinal = sourceReader.finish(), targetFinal = targetReader.finish(), openingFinal = openingReader.finish()
     if (!sourceFinal.稳定 || !targetFinal.稳定 || !openingFinal.稳定) {
       errors.push(issue('UPGRADE_UNSTABLE', '.', '检查前后态的来源证据在预览返回前发生变化'))
       errors.push(...openingReader.issues.filter(item => ['READ_FAILED', 'SNAPSHOT_CHANGED'].includes(item.代码)), ...sourceReader.issues.filter(item => ['READ_FAILED', 'SNAPSHOT_CHANGED'].includes(item.代码)), ...targetReader.issues.filter(item => ['READ_FAILED', 'SNAPSHOT_CHANGED'].includes(item.代码)))
     }
-    if (errors.length || reader.issues.length) return blocked()
+    if (errors.length || reader.issues.length || git === undefined || config === undefined) return blocked()
     const fingerprint = contentHash(stableJson({ rootIdentity, bookId, baseHead, ruleVersion: BOOK_UPGRADE_RULE_VERSION,
       inventory: inventory.fingerprint, gitConfig: contentHash(config.stdout), changes: changes.map(change => ({ path: change.relPath, before: change.before === null ? null : contentHash(change.before), after: contentHash(change.after), rules: change.rules })) }))
     if (openingGit(root, ['check-ignore', '--quiet', '--no-index', '--', upgradeReceiptPath(fingerprint)]).status !== 0) {
       errors.push(issue('UPGRADE_RECEIPT_NOT_IGNORED', UPGRADE_RECEIPT_DIR, '维护收据须位于书仓既有的忽略范围，预览不会修改 Git 配置')); return blocked()
     }
     return { preview: { ok: true, state: changes.length ? 'ready' : 'unchanged', ruleVersion: BOOK_UPGRADE_RULE_VERSION, bookId, baseHead,
-      ...(changes.length ? { fingerprint } : {}), changes, effects, issues: [], inspectionBefore, inspectionAfter, expectedStaleIssues, activeWork, resumable: [...new Set(resumable)] },
+      ...(changes.length ? { fingerprint } : {}), changes, effects, issues: [], inspectionBefore, inspectionAfter, expectedStaleIssues, activeWork, ...(notices.length ? { notices } : {}), resumable: [...new Set(resumable)] },
     inventoryAfter: upgradeInventoryFingerprint(afterFiles, [...new Set([...inventory.directories, ...(changes.length ? ['草稿区'] : [])])]) }
   } catch (error) {
     errors.push(issue('UPGRADE_PREVIEW_FAILED', '.', error instanceof Error ? error.message : String(error)))

@@ -82,7 +82,7 @@ const RULES: ReadonlyArray<readonly [ToolFailureCode, RegExp]> = [
   ['author-declined', /未获作者批准|作者.{0,4}(驳回|拒绝)/],
   ['author-cancelled', /裁决.{0,2}取消|作者关闭了裁决|作者已取消/],
   ['approval-stale', /等待作者裁决期间|旧批准/],
-  ['source-conflict', /冲突|已隔离|只增不改|已被另行修改/],
+  ['source-conflict', /冲突|已隔离|只增不改|已被另行修改|新归档须同时新建本章定稿与章摘要/],
   ['host-unavailable', /裁决窗口|工作范围未就绪|未配置|不可用|尚未就绪/],
   ['book-not-found', /书id|bookId|书目/],
   ['parse-error', /解析失败|未分类正文|无法解析|第 \d+ 行：/],

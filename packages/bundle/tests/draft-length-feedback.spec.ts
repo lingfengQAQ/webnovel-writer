@@ -78,6 +78,7 @@ describe('原生草稿工具后置回执', () => {
     const exec = { ...s.exec, arguments: { file_path: stagedPath } }
     expect(receipt(await s.invoke(exec, staged))).toMatchObject({ 文本阶段: '起草暂存', 距目标剩余汉字数: 2 })
     expect(receipt(await s.invoke(exec, staged))).not.toHaveProperty('篇幅核对')
+    expect(receipt(await s.invoke(exec, staged))).not.toHaveProperty('身份检查')
     const contract = path.join(s.workspace, '测试书/作品契约/契约.md')
     fs.writeFileSync(contract, serializeDocument({ 书id: 'test' },
       '## 阅读体验与情绪承诺 〔已确认〕\n### 章节篇幅\n- 目标汉字数: 1\n- 下限汉字数: 1\n- 上限汉字数: 2'))
@@ -87,5 +88,18 @@ describe('原生草稿工具后置回执', () => {
     fs.unlinkSync(path.join(s.workspace, '测试书/作品契约/契约.md'))
     // Without a book identity there is no safe book to attach a count to.
     expect(await s.invoke()).not.toHaveProperty('additionalContexts')
+  })
+
+  it('成功保存字符串身份时立即反馈问题，合法对象按 after 核对且不改变原结果', async () => {
+    const s = setup()
+    const bad = { ...s.result, value: { path: s.file, after: serializeDocument({ 身份: '卷01-0005-夜渡', 版本: 3 }, '甲乙𠮷') } } as ToolExecutionResult
+    const decision = { kind: 'accept' as const, value: 'native projection' }
+    const response = await s.invoke(s.exec, bad, decision)
+    expect(response).toMatchObject(decision)
+    expect(receipt(response)).toMatchObject({ 正文统计: { 汉字数: 3 }, 身份检查: { 状态: '需核对' } })
+    expect(bad.isError).toBe(false)
+    const good = { ...s.result, value: { path: s.file, after: serializeDocument({ 身份: { 卷: 1, 章: 5, 章名: '夜渡' }, 版本: 3 }, '甲乙𠮷') } } as ToolExecutionResult
+    expect(receipt(await s.invoke(s.exec, good))).toMatchObject({ 身份检查: { 范围: '格式与目录', 状态: '通过', 问题: [] } })
+    expect(fs.readFileSync(s.file, 'utf8')).toBe('磁盘可能已经被后续操作改动')
   })
 })

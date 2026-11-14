@@ -5,9 +5,11 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import { createNovelTools } from '../src/novel-tools'
 import { nativeWriteStub } from './fixtures/native-write-stub'
+import { removeSync } from '../../core/src/repo/remove'
+import { settlementPack } from './fixtures/settlement-pack'
 
 const roots: string[] = []
-afterAll(() => { for (const root of roots) fs.rmSync(root, { recursive: true, force: true }) })
+afterAll(() => { for (const root of roots) removeSync(root) })
 
 const LEAK = /Error:|\(B\d|askFn|ASK_ABORTED|未装机|PRD §/
 
@@ -82,7 +84,7 @@ describe('所有工具的失败结果都有 code 与 next（PR-6）', () => {
 
   it('裁决完成后加锁失败仍返回统一业务失败', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'settle-lock-failure-')); roots.push(root)
-    fs.mkdirSync(path.join(root, '.webnovel'))
+    settlementPack(root, 'b', { 卷: 1, 章: 1, 章名: '测试' })
     fs.writeFileSync(path.join(root, '.webnovel/book.lock'), JSON.stringify({ pid: process.pid, hostname: os.hostname() }))
     const tools = createNovelTools({ workspaceRoot: () => root, bookRootOfBookId: () => root,
       askFn: async () => ({ answers: [{ id: '定稿入档', selected: ['批准'] }] }),

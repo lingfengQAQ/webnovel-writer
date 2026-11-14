@@ -14,12 +14,16 @@ import { planSettlement, type SettlementApproval } from '../settlement'
 import { commitWithIsolatedIndex, runGit } from './git'
 import {
   archiveFile, archiveReceiptCommitted, archiveReceiptOp, archiveScope, contentHash,
-  makeArchiveReceipt, readArchiveReceipt, verifyArchiveOutputs,
-  archivePathIdentity, listArchiveReceipts, retconPackageInputs, retconRequestScope, stableJson, type ArchiveReceipt,
+  makeArchiveReceipt, readArchiveReceipt, verifyArchiveOutputs, verifyArchiveBeforeCommit,
+  archivePathIdentity, listArchiveReceipts, retconPackageInputs, retconRequestScope, receiptRelative, stableJson, type ArchiveReceipt,
 } from './receipt'
 import { updateOperationTargets, withBookLock } from '../repo/lock'
 import { recoverTransactions, type OperationProvenance } from '../repo/transaction'
 import { 待定稿包七件 } from '../prepare/pack'
+import { parseDocument } from '../repo/frontmatter'
+import { assertDraftRetentionBinding, parseDraftRetention, verifyDraftRetention, type DraftRetentionManifest, type DraftRetentionVerification } from '../repo/draft-retention'
+import { paths } from '../repo/paths'
+import type { ChapterKey } from '../derive/scan'
 
 export interface ManifestEntry {
   readonly 源?: string
@@ -35,6 +39,8 @@ export interface ArchiveOptions {
   readonly files?: readonly ManifestEntry[]
   readonly summary: string
   readonly lines?: readonly string[]
+  /** Frozen preparation evidence; never collected or enlarged during archive. */
+  readonly retention?: DraftRetentionManifest
   /** 包中存在非空沉淀候选时，必须提供作者批准。 */
   readonly settlement?: SettlementApproval
   /**
@@ -53,13 +59,13 @@ export type ArchiveResult =
       /** 可信收据及 Git 历史证明本次请求已经完成，未重复沉淀或提交。 */
       readonly alreadyCommitted?: boolean
     }
-  | { readonly ok: false; readonly reason: string; /** F7:文件已落盘、待提交(commit/add 阶段失败)。 */ readonly written?: true }
+  | { readonly ok: false; readonly reason: string; readonly next?: string; /** F7:文件已落盘、待提交(commit/add 阶段失败)。 */ readonly written?: true }
 
 function resolvePackageDir(bookRoot: string, packageDir: string): string {
   return path.isAbsolute(packageDir) ? packageDir : path.join(bookRoot, packageDir)
 }
 
-function readManifest(packageAbs: string): { readonly ok: true; readonly files: readonly ManifestEntry[] } | { readonly ok: false; readonly reason: string } {
+function readManifest(packageAbs: string): { readonly ok: true; readonly files: readonly ManifestEntry[]; readonly retention?: DraftRetentionManifest } | { readonly ok: false; readonly reason: string } {
   const p = path.join(packageAbs, '清单.json')
   let text: string
   try {
@@ -86,7 +92,12 @@ function readManifest(packageAbs: string): { readonly ok: true; readonly files: 
       sha256: typeof o['sha256'] === 'string' ? o['sha256'] : undefined,
     })
   }
-  return { ok: true, files }
+  try {
+    const retention = Object.hasOwn(parsed.data, '草稿留档') ? parseDraftRetention(parsed.data['草稿留档']) : undefined
+    return { ok: true, files, ...(retention === undefined ? {} : { retention }) }
+  } catch (error) {
+    return { ok: false, reason: `准备包留档清单无效：${error instanceof Error ? error.message : String(error)}` }
+  }
 }
 
 function loadOps(
@@ -120,7 +131,7 @@ function loadOps(
   return { ok: true, ops }
 }
 
-function requestFingerprint(opts: ArchiveOptions, packageAbs: string | null, ops: readonly FileOp[], extras: readonly string[], mode: 'ch' | 'retcon'): string {
+function requestFingerprint(opts: ArchiveOptions, packageAbs: string | null, ops: readonly FileOp[], extras: readonly string[], mode: 'ch' | 'retcon', retention?: DraftRetentionManifest): string {
   const inputs: Record<string, string | null> = {}
   if (packageAbs !== null) {
     for (const name of [...待定稿包七件, '清单.json']) {
@@ -141,16 +152,56 @@ function requestFingerprint(opts: ArchiveOptions, packageAbs: string | null, ops
   }
   return contentHash(stableJson({
     mode, inputs, ops, extras,
+    ...(retention === undefined ? {} : { retention }),
     approval: opts.settlement === undefined ? null : { 章节: opts.settlement.章节, 批准: opts.settlement.批准 },
   }))
 }
 
-function commitArchive(root: string, dests: readonly string[], message: string): ArchiveResult {
+function commitArchive(root: string, dests: readonly string[], message: string, receipt?: ArchiveReceipt): ArchiveResult {
+  if (receipt?.schema === 3) {
+    try { verifyArchiveBeforeCommit(root, receipt) }
+    catch (error) { return { ok: false, written: true, reason: `文件已写入但未能补交：${error instanceof Error ? error.message : String(error)}` } }
+  }
   const commit = commitWithIsolatedIndex(root, dests, message)
   if (commit.status !== 0 || commit.noChanges) {
     return { ok: false, written: true, reason: `文件已写入但提交失败，未形成提交：${commit.stderr.trim() || 'git commit 失败'}` }
   }
   return { ok: true, message, dests }
+}
+
+export interface PendingRetentionRecovery {
+  readonly reason: string
+  readonly next: string
+}
+
+function missingRetentionRecovery(root: string, receipt: ArchiveReceipt, retained: DraftRetentionVerification): PendingRetentionRecovery | undefined {
+  if (receipt.schema !== 3 || receipt.kind !== 'archive' || retained.issues.length === 0
+    || !retained.issues.every(item => item.代码 === 'DRAFT_RETENTION_MISSING' && item.路径 !== receipt.retention.sourceDraft)) return undefined
+  // A split batch or changed before-state cannot be repaired by another manual commit.
+  verifyArchiveBeforeCommit(root, receipt)
+  return {
+    reason: `归档留档证据冲突：非来源留档已缺失，原输出尚未提交；文件和收据已保留。缺失：${JSON.stringify(retained.issues.map(item => item.路径))}`,
+    next: `请作者从备份原样恢复缺稿后重试。若无法恢复，请作者核对 ${receiptRelative(receipt.scope)} 的 outputs，再一次性手动提交以下全部路径：${JSON.stringify(receipt.outputs.map(output => output.relPath))}。只提交这些输出，保留无关暂存，不提交草稿或收据，也不要分批；模型不要执行 Git 写入。完成后调用 novel_begin_chapter 核对。`,
+  }
+}
+
+/** Read-only advice for the public pre-approval check; this does not approve or resume a write. */
+export function inspectPendingSettlementRetention(root: string, chapter: ChapterKey): PendingRetentionRecovery | undefined {
+  const packageAbs = resolvePackageDir(root, paths.待定稿包目录(chapter.卷, chapter.章名))
+  const manifest = readManifest(packageAbs)
+  if (!manifest.ok || manifest.retention === undefined || stableJson(manifest.retention.chapter) !== stableJson(chapter)) return undefined
+  const loaded = loadOps(root, packageAbs, manifest.files)
+  if (!loaded.ok) return undefined
+  const scope = archiveScope(root, packageAbs, 'ch', loaded.ops.map(op => op.relPath))
+  const receipt = readArchiveReceipt(root, scope)
+  if (receipt?.schema !== 3 || receipt.kind !== 'archive' || stableJson(receipt.retention) !== stableJson(manifest.retention)) return undefined
+  // Approval time/text are intentionally absent from the existing business request identity.
+  const request = requestFingerprint({ bookRoot: root, summary: '', settlement: { 章节: chapter, 批准: true, 裁决记录: '' } },
+    packageAbs, loaded.ops, [], 'ch', manifest.retention)
+  if (receipt.request !== request) return undefined
+  verifyArchiveOutputs(root, receipt)
+  if (archiveReceiptCommitted(root, receipt)) return undefined
+  return missingRetentionRecovery(root, receipt, verifyDraftRetention(root, receipt.retention))
 }
 
 function resumeArchive(root: string, receipt: ArchiveReceipt, provenance?: OperationProvenance): ArchiveResult {
@@ -162,8 +213,18 @@ function resumeArchive(root: string, receipt: ArchiveReceipt, provenance?: Opera
   if (!health.ok) return health
   const dests = receipt.outputs.map(output => output.relPath)
   updateOperationTargets(root, provenance, dests)
-  if (archiveReceiptCommitted(root, receipt)) return { ok: true, message: receipt.message, dests, alreadyCommitted: true }
-  return commitArchive(root, dests, receipt.message)
+  const committed = archiveReceiptCommitted(root, receipt)
+  if (receipt.schema === 3) {
+    const retained = verifyDraftRetention(root, receipt.retention, { allowMissingRetained: committed })
+    if (!retained.ok) {
+      const recovery = committed ? undefined : missingRetentionRecovery(root, receipt, retained)
+      return recovery === undefined
+        ? { ok: false, reason: `归档留档证据已变化，保留原收据：${retained.issues.map(item => item.说明).join('；')}` }
+        : { ok: false, written: true, ...recovery }
+    }
+  }
+  if (committed) return { ok: true, message: receipt.message, dests, alreadyCommitted: true }
+  return commitArchive(root, dests, receipt.message, receipt)
 }
 
 const 定稿章 = /^定稿\/卷(\d+)\/(\d{4})-(.+)\.md$/
@@ -223,15 +284,32 @@ interface RetconIdentity {
 function archiveLocked(opts: ArchiveOptions, mode: 'ch' | 'retcon', identity?: RetconIdentity): ArchiveResult {
   const packageAbs = opts.packageDir === undefined ? null : resolvePackageDir(opts.bookRoot, opts.packageDir)
   let files = opts.files
-  if (files === undefined) {
-    if (packageAbs === null) return { ok: false, reason: '未提供清单或待定稿包目录' }
+  let retention = opts.retention === undefined ? undefined : parseDraftRetention(opts.retention)
+  if (files === undefined && packageAbs === null) return { ok: false, reason: '未提供清单或待定稿包目录' }
+  if (packageAbs !== null && (files === undefined || (mode === 'ch' && fs.existsSync(path.join(packageAbs, '清单.json'))))) {
     const man = readManifest(packageAbs)
     if (!man.ok) return man
-    files = man.files
+    if (files === undefined) files = man.files
+    if (retention !== undefined && man.retention !== undefined && stableJson(retention) !== stableJson(man.retention)) return { ok: false, reason: '归档参数与准备包中的留档清单不一致' }
+    if (man.retention !== undefined) retention = man.retention
   }
 
-  const loaded = loadOps(opts.bookRoot, packageAbs, files)
+  const loaded = loadOps(opts.bookRoot, packageAbs, files!)
   if (!loaded.ok) return loaded
+  if (mode === 'ch') {
+    const marked = loaded.ops.filter(op => {
+      if (!op.relPath.startsWith('定稿/')) return false
+      const doc = parseDocument(op.content)
+      return doc.ok && Object.hasOwn(doc.data.fields, '草稿留档摘要')
+    })
+    if (retention === undefined && marked.length > 0) return { ok: false, reason: '定稿已有留档摘要但缺少准备时的完整清单，不能回退旧归档格式' }
+    if (retention !== undefined) {
+      const chapterPath = paths.定稿章(retention.chapter.卷, retention.chapter.章, retention.chapter.章名)
+      const chapter = loaded.ops.find(op => op.relPath === chapterPath)
+      if (!chapter || marked.length !== 1) return { ok: false, reason: '准备包留档清单与定稿摘要或章节不一致' }
+      assertDraftRetentionBinding(chapter.content, retention)
+    }
+  } else if (retention !== undefined) return { ok: false, reason: '吃书补偿不得重新采集或替换原次定稿留档清单' }
   // 账本与本书记忆只有一条写入路径:沉淀服务。两种模式都不许清单从旁边的门进来,
   // 否则状态词表、计划来源、线索必填字段等校验被整体绕过(吃书亦然)。
   if (loaded.ops.some((op) => op.relPath.startsWith('账本/') || op.relPath.startsWith('本书记忆/'))) {
@@ -246,10 +324,14 @@ function archiveLocked(opts: ArchiveOptions, mode: 'ch' | 'retcon', identity?: R
     if (!extras.includes(relative)) extras.push(relative)
   }
   const scope = identity?.scope ?? archiveScope(opts.bookRoot, packageAbs, mode, loaded.ops.map(op => op.relPath))
-  const request = identity?.request ?? requestFingerprint(opts, packageAbs, loaded.ops, extras, mode)
+  const request = identity?.request ?? requestFingerprint(opts, packageAbs, loaded.ops, extras, mode, retention)
   const receipt = readArchiveReceipt(opts.bookRoot, scope)
   if (receipt !== undefined) {
     if (receipt.request === request && receipt.mode === mode) {
+      if (retention !== undefined && (receipt.schema !== 3 || receipt.kind !== 'archive'
+        || stableJson(receipt.retention) !== stableJson(retention))) {
+        return { ok: false, reason: '归档收据缺少或冲突于原准备留档清单，不能回退旧归档证明' }
+      }
       return resumeArchive(opts.bookRoot, receipt, opts.provenance)
     }
     if (!archiveReceiptCommitted(opts.bookRoot, receipt)) {
@@ -314,21 +396,31 @@ function archiveLocked(opts: ArchiveOptions, mode: 'ch' | 'retcon', identity?: R
   const dests = [...ops.map((op) => op.relPath), ...extraDests]
   updateOperationTargets(opts.bookRoot, opts.provenance, dests)
 
+  let nextReceipt: ArchiveReceipt, receiptOp: FileOp
   try {
-    const baseReceipt = makeArchiveReceipt(opts.bookRoot, { scope, request, mode, message }, ops, extraDests)
-    const nextReceipt: ArchiveReceipt = identity === undefined ? baseReceipt : {
-      ...baseReceipt, schema: 2, retcon: {
+    const baseReceipt = makeArchiveReceipt(opts.bookRoot, { scope, request, mode, message }, ops, extraDests, retention)
+    nextReceipt = identity === undefined ? baseReceipt : {
+      ...baseReceipt, schema: 2, mode: 'retcon', retcon: {
         chapter: identity.chapter,
         packageDir: opts.packageDir ?? null,
         inputs: retconPackageInputs(opts.bookRoot, opts.packageDir ?? null),
       },
     }
-    writeBatchAtomic(opts.bookRoot, [...ops, archiveReceiptOp(nextReceipt)], opts.provenance === undefined ? {} : { provenance: opts.provenance })
+    if (nextReceipt.schema === 3) {
+      const retained = verifyDraftRetention(opts.bookRoot, nextReceipt.retention)
+      if (!retained.ok) return { ok: false, reason: `准备后的草稿留档已变化，旧批准不可使用，本次没有写入；请重新准备并呈报：${retained.issues.map(item => item.说明).join('；')}` }
+    }
+    receiptOp = archiveReceiptOp(nextReceipt)
+  } catch (err) {
+    return { ok: false, reason: `归档写入前核对失败，本次没有写入：${err instanceof Error ? err.message : String(err)}` }
+  }
+  try {
+    writeBatchAtomic(opts.bookRoot, [...ops, receiptOp], opts.provenance === undefined ? {} : { provenance: opts.provenance })
   } catch (err) {
     return { ok: false, reason: `原子写入失败：${err instanceof Error ? err.message : String(err)}` }
   }
 
-  return commitArchive(opts.bookRoot, dests, message)
+  return commitArchive(opts.bookRoot, dests, message, nextReceipt)
 }
 
 function archive(opts: ArchiveOptions, mode: 'ch' | 'retcon'): ArchiveResult {

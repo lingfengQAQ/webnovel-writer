@@ -21,11 +21,13 @@ import * as nodePath from 'node:path'
 import * as os from 'node:os'
 import { apply, resetWorkspaceRoot } from '../src'
 import { NOVEL_TOOL_NAMES } from '../src/novel-tools'
+import { removeSync } from '../../core/src/repo/remove'
+import { settlementPack } from './fixtures/settlement-pack'
 
 const roots: string[] = []
 afterAll(() => {
   for (const r of roots) {
-    try { fs.rmSync(r, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }) } catch { /* Windows 句柄延迟 */ }
+    removeSync(r)
   }
   resetWorkspaceRoot()
 })
@@ -223,7 +225,8 @@ describe('dsh 运行时对齐:ToolRunContext 透传与作者裁决', () => {
 
     const tools = (root as unknown as { get(n: string): unknown }).get('tools') as ToolRuntimeType
     const controller = new AbortController()
-    // 定稿入档:裁决发生在一切落盘检查之前,最小书即可走到 askAuthor
+    settlementPack(nodePath.join(ws, '测试书'), 'test-book', { 卷: 1, 章: 1, 章名: '第一章' })
+    // The real prepared inventory is verified before asking; the host context still passes through.
     const result = await execTool(tools, main.agent, 'novel_settle_chapter', {
       bookId: 'test-book', 卷: 1, 章: 1, 章名: '第一章', summary: '测试',
     }, controller.signal)
@@ -253,6 +256,7 @@ describe('dsh 运行时对齐:ToolRunContext 透传与作者裁决', () => {
     const { unload, uq } = await loadBundle(root, ws, [main.agent])
     // 作者退回:有效答案但决定=已退回
     uq.answer = { answers: [{ id: '定稿入档', selected: ['退回'] }] }
+    settlementPack(nodePath.join(ws, '测试书'), 'test-book', { 卷: 1, 章: 1, 章名: '第一章' })
     const tools = (root as unknown as { get(n: string): unknown }).get('tools') as ToolRuntimeType
 
     const rejected = await execTool(tools, main.agent, 'novel_settle_chapter', {

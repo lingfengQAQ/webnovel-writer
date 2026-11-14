@@ -54,7 +54,8 @@ function bytes(root: string): Record<string, string> {
   return found
 }
 
-describe('整仓升级工具的预览与批准', { timeout: 30_000 }, () => {
+// The first case alone takes ~26-28 s on Windows (base v8 and this branch); 30 s flaked under full-suite load.
+describe('整仓升级工具的预览与批准', { timeout: 90_000 }, () => {
   it('实际旧契约预览零写入，作者看到同一份完整差异，批准后一次提交', async () => {
     const f = fixture(), before = bytes(f.bookRoot), previousHead = git(f.bookRoot, 'rev-parse', 'HEAD')
     const preview = await f.call('novel_preview_book_upgrade')
@@ -86,7 +87,7 @@ describe('整仓升级工具的预览与批准', { timeout: 30_000 }, () => {
     expect(replay).toMatchObject({ ok: true, state: 'already-committed' })
     expect(f.ask).toHaveBeenCalledTimes(1)
     expect(bytes(f.bookRoot)).toEqual(after)
-  }, 30_000)
+  }, 90_000)
 
   it.each(['unknown', 'dirty', 'locked'] as const)('整仓存在%s时不批准局部变换', async kind => {
     const f = fixture()
@@ -124,7 +125,7 @@ describe('整仓升级工具的预览与批准', { timeout: 30_000 }, () => {
   it.each([
     ['预览中途抛错', (f: ReturnType<typeof fixture>) => {
       const dir = path.join(f.bookRoot, '草稿区/.maintenance-receipts'); fs.mkdirSync(dir, { recursive: true })
-      fs.writeFileSync(path.join(dir, '.DS_Store'), 'x')
+      fs.writeFileSync(path.join(dir, 'unexpected.txt'), 'x')
     }, 'UPGRADE_PREVIEW_FAILED'],
     ['契约缺书id', (f: ReturnType<typeof fixture>) => {
       fs.writeFileSync(f.contract, fs.readFileSync(f.contract, 'utf8').replace(/^书id:.*\r?\n/m, ''))
@@ -235,7 +236,7 @@ describe('整仓升级工具的预览与批准', { timeout: 30_000 }, () => {
   })
 })
 
-describe('维护收据续办接线', { timeout: 30_000 }, () => {
+describe('维护收据续办接线', { timeout: 90_000 }, () => {
   it('真实提交失败后新工具实例按原编号请求续办，只补一次提交', async () => {
     const f = fixture()
     git(f.bookRoot, 'config', 'core.hooksPath', '.git/hooks')
@@ -278,5 +279,5 @@ describe('维护收据续办接线', { timeout: 30_000 }, () => {
     const changed = bytes(f.bookRoot)
     expect(await f.call('novel_resume_book_upgrade', { bookId: f.bookId, operationId: result.operationId })).toMatchObject({ ok: false, state: 'blocked' })
     expect(f.ask).toHaveBeenCalledTimes(1); expect(bytes(f.bookRoot)).toEqual(changed)
-  }, 30_000)
+  }, 90_000)
 })

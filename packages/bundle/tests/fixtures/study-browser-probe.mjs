@@ -283,7 +283,7 @@ try {
   }
   await page.getByRole('tab', { name: '工作区', exact: true }).click()
   await page.getByText('S5 临时验收书房', { exact: true }).click()
-  await page.getByText('S5 书房验收', { exact: true }).click()
+  await page.getByText(/^(S5 书房验收|S6 后台索引验收)$/).first().click()
   await page.getByRole('tab', { name: '书房', exact: true }).click()
   await page.getByRole('button', { name: /验收作品甲/ }).waitFor()
   if (process.argv[3] === 'verify') {
@@ -316,7 +316,11 @@ try {
     const quote = await page.evaluate(() => navigator.clipboard.readText())
     assert.ok(quote.includes('【书房原文引用】') && quote.includes('acceptance-a'))
     assert.ok(quote.includes(selection.trim().split('\n').filter(Boolean).at(-1)))
-    assert.ok(quote.length > 1500)
+    const savedProse = fs.readFileSync(path.join(runtime.workspace, '验收作品甲/草稿区/草稿/卷01-来信/稿1.md'), 'utf8')
+      .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '').replaceAll('\r\n', '\n').trim()
+    const quotedProse = quote.replaceAll('\r\n', '\n').split('\n').filter(line => line.startsWith('> ')).map(line => line.slice(2)).join('\n').trim()
+    assert.equal(quotedProse, savedProse, 'the clipboard must retain the complete saved prose, beyond the rendered viewport')
+    checks.quotedCharacters = savedProse.length
     checks.fullQuote = true
     await composer.fill('')
     await page.getByRole('button', { name: '知识库', exact: true }).click()
@@ -333,7 +337,7 @@ try {
     await Promise.all([
       waitForEditorToast(page, /文件已保存[\s\S]*已交给主控，处理结果见对话/),
       waitForDisk(notesPath, marker),
-      page.getByRole('button', { name: /收到执行请求/ }).first().waitFor({ timeout: 15000 }),
+      page.locator('[data-webnovel-save-notice]').getByRole('button', { name: /写作笔记\.md 已保存/ }).waitFor({ timeout: 15000 }),
     ])
     checks.authorSave = true
     checks.savedDiff = true
@@ -346,7 +350,7 @@ try {
     // Tab names include the nested close button, so an exact name would never match.
     assert.equal(await page.getByRole('tab', { name: /写作笔记\.md/ }).count(), 0)
     await page.getByRole('tab', { name: '工作区', exact: true }).click()
-    await native.getByText('S5 书房验收', { exact: true }).click()
+    await native.getByText(/^(S5 书房验收|S6 后台索引验收)$/).first().click()
     await page.getByRole('tab', { name: '书房', exact: true }).click()
     await page.getByRole('tab', { name: /写作笔记\.md/ }).first().waitFor()
     checks.sessionIsolation = true
@@ -375,7 +379,7 @@ try {
     await page.setViewportSize({ width: 1440, height: 960 })
     await settleLayout()
     await page.getByRole('tab', { name: '可视化', exact: true }).click()
-    await page.getByRole('tab', { name: '章节进度', exact: true }).click()
+    await page.getByRole('tab', { name: '进度', exact: true }).click()
     await page.getByRole('heading', { name: '章节进度' }).waitFor()
     await page.locator('.nw-chapter-line').first().waitFor()
     await page.screenshot({ path: path.join(evidence, 'study-chapters.png'), fullPage: true })

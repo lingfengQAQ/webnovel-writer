@@ -239,6 +239,16 @@
     "strong": 0,
     "format": 0
   },
+  "packages/bundle/src/draft-retention-output.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
+  "packages/bundle/src/draft-retention-tools.ts": {
+    "ratio": 0.979,
+    "strong": 1,
+    "format": 0
+  },
   "packages/bundle/src/gates.ts": {
     "ratio": 1,
     "strong": 1,
@@ -639,6 +649,11 @@
     "strong": 0,
     "format": 0
   },
+  "packages/core/src/maintenance/draft-retention.ts": {
+    "ratio": 1,
+    "strong": 2,
+    "format": 0
+  },
   "packages/core/src/maintenance/inspection.ts": {
     "ratio": 1,
     "strong": 10,
@@ -655,6 +670,11 @@
     "format": 0
   },
   "packages/core/src/maintenance/opening.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
+  "packages/core/src/maintenance/retention-history.ts": {
     "ratio": 1,
     "strong": 0,
     "format": 0
@@ -819,6 +839,11 @@
     "strong": 0,
     "format": 0
   },
+  "packages/core/src/repo/draft-retention.ts": {
+    "ratio": 1,
+    "strong": 3,
+    "format": 0
+  },
   "packages/core/src/repo/drafts.ts": {
     "ratio": 1,
     "strong": 0,
@@ -850,6 +875,11 @@
     "format": 0
   },
   "packages/core/src/repo/paths.ts": {
+    "ratio": 1,
+    "strong": 0,
+    "format": 0
+  },
+  "packages/core/src/repo/retention-anchor.ts": {
     "ratio": 1,
     "strong": 0,
     "format": 0

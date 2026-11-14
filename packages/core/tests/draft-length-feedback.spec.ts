@@ -47,6 +47,7 @@ describe('保存快照篇幅反馈', () => {
     const partial = draftLengthFeedback(draftLengthTarget(stage)!, '甲', policy)
     expect(partial).toMatchObject({ 正文统计: { 汉字数: 1 }, 距目标剩余汉字数: 2 })
     expect(partial).not.toHaveProperty('篇幅核对')
+    expect(partial).not.toHaveProperty('身份检查')
     const policies = [parseChapterLength(null), { ...policy, 状态: '未确认' as const },
       { 状态: '配置错误' as const, 来源: '契约', 原因: '非法范围' }]
     for (const input of policies) {
@@ -56,6 +57,28 @@ describe('保存快照篇幅反馈', () => {
     }
     expect(draftLengthFeedback(draftLengthTarget(relative)!, undefined, policy)).toMatchObject({ 统计状态: '未核验' })
     expect(draftLengthFeedback(draftLengthTarget(relative)!, '---\n未闭合', policy)).not.toHaveProperty('正文统计')
+  })
+
+  it('完整稿在同一保存快照中核对身份格式与目录，章号不取稿件版本', () => {
+    const text = serializeDocument({ 身份: { 卷: 1, 章: 5, 章名: '夜渡' }, 版本: 2 }, '甲乙𠮷')
+    const feedback = draftLengthFeedback(draftLengthTarget(relative)!, text, policy)
+    expect(feedback).toMatchObject({
+      正文统计: { 汉字数: 3, 版本: 2, 保存文本哈希: createHash('sha256').update(text).digest('hex') },
+      身份检查: { 范围: '格式与目录', 状态: '通过', 问题: [] },
+    })
+  })
+
+  it.each([
+    undefined, '卷01-夜渡', null, [], { 卷: '1', 章: 5, 章名: '夜渡' },
+    { 卷: 1, 章: 0, 章名: '夜渡' }, { 卷: 1, 章: 1.5, 章名: '夜渡' },
+    { 卷: 1, 章: 5, 章名: '另一章' }, { 卷: 2, 章: 5, 章名: '夜渡' },
+  ])('身份不完整或矛盾时保留可信字数，并显式提示核对：%j', identity => {
+    const text = serializeDocument(identity === undefined ? { 版本: 3 } : { 身份: identity, 版本: 3 }, '甲乙𠮷')
+    const feedback = draftLengthFeedback(draftLengthTarget(relative)!, text, policy)
+    expect(feedback).toMatchObject({ 统计状态: '已统计', 正文统计: { 汉字数: 3, 版本: 3 }, 身份检查: { 范围: '格式与目录', 状态: '需核对' } })
+    if (feedback.统计状态 !== '已统计') throw new Error('count unexpectedly rejected')
+    expect(feedback.身份检查?.问题.length).toBeGreaterThan(0)
+    expect(JSON.parse(JSON.stringify(feedback))).toStrictEqual(feedback)
   })
 
   it('只有暂存时不占正式稿号、不进入草稿/待审稿，发布正式文件后才改变推导', () => {

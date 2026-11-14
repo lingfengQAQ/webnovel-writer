@@ -71,7 +71,7 @@ async function openSession(page) {
   const group = page.locator('[role="treeitem"][aria-expanded]').filter({ has: page.getByText('S5 临时验收书房', { exact: true }) })
   await group.waitFor()
   if (await group.getAttribute('aria-expanded') !== 'true') await group.click()
-  await page.getByText('S5 书房验收', { exact: true }).click()
+  await page.getByText(/^(S5 书房验收|S6 后台索引验收)$/).first().click()
   await page.getByRole('tab', { name: '书房', exact: true }).click()
   await page.locator('.nw-book').first().locator('.nw-tree-row').first().waitFor()
 }
