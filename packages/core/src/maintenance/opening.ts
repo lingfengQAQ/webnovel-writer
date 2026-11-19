@@ -15,7 +15,7 @@ import { uniqueMaintenanceIssues } from './types'
 import { OpeningCommitProof, openingDirtyPaths, readOpeningGitState } from './opening-git'
 import { inspectOpeningMaterials } from './opening-materials'
 import { listUpgradeReceipts, upgradeCommitted, upgradeReceiptPath, verifyUpgradeBook } from './upgrade-receipt'
-import { missingRetentionNotices, readArchiveReceiptsSnapshot, retentionReceiptAbsent, retentionReceiptAbsentNotice, trustedDraftRetention, verifyRetentionOrigin } from './retention-history'
+import { missingRetentionNotices, readArchiveReceiptsSnapshot, retentionReceiptAbsent, retentionReceiptAbsentNotice, SUMMARY_HEADING, trustedDraftRetention, verifyRetentionOrigin } from './retention-history'
 
 export interface ChapterOpeningInspection {
   readonly 状态: '边界已核对' | '需恢复' | '无法核实'
@@ -84,6 +84,19 @@ function finalizedChapters(reader: ReadonlyBookSnapshot): FinalizedChapter[] {
     for (const file of reader.listDirectory(volumePath) ?? []) {
       const relative = `${volumePath}/${file.name}`
       if (file.name === '.gitkeep' && file.kind === 'file') { reader.readFile(relative); continue }
+      if (file.name === '补偿' && file.kind === 'directory') {
+        for (const entry of reader.listDirectory(relative) ?? []) {
+          const eventPath = `${relative}/${entry.name}`
+          if (entry.name === '.gitkeep' && entry.kind === 'file') { reader.readFile(eventPath); continue }
+          const eventMatch = /^补偿-(\d{4,})\.md$/.exec(entry.name)
+          if (entry.kind !== 'file' || eventMatch === null || !positive(Number(eventMatch[1]))) {
+            issue(reader, 'OPENING_FINAL_PATH', eventPath, '定稿补偿目录中的文件路径或类型无法核实')
+            continue
+          }
+          reader.readFile(eventPath)
+        }
+        continue
+      }
       const match = /^(\d{4,})-(.+)\.md$/.exec(file.name)
       if (file.kind !== 'file' || match === null || !positive(Number(match[1])) || validateSegment(match[2]!).length > 0) {
         issue(reader, 'OPENING_FINAL_PATH', relative, '定稿文件的章节身份无法核实')
@@ -194,7 +207,7 @@ function closeChapters(reader: ReadonlyBookSnapshot, chapters: FinalizedChapter[
         chapter.closed = proof.legacyPair(chapter.relative, chapter.summary, (text, summary) => {
           const parsed = parseDocument(text)
           const parsedSummary = parseDocument(summary)
-          if (!parsed.ok || !parsedSummary.ok || parsed.data.body.trim() === '' || !/^# 章摘要(?:\s|$)/.test(parsedSummary.data.body.trim())) return false
+          if (!parsed.ok || !parsedSummary.ok || parsed.data.body.trim() === '' || !SUMMARY_HEADING.test(parsedSummary.data.body.trim())) return false
           const identity = parsed.data.fields['身份']
           return record(identity) && identity['卷'] === chapter.key.卷 && identity['章'] === chapter.key.章 && identity['章名'] === chapter.key.章名
             && parsed.data.fields['状态'] === '已定稿' && typeof parsed.data.fields['版本'] === 'number' && positive(parsed.data.fields['版本'])

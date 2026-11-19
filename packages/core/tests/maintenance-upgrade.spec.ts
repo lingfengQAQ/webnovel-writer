@@ -9,7 +9,9 @@ import { scaffoldBookFiles } from '../src/book/scaffold'
 import { paths } from '../src/repo/paths'
 import { removeSync } from '../src/repo/remove'
 import { contentHash } from '../src/commit/receipt'
-import { parseDocument } from '../src/repo/frontmatter'
+import { archiveChapter, archiveRetcon } from '../src/commit/archive'
+import { retconEventOps } from '../src/revise/proposal'
+import { parseDocument, serializeDocument } from '../src/repo/frontmatter'
 import { previewBookUpgrade } from '../src/maintenance/upgrade-plan'
 import { applyBookUpgrade, previewBookUpgradeResume, resumeBookUpgrade } from '../src/maintenance/upgrade'
 import { inspectBookDocuments } from '../src/maintenance/inspection'
@@ -266,6 +268,57 @@ describe('whole-book maintenance preview and execution', { timeout: 90_000 }, ()
     syncBuiltinESMExports()
     expect(previewBookUpgrade(root).state).toBe('blocked')
     expect(seen.some(args => args.includes('hash-object') && args.includes(`--path=${created}`))).toBe(false)
+  })
+
+  it('allows upgrading a legacy book with finalized retcon events and legacy memory index links', () => {
+    init(false)
+    put(paths.契约(), get(paths.契约()).replace('书仓格式版本: 1\n', ''))
+    git('commit', '--quiet', '-am', 'fixture: unversioned contract')
+    const key = { 卷: 1, 章: 1, 章名: '初见' }
+    const finalPath = paths.定稿章(key.卷, key.章, key.章名)
+    const summaryPath = paths.章摘要(key.卷, key.章, key.章名)
+    const draftPath = `${paths.草稿目录(key.卷, key.章名)}/稿1.md`
+    const summaryText = '# 章摘要\n\n初见铜铃。\n'
+    put(draftPath, serializeDocument({ 身份: key, 角色: '待审稿', 版本: 1 }, '铜铃响起。'))
+    const archived = archiveChapter({
+      bookRoot: root,
+      files: [
+        { 目标: finalPath, 内容: serializeDocument({ 身份: key, 章号: 1, 状态: '已定稿', 版本: 1, 生成模块: '定稿入档', 恢复信息: { 来源草稿: draftPath } }, '铜铃响起。') },
+        { 目标: summaryPath, 内容: summaryText },
+      ],
+      summary: '初见收尾',
+    })
+    expect(archived.ok).toBe(true)
+    const event = retconEventOps(root, { 提案编号: '0001', 受影响工件: [finalPath], 卷: 1, 账本留痕: '更正铜铃', 摘要: '更正初见铜铃状态' })
+    expect(event.relPath).toBe('定稿/卷01/补偿/补偿-0001.md')
+    const retconned = archiveRetcon({
+      bookRoot: root,
+      files: [
+        { 目标: finalPath, 内容: serializeDocument({ 身份: key, 章号: 1, 状态: '已定稿', 版本: 2, 生成模块: '吃书补偿', 恢复信息: { 来源草稿: draftPath } }, '铜铃没有响起。') },
+        { 目标: event.relPath, 内容: event.content },
+        { 目标: summaryPath, 内容: `> 〔摘要过期〕定稿正文已经吃书补偿更正,本摘要待重做(关联提案 0001)\n\n${summaryText}` },
+      ],
+      summary: '吃书补偿初见',
+    })
+    expect(retconned.ok).toBe(true)
+    put('本书记忆/Some File Name.md', serializeDocument({ 名称: 'Some File Name', 类: '决策', 状态: '已确认', 来源: '构想/构想快照.md' }, '保留跨章决策。\n'))
+    put(paths.本书记忆索引(), '# 本书记忆索引\n\n- [Some title](Some File Name.md)\n')
+    git('add', '.')
+    git('commit', '--quiet', '-m', 'fixture: legacy memory index link')
+
+    const plan = ready()
+    expect(plan.issues).toEqual([])
+    expect(plan.changes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ relPath: paths.本书记忆索引(), rules: ['C3-v1'] }),
+      expect.objectContaining({ relPath: paths.契约(), rules: ['C6-v1'] }),
+    ]))
+    const result = apply(plan.fingerprint)
+    expect(result, JSON.stringify(result)).toMatchObject({ ok: true, state: 'committed' })
+    expect(get(paths.本书记忆索引())).toContain('<./Some%20File%20Name.md>')
+    expect(parseDocument(get(paths.契约()))).toMatchObject({ ok: true, data: { fields: { 书仓格式版本: 1 } } })
+    expect(queryMemory(root)).toMatchObject({ ok: true })
+    expect(inspectBookDocuments(root).结论).toBe('未发现已知问题')
+    expect(inspectChapterOpening(root).状态).toBe('边界已核对')
   })
 })
 

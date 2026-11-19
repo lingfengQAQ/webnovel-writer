@@ -245,5 +245,55 @@
     "repository": "deepseek-ai/deepseek-harness",
     "commit": "38a6a5c965aa99ab525161efb7cc5cf1fe62fced",
     "tag": "dsh-v0.2.2-rc.3"
+  },
+  "@deepseek-ai/dsh-brand@0.2.2-rc.4": {
+    "repository": "deepseek-ai/deepseek-harness",
+    "commit": "3f321d32bfe382212a8ed8785c1d47a5a300aa23",
+    "tag": "dsh-v0.2.2-rc.4"
+  },
+  "@deepseek-ai/dsh-scope@0.2.2-rc.4": {
+    "repository": "deepseek-ai/deepseek-harness",
+    "commit": "3f321d32bfe382212a8ed8785c1d47a5a300aa23",
+    "tag": "dsh-v0.2.2-rc.4"
+  },
+  "@deepseek-ai/dsh-system-prompt@0.2.2-rc.4": {
+    "repository": "deepseek-ai/deepseek-harness",
+    "commit": "3f321d32bfe382212a8ed8785c1d47a5a300aa23",
+    "tag": "dsh-v0.2.2-rc.4"
+  },
+  "@deepseek-ai/dsh-util-workspace-path@0.2.2-rc.4": {
+    "repository": "deepseek-ai/deepseek-harness",
+    "commit": "3f321d32bfe382212a8ed8785c1d47a5a300aa23",
+    "tag": "dsh-v0.2.2-rc.4"
+  },
+  "@deepseek-ai/dsh-credentials@0.2.2-rc.4": {
+    "repository": "deepseek-ai/deepseek-harness",
+    "commit": "3f321d32bfe382212a8ed8785c1d47a5a300aa23",
+    "tag": "dsh-v0.2.2-rc.4"
+  },
+  "@deepseek-ai/dsh-brand@0.2.2-rc.5": {
+    "repository": "deepseek-ai/deepseek-harness",
+    "commit": "9c2670d3bce5275e0d1610272958121af87787bb",
+    "tag": "dsh-v0.2.2-rc.5"
+  },
+  "@deepseek-ai/dsh-scope@0.2.2-rc.5": {
+    "repository": "deepseek-ai/deepseek-harness",
+    "commit": "9c2670d3bce5275e0d1610272958121af87787bb",
+    "tag": "dsh-v0.2.2-rc.5"
+  },
+  "@deepseek-ai/dsh-system-prompt@0.2.2-rc.5": {
+    "repository": "deepseek-ai/deepseek-harness",
+    "commit": "9c2670d3bce5275e0d1610272958121af87787bb",
+    "tag": "dsh-v0.2.2-rc.5"
+  },
+  "@deepseek-ai/dsh-util-workspace-path@0.2.2-rc.5": {
+    "repository": "deepseek-ai/deepseek-harness",
+    "commit": "9c2670d3bce5275e0d1610272958121af87787bb",
+    "tag": "dsh-v0.2.2-rc.5"
+  },
+  "@deepseek-ai/dsh-credentials@0.2.2-rc.5": {
+    "repository": "deepseek-ai/deepseek-harness",
+    "commit": "9c2670d3bce5275e0d1610272958121af87787bb",
+    "tag": "dsh-v0.2.2-rc.5"
   }
 }

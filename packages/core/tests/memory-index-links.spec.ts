@@ -5,8 +5,11 @@ import * as path from 'node:path'
 import { createRequire } from 'node:module'
 import { removeSync } from '../src/repo/remove'
 import { readAuthorMemoryCatalog, readBookMemoryCatalog } from '../src/memory/catalog'
-import { rebuildBookMemoryIndex, writeBookMemory } from '../src/memory/book'
+import { bookMemoryOps, rebuildBookMemoryIndex, writeBookMemory } from '../src/memory/book'
 import { writeAuthorMemory } from '../src/memory/author'
+import { MemoryWriteError } from '../src/memory/write'
+import { planSettlement } from '../src/settlement'
+import { paths } from '../src/repo/paths'
 import { parseDocument, serializeDocument } from '../src/repo/frontmatter'
 import { memoryIndexLink, memoryIndexText, parseMemoryIndexLinks } from '../src/repo/memory-index-links'
 
@@ -156,6 +159,87 @@ describe('memory index filenames roundtrip through actual writers and catalogs',
     const catalog = readBookMemoryCatalog(root)
     expect(catalog).toMatchObject({ 状态: '读取错误', 条目: [{ 名称: 'A' }] })
     expect(catalog.问题.join(';')).toContain('解析索引失败：本书记忆/索引.md')
+    expect(snapshot()).toEqual(before)
+  })
+
+  it.each([
+    ['Some File Name', '- [Some title](Some File Name.md)\n'],
+    ['计划(备选)', '- [旧条目](计划(备选).md) — 旧说明\n'],
+  ])('diagnoses legacy unencoded index target %s with exact line and upgrade guide without writes', (name, line) => {
+    expect(writeBookMemory(root, input(name)).ok).toBe(true)
+    fs.writeFileSync(indexPath(), `# 本书记忆索引\n${line}`, 'utf8')
+    const key = { 卷: 1, 章: 1, 章名: '开篇' } as const
+    const pkgAbs = path.join(root, paths.待定稿包目录(key.卷, key.章名))
+    fs.mkdirSync(pkgAbs, { recursive: true })
+    fs.writeFileSync(path.join(pkgAbs, '本书层记忆候选.md'), '# 本书层记忆候选\n\n## 决策\n### 沉淀新增\n状态：候选\n描述：说明\n独立正文。\n', 'utf8')
+    const before = snapshot()
+    const expectedLine = `第2行旧索引目标未编码（${name}.md）`
+    const expectedGuide = '请先检查书仓并预览整仓升级，未重建索引'
+
+    const writeResult = writeBookMemory(root, input('新增条目'))
+    expect(writeResult).toMatchObject({ ok: false })
+    if (!writeResult.ok) {
+      expect(writeResult.reason).toContain('记忆索引解析失败：本书记忆/索引.md')
+      expect(writeResult.reason).toContain(expectedLine)
+      expect(writeResult.reason).toContain(expectedGuide)
+    }
+    expect(snapshot()).toEqual(before)
+
+    let rebuildError: unknown
+    try { rebuildBookMemoryIndex(root) } catch (error) { rebuildError = error }
+    expect(rebuildError).toBeInstanceOf(MemoryWriteError)
+    expect((rebuildError as Error).message).toContain(expectedLine)
+    expect((rebuildError as Error).message).toContain(expectedGuide)
+    expect(snapshot()).toEqual(before)
+
+    let opsError: unknown
+    try { bookMemoryOps(root, [input('新增条目')]) } catch (error) { opsError = error }
+    expect(opsError).toBeInstanceOf(MemoryWriteError)
+    expect((opsError as Error).message).toContain(expectedLine)
+    expect((opsError as Error).message).toContain(expectedGuide)
+    expect(snapshot()).toEqual(before)
+
+    const settled = planSettlement(root, pkgAbs, { 章节: key, 批准: true, 裁决记录: '作者批准' }, key)
+    expect(settled.ok).toBe(false)
+    if (!settled.ok) {
+      expect(settled.reason).toContain(expectedLine)
+      expect(settled.reason).toContain(expectedGuide)
+    }
+    expect(snapshot()).toEqual(before)
+  })
+
+  it('diagnoses malformed index links with exact line and verification guide without writes', () => {
+    expect(writeBookMemory(root, input('A')).ok).toBe(true)
+    fs.writeFileSync(indexPath(), '# 本书记忆索引\n- [编码无效](<./%ZZ.md>)\n', 'utf8')
+    const before = snapshot()
+    const expectedLine = '第2行链接无效或不明确'
+    const expectedGuide = '请先核对原文并检查书仓，未重建索引'
+
+    const writeResult = writeBookMemory(root, input('新增条目'))
+    expect(writeResult.ok).toBe(false)
+    if (!writeResult.ok) {
+      expect(writeResult.reason).toContain('记忆索引解析失败：本书记忆/索引.md')
+      expect(writeResult.reason).toContain(expectedLine)
+      expect(writeResult.reason).toContain(expectedGuide)
+    }
+    expect(() => rebuildBookMemoryIndex(root)).toThrow(expectedLine)
+    expect(() => rebuildBookMemoryIndex(root)).toThrow(expectedGuide)
+    expect(() => bookMemoryOps(root, [input('新增条目')])).toThrow(expectedLine)
+    expect(() => bookMemoryOps(root, [input('新增条目')])).toThrow(expectedGuide)
+    expect(snapshot()).toEqual(before)
+  })
+
+  it('reports both legacy and malformed index lines together while guiding toward upgrade', () => {
+    expect(writeBookMemory(root, input('Some File Name')).ok).toBe(true)
+    fs.writeFileSync(indexPath(), '# 本书记忆索引\r\n- [Some title](Some File Name.md)\r\n- [编码无效](<./%ZZ.md>)\r\n', 'utf8')
+    const before = snapshot()
+    const writeResult = writeBookMemory(root, input('新增条目'))
+    expect(writeResult.ok).toBe(false)
+    if (!writeResult.ok) {
+      expect(writeResult.reason).toContain('第2行旧索引目标未编码（Some File Name.md）')
+      expect(writeResult.reason).toContain('第3行链接无效或不明确')
+      expect(writeResult.reason).toContain('请先检查书仓并预览整仓升级，未重建索引')
+    }
     expect(snapshot()).toEqual(before)
   })
 })

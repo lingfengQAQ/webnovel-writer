@@ -12,6 +12,7 @@ import { parseDocument, serializeDocument } from '../src/repo/frontmatter'
 import { paths } from '../src/repo/paths'
 import { removeSync } from '../src/repo/remove'
 import * as gitModule from '../src/commit/git'
+import { retconEventOps } from '../src/revise/proposal'
 import { assembleMaterials, computeMaterials } from '../src/assembly/assemble'
 import type { SupplementEdit } from '../src/assembly/sections'
 
@@ -168,6 +169,54 @@ describe('开章只读事实核对', () => {
     const changed = serializeDocument({ ...parsed.data.fields, 版本: 2, 生成模块: '吃书补偿' }, '铜铃没有响起。')
     expect(archiveRetcon({ bookRoot: root, files: [{ 目标: finalPath, 内容: changed }], summary: '修正初见' })).toMatchObject({ ok: true })
     expect(checkedWithoutWrites(root)).toMatchObject({ 状态: '边界已核对', 问题: [] })
+  })
+
+  it('吃书写入正式补偿目录和过期章摘要横幅时，有无本地收据均通过开章核对', () => {
+    const root = book()
+    finish(root)
+    const parsed = parseDocument(finalizedText())
+    if (!parsed.ok) throw new Error('fixture')
+    const changed = serializeDocument({ ...parsed.data.fields, 版本: 2, 生成模块: '吃书补偿' }, '铜铃没有响起。')
+    const event = retconEventOps(root, { 提案编号: '0001', 受影响工件: [finalPath], 卷: 1, 账本留痕: '更正铜铃', 摘要: '更正初见铜铃状态' })
+    expect(event.relPath).toBe('定稿/卷01/补偿/补偿-0001.md')
+    const staleSummary = `> 〔摘要过期〕定稿正文已经吃书补偿更正,本摘要待重做(关联提案 0001)\n\n${summaryText}`
+    expect(archiveRetcon({
+      bookRoot: root,
+      files: [{ 目标: finalPath, 内容: changed }, { 目标: event.relPath, 内容: event.content }, { 目标: summaryPath, 内容: staleSummary }],
+      summary: '吃书补偿初见',
+    })).toMatchObject({ ok: true })
+    expect(checkedWithoutWrites(root)).toMatchObject({ 状态: '边界已核对', 问题: [], 在途项: [], 前章: key })
+
+    put(root, '定稿/卷01/补偿/.gitkeep', '')
+    git(root, 'add', '定稿/卷01/补偿/.gitkeep')
+    git(root, 'commit', '-m', 'design: 保留补偿目录占位')
+    removeReceipts(root)
+    expect(checkedWithoutWrites(root)).toMatchObject({ 状态: '边界已核对', 问题: [], 在途项: [], 前章: key })
+  })
+
+  it.each(['未知.md', '补偿-0000.md', '子目录/补偿-0002.md'])('定稿补偿目录内的非法路径或目录 %s 仍触发 OPENING_FINAL_PATH', (entry) => {
+    const root = book()
+    finish(root)
+    put(root, `定稿/卷01/补偿/${entry}`, '内容。\n')
+    git(root, 'add', '.')
+    git(root, 'commit', '-m', 'ch: 非法补偿文件')
+    const expectedPath = entry === '子目录/补偿-0002.md' ? '定稿/卷01/补偿/子目录' : `定稿/卷01/补偿/${entry}`
+    expect(checkedWithoutWrites(root)).toMatchObject({
+      状态: '无法核实',
+      问题: expect.arrayContaining([expect.objectContaining({ 代码: 'OPENING_FINAL_PATH', 路径: expectedPath })]),
+    })
+  })
+
+  it('定稿卷下的普通文件 补偿 仍触发 OPENING_FINAL_PATH', () => {
+    const root = book()
+    finish(root)
+    put(root, '定稿/卷01/补偿', '普通文件。\n')
+    git(root, 'add', '.')
+    git(root, 'commit', '-m', 'ch: 非法补偿普通文件')
+    expect(checkedWithoutWrites(root)).toMatchObject({
+      状态: '无法核实',
+      问题: expect.arrayContaining([expect.objectContaining({ 代码: 'OPENING_FINAL_PATH', 路径: '定稿/卷01/补偿' })]),
+    })
   })
 
   it.each(['稿1.md', '稿1.起草中.txt'])('新章只有 %s 时仍识别真实在途，不要求先有 Markdown 成稿', (name) => {
