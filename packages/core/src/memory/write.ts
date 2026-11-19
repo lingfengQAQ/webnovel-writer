@@ -5,6 +5,7 @@ import { parseDocument, serializeDocument } from '../repo/frontmatter'
 import { assertSegment, type MemoryKind } from '../repo/paths'
 import { isMemoryKind } from '../repo/book-memory-contract'
 import { memoryIndexLink, memoryIndexText, parseMemoryIndexLinks } from '../repo/memory-index-links'
+import { parseLegacyMemoryIndexLinks } from '../repo/legacy-memory-index-links'
 
 export class MemoryWriteError extends Error {}
 
@@ -154,7 +155,23 @@ export function memoryIndex(title: string, documents: readonly MemoryDocument[],
   const newline = originalIndex?.includes('\r\n') ? '\r\n' : '\n'
   let retained = `# ${title}${newline}${newline}`
   if (originalIndex?.trim()) {
-    if (parseMemoryIndexLinks(originalIndex).problems.length) throw new MemoryWriteError('记忆索引解析失败；请先核对原文并检查书仓，未重建索引')
+    const parsedIndex = parseMemoryIndexLinks(originalIndex)
+    if (parsedIndex.problems.length) {
+      const details: string[] = []
+      let hasLegacy = false
+      for (const [index, line] of originalIndex.replace(/\r\n/g, '\n').split('\n').entries()) {
+        if (!parseMemoryIndexLinks(line).problems.length) continue
+        const legacy = parseLegacyMemoryIndexLinks(line)
+        if (!legacy.problems.length && legacy.filenames.length === 1) {
+          hasLegacy = true
+          details.push(`第${index + 1}行旧索引目标未编码（${legacy.filenames[0]}）`)
+        } else {
+          details.push(`第${index + 1}行链接无效或不明确`)
+        }
+      }
+      const guide = hasLegacy ? '请先检查书仓并预览整仓升级，未重建索引' : '请先核对原文并检查书仓，未重建索引'
+      throw new MemoryWriteError(`记忆索引解析失败：本书记忆/索引.md（${details.join('、')}；${guide}）`)
+    }
     // Replace filename rows only; category notes retained by C5 and author prose survive.
     retained = (originalIndex.match(/[^\n]*\n|[^\n]+$/g) ?? []).filter(line => !parseMemoryIndexLinks(line).filenames.length).join('')
   }

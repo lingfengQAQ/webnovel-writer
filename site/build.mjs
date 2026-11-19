@@ -525,11 +525,11 @@ function renderHome(ctx, groups, guides) {
   <div class="section-inner">
     <h2 id="update-title">${esc(ctx.version)} 更新</h2>
     <div class="feature-grid feature-main">
-      <article class="feature"><h3>升级诊断可读</h3><p>修复预览返回错误，保留阻断原因。</p></article>
-      <article class="feature"><h3>草稿留档可核对</h3><p>定稿时确认留档清单，旧章也可预览确认。</p></article>
-      <article class="feature"><h3>DSH rc.3 兼容</h3><p>修复侧栏滚动与委派进度，保留 rc.1 兼容。</p></article>
+      <article class="feature"><h3>定稿补偿兼容</h3><p>开仓与检查识别回溯补偿目录及摘要标记。</p></article>
+      <article class="feature"><h3>记忆索引诊断</h3><p>定位旧索引未编码行，指引整仓升级迁移。</p></article>
+      <article class="feature"><h3>DSH rc.5 兼容</h3><p>同步适配 0.2.2-rc.5，保留 rc.1 兼容。</p></article>
     </div>
-    <p>旧版本准备的待定稿包须重新准备并核对。检索和桌宠仅同步兼容版本。</p>
+    <p>存在回溯补偿或旧格式记忆索引的书仓，先备份并预览整仓升级；旧版本待定稿包须重新准备并核对。检索和桌宠仅同步兼容版本。</p>
     <p class="home-links"><a href="docs/upgrade-backup.html">升级与草稿留档 →</a><a href="${esc(ctx.release)}">完整更新与下载 →</a></p>
   </div>
 </section>

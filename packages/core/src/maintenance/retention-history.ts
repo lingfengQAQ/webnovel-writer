@@ -12,6 +12,8 @@ const positive = (value: unknown): boolean => typeof value === 'number' && Numbe
 const chapterPath = (key: ChapterKey): string => paths.定稿章(key.卷, key.章, key.章名)
 const summaryPath = (key: ChapterKey): string => paths.章摘要(key.卷, key.章, key.章名)
 
+export const SUMMARY_HEADING = /^(?:> 〔摘要过期〕定稿正文已经吃书补偿更正,本摘要待重做\(关联提案 [^\r\n]+\)\r?\n\r?\n)*# 章摘要(?:\s|$)/
+
 /** All local receipts enter the caller's read set, including directory membership. */
 export function readArchiveReceiptsSnapshot(reader: ReadonlyBookSnapshot, code = 'RECEIPT_INVALID'): ArchiveReceipt[] {
   const receipts: ArchiveReceipt[] = []
@@ -38,7 +40,7 @@ export function finalizedSource(fields: Readonly<Record<string, unknown>>): stri
 
 function supportedChapter(key: ChapterKey, finalText: string, summaryText: string): boolean {
   const final = parseDocument(finalText), summary = parseDocument(summaryText)
-  if (!final.ok || !summary.ok || final.data.body.trim() === '' || !/^# 章摘要(?:\s|$)/.test(summary.data.body.trim())) return false
+  if (!final.ok || !summary.ok || final.data.body.trim() === '' || !SUMMARY_HEADING.test(summary.data.body.trim())) return false
   const fields = final.data.fields, identity = fields['身份']
   return record(identity) && identity['卷'] === key.卷 && identity['章'] === key.章 && identity['章名'] === key.章名
     && (fields['章号'] === undefined || fields['章号'] === key.章) && fields['状态'] === '已定稿' && positive(fields['版本'])

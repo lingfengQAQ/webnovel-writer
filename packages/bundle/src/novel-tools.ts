@@ -1912,8 +1912,15 @@ ${摘要现文}`,
             const result = scope === 'book'
               ? writeBookMemory(root, { ...input, 裁决记录: '对谈中已确认的记忆' })
               : writeAuthorMemory(root, input)
-            if (!result.ok) return toolFailure(result.reason.includes('原文已变化') ? 'source-conflict' : 'invalid-argument', result.reason,
-              '读取最新索引和条目，核对后再调用；不要改名新增来绕过冲突。')
+            if (!result.ok) {
+              if (result.reason.includes('原文已变化')) {
+                return toolFailure('source-conflict', result.reason, '读取最新索引和条目，核对后再调用；不要改名新增来绕过冲突。')
+              }
+              if (result.reason.includes('解析失败')) {
+                return toolFailure('parse-error', result.reason, '先检查书仓或预览整仓升级；按 reason 核对原文后再调用。')
+              }
+              return toolFailure('invalid-argument', result.reason, '读取最新索引和条目，核对后再调用；不要改名新增来绕过冲突。')
+            }
             const value = { ...result, scope, ...(scope === 'book' ? { bookId: String(args['bookId']) } : {}) }
             if (scope === 'author' || result.duplicate) return {
               ...value, commitState: 'not-required', retryable: false,

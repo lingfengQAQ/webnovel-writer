@@ -111,9 +111,9 @@ beforeAll(async () => {
   ], {
     cwd: workspace,
     env: { ...process.env, DSH_HOME: path.join(root, '.dsh'), DSH_AGENTS_HOME: path.join(root, '.agents'), DSH_TELEMETRY_DISABLED: '1' },
-    // The shared process runs 35 integration scenarios, including native settings
+    // The shared process runs 41 integration scenarios, including native settings
     // reloads and local HTTP. Keep a total bound without treating it as one test.
-    timeout: 90_000,
+    timeout: 120_000,
     windowsHide: true,
     maxBuffer: 2 * 1024 * 1024,
   }).catch((error: unknown) => {
@@ -128,7 +128,7 @@ beforeAll(async () => {
   const reportPath = process.env['WEBNOVEL_LOADER_REPORT']
   if (reportPath !== undefined) fs.writeFileSync(path.resolve(reportPath), JSON.stringify({ ...report, stdout: result.stdout, stderr: result.stderr }, null, 2))
   expect(result.stderr).not.toContain('UNHANDLED')
-}, 100_000)
+}, 130_000)
 
 afterAll(() => {
   if (root === undefined) return

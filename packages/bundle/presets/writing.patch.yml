@@ -1,4 +1,4 @@
-# Based on DSH dsh-v0.2.2-rc.3 (38a6a5c965aa99ab525161efb7cc5cf1fe62fced) standard preset; retains the rc.1-compatible capability subset.
+# Based on DSH dsh-v0.2.2-rc.5 (9c2670d3bce5275e0d1610272958121af87787bb) standard preset; retains the rc.1-compatible capability subset.
 # Canonical definition: packages/bundle/presets/writing.patch.yml; meta ships an identical copy.
 - insert:
     - id: preset-scriptor

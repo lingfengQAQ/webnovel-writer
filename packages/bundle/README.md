@@ -1,34 +1,34 @@
 # Webnovel Writer · 网文写作工作台
 
-Scriptor 8.4.1 适配 DSH 0.2.2-rc.3。安装范围为 `>=0.2.2-rc.1 <0.3.0-0`，Node最低24.9；实际验证按具体版本记录。
+Scriptor 8.4.2 适配 DSH 0.2.2-rc.5。安装范围为 `>=0.2.2-rc.1 <0.3.0-0`，Node最低24.9；实际验证按具体版本记录。
 
 [产品主页](https://lingfengqaq.github.io/webnovel-writer/) · [新手教程](https://lingfengqaq.github.io/webnovel-writer/docs/beginner.html)
 
-> Scriptor 8.4.1 配套 **DSH 0.2.2-rc.3**。旧格式先备份并使用书仓维护预览，按明确批准执行升级。
+> Scriptor 8.4.2 配套 **DSH 0.2.2-rc.5**。旧格式先备份并使用书仓维护预览，按明确批准执行升级。
 
-DSH 插件 `@linfengqaqtat/dsh-scriptor` 提供写作工作台。8.4.1包含12个写作与维护技能和八个脚本入口。
+DSH 插件 `@linfengqaqtat/dsh-scriptor` 提供写作工作台。8.4.2包含12个写作与维护技能和八个脚本入口。
 命令行要求 Node.js至少24.9，DSH最低兼容版为0.2.2-rc.1。许可证 GPL-3.0-only。
 
 ## 安装
 
-在 DSH 0.2.2-rc.3 桌面端侧栏打开“插件 → 添加插件”，输入 `@linfengqaqtat/dsh-scriptor@8.4.1`，核对后安装并应用变更。桌面端自带运行时，不需要另外安装 Node/pnpm。
+在 DSH 0.2.2-rc.5 桌面端侧栏打开“插件 → 添加插件”，输入 `@linfengqaqtat/dsh-scriptor@8.4.2`，核对后安装并应用变更。桌面端自带运行时，不需要另外安装 Node/pnpm。
 
 以下是进阶用户创建独立 Web profile 的方式，不用于桌面端保留的 `desktop` profile：
 
 ```powershell
 dsh --profile webnovel --from-default-profile web --dump-config
-dsh plugin --profile webnovel add @linfengqaqtat/dsh-scriptor@8.4.1
+dsh plugin --profile webnovel add @linfengqaqtat/dsh-scriptor@8.4.2
 dsh --profile webnovel --host 127.0.0.1 --port 6104 --no-open
 ```
 
 通过该进程输出的带 token 链接打开页面。新建对话并选择 **写作模式**，随包技能在该模式下自动发现，无需设置技能目录。
 不要同时启用旧开发 file patch 与正式安装入口。模型与凭据在宿主设置中配置。
 嵌入提供方 `@linfengqaqtat/dsh-scriptor-retrieval` 是可选的独立包，提供语义检索增强。
-可执行 `dsh plugin --profile webnovel add @linfengqaqtat/dsh-scriptor-retrieval@8.4.1` 添加嵌入提供方。也可改用同版full统一安装二者，不要重复启用单包与full。
+可执行 `dsh plugin --profile webnovel add @linfengqaqtat/dsh-scriptor-retrieval@8.4.2` 添加嵌入提供方。也可改用同版full统一安装二者，不要重复启用单包与full。
 
 ## 更新与卸载
 
-先停止指定 profile 的运行实例，再安装目标精确版本并重启（本版为 `@linfengqaqtat/dsh-scriptor@8.4.1`）。
+先停止指定 profile 的运行实例，再安装目标精确版本并重启（本版为 `@linfengqaqtat/dsh-scriptor@8.4.2`）。
 卸载后可执行上面的安装命令重装：
 
 ```powershell
@@ -38,9 +38,9 @@ dsh --profile webnovel --dump-config
 
 卸载插件不会删除作品书仓。安装不需要源码、安装时构建或 npm 账号。tarball 放在无空格目录，并核对对应 Release 提供的 SHA256。首次下载宿主依赖仍可能需要网络。
 
-## 8.4.1 更新与旧项目升级
+## 8.4.2 更新与旧项目升级
 
-本版修复#213升级预览诊断、草稿身份与留档检查，并适配DSH 0.2.2-rc.3的委派和侧栏。旧版本准备的待定稿包须重新准备、重新核对，再提交定稿。最低兼容DSH仍为rc.1。旧格式先备份、检查并预览整仓升级；安装不自动迁移书稿或对话。
+本版修复#218定稿补偿目录及过期摘要开仓阻断、#219旧记忆索引行级诊断与 `parse-error` 返回码，并同步适配DSH 0.2.2-rc.5。旧版本准备的待定稿包须重新准备、重新核对，再提交定稿。最低兼容DSH仍为rc.1。旧格式先备份、检查并预览整仓升级；安装不自动迁移书稿或对话。
 
 编辑器支持选区/右键改写、续写、审读批注及行内采纳，采纳后还需保存。教程见 [新编辑器图文说明](https://github.com/lingfengQAQ/webnovel-writer/blob/v8/docs/user/editor.md)。
 
@@ -50,7 +50,7 @@ dsh --profile webnovel --dump-config
 
 ## 公开文档
 
-当前主包 8.4.1。完整的安装、配置、首章和备份教程见 [公开使用文档](https://github.com/lingfengQAQ/webnovel-writer/tree/v8/docs/user)。
+当前主包 8.4.2。完整的安装、配置、首章和备份教程见 [公开使用文档](https://github.com/lingfengQAQ/webnovel-writer/tree/v8/docs/user)。
 
 第三方组件的原始声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，许可证文本随包放在 licenses/。源码及校验和由对应的 GitHub Release 提供。
 
