@@ -33,9 +33,9 @@
 <table style="border-collapse: collapse; margin-bottom: 12px;">
 <tr>
 <td style="border: 1px solid #000; padding: 10px 14px; line-height: 1.45;">
-<a href="https://x6.ai" target="_blank"><img src="docs/assets/sponsors/x6-banner.jpg" alt="x6.ai · 一个 Key 调用所有模型 · 低至 1 折" width="728"/></a><br>
-<a href="https://x6.ai">x6.ai</a>：一个 Key 调用所有主流模型，官 Key 直连(可蒸馏)和反代双通道，最低 1 折，注册送免费额度。支持支付宝、Google Pay、Apple Pay、Visa、Mastercard。<br>
-<a href="https://x6.ai">x6.ai</a>: One API key for every major model. Official-key and proxy channels, up to 90% off, free credits on sign-up. Pay with Alipay, Google Pay, Apple Pay, Visa or Mastercard.
+<a href="https://console.x6.ai/register?code=SP8RFCLR" target="_blank"><img src="docs/assets/sponsors/x6-banner.jpg" alt="x6.ai · 一个 Key 调用所有模型 · 低至 1 折" width="728"/></a><br>
+<a href="https://console.x6.ai/register?code=SP8RFCLR">x6.ai</a>：一个 Key 调用所有主流模型，官 Key 直连(可蒸馏)和反代双通道，最低 1 折，注册送免费额度。支持支付宝、Google Pay、Apple Pay、Visa、Mastercard。<br>
+<a href="https://console.x6.ai/register?code=SP8RFCLR">x6.ai</a>: One API key for every major model. Official-key and proxy channels, up to 90% off, free credits on sign-up. Pay with Alipay, Google Pay, Apple Pay, Visa or Mastercard.
 </td>
 </tr>
 </table>
