@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { baseline } from '../../packages/bundle/scripts/dsh-source.mjs'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -10,16 +9,27 @@ import { root as sourceRoot } from './version.mjs'
 import { packageFiles } from './tar.mjs'
 
 const fromRegistry = process.argv.includes('--registry')
-const args = process.argv.slice(2).filter(value => value !== '--' && value !== '--registry')
-assert.ok(args[0], 'Usage: pnpm release:smoke <main.tgz> [embedding.tgz] [meta.tgz] [--registry] [--root <new-directory>]')
-const main = path.resolve(args[0])
-const embedding = args[1] && args[1] !== '--root' ? path.resolve(args[1]) : undefined
-const meta = args[2] && args[2] !== '--root' ? path.resolve(args[2]) : undefined
-const companionIndex = args.indexOf('--companion')
-const companion = companionIndex >= 0 ? path.resolve(args[companionIndex + 1]) : undefined
-const rootIndex = args.indexOf('--root')
-const root = rootIndex >= 0 ? path.resolve(args[rootIndex + 1]) : fs.mkdtempSync(path.join(os.tmpdir(), 'scriptor-install-'))
-assert.ok(root !== sourceRoot && !root.startsWith(sourceRoot + path.sep), 'Use an isolated directory outside the source checkout')
+const rawArgs = process.argv.slice(2).filter(value => value !== '--' && value !== '--registry')
+const positional = []
+let companion
+let rootArg
+let sourceArg
+for (let i = 0; i < rawArgs.length; i += 1) {
+  if (rawArgs[i] === '--companion') { companion = path.resolve(rawArgs[++i]); continue }
+  if (rawArgs[i] === '--root') { rootArg = path.resolve(rawArgs[++i]); continue }
+  if (rawArgs[i] === '--source') { sourceArg = path.resolve(rawArgs[++i]); continue }
+  positional.push(rawArgs[i])
+}
+assert.ok(positional[0], 'Usage: pnpm release:smoke <main.tgz> [embedding.tgz] [meta.tgz] [--registry] [--companion <companion.tgz>] [--root <new-directory>] [--source <source-root>]')
+const main = path.resolve(positional[0])
+const embedding = positional[1] ? path.resolve(positional[1]) : undefined
+const meta = positional[2] ? path.resolve(positional[2]) : undefined
+const effectiveSourceRoot = sourceArg ?? sourceRoot
+const effectiveBaseline = JSON.parse(fs.readFileSync(path.join(effectiveSourceRoot, 'dsh-baseline.json'), 'utf8'))
+const root = rootArg ?? fs.mkdtempSync(path.join(os.tmpdir(), 'scriptor-install-'))
+for (const checkout of [sourceRoot, effectiveSourceRoot]) {
+  assert.ok(root !== checkout && !root.startsWith(checkout + path.sep), 'Use an isolated directory outside the source checkout')
+}
 assert.ok(!root.includes(' '), 'The current Windows DSH plugin installer requires a path without spaces')
 if (fs.existsSync(root)) assert.equal(fs.readdirSync(root).length, 0, 'Isolation directory must be empty')
 fs.mkdirSync(root, { recursive: true })
@@ -56,15 +66,15 @@ const packageSpec = file => {
 let fixtureRegistry
 let fixtureRegistryUrl
 try {
-  // Hosted Windows runners with a cold npm cache exceeded 4 minutes for the DSH tree; the network-bound step gets its own bound.
-  log('install-host', run(npm, ['install', '--prefix', host, '--save-exact', '--no-audit', '--no-fund', '--prefer-online', `@deepseek-ai/dsh@${baseline.registry.version}`, 'pnpm@11.27.1'], host, 15 * 60 * 1000))
+  // Hosted Windows runners with a cold npm cache reached ~15 minutes for the DSH tree; give the network/unpack step 25 minutes without weakening checks.
+  log('install-host', run(npm, ['install', '--prefix', host, '--save-exact', '--no-audit', '--no-fund', '--prefer-online', `@deepseek-ai/dsh@${effectiveBaseline.registry.version}`, 'pnpm@11.27.1'], host, 25 * 60 * 1000))
   const pathKey = Object.keys(env).find(key => key.toLowerCase() === 'path') ?? 'PATH'
   env[pathKey] = path.join(host, 'node_modules/.bin') + path.delimiter + (env[pathKey] ?? '')
   report.hostPackageManager = 'pnpm@11.27.1'
   const require = createRequire(path.join(host, 'package.json'))
   const hostAnchor = require.resolve('@deepseek-ai/dsh/package.json')
   const cli = path.join(path.dirname(hostAnchor), 'lib/bin.js')
-  assert.equal(run(cli, ['--version']).trim(), baseline.registry.version)
+  assert.equal(run(cli, ['--version']).trim(), effectiveBaseline.registry.version)
   report.checks.freshHost = true
   log('web-profile', run(cli, ['--profile', 'scriptor-test', '--from-default-profile', 'web', '--dump-config']))
   const copiedMain = path.join(root, 'main.tgz')
@@ -80,12 +90,12 @@ try {
   const installedRoot = path.dirname(installed)
   assert.ok(installedRoot.startsWith(root + path.sep))
   const prepare = path.join(root, 'prepare-profile.mjs')
-  fs.copyFileSync(path.join(sourceRoot, 'packages/bundle/tests/fixtures/packaging-prepare.mjs'), prepare)
+  fs.copyFileSync(path.join(effectiveSourceRoot, 'packages/bundle/tests/fixtures/packaging-prepare.mjs'), prepare)
   log('prepare-profile', run(prepare, [profile, hostAnchor]))
   const script = path.join(root, 'isolation.mjs')
-  fs.copyFileSync(path.join(sourceRoot, 'packages/bundle/tests/fixtures/packaging-isolation.mjs'), script)
+  fs.copyFileSync(path.join(effectiveSourceRoot, 'packages/bundle/tests/fixtures/packaging-isolation.mjs'), script)
   const isolatedReport = path.join(root, 'source-isolation.json')
-  const blocked = path.join(sourceRoot, 'packages/bundle/src/index.ts')
+  const blocked = path.join(effectiveSourceRoot, 'packages/bundle/src/index.ts')
   const output = execFileSync(process.execPath, ['--permission', '--allow-addons', ...permissionGrants('read'), ...permissionGrants('write'), `--allow-fs-read=${path.dirname(process.execPath)}`, script, profile, hostAnchor, blocked, isolatedReport], { cwd: workspace, env, encoding: 'utf8', windowsHide: true, timeout: 45000 })
   log('source-isolation', output)
   assert.equal(JSON.parse(fs.readFileSync(isolatedReport, 'utf8')).ok, true)

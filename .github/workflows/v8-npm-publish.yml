@@ -78,7 +78,7 @@ jobs:
     needs: publish
     if: needs.publish.outputs.ready == 'true'
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     permissions:
       # Keep the release private until registry installation has passed.
       contents: write
@@ -112,7 +112,7 @@ jobs:
           $main = Join-Path .tmp/npm-release $manifest.filename
           $embedding = Join-Path .tmp/npm-release ($manifest.optionalPackages | Where-Object name -eq '@linfengqaqtat/dsh-scriptor-retrieval').tarball
           $meta = Join-Path .tmp/npm-release ($manifest.optionalPackages | Where-Object name -eq '@linfengqaqtat/dsh-scriptor-full').tarball
-          node scripts/release/install-smoke.mjs $main $embedding $meta --registry
+          node ../publisher/scripts/release/install-smoke.mjs $main $embedding $meta --registry --source .
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   finalize:
     if: github.event_name == 'workflow_dispatch'
