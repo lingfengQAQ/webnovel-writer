@@ -1,0 +1,14 @@
+# Webnovel Writer Service —— 服务层依赖
+#
+# 上游 webnovel-writer 的数据链依赖见 webnovel-writer/scripts/requirements.txt
+# 与 webnovel-writer/dashboard/requirements.txt；这里只声明服务层新增部分。
+
+# Web 服务
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+
+# LLM HTTP 客户端（httpx 同时被上游 dashboard 使用）
+httpx>=0.27.0
+
+# 服务层校验
+pydantic>=2.0.0
